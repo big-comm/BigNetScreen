@@ -1,0 +1,19 @@
+[package]
+name = "nd-capture"
+description = "Backends de captura de tela: portal (ashpd) e Mutter direto (zbus)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+nd-core.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+
+# A implementar na Fase 0/1:
+# ashpd = "0.9"      # xdg-desktop-portal ScreenCast (Flatpak + cross-desktop)
+# zbus  = "5"        # org.gnome.Mutter.ScreenCast (GNOME nativo)

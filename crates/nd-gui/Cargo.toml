@@ -1,0 +1,26 @@
+[package]
+name = "nd-gui"
+description = "Aplicativo gráfico BigNetScreen (relm4 + libadwaita)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+default-run = "bignetscreen"
+
+[[bin]]
+name = "bignetscreen"
+path = "src/main.rs"
+
+[dependencies]
+nd-core.workspace = true
+nd-capture.workspace = true
+nd-chromecast.workspace = true
+nd-wfd.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+relm4 = { version = "0.9", features = ["libadwaita"] }
+# Habilita a API da libadwaita ≥ 1.5 (AdwToolbarView, AdwBreakpoint, …).
+# O sistema tem 1.9.1; as bindings 0.7 expõem até v1_5.
+adw = { package = "libadwaita", version = "0.7", features = ["v1_5"] }

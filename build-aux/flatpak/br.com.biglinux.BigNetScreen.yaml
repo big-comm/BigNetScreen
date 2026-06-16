@@ -1,0 +1,28 @@
+# Manifesto Flatpak — placeholder (preencher na Fase 4).
+#
+# Notas importantes:
+# - Sob sandbox NÃO há acesso a NetworkManager/firewalld no system bus, então
+#   Miracast/WFD fica indisponível. Chromecast funciona (mDNS + TCP via
+#   --share=network + servidor HTTP).
+# - Captura de tela DEVE usar o portal (ashpd), nunca Mutter direto.
+# - Construir com o módulo `cargo` (flatpak-cargo-generator p/ as deps).
+app-id: br.com.biglinux.BigNetScreen
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: bignetscreen
+finish-args:
+  - --share=network
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  # ScreenCast via portal (sem --talk-name de Mutter): captura sandbox-safe.
+# modules:
+#   - name: bignetscreen
+#     buildsystem: simple
+#     build-commands:
+#       - cargo build --release --offline
+#       - install -Dm755 target/release/bignetscreen /app/bin/bignetscreen

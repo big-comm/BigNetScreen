@@ -1,0 +1,41 @@
+# BigNetScreen — Rust workspace
+# Reescrita limpa do projeto (referência C arquivada em ./bkp).
+[workspace]
+resolver = "2"
+members = [
+    "crates/nd-core",
+    "crates/nd-capture",
+    "crates/nd-net",
+    "crates/nd-chromecast",
+    "crates/nd-wfd",
+    "crates/nd-gui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+authors = ["Tales A. Mendonça", "BigCommunity"]
+repository = "https://github.com/big-comm/BigNetScreen"
+rust-version = "1.80"
+
+[workspace.dependencies]
+# crates internos
+nd-core = { path = "crates/nd-core" }
+nd-capture = { path = "crates/nd-capture" }
+nd-net = { path = "crates/nd-net" }
+nd-chromecast = { path = "crates/nd-chromecast" }
+nd-wfd = { path = "crates/nd-wfd" }
+
+# comuns
+thiserror = "2"
+async-trait = "0.1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+futures = "0.3"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true

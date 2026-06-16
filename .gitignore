@@ -1,0 +1,26 @@
+# ===== Rust =====
+/target
+**/*.rs.bk
+
+# ===== Backup do projeto C original (cópia física local) =====
+# O histórico do código C continua acessível nos commits anteriores ao pivô.
+/bkp
+
+# ===== Editores / IDEs =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ===== AI / tooling ephemera =====
+.codex
+.serena/
+.claude/
+.cache/
+
+# ===== Flatpak build =====
+.flatpak-builder/
+/build-aux/flatpak/.flatpak-builder/
+/repo/

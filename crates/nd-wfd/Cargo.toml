@@ -1,0 +1,20 @@
+[package]
+name = "nd-wfd"
+description = "Provider e sink Wi-Fi Display (Miracast): servidor RTSP, negociação WFD e P2P via NetworkManager"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+nd-core.workspace = true
+nd-net.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+futures.workspace = true
+
+# A implementar na Fase 3:
+# gstreamer-rtsp-server = "0.23"   # servidor RTSP do source WFD (porta 7236)

@@ -1,0 +1,18 @@
+[package]
+name = "nd-net"
+description = "Integração de rede do sistema: NetworkManager (Wi-Fi Direct) e firewalld via D-Bus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+nd-core.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+
+# A implementar na Fase 3 (apenas build nativo — indisponível sob Flatpak):
+# zbus = "5"   # org.freedesktop.NetworkManager + org.fedoraproject.FirewallD1

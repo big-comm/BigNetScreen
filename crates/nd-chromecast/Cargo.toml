@@ -1,0 +1,24 @@
+[package]
+name = "nd-chromecast"
+description = "Provider e sink Chromecast: descoberta mDNS, canal Cast (protobuf/TLS) e servidor HTTP do stream"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+nd-core.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+futures.workspace = true
+
+# A implementar na Fase 2:
+# mdns-sd      = "0.11"   # descoberta _googlecast._tcp
+# prost        = "0.13"   # cast_channel protobuf
+# tokio        = { version = "1", features = ["rt", "net", "io-util"] }
+# tokio-rustls = "0.26"   # canal Cast 8009 (TLS COM validação correta!)
+# hyper        = "1"      # servidor HTTP do stream (token + allowlist de IP)
+# uuid         = "1"      # token aleatório do path
