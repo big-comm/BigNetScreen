@@ -20,6 +20,7 @@ nd-chromecast.workspace = true
 nd-wfd.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+futures.workspace = true
 relm4 = { version = "0.9", features = ["libadwaita"] }
 # Habilita a API da libadwaita ≥ 1.5 (AdwToolbarView, AdwBreakpoint, …).
 # O sistema tem 1.9.1; as bindings 0.7 expõem até v1_5.

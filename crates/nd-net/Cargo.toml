@@ -13,6 +13,8 @@ nd-core.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
+zbus = { version = "5", default-features = false, features = ["tokio"] }
 
-# A implementar na Fase 3 (apenas build nativo — indisponível sob Flatpak):
-# zbus = "5"   # org.freedesktop.NetworkManager + org.fedoraproject.FirewallD1
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

@@ -14,11 +14,17 @@ thiserror.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
 futures.workspace = true
+mdns-sd = "0.11"
+prost = "0.13"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "io-util", "time", "sync", "macros"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "logging", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "logging"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
-# A implementar na Fase 2:
-# mdns-sd      = "0.11"   # descoberta _googlecast._tcp
-# prost        = "0.13"   # cast_channel protobuf
-# tokio        = { version = "1", features = ["rt", "net", "io-util"] }
-# tokio-rustls = "0.26"   # canal Cast 8009 (TLS COM validação correta!)
-# hyper        = "1"      # servidor HTTP do stream (token + allowlist de IP)
-# uuid         = "1"      # token aleatório do path
+# A implementar mais à frente na Fase 2 (servidor HTTP do stream):
+# hyper = "1"   # serve o stream webm com token + allowlist de IP
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

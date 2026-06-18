@@ -8,6 +8,8 @@
 //! Indisponível sob Flatpak (sem barramento de sistema) — por isso fica
 //! isolado neste crate, habilitado só no build nativo.
 
+pub mod p2p;
+
 use nd_core::pipeline::GpuDriver;
 use nd_core::Result;
 

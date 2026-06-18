@@ -15,6 +15,9 @@ thiserror.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
 futures.workspace = true
+tokio = { version = "1", features = ["rt", "time", "net", "io-util"] }
+gstreamer = "0.23"
 
-# A implementar na Fase 3:
-# gstreamer-rtsp-server = "0.23"   # servidor RTSP do source WFD (porta 7236)
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

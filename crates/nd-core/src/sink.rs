@@ -14,12 +14,23 @@ use crate::Result;
 pub enum SinkKind {
     /// Google Chromecast (mDNS + Cast + HTTP).
     Chromecast,
+    /// Apple AirPlay (mDNS). Descoberto, mas cast ainda não implementado.
+    AirPlay,
     /// Wi-Fi Display sobre Wi-Fi Direct / P2P.
     WfdP2p,
     /// Wi-Fi Display sobre infraestrutura (MICE, LAN comum).
     WfdMice,
     /// Sink falso para testes (`NETWORK_DISPLAYS_DUMMY`).
     Dummy,
+}
+
+impl SinkKind {
+    /// Indica se o cast para este tipo já está implementado.
+    pub fn is_castable(self) -> bool {
+        // Por ora, nenhum protocolo transmite ainda (Fases 2/3). AirPlay não
+        // está no escopo de transmissão — apenas descoberta.
+        false
+    }
 }
 
 /// Estados possíveis de uma sessão. A transição para [`SinkState::Error`] é

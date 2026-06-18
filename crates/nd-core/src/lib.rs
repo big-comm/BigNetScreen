@@ -14,7 +14,9 @@
 //! Nada aqui depende de GTK: tudo é testável de forma isolada.
 
 pub mod capture;
+pub mod dummy;
 pub mod error;
+pub mod meta;
 pub mod pipeline;
 pub mod provider;
 pub mod sink;

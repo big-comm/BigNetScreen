@@ -13,7 +13,13 @@ nd-core.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
+tokio = { version = "1", features = ["sync"] }
+ashpd = { version = "0.9", default-features = false, features = ["tokio"] }
 
-# A implementar na Fase 0/1:
-# ashpd = "0.9"      # xdg-desktop-portal ScreenCast (Flatpak + cross-desktop)
-# zbus  = "5"        # org.gnome.Mutter.ScreenCast (GNOME nativo)
+# A implementar na Fase 1:
+# zbus = "5"   # org.gnome.Mutter.ScreenCast (GNOME nativo)
+
+[dev-dependencies]
+gstreamer = "0.23"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
