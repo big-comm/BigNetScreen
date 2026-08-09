@@ -1,60 +1,102 @@
-//! Abstração de captura de tela.
+//! Screen capture abstraction.
 //!
-//! Duas implementações concretas (no crate `nd-capture`) por trás do mesmo
-//! trait, escolhidas em runtime conforme o ambiente:
+//! Two concrete implementations (in the `nd-capture` crate) behind the same
+//! trait, picked at runtime according to the environment:
 //!
-//! - **Portal** (`ashpd` / xdg-desktop-portal `ScreenCast`): obrigatório sob
-//!   Flatpak e funciona em qualquer desktop (KDE, GNOME, …).
-//! - **Mutter direto** (`org.gnome.Mutter.ScreenCast` via D-Bus): caminho de
-//!   menor latência no GNOME nativo, inclui captura de **monitor virtual**.
+//! - **Portal** (`ashpd` / xdg-desktop-portal `ScreenCast`): mandatory under
+//!   Flatpak, and works on any desktop (KDE, GNOME, …).
+//! - **Mutter directly** (`org.gnome.Mutter.ScreenCast` over D-Bus): the
+//!   lowest-latency path on native GNOME, and the one that can capture a
+//!   **virtual monitor**.
 //!
-//! Esta separação é o que permite a meta "nativo + Flatpak" sem `#ifdef`s
-//! espalhados pelo código.
+//! This split is what makes the "native + Flatpak" goal possible without
+//! `#ifdef`s scattered through the code.
+
+use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 
 use async_trait::async_trait;
-use std::os::fd::OwnedFd;
 
+use crate::pipeline::VideoSource;
 use crate::Result;
 
-/// O que será capturado.
+/// What is going to be captured.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SourceType {
-    /// Um monitor físico inteiro.
+    /// A whole physical monitor.
     Monitor,
-    /// Uma janela específica (requer backend com suporte a window-capture).
+    /// One specific window (needs a backend with window-capture support).
     Window,
-    /// Um monitor **virtual** criado sob demanda (caminho Mutter; ideal p/ WFD).
+    /// A **virtual** monitor created on demand (Mutter path; ideal for WFD).
     Virtual,
 }
 
-/// Stream PipeWire pronto para alimentar o pipeline de encode.
+/// A PipeWire stream ready to feed the encoding pipeline.
 ///
-/// `pipewire_fd` é o descritor remoto entregue pelo portal/Mutter; `node_id`
-/// identifica o nó dentro desse fd. Ambos são consumidos por `pipewiresrc`.
+/// `node_id` is **always** required: it is what identifies the node to capture.
+/// `pipewire_fd` is the remote descriptor handed over by the portal — under
+/// Flatpak there is no other way. Mutter directly hands over no descriptor: the
+/// node lives in the session's own PipeWire daemon, and the field is `None`.
 #[derive(Debug)]
 pub struct CaptureSource {
-    /// Descritor do socket PipeWire (posse transferida ao pipeline).
-    pub pipewire_fd: OwnedFd,
-    /// Nó PipeWire a consumir.
+    /// The PipeWire socket descriptor, when the backend provides one.
+    ///
+    /// Ownership stays here: `pipewiresrc` dups the descriptor when it starts,
+    /// but this value has to stay alive while the pipeline is being built.
+    pub pipewire_fd: Option<OwnedFd>,
+    /// The PipeWire node to consume.
     pub node_id: u32,
-    /// Tipo efetivo da fonte.
+    /// The effective source type.
     pub source_type: SourceType,
-    /// Dimensões conhecidas, quando o backend as informa (None = negociar).
+    /// Known dimensions, when the backend reports them (None = negotiate).
     pub size: Option<(u32, u32)>,
 }
 
-/// Backend de captura. Implementações devem ser thread-safe.
+impl CaptureSource {
+    /// The raw descriptor, for building the `pipewiresrc` description.
+    pub fn raw_fd(&self) -> Option<RawFd> {
+        self.pipewire_fd.as_ref().map(|fd| fd.as_raw_fd())
+    }
+
+    /// The matching video source, with `fd` and `path` already filled in.
+    ///
+    /// Always going through this constructor rules out the class of bug where
+    /// the pipeline was assembled without `fd=`/`path=` and captured some
+    /// arbitrary node from the PipeWire daemon instead of the stream the user
+    /// authorised.
+    pub fn video_source(&self) -> VideoSource {
+        VideoSource::PipeWire {
+            fd: self.raw_fd(),
+            node_id: self.node_id,
+        }
+    }
+
+    /// The known resolution, or the given guess.
+    pub fn size_or(&self, default: (u32, u32)) -> (u32, u32) {
+        self.size.unwrap_or(default)
+    }
+}
+
+/// A capture backend. Implementations must be thread-safe.
 #[async_trait]
 pub trait CaptureBackend: Send + Sync {
-    /// Identificador curto para logs/telemetria (`"portal"`, `"mutter"`).
+    /// Short identifier for logs/telemetry (`"portal"`, `"mutter"`).
     fn id(&self) -> &'static str;
 
-    /// Verifica se este backend pode operar no ambiente atual.
+    /// Checks whether this backend can operate in the current environment.
     async fn is_available(&self) -> bool;
 
-    /// Inicia a captura e devolve o stream PipeWire.
+    /// The source types this backend can capture in this environment.
+    ///
+    /// Not every portal exposes `Virtual` or `Window`; asking first avoids
+    /// requesting something that makes the portal close the session without
+    /// explanation.
+    async fn supported_sources(&self) -> Vec<SourceType> {
+        vec![SourceType::Monitor]
+    }
+
+    /// Starts the capture and returns the PipeWire stream.
     async fn start(&self, source_type: SourceType) -> Result<CaptureSource>;
 
-    /// Encerra a sessão de captura e libera recursos no compositor.
+    /// Ends the capture session and releases resources in the compositor.
     async fn stop(&self) -> Result<()>;
 }

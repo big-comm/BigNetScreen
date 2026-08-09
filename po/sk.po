@@ -1,0 +1,150 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: bignetscreen\n"
+"Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
+"POT-Creation-Date: 2026-08-08 21:38-0300\n"
+"PO-Revision-Date: 2026-08-08 18:16\n"
+"Last-Translator: Translation Automator <auto@translator.ai>\n"
+"Language-Team: Slovak <sk@li.org>\n"
+"Language: sk\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2;\n"
+
+#: crates/nd-gui/src/app.rs:608
+msgid "1 receiver found"
+msgstr "Našiel sa 1 prijímač"
+
+#: crates/nd-gui/src/app.rs:679
+msgid "A stream is already running"
+msgstr "Stream už beží"
+
+#: crates/nd-gui/src/app.rs:382
+msgid "A window"
+msgstr "Okno"
+
+#: crates/nd-gui/src/app.rs:46
+msgid "AirPlay"
+msgstr "AirPlay"
+
+#: crates/nd-gui/src/app.rs:45
+msgid "Chromecast"
+msgstr "Chromecast"
+
+#: crates/nd-gui/src/app.rs:839
+msgid ""
+"Chromecasts and TVs show up on their own. For Miracast, put the TV or the "
+"projector into “Screen Mirroring” mode."
+msgstr ""
+"Chromecasty a televízory sa zobrazia samy. Pre Miracast prepnite televízor "
+"alebo projektor do režimu „Screen Mirroring“."
+
+#: crates/nd-gui/src/app.rs:64 crates/nd-gui/src/app.rs:696
+msgid "Connecting…"
+msgstr "Pripájanie…"
+
+#: crates/nd-gui/src/app.rs:69
+msgid "Failed"
+msgstr "Zlyhanie"
+
+#: crates/nd-gui/src/app.rs:342
+msgid "Got it"
+msgstr "Rozumiem"
+
+#: crates/nd-gui/src/app.rs:780
+msgid "Local network discovery unavailable"
+msgstr "Zisťovanie v lokálnej sieti nie je dostupné"
+
+#: crates/nd-gui/src/app.rs:838
+msgid "Looking for receivers…"
+msgstr "Hľadajú sa prijímače…"
+
+#: crates/nd-gui/src/app.rs:47
+msgid "Miracast"
+msgstr "Miracast"
+
+#: crates/nd-gui/src/app.rs:822
+msgid ""
+"Miracast does not work in the Flatpak build (it needs the system "
+"NetworkManager)"
+msgstr ""
+"Miracast nefunguje v zostave Flatpak (vyžaduje systémový NetworkManager)"
+
+#: crates/nd-gui/src/app.rs:829
+msgid "Miracast unavailable"
+msgstr "Miracast nie je dostupný"
+
+#: crates/nd-gui/src/app.rs:827
+msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
+msgstr "Miracast nie je dostupný: táto Wi-Fi karta nepodporuje Wi-Fi Direct"
+
+#: crates/nd-gui/src/app.rs:605
+msgid "No receivers found"
+msgstr "Nenašli sa žiadne prijímače"
+
+#: crates/nd-gui/src/app.rs:65
+msgid "Opening the firewall port…"
+msgstr "Otváram port firewallu…"
+
+#: crates/nd-gui/src/app.rs:67
+msgid "Preparing the video…"
+msgstr "Pripravujem video…"
+
+#: crates/nd-gui/src/app.rs:316
+msgid "Scan again"
+msgstr "Skenovať znova"
+
+#: crates/nd-gui/src/app.rs:436 crates/nd-gui/src/app.rs:471
+#: crates/nd-gui/src/app.rs:603
+msgid "Searching…"
+msgstr "Vyhľadávanie…"
+
+#: crates/nd-gui/src/app.rs:323
+msgid "Stop"
+msgstr "Zastaviť"
+
+#: crates/nd-gui/src/app.rs:668
+msgid "Stopping…"
+msgstr "Zastavovanie…"
+
+#: crates/nd-gui/src/app.rs:68
+msgid "Streaming"
+msgstr "Streamovanie"
+
+#: crates/nd-gui/src/app.rs:48
+msgid "Test"
+msgstr "Test"
+
+#: crates/nd-gui/src/app.rs:66
+msgid "Waiting for the receiver…"
+msgstr "Čakám na prijímač…"
+
+#: crates/nd-gui/src/app.rs:362
+msgid "What to share"
+msgstr "Čo zdieľať"
+
+#: crates/nd-gui/src/app.rs:371
+msgid "Whole screen"
+msgstr "Celá obrazovka"
+
+#: crates/nd-gui/src/app.rs:220
+msgid "discovery only"
+msgstr "iba zisťovanie"
+
+#: crates/nd-gui/src/app.rs:727
+msgid "instant response"
+msgstr "okamžitá odozva"
+
+#: crates/nd-gui/src/app.rs:731
+msgid "quick response"
+msgstr "rýchla odozva"
+
+#: crates/nd-gui/src/app.rs:610
+msgid "receivers found"
+msgstr "našlo sa prijímačov"
+
+#: crates/nd-gui/src/app.rs:690
+msgid "shows up in discovery only"
+msgstr "zobrazuje sa iba pri zisťovaní"

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#62a0ea"/>
+      <stop offset="1" stop-color="#1c71d8"/>
+    </linearGradient>
+  </defs>
+  <!-- corpo da tela -->
+  <rect x="12" y="22" width="104" height="70" rx="8" fill="url(#screen)"/>
+  <rect x="20" y="30" width="88" height="54" rx="4" fill="#f6f5f4" opacity="0.15"/>
+  <!-- pé -->
+  <rect x="48" y="92" width="32" height="8" rx="2" fill="#1c71d8"/>
+  <rect x="36" y="100" width="56" height="8" rx="4" fill="#1a5fb4"/>
+  <!-- ondas de transmissão -->
+  <g fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round">
+    <path d="M 36 72 a 0 0 0 0 1 0 0" stroke-width="0"/>
+    <circle cx="38" cy="74" r="4" stroke="none" fill="#ffffff"/>
+    <path d="M 34 60 a 18 18 0 0 1 18 18"/>
+    <path d="M 34 46 a 32 32 0 0 1 32 32"/>
+  </g>
+</svg>

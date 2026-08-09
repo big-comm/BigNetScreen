@@ -1,0 +1,152 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: bignetscreen\n"
+"Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
+"POT-Creation-Date: 2026-08-08 21:38-0300\n"
+"PO-Revision-Date: 2026-08-08 18:16\n"
+"Last-Translator: Translation Automator <auto@translator.ai>\n"
+"Language-Team: Swedish <sv@li.org>\n"
+"Language: sv\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: crates/nd-gui/src/app.rs:608
+msgid "1 receiver found"
+msgstr "1 mottagare hittades"
+
+#: crates/nd-gui/src/app.rs:679
+msgid "A stream is already running"
+msgstr "En strömning pågår redan"
+
+#: crates/nd-gui/src/app.rs:382
+msgid "A window"
+msgstr "Ett fönster"
+
+#: crates/nd-gui/src/app.rs:46
+msgid "AirPlay"
+msgstr "AirPlay"
+
+#: crates/nd-gui/src/app.rs:45
+msgid "Chromecast"
+msgstr "Chromecast"
+
+#: crates/nd-gui/src/app.rs:839
+msgid ""
+"Chromecasts and TVs show up on their own. For Miracast, put the TV or the "
+"projector into “Screen Mirroring” mode."
+msgstr ""
+"Chromecast och TV-apparater dyker upp automatiskt. För Miracast, sätt TV:n "
+"eller projektorn i läget ”Skärmspegling”."
+
+#: crates/nd-gui/src/app.rs:64 crates/nd-gui/src/app.rs:696
+msgid "Connecting…"
+msgstr "Ansluter…"
+
+#: crates/nd-gui/src/app.rs:69
+msgid "Failed"
+msgstr "Misslyckades"
+
+#: crates/nd-gui/src/app.rs:342
+msgid "Got it"
+msgstr "Uppfattat"
+
+#: crates/nd-gui/src/app.rs:780
+msgid "Local network discovery unavailable"
+msgstr "Lokal nätverksupptäckt är inte tillgänglig"
+
+#: crates/nd-gui/src/app.rs:838
+msgid "Looking for receivers…"
+msgstr "Söker efter mottagare…"
+
+#: crates/nd-gui/src/app.rs:47
+msgid "Miracast"
+msgstr "Miracast"
+
+#: crates/nd-gui/src/app.rs:822
+msgid ""
+"Miracast does not work in the Flatpak build (it needs the system "
+"NetworkManager)"
+msgstr ""
+"Miracast fungerar inte i Flatpak-versionen (den kräver systemets "
+"NetworkManager)"
+
+#: crates/nd-gui/src/app.rs:829
+msgid "Miracast unavailable"
+msgstr "Miracast är inte tillgängligt"
+
+#: crates/nd-gui/src/app.rs:827
+msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
+msgstr ""
+"Miracast är inte tillgängligt: detta Wi-Fi-kort stöder inte Wi-Fi Direct"
+
+#: crates/nd-gui/src/app.rs:605
+msgid "No receivers found"
+msgstr "Inga mottagare hittades"
+
+#: crates/nd-gui/src/app.rs:65
+msgid "Opening the firewall port…"
+msgstr "Öppnar brandväggsporten…"
+
+#: crates/nd-gui/src/app.rs:67
+msgid "Preparing the video…"
+msgstr "Förbereder videon…"
+
+#: crates/nd-gui/src/app.rs:316
+msgid "Scan again"
+msgstr "Skanna igen"
+
+#: crates/nd-gui/src/app.rs:436 crates/nd-gui/src/app.rs:471
+#: crates/nd-gui/src/app.rs:603
+msgid "Searching…"
+msgstr "Söker…"
+
+#: crates/nd-gui/src/app.rs:323
+msgid "Stop"
+msgstr "Stopp"
+
+#: crates/nd-gui/src/app.rs:668
+msgid "Stopping…"
+msgstr "Stoppar…"
+
+#: crates/nd-gui/src/app.rs:68
+msgid "Streaming"
+msgstr "Strömmar"
+
+#: crates/nd-gui/src/app.rs:48
+msgid "Test"
+msgstr "Test"
+
+#: crates/nd-gui/src/app.rs:66
+msgid "Waiting for the receiver…"
+msgstr "Väntar på mottagaren…"
+
+#: crates/nd-gui/src/app.rs:362
+msgid "What to share"
+msgstr "Vad du vill dela"
+
+#: crates/nd-gui/src/app.rs:371
+msgid "Whole screen"
+msgstr "Hela skärmen"
+
+#: crates/nd-gui/src/app.rs:220
+msgid "discovery only"
+msgstr "endast upptäckt"
+
+#: crates/nd-gui/src/app.rs:727
+msgid "instant response"
+msgstr "omedelbart svar"
+
+#: crates/nd-gui/src/app.rs:731
+msgid "quick response"
+msgstr "snabbt svar"
+
+#: crates/nd-gui/src/app.rs:610
+msgid "receivers found"
+msgstr "mottagare hittades"
+
+#: crates/nd-gui/src/app.rs:690
+msgid "shows up in discovery only"
+msgstr "visas endast i upptäckt"

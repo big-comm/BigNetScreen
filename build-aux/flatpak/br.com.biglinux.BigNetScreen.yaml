@@ -1,28 +1,61 @@
-# Manifesto Flatpak — placeholder (preencher na Fase 4).
+# Manifesto Flatpak do BigNetScreen.
 #
-# Notas importantes:
-# - Sob sandbox NÃO há acesso a NetworkManager/firewalld no system bus, então
-#   Miracast/WFD fica indisponível. Chromecast funciona (mDNS + TCP via
-#   --share=network + servidor HTTP).
-# - Captura de tela DEVE usar o portal (ashpd), nunca Mutter direto.
-# - Construir com o módulo `cargo` (flatpak-cargo-generator p/ as deps).
+# A structural limitation of the sandbox: NetworkManager and firewalld live on
+# the **system** bus, which Flatpak does not grant access to. Therefore:
+#
+#   Chromecast → funciona plenamente (mDNS + TCP via --share=network)
+#   Miracast   → unavailable; the app detects the sandbox and says so in the UI
+#
+# A captura de tela usa exclusivamente o portal (ashpd), nunca o Mutter direto.
+#
+# Antes de construir, gere as fontes do Cargo:
+#   python3 flatpak-cargo-generator.py Cargo.lock -o cargo-sources.json
+# (https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo)
+
 app-id: br.com.biglinux.BigNetScreen
 runtime: org.gnome.Platform
-runtime-version: '47'
+runtime-version: '49'
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
 command: bignetscreen
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/bignetscreen/cargo
+
 finish-args:
+  # Descoberta mDNS e canal Cast.
   - --share=network
-  - --socket=fallback-x11
   - --socket=wayland
-  - --socket=pulseaudio
+  - --socket=fallback-x11
   - --device=dri
-  # ScreenCast via portal (sem --talk-name de Mutter): captura sandbox-safe.
-# modules:
-#   - name: bignetscreen
-#     buildsystem: simple
-#     build-commands:
-#       - cargo build --release --offline
-#       - install -Dm755 target/release/bignetscreen /app/bin/bignetscreen
+  # System audio for the cast's audio track.
+  - --socket=pulseaudio
+  # Captura de tela via portal ScreenCast (nada de --talk-name do Mutter).
+  - --talk-name=org.freedesktop.portal.Desktop
+  # PipeWire: the portal hands over the fd, but the remote is still opened here.
+  - --filesystem=xdg-run/pipewire-0:ro
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/man
+  - '*.a'
+  - '*.la'
+
+modules:
+  - name: bignetscreen
+    buildsystem: simple
+    build-options:
+      env:
+        CARGO_NET_OFFLINE: 'true'
+    build-commands:
+      - cargo build --release --offline --locked
+      - make PREFIX=/app DESTDIR= locale
+      - make PREFIX=/app DESTDIR= install CARGO_FLAGS="--release --offline --locked"
+    sources:
+      - type: dir
+        path: ../..
+      - cargo-sources.json

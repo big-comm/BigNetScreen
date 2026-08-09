@@ -1,0 +1,150 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: bignetscreen\n"
+"Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
+"POT-Creation-Date: 2026-08-08 21:38-0300\n"
+"PO-Revision-Date: 2026-08-08 18:11\n"
+"Last-Translator: Translation Automator <auto@translator.ai>\n"
+"Language-Team: Icelandic <is@li.org>\n"
+"Language: is\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n%10!=1 || n%100==11);\n"
+
+#: crates/nd-gui/src/app.rs:608
+msgid "1 receiver found"
+msgstr "1 móttakandi fannst"
+
+#: crates/nd-gui/src/app.rs:679
+msgid "A stream is already running"
+msgstr "Streymi er þegar í gangi"
+
+#: crates/nd-gui/src/app.rs:382
+msgid "A window"
+msgstr "Gluggi"
+
+#: crates/nd-gui/src/app.rs:46
+msgid "AirPlay"
+msgstr "AirPlay"
+
+#: crates/nd-gui/src/app.rs:45
+msgid "Chromecast"
+msgstr "Chromecast"
+
+#: crates/nd-gui/src/app.rs:839
+msgid ""
+"Chromecasts and TVs show up on their own. For Miracast, put the TV or the "
+"projector into “Screen Mirroring” mode."
+msgstr ""
+"Chromecast-tæki og sjónvörp birtast sjálfkrafa. Fyrir Miracast skaltu setja "
+"sjónvarpið eða skjávarpann í „Skjáspeglun“ ham."
+
+#: crates/nd-gui/src/app.rs:64 crates/nd-gui/src/app.rs:696
+msgid "Connecting…"
+msgstr "Tengist…"
+
+#: crates/nd-gui/src/app.rs:69
+msgid "Failed"
+msgstr "Mistókst"
+
+#: crates/nd-gui/src/app.rs:342
+msgid "Got it"
+msgstr "Skil það"
+
+#: crates/nd-gui/src/app.rs:780
+msgid "Local network discovery unavailable"
+msgstr "Uppgötvun staðarnets ekki tiltæk"
+
+#: crates/nd-gui/src/app.rs:838
+msgid "Looking for receivers…"
+msgstr "Leita að móttakendum…"
+
+#: crates/nd-gui/src/app.rs:47
+msgid "Miracast"
+msgstr "Miracast"
+
+#: crates/nd-gui/src/app.rs:822
+msgid ""
+"Miracast does not work in the Flatpak build (it needs the system "
+"NetworkManager)"
+msgstr ""
+"Miracast virkar ekki í Flatpak-útgáfunni (það þarf system NetworkManager)"
+
+#: crates/nd-gui/src/app.rs:829
+msgid "Miracast unavailable"
+msgstr "Miracast ótiltækt"
+
+#: crates/nd-gui/src/app.rs:827
+msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
+msgstr "Miracast ótiltækt: þetta Wi-Fi-kort styður ekki Wi-Fi Direct"
+
+#: crates/nd-gui/src/app.rs:605
+msgid "No receivers found"
+msgstr "Engir móttakendur fundust"
+
+#: crates/nd-gui/src/app.rs:65
+msgid "Opening the firewall port…"
+msgstr "Opna eldveggshlaupinn…"
+
+#: crates/nd-gui/src/app.rs:67
+msgid "Preparing the video…"
+msgstr "Undirbý myndbandið…"
+
+#: crates/nd-gui/src/app.rs:316
+msgid "Scan again"
+msgstr "Leita aftur"
+
+#: crates/nd-gui/src/app.rs:436 crates/nd-gui/src/app.rs:471
+#: crates/nd-gui/src/app.rs:603
+msgid "Searching…"
+msgstr "Leitar…"
+
+#: crates/nd-gui/src/app.rs:323
+msgid "Stop"
+msgstr "Stöðva"
+
+#: crates/nd-gui/src/app.rs:668
+msgid "Stopping…"
+msgstr "Stöðva…"
+
+#: crates/nd-gui/src/app.rs:68
+msgid "Streaming"
+msgstr "Streymir"
+
+#: crates/nd-gui/src/app.rs:48
+msgid "Test"
+msgstr "Próf"
+
+#: crates/nd-gui/src/app.rs:66
+msgid "Waiting for the receiver…"
+msgstr "Beðið eftir móttakara…"
+
+#: crates/nd-gui/src/app.rs:362
+msgid "What to share"
+msgstr "Hvað á að deila"
+
+#: crates/nd-gui/src/app.rs:371
+msgid "Whole screen"
+msgstr "Allur skjárinn"
+
+#: crates/nd-gui/src/app.rs:220
+msgid "discovery only"
+msgstr "aðeins uppgötvun"
+
+#: crates/nd-gui/src/app.rs:727
+msgid "instant response"
+msgstr "tafarlaus svörun"
+
+#: crates/nd-gui/src/app.rs:731
+msgid "quick response"
+msgstr "hröð svörun"
+
+#: crates/nd-gui/src/app.rs:610
+msgid "receivers found"
+msgstr "móttakendur fundust"
+
+#: crates/nd-gui/src/app.rs:690
+msgid "shows up in discovery only"
+msgstr "birtist aðeins í uppgötvun"

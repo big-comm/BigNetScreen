@@ -2,10 +2,6 @@
 /target
 **/*.rs.bk
 
-# ===== Backup do projeto C original (cópia física local) =====
-# O histórico do código C continua acessível nos commits anteriores ao pivô.
-/bkp
-
 # ===== Editores / IDEs =====
 .vscode/
 .idea/
@@ -20,7 +16,19 @@
 .claude/
 .cache/
 
+# ===== Local build output (make) =====
+/build
+# Compiled .mo catalogues: produced by `make locale` and by translation
+# tooling. They are artefacts, not source.
+/usr
+
 # ===== Flatpak build =====
 .flatpak-builder/
 /build-aux/flatpak/.flatpak-builder/
 /repo/
+
+# Compiled translations and Makefile artefacts
+/build/
+
+# Fontes geradas para o Flatpak
+/build-aux/flatpak/cargo-sources.json

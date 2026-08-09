@@ -1,10 +1,10 @@
-//! Testa a CONEXÃO Wi-Fi Direct (Fase 3b) com um sink Miracast.
+//! Exercises the Wi-Fi Direct CONNECTION (phase 3b) with a Miracast sink.
 //!
 //!   cargo run -p nd-net --example p2p_connect
 //!
-//! Coloque a TV/projetor em "Espelhamento de Tela / Screen Mirroring" ANTES.
-//! O teste: descobre o peer WFD, forma o grupo P2P e acompanha o estado da
-//! conexão (2 = ACTIVATED = grupo formado).
+//! Put the TV/projector into "Screen Mirroring" FIRST. The test discovers the
+//! WFD peer, forms the P2P group and follows the connection state
+//! (2 = ACTIVATED = group formed).
 
 use std::time::Duration;
 
@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let device = P2pDevice::open().await?;
     device.start_find().await?;
-    eprintln!("procurando sink Miracast (TV em Espelhamento de Tela)…");
+    eprintln!("looking for a Miracast sink (TV in Screen Mirroring mode)…");
 
     let mut peer = None;
     for _ in 0..20 {
@@ -31,24 +31,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             peer = Some(p.path);
             break;
         }
-        eprintln!("  …ainda nenhum peer WFD");
+        eprintln!("  …no WFD peer yet");
     }
 
     let peer = match peer {
         Some(p) => p,
         None => {
-            eprintln!("nenhum sink Miracast encontrado — a TV está em Espelhamento de Tela?");
+            eprintln!("no Miracast sink found — is the TV in Screen Mirroring mode?");
             return Ok(());
         }
     };
 
-    eprintln!("formando grupo Wi-Fi Direct com {peer}…");
+    eprintln!("forming a Wi-Fi Direct group with {peer}…");
     let active = device.connect(&peer).await?;
-    eprintln!("conexão ativa: {active}");
+    eprintln!("active connection: {active}");
 
     for _ in 0..15 {
         tokio::time::sleep(Duration::from_secs(2)).await;
-        let state = device.active_state(&active).await.unwrap_or(ActiveState::Unknown);
+        let state = device
+            .active_state(&active)
+            .await
+            .unwrap_or(ActiveState::Unknown);
         eprintln!("  estado: {state:?}");
         if state == ActiveState::Activated {
             let ips = device.addresses(&active).await.unwrap_or_default();
@@ -59,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             break;
         }
         if state == ActiveState::Deactivated {
-            eprintln!("❌ conexão falhou/desativada");
+            eprintln!("❌ connection failed/deactivated");
             break;
         }
     }

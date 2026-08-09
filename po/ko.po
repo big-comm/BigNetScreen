@@ -1,0 +1,151 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: bignetscreen\n"
+"Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
+"POT-Creation-Date: 2026-08-08 21:38-0300\n"
+"PO-Revision-Date: 2026-08-08 18:12\n"
+"Last-Translator: Translation Automator <auto@translator.ai>\n"
+"Language-Team: Korean <ko@li.org>\n"
+"Language: ko\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: crates/nd-gui/src/app.rs:608
+msgid "1 receiver found"
+msgstr "수신기 1개 발견"
+
+#: crates/nd-gui/src/app.rs:679
+msgid "A stream is already running"
+msgstr "이미 스트리밍이 실행 중입니다"
+
+#: crates/nd-gui/src/app.rs:382
+msgid "A window"
+msgstr "창"
+
+#: crates/nd-gui/src/app.rs:46
+msgid "AirPlay"
+msgstr "AirPlay"
+
+#: crates/nd-gui/src/app.rs:45
+msgid "Chromecast"
+msgstr "Chromecast"
+
+#: crates/nd-gui/src/app.rs:839
+msgid ""
+"Chromecasts and TVs show up on their own. For Miracast, put the TV or the "
+"projector into “Screen Mirroring” mode."
+msgstr ""
+"Chromecast와 TV는 자동으로 표시됩니다. Miracast의 경우 TV나 프로젝터를 \"화"
+"면 미러링\" 모드로 설정하세요."
+
+#: crates/nd-gui/src/app.rs:64 crates/nd-gui/src/app.rs:696
+msgid "Connecting…"
+msgstr "연결 중…"
+
+#: crates/nd-gui/src/app.rs:69
+msgid "Failed"
+msgstr "실패"
+
+#: crates/nd-gui/src/app.rs:342
+msgid "Got it"
+msgstr "알겠습니다"
+
+#: crates/nd-gui/src/app.rs:780
+msgid "Local network discovery unavailable"
+msgstr "로컬 네트워크 검색을 사용할 수 없음"
+
+#: crates/nd-gui/src/app.rs:838
+msgid "Looking for receivers…"
+msgstr "수신기를 찾는 중…"
+
+#: crates/nd-gui/src/app.rs:47
+msgid "Miracast"
+msgstr "Miracast"
+
+#: crates/nd-gui/src/app.rs:822
+msgid ""
+"Miracast does not work in the Flatpak build (it needs the system "
+"NetworkManager)"
+msgstr ""
+"Miracast는 Flatpak 빌드에서 작동하지 않습니다(시스템 NetworkManager가 필요함)"
+
+#: crates/nd-gui/src/app.rs:829
+msgid "Miracast unavailable"
+msgstr "Miracast를 사용할 수 없음"
+
+#: crates/nd-gui/src/app.rs:827
+msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
+msgstr ""
+"Miracast를 사용할 수 없음: 이 Wi-Fi 카드는 Wi-Fi Direct를 지원하지 않습니다"
+
+#: crates/nd-gui/src/app.rs:605
+msgid "No receivers found"
+msgstr "수신기를 찾을 수 없음"
+
+#: crates/nd-gui/src/app.rs:65
+msgid "Opening the firewall port…"
+msgstr "방화벽 포트를 여는 중…"
+
+#: crates/nd-gui/src/app.rs:67
+msgid "Preparing the video…"
+msgstr "비디오를 준비하는 중…"
+
+#: crates/nd-gui/src/app.rs:316
+msgid "Scan again"
+msgstr "다시 스캔"
+
+#: crates/nd-gui/src/app.rs:436 crates/nd-gui/src/app.rs:471
+#: crates/nd-gui/src/app.rs:603
+msgid "Searching…"
+msgstr "검색 중…"
+
+#: crates/nd-gui/src/app.rs:323
+msgid "Stop"
+msgstr "중지"
+
+#: crates/nd-gui/src/app.rs:668
+msgid "Stopping…"
+msgstr "중지 중…"
+
+#: crates/nd-gui/src/app.rs:68
+msgid "Streaming"
+msgstr "스트리밍 중"
+
+#: crates/nd-gui/src/app.rs:48
+msgid "Test"
+msgstr "테스트"
+
+#: crates/nd-gui/src/app.rs:66
+msgid "Waiting for the receiver…"
+msgstr "수신기를 기다리는 중…"
+
+#: crates/nd-gui/src/app.rs:362
+msgid "What to share"
+msgstr "공유할 내용"
+
+#: crates/nd-gui/src/app.rs:371
+msgid "Whole screen"
+msgstr "전체 화면"
+
+#: crates/nd-gui/src/app.rs:220
+msgid "discovery only"
+msgstr "검색 전용"
+
+#: crates/nd-gui/src/app.rs:727
+msgid "instant response"
+msgstr "즉시 응답"
+
+#: crates/nd-gui/src/app.rs:731
+msgid "quick response"
+msgstr "빠른 응답"
+
+#: crates/nd-gui/src/app.rs:610
+msgid "receivers found"
+msgstr "수신기 발견"
+
+#: crates/nd-gui/src/app.rs:690
+msgid "shows up in discovery only"
+msgstr "검색 전용으로 표시됨"

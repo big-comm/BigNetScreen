@@ -1,6 +1,6 @@
 [package]
 name = "nd-core"
-description = "Núcleo sem GUI: traits Provider/Sink/Capture, tipos e construção dos pipelines GStreamer"
+description = "GUI-free core: the Provider/Sink/Capture traits, shared types and GStreamer pipeline construction"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,4 +13,6 @@ thiserror.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
 futures.workspace = true
-gstreamer = "0.23"
+gstreamer.workspace = true
+# `radio`: radio silence shared between discovery and streaming.
+tokio.workspace = true

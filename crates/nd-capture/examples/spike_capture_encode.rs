@@ -1,22 +1,24 @@
-//! Spike da Fase 0: prova a stack de mídia em Rust ponta-a-ponta.
+//! Proves the media stack end to end, already using the production tuning.
 //!
-//! Captura a tela via portal (`ashpd`) → `pipewiresrc` → `x264enc` → arquivo
-//! MP4. Valida que captura + encode funcionam antes de investir nos protocolos.
+//! Screen capture → `nd_core::pipeline` (encoder picked from the registry,
+//! with the real low-latency properties) → an MP4 file.
 //!
 //! ```sh
 //! cargo run -p nd-capture --example spike_capture_encode
 //! ```
 //!
-//! Precisa de uma sessão gráfica: o portal abre um diálogo para escolher o
-//! monitor. Saída: `/tmp/bignetscreen-spike.mp4` (≈ 8 s de gravação).
+//! Needs a graphical session: the portal opens a dialog to pick the monitor
+//! (only the first time — after that the restore token skips it).
+//! Output: `/tmp/bignetscreen-spike.mp4` (≈ 8 s of recording).
 
-use std::os::fd::AsRawFd;
 use std::time::Duration;
 
-use gstreamer as gst;
 use gst::prelude::*;
-use nd_capture::PortalBackend;
-use nd_core::capture::{CaptureBackend, SourceType};
+use gstreamer as gst;
+
+use nd_capture::select_backend;
+use nd_core::capture::SourceType;
+use nd_core::pipeline::{self, StreamConfig};
 
 const OUTPUT: &str = "/tmp/bignetscreen-spike.mp4";
 const RECORD_SECS: u64 = 8;
@@ -30,51 +32,102 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
 
-    gst::init()?;
+    pipeline::init()?;
 
-    tracing::info!("solicitando captura ao portal (escolha um monitor no diálogo)…");
-    let backend = PortalBackend::new();
+    // The same encoder selection production uses: registry + GPU driver.
+    let driver = nd_net_driver();
+    let encoder = pipeline::best_encoder(driver)?;
+    println!("encoder escolhido: {encoder:?} (driver {driver:?})");
+
+    println!("solicitando captura ao portal…");
+    let backend = select_backend().await;
     let source = backend.start(SourceType::Monitor).await?;
-    tracing::info!(node = source.node_id, "stream PipeWire obtido");
+    let (width, height) = source.size_or((1920, 1080));
+    println!(
+        "PipeWire stream acquired: node {} ({width}x{height})",
+        source.node_id
+    );
 
-    // O fd precisa permanecer aberto enquanto o pipeline grava; `source` é
-    // mantido vivo no escopo até o fim.
-    let fd = source.pipewire_fd.as_raw_fd();
+    let cfg = StreamConfig {
+        width,
+        height,
+        encoder,
+        ..Default::default()
+    };
+
+    // `source.video_source()` guarantees the right `fd=`/`path=` — building
+    // the description by hand was exactly the source of the "captures the
+    // wrong node" bug.
     let desc = format!(
-        "pipewiresrc fd={fd} path={node} do-timestamp=true ! \
-         videoconvert n-threads=0 ! videorate ! video/x-raw,format=I420 ! \
-         x264enc tune=zerolatency speed-preset=ultrafast bitrate=8000 ! \
-         h264parse ! mp4mux ! filesink location={out}",
-        fd = fd,
-        node = source.node_id,
+        "{src} ! {enc} ! h264parse ! mp4mux ! filesink location={out}",
+        src = describe_source(&cfg, &source),
+        enc = encoder.encoder_description(&cfg),
         out = OUTPUT,
     );
-    tracing::info!("pipeline: {desc}");
 
-    let pipeline = gst::parse::launch(&desc)?
-        .downcast::<gst::Pipeline>()
-        .expect("gst::parse::launch devolve um Pipeline");
-
+    let (pipeline, mut events) = pipeline::build_pipeline(&desc, cfg.latency_ms())?;
     pipeline.set_state(gst::State::Playing)?;
-    tracing::info!("gravando por {RECORD_SECS}s…");
-    tokio::time::sleep(Duration::from_secs(RECORD_SECS)).await;
+    println!("gravando por {RECORD_SECS}s…");
 
-    // EOS para o mp4mux fechar o container corretamente.
-    pipeline.send_event(gst::event::Eos::new());
-    let bus = pipeline.bus().expect("pipeline tem bus");
-    if let Some(msg) = bus.timed_pop_filtered(
-        gst::ClockTime::from_seconds(5),
-        &[gst::MessageType::Eos, gst::MessageType::Error],
-    ) {
-        if let gst::MessageView::Error(err) = msg.view() {
-            tracing::error!("erro do pipeline: {} ({:?})", err.error(), err.debug());
+    tokio::select! {
+        _ = tokio::time::sleep(Duration::from_secs(RECORD_SECS)) => {}
+        Some(event) = futures::StreamExt::next(&mut events) => {
+            eprintln!("evento do pipeline: {event:?}");
         }
+    }
+
+    // EOS so mp4mux closes the container properly.
+    pipeline.send_event(gst::event::Eos::new());
+    if let Some(bus) = pipeline.bus() {
+        // The sync handler already drains the bus; a brief wait is enough for
+        // the muxer to finish writing the index.
+        let _ = bus;
+        tokio::time::sleep(Duration::from_millis(500)).await;
     }
 
     pipeline.set_state(gst::State::Null)?;
     backend.stop().await?;
-    drop(source); // só agora é seguro fechar o fd
+    drop(source); // only now is it safe to close the fd
 
-    tracing::info!("pronto: {OUTPUT}");
+    println!("pronto: {OUTPUT}");
     Ok(())
+}
+
+/// The source + conversion fragment, mirroring the start of the production pipeline.
+fn describe_source(cfg: &StreamConfig, source: &nd_core::capture::CaptureSource) -> String {
+    let video = source.video_source();
+    // Reuses the core's conversion logic through a throwaway full pipeline,
+    // so the rules are not duplicated here.
+    let full = pipeline::chromecast_pipeline_description(cfg, &video);
+    // Take everything up to the encoder (exclusive).
+    let cut = full
+        .find(cfg.encoder.element())
+        .expect("the description contains the encoder");
+    full[..cut].trim_end().trim_end_matches('!').to_string()
+}
+
+/// The `nd-net` crate only exists in the native build; detect it directly here.
+fn nd_net_driver() -> nd_core::pipeline::GpuDriver {
+    use nd_core::pipeline::GpuDriver;
+    let Ok(entries) = std::fs::read_dir("/sys/class/drm") else {
+        return GpuDriver::Unknown;
+    };
+    let mut names: Vec<_> = entries
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("card") && n["card".len()..].chars().all(|c| c.is_ascii_digit()))
+        .collect();
+    names.sort();
+    for card in names {
+        let link = format!("/sys/class/drm/{card}/device/driver");
+        if let Ok(target) = std::fs::read_link(&link) {
+            if let Some(module) = target.file_name().and_then(|n| n.to_str()) {
+                let driver = GpuDriver::from_kernel_module(module);
+                if driver != GpuDriver::Unknown {
+                    return driver;
+                }
+            }
+        }
+    }
+    GpuDriver::Unknown
 }

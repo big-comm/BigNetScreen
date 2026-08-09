@@ -1,6 +1,7 @@
-//! Ponto de entrada do aplicativo gráfico BigNetScreen.
+//! Entry point of the BigNetScreen graphical application.
 
 mod app;
+mod i18n;
 
 use app::AppModel;
 use relm4::RelmApp;
@@ -16,7 +17,20 @@ fn main() {
         .with_writer(std::io::stderr)
         .init();
 
-    tracing::info!("BigNetScreen {} iniciando", env!("CARGO_PKG_VERSION"));
+    i18n::init();
+
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        sandboxed = nd_capture::is_sandboxed(),
+        "BigNetScreen iniciando"
+    );
+
+    // Useful in a bug report: which encoder will actually be used.
+    let driver = nd_net::detect_gpu_driver();
+    match nd_core::pipeline::best_encoder(driver) {
+        Ok(encoder) => tracing::info!(?driver, ?encoder, "video encoding"),
+        Err(err) => tracing::error!(?driver, %err, "no H.264 encoder available"),
+    }
 
     let app = RelmApp::new(APP_ID);
     app.run::<AppModel>(());

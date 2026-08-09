@@ -1,6 +1,6 @@
-//! Diagnóstico: usa o NOSSO mdns-sd para varrer vários serviços mDNS e
-//! imprimir tudo que encontrar. Serve para descobrir se o stack está vendo a
-//! rede certa (ex.: se o Tailscale está atrapalhando a seleção de interface).
+//! Diagnostic: uses OUR mdns-sd to browse several mDNS services and print
+//! everything it finds. Useful for telling whether the stack is looking at the
+//! right network (e.g. whether Tailscale is skewing interface selection).
 //!
 //!   cargo run -p nd-chromecast --example mdns_scan
 
@@ -49,5 +49,5 @@ fn main() {
             }
         }
     }
-    println!("\n--- fim: {count} serviços resolvidos ---");
+    println!("\n--- done: {count} services resolved ---");
 }

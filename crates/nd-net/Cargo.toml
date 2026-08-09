@@ -1,6 +1,6 @@
 [package]
 name = "nd-net"
-description = "Integração de rede do sistema: NetworkManager (Wi-Fi Direct) e firewalld via D-Bus"
+description = "System network integration: NetworkManager (Wi-Fi Direct) and firewalld over D-Bus"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,11 +10,12 @@ rust-version.workspace = true
 
 [dependencies]
 nd-core.workspace = true
-thiserror.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
+futures.workspace = true
+tokio.workspace = true
 zbus = { version = "5", default-features = false, features = ["tokio"] }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

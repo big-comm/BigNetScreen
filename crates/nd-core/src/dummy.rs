@@ -1,7 +1,8 @@
-//! Provider/sink falsos para desenvolvimento e teste de UI.
+//! Fake provider/sink for development and UI testing.
 //!
-//! Equivalente ao `NETWORK_DISPLAYS_DUMMY=1` do projeto C: injeta receptores
-//! fictícios para exercitar a lista da GUI sem hardware na rede.
+//! The equivalent of the C project's `NETWORK_DISPLAYS_DUMMY=1`: it injects
+//! made-up receivers so the GUI list can be exercised with no hardware on the
+//! network.
 
 use std::sync::Arc;
 
@@ -10,11 +11,12 @@ use futures::stream::{BoxStream, StreamExt};
 
 use crate::capture::CaptureSource;
 use crate::provider::{DiscoveryEvent, Provider};
-use crate::sink::{Sink, SinkInfo, SinkKind, SinkState};
+use crate::sink::{Sink, SinkInfo, SinkKind, SinkState, SinkStatus};
 use crate::{NdError, Result};
 
 struct DummySink {
     info: SinkInfo,
+    status: SinkStatus,
 }
 
 #[async_trait]
@@ -23,23 +25,34 @@ impl Sink for DummySink {
         self.info.clone()
     }
     fn state(&self) -> SinkState {
-        SinkState::Disconnected
+        self.status.state()
+    }
+    fn error_message(&self) -> Option<String> {
+        self.status.message()
     }
     async fn start_stream(&self, _source: CaptureSource) -> Result<()> {
-        Err(NdError::Unsupported("sink dummy não transmite".into()))
+        self.status.fail("a test sink does not stream");
+        Err(NdError::Unsupported(
+            "the dummy sink does not stream".into(),
+        ))
     }
     async fn stop_stream(&self) -> Result<()> {
+        self.status.reset();
         Ok(())
     }
 }
 
-/// Provider que anuncia alguns receptores fictícios uma vez.
+/// A provider that announces a few made-up receivers once.
 pub struct DummyProvider;
 
 #[async_trait]
 impl Provider for DummyProvider {
     fn id(&self) -> &'static str {
         "dummy"
+    }
+
+    fn display_name(&self) -> &'static str {
+        "Test"
     }
 
     async fn discover(&self) -> Result<BoxStream<'static, DiscoveryEvent>> {
@@ -51,13 +64,24 @@ impl Provider for DummyProvider {
                     kind,
                     address: Some(addr.to_string()),
                 },
+                status: SinkStatus::new(),
             };
             DiscoveryEvent::Added(Arc::new(sink) as Arc<dyn Sink>)
         };
 
         let events = vec![
-            make("dummy-cc", "Chromecast de teste", SinkKind::Chromecast, "192.168.0.50"),
-            make("dummy-wfd", "Miracast de teste", SinkKind::WfdP2p, "AA:BB:CC:DD:EE:FF"),
+            make(
+                "dummy-cc",
+                "Test Chromecast",
+                SinkKind::Chromecast,
+                "192.168.0.50",
+            ),
+            make(
+                "dummy-wfd",
+                "Test Miracast",
+                SinkKind::WfdP2p,
+                "AA:BB:CC:DD:EE:FF",
+            ),
         ];
 
         Ok(futures::stream::iter(events).boxed())

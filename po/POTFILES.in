@@ -1,0 +1,4 @@
+crates/nd-gui/src/app.rs
+crates/nd-gui/src/main.rs
+data/br.com.biglinux.BigNetScreen.desktop
+data/br.com.biglinux.BigNetScreen.metainfo.xml

@@ -1,6 +1,6 @@
 [package]
 name = "nd-wfd"
-description = "Provider e sink Wi-Fi Display (Miracast): servidor RTSP, negociação WFD e P2P via NetworkManager"
+description = "Wi-Fi Display (Miracast) provider and sink: RTSP server, WFD negotiation and P2P through NetworkManager"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,13 +11,14 @@ rust-version.workspace = true
 [dependencies]
 nd-core.workspace = true
 nd-net.workspace = true
-thiserror.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
 futures.workspace = true
-tokio = { version = "1", features = ["rt", "time", "net", "io-util"] }
-gstreamer = "0.23"
+tokio.workspace = true
+gstreamer.workspace = true
+zbus = { version = "5", default-features = false, features = ["tokio"] }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net"] }
+nd-capture.workspace = true
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

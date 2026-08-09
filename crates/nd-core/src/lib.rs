@@ -1,17 +1,17 @@
 //! # nd-core
 //!
-//! Núcleo independente de GUI do BigNetScreen. Concentra:
+//! GUI-independent core of BigNetScreen. It holds:
 //!
-//! - As **abstrações** que isolam protocolos e ambientes:
-//!   - [`provider::Provider`] — descoberta de receptores (Chromecast/WFD).
-//!   - [`sink::Sink`] — ciclo de vida de uma sessão de cast (máquina de estados).
-//!   - [`capture::CaptureBackend`] — captura de tela (portal vs Mutter direto),
-//!     necessária para suportar **nativo e Flatpak** com o mesmo código.
-//! - A **construção dos pipelines GStreamer** ([`pipeline`]), onde mora todo o
-//!   tuning de baixa latência. Esses valores são portados do projeto C de
-//!   referência (`./bkp`, branch HEAD — antes da regressão do working tree).
+//! - The **abstractions** that isolate protocols and environments:
+//!   - [`provider::Provider`] — receiver discovery (Chromecast/WFD).
+//!   - [`sink::Sink`] — lifecycle of a cast session (a state machine).
+//!   - [`capture::CaptureBackend`] — screen capture (portal vs. Mutter directly),
+//!     which is what lets **native and Flatpak** share the same code.
+//! - The **GStreamer pipeline construction** ([`pipeline`]), where all the
+//!   low-latency tuning lives. Those values were ported from the reference C
+//!   project (GNOME Network Displays), which this rewrite replaces.
 //!
-//! Nada aqui depende de GTK: tudo é testável de forma isolada.
+//! Nothing here depends on GTK: everything is testable in isolation.
 
 pub mod capture;
 pub mod dummy;
@@ -19,6 +19,7 @@ pub mod error;
 pub mod meta;
 pub mod pipeline;
 pub mod provider;
+pub mod radio;
 pub mod sink;
 
 pub use error::{NdError, Result};

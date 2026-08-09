@@ -1,0 +1,153 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: bignetscreen\n"
+"Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
+"POT-Creation-Date: 2026-08-08 21:38-0300\n"
+"PO-Revision-Date: 2026-08-08 18:08\n"
+"Last-Translator: Translation Automator <auto@translator.ai>\n"
+"Language-Team: Greek <el@li.org>\n"
+"Language: el\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: crates/nd-gui/src/app.rs:608
+msgid "1 receiver found"
+msgstr "Βρέθηκε 1 δέκτης"
+
+#: crates/nd-gui/src/app.rs:679
+msgid "A stream is already running"
+msgstr "Μια ροή εκτελείται ήδη"
+
+#: crates/nd-gui/src/app.rs:382
+msgid "A window"
+msgstr "Ένα παράθυρο"
+
+#: crates/nd-gui/src/app.rs:46
+msgid "AirPlay"
+msgstr "AirPlay"
+
+#: crates/nd-gui/src/app.rs:45
+msgid "Chromecast"
+msgstr "Chromecast"
+
+#: crates/nd-gui/src/app.rs:839
+msgid ""
+"Chromecasts and TVs show up on their own. For Miracast, put the TV or the "
+"projector into “Screen Mirroring” mode."
+msgstr ""
+"Τα Chromecast και οι τηλεοράσεις εμφανίζονται μόνα τους. Για Miracast, θέστε "
+"την τηλεόραση ή τον προβολέα σε λειτουργία «Screen Mirroring»."
+
+#: crates/nd-gui/src/app.rs:64 crates/nd-gui/src/app.rs:696
+msgid "Connecting…"
+msgstr "Σύνδεση…"
+
+#: crates/nd-gui/src/app.rs:69
+msgid "Failed"
+msgstr "Αποτυχία"
+
+#: crates/nd-gui/src/app.rs:342
+msgid "Got it"
+msgstr "Κατάλαβα"
+
+#: crates/nd-gui/src/app.rs:780
+msgid "Local network discovery unavailable"
+msgstr "Η ανακάλυψη τοπικού δικτύου δεν είναι διαθέσιμη"
+
+#: crates/nd-gui/src/app.rs:838
+msgid "Looking for receivers…"
+msgstr "Αναζήτηση συσκευών λήψης…"
+
+#: crates/nd-gui/src/app.rs:47
+msgid "Miracast"
+msgstr "Miracast"
+
+#: crates/nd-gui/src/app.rs:822
+msgid ""
+"Miracast does not work in the Flatpak build (it needs the system "
+"NetworkManager)"
+msgstr ""
+"Το Miracast δεν λειτουργεί στην έκδοση Flatpak (απαιτείται ο διαχειριστής "
+"δικτύου του συστήματος)"
+
+#: crates/nd-gui/src/app.rs:829
+msgid "Miracast unavailable"
+msgstr "Το Miracast δεν είναι διαθέσιμο"
+
+#: crates/nd-gui/src/app.rs:827
+msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
+msgstr ""
+"Το Miracast δεν είναι διαθέσιμο: αυτή η κάρτα Wi-Fi δεν υποστηρίζει το Wi-Fi "
+"Direct"
+
+#: crates/nd-gui/src/app.rs:605
+msgid "No receivers found"
+msgstr "Δεν βρέθηκαν δέκτες"
+
+#: crates/nd-gui/src/app.rs:65
+msgid "Opening the firewall port…"
+msgstr "Άνοιγμα της θύρας τείχους προστασίας…"
+
+#: crates/nd-gui/src/app.rs:67
+msgid "Preparing the video…"
+msgstr "Προετοιμασία του βίντεο…"
+
+#: crates/nd-gui/src/app.rs:316
+msgid "Scan again"
+msgstr "Νέα σάρωση"
+
+#: crates/nd-gui/src/app.rs:436 crates/nd-gui/src/app.rs:471
+#: crates/nd-gui/src/app.rs:603
+msgid "Searching…"
+msgstr "Αναζήτηση…"
+
+#: crates/nd-gui/src/app.rs:323
+msgid "Stop"
+msgstr "Διακοπή"
+
+#: crates/nd-gui/src/app.rs:668
+msgid "Stopping…"
+msgstr "Διακοπή…"
+
+#: crates/nd-gui/src/app.rs:68
+msgid "Streaming"
+msgstr "Μετάδοση ροής"
+
+#: crates/nd-gui/src/app.rs:48
+msgid "Test"
+msgstr "Δοκιμή"
+
+#: crates/nd-gui/src/app.rs:66
+msgid "Waiting for the receiver…"
+msgstr "Αναμονή για τον δέκτη…"
+
+#: crates/nd-gui/src/app.rs:362
+msgid "What to share"
+msgstr "Τι να μοιραστείτε"
+
+#: crates/nd-gui/src/app.rs:371
+msgid "Whole screen"
+msgstr "Ολόκληρη οθόνη"
+
+#: crates/nd-gui/src/app.rs:220
+msgid "discovery only"
+msgstr "μόνο εντοπισμός"
+
+#: crates/nd-gui/src/app.rs:727
+msgid "instant response"
+msgstr "άμεση απόκριση"
+
+#: crates/nd-gui/src/app.rs:731
+msgid "quick response"
+msgstr "γρήγορη απόκριση"
+
+#: crates/nd-gui/src/app.rs:610
+msgid "receivers found"
+msgstr "δέκτες βρέθηκαν"
+
+#: crates/nd-gui/src/app.rs:690
+msgid "shows up in discovery only"
+msgstr "εμφανίζεται μόνο στην ανακάλυψη"

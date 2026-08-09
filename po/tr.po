@@ -1,0 +1,149 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: bignetscreen\n"
+"Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
+"POT-Creation-Date: 2026-08-08 21:38-0300\n"
+"PO-Revision-Date: 2026-08-08 18:16\n"
+"Last-Translator: Translation Automator <auto@translator.ai>\n"
+"Language-Team: Turkish <tr@li.org>\n"
+"Language: tr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: crates/nd-gui/src/app.rs:608
+msgid "1 receiver found"
+msgstr "1 alıcı bulundu"
+
+#: crates/nd-gui/src/app.rs:679
+msgid "A stream is already running"
+msgstr "Zaten çalışan bir akış var"
+
+#: crates/nd-gui/src/app.rs:382
+msgid "A window"
+msgstr "Bir pencere"
+
+#: crates/nd-gui/src/app.rs:46
+msgid "AirPlay"
+msgstr "AirPlay"
+
+#: crates/nd-gui/src/app.rs:45
+msgid "Chromecast"
+msgstr "Chromecast"
+
+#: crates/nd-gui/src/app.rs:839
+msgid ""
+"Chromecasts and TVs show up on their own. For Miracast, put the TV or the "
+"projector into “Screen Mirroring” mode."
+msgstr ""
+"Chromecast'ler ve TV'ler kendiliğinden görünür. Miracast için TV'yi veya "
+"projektörü \"Ekran Yansıtma\" moduna alın."
+
+#: crates/nd-gui/src/app.rs:64 crates/nd-gui/src/app.rs:696
+msgid "Connecting…"
+msgstr "Bağlanılıyor…"
+
+#: crates/nd-gui/src/app.rs:69
+msgid "Failed"
+msgstr "Başarısız"
+
+#: crates/nd-gui/src/app.rs:342
+msgid "Got it"
+msgstr "Anladım"
+
+#: crates/nd-gui/src/app.rs:780
+msgid "Local network discovery unavailable"
+msgstr "Yerel ağ keşfi kullanılamıyor"
+
+#: crates/nd-gui/src/app.rs:838
+msgid "Looking for receivers…"
+msgstr "Alıcılar aranıyor…"
+
+#: crates/nd-gui/src/app.rs:47
+msgid "Miracast"
+msgstr "Miracast"
+
+#: crates/nd-gui/src/app.rs:822
+msgid ""
+"Miracast does not work in the Flatpak build (it needs the system "
+"NetworkManager)"
+msgstr "Miracast Flatpak sürümünde çalışmaz (sistem NetworkManager gerektirir)"
+
+#: crates/nd-gui/src/app.rs:829
+msgid "Miracast unavailable"
+msgstr "Miracast kullanılamıyor"
+
+#: crates/nd-gui/src/app.rs:827
+msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
+msgstr "Miracast kullanılamıyor: bu Wi-Fi kartı Wi-Fi Direct'i desteklemiyor"
+
+#: crates/nd-gui/src/app.rs:605
+msgid "No receivers found"
+msgstr "Alıcı bulunamadı"
+
+#: crates/nd-gui/src/app.rs:65
+msgid "Opening the firewall port…"
+msgstr "Güvenlik duvarı bağlantı noktası açılıyor…"
+
+#: crates/nd-gui/src/app.rs:67
+msgid "Preparing the video…"
+msgstr "Video hazırlanıyor…"
+
+#: crates/nd-gui/src/app.rs:316
+msgid "Scan again"
+msgstr "Tekrar tara"
+
+#: crates/nd-gui/src/app.rs:436 crates/nd-gui/src/app.rs:471
+#: crates/nd-gui/src/app.rs:603
+msgid "Searching…"
+msgstr "Aranıyor…"
+
+#: crates/nd-gui/src/app.rs:323
+msgid "Stop"
+msgstr "Durdur"
+
+#: crates/nd-gui/src/app.rs:668
+msgid "Stopping…"
+msgstr "Durduruluyor…"
+
+#: crates/nd-gui/src/app.rs:68
+msgid "Streaming"
+msgstr "Akış"
+
+#: crates/nd-gui/src/app.rs:48
+msgid "Test"
+msgstr "Test"
+
+#: crates/nd-gui/src/app.rs:66
+msgid "Waiting for the receiver…"
+msgstr "Alıcı bekleniyor…"
+
+#: crates/nd-gui/src/app.rs:362
+msgid "What to share"
+msgstr "Ne paylaşılacak"
+
+#: crates/nd-gui/src/app.rs:371
+msgid "Whole screen"
+msgstr "Tam ekran"
+
+#: crates/nd-gui/src/app.rs:220
+msgid "discovery only"
+msgstr "yalnızca keşif"
+
+#: crates/nd-gui/src/app.rs:727
+msgid "instant response"
+msgstr "anında yanıt"
+
+#: crates/nd-gui/src/app.rs:731
+msgid "quick response"
+msgstr "hızlı yanıt"
+
+#: crates/nd-gui/src/app.rs:610
+msgid "receivers found"
+msgstr "alıcı bulundu"
+
+#: crates/nd-gui/src/app.rs:690
+msgid "shows up in discovery only"
+msgstr "yalnızca keşifte görünür"

@@ -1,18 +1,16 @@
-//! Teste da negociação WFD (Fase 3c, parte 1): forma o grupo Wi-Fi Direct,
-//! sobe o servidor RTSP na 7236 e negocia M1–M3 com o sink, imprimindo as
-//! capacidades anunciadas (resolução/codecs/porta RTP).
+//! WFD negotiation diagnostic: forms the Wi-Fi Direct group, brings the RTSP
+//! server up on 7236 and negotiates M1–M3, printing **the decoded video
+//! modes** from the CEA/VESA/HH tables — and which one would be chosen.
 //!
 //!   cargo run -p nd-wfd --example wfd_negotiate
 //!
-//! Requer a TV/projetor em "Espelhamento de Tela".
+//! Requires the TV/projector to be in "Screen Mirroring" mode.
 
 use std::time::Duration;
 
-use nd_net::p2p::{ActiveState, P2pDevice};
-use nd_wfd::rtsp::negotiate_caps;
+use nd_net::p2p::P2pDevice;
+use nd_wfd::rtsp::{negotiate_caps, RTSP_PORT};
 use tokio::net::TcpListener;
-
-const RTSP_PORT: u16 = 7236;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -25,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let device = P2pDevice::open().await?;
     device.start_find().await?;
-    eprintln!("procurando sink Miracast (TV em Espelhamento de Tela)…");
+    eprintln!("looking for a Miracast sink (TV in Screen Mirroring mode)…");
 
     let mut peer = None;
     for _ in 0..20 {
@@ -39,31 +37,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let peer = peer.ok_or("nenhum sink Miracast encontrado")?;
 
     eprintln!("formando grupo Wi-Fi Direct…");
-    let active = device.connect(&peer).await?;
-
-    let mut our_ip = None;
-    for _ in 0..15 {
-        tokio::time::sleep(Duration::from_secs(2)).await;
-        if device.active_state(&active).await? == ActiveState::Activated {
-            our_ip = device.addresses(&active).await?.into_iter().next();
-            break;
-        }
-    }
-    let ip = our_ip.ok_or("grupo não obteve IP local")?;
+    let (_active, ip) = device
+        .connect_and_wait(&peer, 4, Duration::from_secs(20))
+        .await?;
     eprintln!("grupo formado; nosso IP: {ip}");
 
-    let listener = TcpListener::bind((ip.as_str(), RTSP_PORT)).await?;
-    eprintln!("servidor RTSP/WFD em {ip}:{RTSP_PORT} — aguardando o sink conectar (até 40s)…");
+    let listener = TcpListener::bind((ip, RTSP_PORT)).await?;
+    eprintln!("RTSP/WFD on {ip}:{RTSP_PORT} — waiting for the sink (up to 40s)…");
 
     let (stream, addr) = tokio::time::timeout(Duration::from_secs(40), listener.accept()).await??;
-    eprintln!("sink conectou de {addr}! negociando WFD M1–M3…");
+    eprintln!("sink conectou de {addr}! negociando M1–M3…");
 
     let caps = negotiate_caps(stream).await?;
-    eprintln!("✅ capacidades do sink:");
-    eprintln!("   wfd_video_formats: {:?}", caps.video_formats);
-    eprintln!("   wfd_audio_codecs:  {:?}", caps.audio_codecs);
-    eprintln!("   rtp_port:          {}", caps.rtp_port);
-    eprintln!("(próximo: M4–M7 + pipeline MPEG-TS/RTP → imagem no projetor)");
+    println!("\ncapacidades do sink");
+    println!("  wfd_video_formats: {:?}", caps.video_formats);
+    println!("  wfd_audio_codecs:  {:?}", caps.audio_codecs);
+    println!("  porta RTP:         {}", caps.rtp_port);
+    println!(
+        "  profile/level:     {:#04x}/{:#04x}",
+        caps.profile, caps.level
+    );
+    println!("\n  {} modos suportados:", caps.modes.len());
+    for mode in &caps.modes {
+        println!(
+            "    {:>4}x{:<4} @{:>2}Hz {:?}{}",
+            mode.width,
+            mode.height,
+            mode.fps,
+            mode.table,
+            if mode.interlaced { " (interlaced)" } else { "" }
+        );
+    }
+    match caps.best_mode_for((1920, 1080), (1920, 1080)) {
+        Some(mode) => println!(
+            "\n  chosen for a 1920x1080 screen: {}x{}@{}Hz",
+            mode.width, mode.height, mode.fps
+        ),
+        None => println!("\n  no usable mode!"),
+    }
 
     Ok(())
 }

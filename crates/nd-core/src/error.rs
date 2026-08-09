@@ -1,38 +1,38 @@
-//! Tipo de erro unificado do núcleo.
+//! Unified error type for the core.
 //!
-//! Em Rust o tratamento de erro é por `Result`, eliminando por construção a
-//! classe de bug "GError por valor / NULL-deref" que derrubava o daemon do
-//! projeto C (ver auditoria, `nd-daemon.c:86`).
+//! In Rust, error handling goes through `Result`, which rules out by
+//! construction the "GError by value / NULL-deref" class of bug that used to
+//! crash the daemon in the C project (see the audit, `nd-daemon.c:86`).
 
 use thiserror::Error;
 
-/// Erro de qualquer camada do núcleo.
+/// An error from any core layer.
 #[derive(Debug, Error)]
 pub enum NdError {
-    /// Falha originada no GStreamer (init, parse de pipeline, mudança de estado).
+    /// Failure coming from GStreamer (init, pipeline parsing, state change).
     #[error("gstreamer: {0}")]
     Gst(String),
 
-    /// Falha na captura de tela (portal/Mutter).
-    #[error("captura: {0}")]
+    /// Screen capture failure (portal/Mutter).
+    #[error("capture: {0}")]
     Capture(String),
 
-    /// Falha de protocolo (negociação WFD/RTSP, canal Cast).
-    #[error("protocolo: {0}")]
+    /// Protocol failure (WFD/RTSP negotiation, Cast channel).
+    #[error("protocol: {0}")]
     Protocol(String),
 
-    /// Falha de rede (D-Bus, NetworkManager, firewalld, sockets).
-    #[error("rede: {0}")]
+    /// Network failure (D-Bus, NetworkManager, firewalld, sockets).
+    #[error("network: {0}")]
     Network(String),
 
-    /// Funcionalidade indisponível no ambiente atual (ex.: WFD sob Flatpak).
-    #[error("não suportado: {0}")]
+    /// Feature unavailable in the current environment (e.g. WFD under Flatpak).
+    #[error("unsupported: {0}")]
     Unsupported(String),
 
-    /// Operação cancelada (ex.: usuário desconectou durante a negociação).
-    #[error("cancelado")]
+    /// Operation cancelled (e.g. the user disconnected mid-negotiation).
+    #[error("cancelled")]
     Cancelled,
 }
 
-/// Alias padrão do crate.
+/// The crate's standard alias.
 pub type Result<T> = std::result::Result<T, NdError>;

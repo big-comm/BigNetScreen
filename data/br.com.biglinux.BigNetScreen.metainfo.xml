@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>br.com.biglinux.BigNetScreen</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <name>BigNetScreen</name>
+  <summary>Mirror your screen to Miracast and Chromecast receivers</summary>
+  <summary xml:lang="pt_BR">Transmita sua tela para receptores Miracast e Chromecast</summary>
+
+  <description>
+    <p>
+      BigNetScreen mirrors your Linux desktop to network displays: Miracast
+      (Wi-Fi Display) receivers over Wi-Fi Direct, and Chromecast devices over
+      your local network.
+    </p>
+    <p>Highlights:</p>
+    <ul>
+      <li>Hardware video encoding (VA-API, NVENC, V4L2) with a software fallback</li>
+      <li>Low-latency pipeline tuned for screen mirroring</li>
+      <li>Screen capture through the desktop portal, so it works on GNOME, KDE and under Flatpak</li>
+    </ul>
+    <p xml:lang="pt_BR">
+      O BigNetScreen espelha sua área de trabalho Linux em telas de rede:
+      receptores Miracast (Wi-Fi Display) via Wi-Fi Direct e dispositivos
+      Chromecast na rede local.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">br.com.biglinux.BigNetScreen.desktop</launchable>
+
+  <url type="homepage">https://github.com/big-comm/BigNetScreen</url>
+  <url type="bugtracker">https://github.com/big-comm/BigNetScreen/issues</url>
+  <url type="vcs-browser">https://github.com/big-comm/BigNetScreen</url>
+
+  <developer id="com.biglinux">
+    <name>BigCommunity</name>
+  </developer>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+  </supports>
+
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.1.0" date="2026-08-07">
+      <description>
+        <p>First development release: receiver discovery (Chromecast, AirPlay,
+        Miracast), WFD negotiation and the low-latency encoding pipeline.</p>
+      </description>
+    </release>
+  </releases>
+</component>

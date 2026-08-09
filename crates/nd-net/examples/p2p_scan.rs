@@ -1,9 +1,9 @@
-//! Testa a descoberta Wi-Fi Direct (P2P) via NetworkManager.
+//! Exercises Wi-Fi Direct (P2P) discovery through NetworkManager.
 //!
 //!   cargo run -p nd-net --example p2p_scan
 //!
-//! Coloque a TV/projetor em "Espelhamento de Tela / Screen Mirroring" para que
-//! ela apareça como peer com `wfd=true` (sink Miracast).
+//! Put the TV/projector into "Screen Mirroring" so it shows up as a peer with
+//! `wfd=true` (a Miracast sink).
 
 use std::time::Duration;
 

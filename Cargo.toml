@@ -1,5 +1,5 @@
 # BigNetScreen — Rust workspace
-# Reescrita limpa do projeto (referência C arquivada em ./bkp).
+# A clean rewrite of the project (the C reference is no longer in tree).
 [workspace]
 resolver = "2"
 members = [
@@ -33,9 +33,11 @@ async-trait = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures = "0.3"
+gstreamer = "0.25"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "io-util", "time", "sync", "macros"] }
 
 [profile.release]
 opt-level = 3
-lto = "thin"
+lto = "fat"
 codegen-units = 1
 strip = true

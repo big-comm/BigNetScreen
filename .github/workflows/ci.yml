@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev-*]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  build:
+    name: Build, lint e testes
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+
+    steps:
+      - name: Install system dependencies
+        run: |
+          pacman -Syu --noconfirm --needed \
+            base-devel git rust \
+            gtk4 libadwaita \
+            gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad \
+            gst-plugins-ugly gst-libav gst-plugin-pipewire \
+            pipewire networkmanager gettext
+
+      - uses: actions/checkout@v4
+
+      - name: Cache do Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Testes
+        run: cargo test --workspace --locked
+
+      - name: Build de release
+        run: cargo build --release --locked
+
+  data:
+    name: Data files and translations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar validadores
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y desktop-file-utils appstream gettext
+
+      - name: Validar o .desktop
+        run: desktop-file-validate data/br.com.biglinux.BigNetScreen.desktop
+
+      - name: Validar o metainfo AppStream
+        run: appstreamcli validate --no-net data/br.com.biglinux.BigNetScreen.metainfo.xml
+
+      - name: Validate the translations
+        run: |
+          for po in po/*.po; do
+            msgfmt --check --output-file=/dev/null "$po"
+          done
+
+      - name: Is the .pot template up to date?
+        run: |
+          python3 po/extract.py
+          git diff --exit-code po/bignetscreen.pot \
+            || (echo "::error::run ./po/update-pot.sh and commit the .pot"; exit 1)
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

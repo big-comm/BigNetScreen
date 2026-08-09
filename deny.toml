@@ -1,0 +1,29 @@
+# Dependency policy (cargo-deny).
+
+[advisories]
+yanked = "deny"
+
+[licenses]
+# The binary is GPL-3.0-or-later; these are the compatible licences accepted.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "MPL-2.0",
+    "GPL-3.0",
+    "LGPL-2.1",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
