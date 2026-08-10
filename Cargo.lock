@@ -1109,6 +1109,7 @@ dependencies = [
  "enumflags2",
  "futures",
  "gstreamer",
+ "gstreamer-app",
  "nd-core",
  "tokio",
  "tracing",

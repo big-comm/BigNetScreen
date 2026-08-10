@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stopper = cancel_tx.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_secs(secs)).await;
-        eprintln!("\n>>> prazo esgotado; encerrando…");
+        eprintln!("\n>>> deadline reached; shutting down…");
         let _ = stopper.send(true);
     });
     let on_signal = cancel_tx.clone();
@@ -93,7 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         Err(err) => {
-            eprintln!("falhou: {err}");
+            eprintln!("failed: {err}");
             if let Some(detail) = status.message() {
                 eprintln!("detalhe: {detail}");
             }

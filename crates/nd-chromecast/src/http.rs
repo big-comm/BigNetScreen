@@ -220,7 +220,7 @@ impl StreamServer {
         let local_addr = listener.local_addr().map_err(net_err)?;
         let path = format!("/{}", random_token()?);
 
-        tracing::info!(%local_addr, %receiver, "servidor do stream no ar");
+        tracing::info!(%local_addr, %receiver, "stream server listening");
         Ok(Self {
             listener,
             path,
@@ -505,7 +505,7 @@ mod tests {
             response
         });
 
-        // Um accept manual, replicando a triagem do `serve`.
+        // A manual accept, mirroring the triage `serve` performs.
         let (mut stream, peer) = server.listener.accept().await.unwrap();
         let request = read_request(&mut stream).await.unwrap();
         let verdict = triage(&request, &server.path, server.allowed, peer.ip());

@@ -318,7 +318,7 @@ pub async fn run_with_video(
 ) -> Result<()> {
     status.set(SinkState::Connecting);
 
-    // Cala a varredura Wi-Fi Direct enquanto isto durar (ver `nd_core::radio`).
+    // Silence Wi-Fi Direct scanning for as long as this lasts (see `nd_core::radio`).
     let _radio = nd_core::radio::quiet();
 
     // 1. The stream server, on the IP that reaches this receiver.
@@ -473,7 +473,7 @@ pub async fn run_with_video(
             event = futures::StreamExt::next(&mut events) => {
                 match event {
                     Some(pipeline::PipelineEvent::Error { message, debug: details }) => {
-                        tracing::error!(%message, %details, "pipeline do Chromecast falhou");
+                        tracing::error!(%message, %details, "the Chromecast pipeline failed");
                         break Err(NdError::Gst(message));
                     }
                     Some(pipeline::PipelineEvent::Eos) => break Ok(()),

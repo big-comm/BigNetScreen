@@ -15,6 +15,7 @@
 //! starts with no dialog at all. The token lives in
 //! `$XDG_DATA_HOME/bignetscreen/restore-token` (mode 0600).
 
+pub mod display_config;
 pub mod mutter;
 
 use std::path::PathBuf;
@@ -90,7 +91,7 @@ fn clear_restore_token() {
 pub struct ParentWindow(Option<String>);
 
 impl ParentWindow {
-    /// Handle exportado via `xdg-foreign` (Wayland) ou XID (X11).
+    /// A handle exported through `xdg-foreign` (Wayland) or an XID (X11).
     pub fn from_handle(handle: impl Into<String>) -> Self {
         Self(Some(handle.into()))
     }
@@ -259,7 +260,7 @@ impl CaptureBackend for PortalBackend {
         // The session has to outlive the capture; kept for stop().
         *self.session.lock().await = Some(session);
 
-        tracing::info!(node_id, ?size, ?cursor_mode, "captura via portal iniciada");
+        tracing::info!(node_id, ?size, ?cursor_mode, "portal capture started");
         Ok(CaptureSource {
             pipewire_fd: Some(pipewire_fd),
             node_id,
@@ -383,7 +384,7 @@ pub async fn select_backend_for(source_type: SourceType) -> Box<dyn CaptureBacke
             );
         }
         Some(other) => {
-            tracing::warn!(%other, "BIGNETSCREEN_CAPTURE desconhecido; usando o portal");
+            tracing::warn!(%other, "unknown BIGNETSCREEN_CAPTURE value; using the portal");
         }
         None => {}
     }
@@ -410,6 +411,17 @@ pub async fn select_backend() -> Box<dyn CaptureBackend> {
 /// degrade to "Chromecast only" and say so to the user.
 pub fn is_sandboxed() -> bool {
     std::path::Path::new("/.flatpak-info").exists() || std::env::var_os("FLATPAK_ID").is_some()
+}
+
+/// The GStreamer source fragment for a PipeWire node in the session's own
+/// daemon (no descriptor to pass).
+pub(crate) fn pipeline_source(node_id: u32) -> String {
+    nd_core::pipeline::VideoSource::PipeWire {
+        fd: None,
+        node_id,
+        size: None,
+    }
+    .description()
 }
 
 #[cfg(test)]

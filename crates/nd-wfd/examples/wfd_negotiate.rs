@@ -34,9 +34,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             break;
         }
     }
-    let peer = peer.ok_or("nenhum sink Miracast encontrado")?;
+    let peer = peer.ok_or("no Miracast sink found")?;
 
-    eprintln!("formando grupo Wi-Fi Direct…");
+    eprintln!("forming the Wi-Fi Direct group…");
     let (_active, ip) = device
         .connect_and_wait(&peer, 4, Duration::from_secs(20))
         .await?;
@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("RTSP/WFD on {ip}:{RTSP_PORT} — waiting for the sink (up to 40s)…");
 
     let (stream, addr) = tokio::time::timeout(Duration::from_secs(40), listener.accept()).await??;
-    eprintln!("sink conectou de {addr}! negociando M1–M3…");
+    eprintln!("the sink connected from {addr}! negotiating M1–M3…");
 
     let caps = negotiate_caps(stream).await?;
     println!("\ncapacidades do sink");

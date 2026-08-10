@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-08-08 21:38-0300\n"
+"POT-Creation-Date: 2026-08-09 15:42-0300\n"
 "PO-Revision-Date: 2026-08-08 18:07\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Czech <cs@li.org>\n"
@@ -13,15 +13,20 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2;\n"
 
-#: crates/nd-gui/src/app.rs:608
+#: crates/nd-gui/src/app.rs:679
 msgid "1 receiver found"
 msgstr "Nalezen 1 příjemce"
 
-#: crates/nd-gui/src/app.rs:679
+#: crates/nd-gui/src/app.rs:475
+#, fuzzy
+msgid "A new screen"
+msgstr "Celá obrazovka"
+
+#: crates/nd-gui/src/app.rs:750
 msgid "A stream is already running"
 msgstr "Přenos již běží"
 
-#: crates/nd-gui/src/app.rs:382
+#: crates/nd-gui/src/app.rs:473
 msgid "A window"
 msgstr "Okno"
 
@@ -33,31 +38,35 @@ msgstr "AirPlay"
 msgid "Chromecast"
 msgstr "Chromecast"
 
-#: crates/nd-gui/src/app.rs:839
+#: crates/nd-gui/src/app.rs:964
 msgid ""
-"Chromecasts and TVs show up on their own. For Miracast, put the TV or the "
-"projector into “Screen Mirroring” mode."
+"Chromecasts show up on their own. A TV or projector only appears while it is "
+"in screen mirroring mode — on Fire TV, under Settings › Display & Sounds › "
+"Display Mirroring."
 msgstr ""
-"Chromecasty a televize se zobrazí samy. U Miracastu přepněte televizi nebo "
-"projektor do režimu „Screen Mirroring“."
 
-#: crates/nd-gui/src/app.rs:64 crates/nd-gui/src/app.rs:696
+#: crates/nd-gui/src/app.rs:64 crates/nd-gui/src/app.rs:767
 msgid "Connecting…"
 msgstr "Připojování…"
+
+#: crates/nd-gui/src/app.rs:476
+msgid ""
+"Creates an extra desktop on the receiver instead of duplicating this one"
+msgstr ""
 
 #: crates/nd-gui/src/app.rs:69
 msgid "Failed"
 msgstr "Selhalo"
 
-#: crates/nd-gui/src/app.rs:342
+#: crates/nd-gui/src/app.rs:355
 msgid "Got it"
 msgstr "Rozumím"
 
-#: crates/nd-gui/src/app.rs:780
+#: crates/nd-gui/src/app.rs:863
 msgid "Local network discovery unavailable"
 msgstr "Zjišťování místní sítě není dostupné"
 
-#: crates/nd-gui/src/app.rs:838
+#: crates/nd-gui/src/app.rs:960
 msgid "Looking for receivers…"
 msgstr "Hledání přijímačů…"
 
@@ -65,7 +74,7 @@ msgstr "Hledání přijímačů…"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:822
+#: crates/nd-gui/src/app.rs:944
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
@@ -73,15 +82,15 @@ msgstr ""
 "Miracast nefunguje v sestavení Flatpak (vyžaduje systémového správce "
 "NetworkManager)"
 
-#: crates/nd-gui/src/app.rs:829
+#: crates/nd-gui/src/app.rs:951
 msgid "Miracast unavailable"
 msgstr "Miracast není dostupný"
 
-#: crates/nd-gui/src/app.rs:827
+#: crates/nd-gui/src/app.rs:949
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast není dostupný: tato Wi-Fi karta nepodporuje Wi-Fi Direct"
 
-#: crates/nd-gui/src/app.rs:605
+#: crates/nd-gui/src/app.rs:676
 msgid "No receivers found"
 msgstr "Nebyli nalezeni žádní příjemci"
 
@@ -93,20 +102,20 @@ msgstr "Otevírání portu brány firewall…"
 msgid "Preparing the video…"
 msgstr "Příprava videa…"
 
-#: crates/nd-gui/src/app.rs:316
+#: crates/nd-gui/src/app.rs:329
 msgid "Scan again"
 msgstr "Skenovat znovu"
 
-#: crates/nd-gui/src/app.rs:436 crates/nd-gui/src/app.rs:471
-#: crates/nd-gui/src/app.rs:603
+#: crates/nd-gui/src/app.rs:449 crates/nd-gui/src/app.rs:510
+#: crates/nd-gui/src/app.rs:674
 msgid "Searching…"
 msgstr "Hledání…"
 
-#: crates/nd-gui/src/app.rs:323
+#: crates/nd-gui/src/app.rs:336
 msgid "Stop"
 msgstr "Zastavit"
 
-#: crates/nd-gui/src/app.rs:668
+#: crates/nd-gui/src/app.rs:739
 msgid "Stopping…"
 msgstr "Zastavování…"
 
@@ -118,15 +127,20 @@ msgstr "Streamování"
 msgid "Test"
 msgstr "Test"
 
+#: crates/nd-gui/src/app.rs:630
+msgid ""
+"This desktop cannot create an extra screen (it needs GNOME running natively)"
+msgstr ""
+
 #: crates/nd-gui/src/app.rs:66
 msgid "Waiting for the receiver…"
 msgstr "Čekání na přijímač…"
 
-#: crates/nd-gui/src/app.rs:362
+#: crates/nd-gui/src/app.rs:375
 msgid "What to share"
 msgstr "Co sdílet"
 
-#: crates/nd-gui/src/app.rs:371
+#: crates/nd-gui/src/app.rs:472
 msgid "Whole screen"
 msgstr "Celá obrazovka"
 
@@ -134,18 +148,25 @@ msgstr "Celá obrazovka"
 msgid "discovery only"
 msgstr "pouze zjišťování"
 
-#: crates/nd-gui/src/app.rs:727
+#: crates/nd-gui/src/app.rs:798
 msgid "instant response"
 msgstr "okamžitá odezva"
 
-#: crates/nd-gui/src/app.rs:731
+#: crates/nd-gui/src/app.rs:802
 msgid "quick response"
 msgstr "rychlá odezva"
 
-#: crates/nd-gui/src/app.rs:610
+#: crates/nd-gui/src/app.rs:681
 msgid "receivers found"
 msgstr "nalezeno příjemců"
 
-#: crates/nd-gui/src/app.rs:690
+#: crates/nd-gui/src/app.rs:761
 msgid "shows up in discovery only"
 msgstr "se zobrazuje pouze při zjišťování"
+
+#~ msgid ""
+#~ "Chromecasts and TVs show up on their own. For Miracast, put the TV or the "
+#~ "projector into “Screen Mirroring” mode."
+#~ msgstr ""
+#~ "Chromecasty a televize se zobrazí samy. U Miracastu přepněte televizi "
+#~ "nebo projektor do režimu „Screen Mirroring“."

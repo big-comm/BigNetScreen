@@ -38,16 +38,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => None,
     };
 
-    println!("conectando a {ip}:8009…");
+    println!("connecting to {ip}:8009…");
     let channel = CastChannel::connect(ip).await?;
-    println!("TLS + CONNECT ok (certificado validado: cadeia e prazo)");
+    println!("TLS + CONNECT ok (certificate validated: chain and validity period)");
 
     // The reply is now correlated by requestId: this genuinely waits.
     let status = channel.status().await?;
     println!("receiver status: {status:#}");
 
     if let Some(app_id) = &app_to_launch {
-        println!("iniciando {app_id}…");
+        println!("starting {app_id}…");
         match channel.launch(app_id).await {
             Ok(app) => {
                 println!(
@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("status after the launch: {status:#}");
                 }
             }
-            Err(err) => println!("falhou ao iniciar {app_id}: {err}"),
+            Err(err) => println!("failed to start {app_id}: {err}"),
         }
     }
 

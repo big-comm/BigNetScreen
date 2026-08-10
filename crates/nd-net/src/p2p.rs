@@ -154,6 +154,24 @@ trait Ip4Config {
     fn address_data(&self) -> zbus::Result<Vec<HashMap<String, OwnedValue>>>;
 }
 
+/// wpa_supplicant's global interface.
+///
+/// NetworkManager drives discovery, but the WFD Information Elements live one
+/// layer below, on the supplicant itself — and NM exposes no way to set them
+/// for the *search*, only for a connection.
+#[zbus::proxy(
+    interface = "fi.w1.wpa_supplicant1",
+    default_service = "fi.w1.wpa_supplicant1",
+    default_path = "/fi/w1/wpa_supplicant1"
+)]
+trait WpaSupplicant {
+    #[zbus(property, name = "WFDIEs")]
+    fn wfd_ies(&self) -> zbus::Result<Vec<u8>>;
+
+    #[zbus(property, name = "WFDIEs")]
+    fn set_wfd_ies(&self, value: &[u8]) -> zbus::Result<()>;
+}
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -289,7 +307,13 @@ impl P2pDevice {
                     .build()
                     .await
                     .map_err(err)?;
-                tracing::info!(path = %dev, "device Wi-Fi P2P encontrado");
+                tracing::info!(path = %dev, "Wi-Fi P2P device found");
+
+                // Before any search: several sinks only answer with their WFD
+                // Information Elements to a peer that already identifies
+                // itself as a Wi-Fi Display source.
+                Self::advertise_as_wfd_source(&conn).await;
+
                 return Ok(Self {
                     conn,
                     path: dev,
@@ -299,16 +323,75 @@ impl P2pDevice {
             }
         }
 
+        // The three causes are indistinguishable from here, and they call for
+        // very different actions, so all three are named. Reporting only "the
+        // card does not support it" sent people shopping for a Wi-Fi adapter
+        // they did not need.
         Err(NdError::Unsupported(
-            "no Wi-Fi P2P device in NetworkManager — this Wi-Fi card does not support \
-             Wi-Fi Direct, or the driver does not expose it"
+            "no Wi-Fi P2P device in NetworkManager. Either this Wi-Fi card does not \
+             support Wi-Fi Direct, or the driver does not expose it, or NetworkManager \
+             is running with the `iwd` backend, which has no P2P support — `nmcli device` \
+             should list a `p2p-dev-*` device alongside the Wi-Fi one"
                 .into(),
         ))
     }
 
-    /// Caminho D-Bus do device.
+    /// The device's D-Bus path.
     pub fn path(&self) -> &str {
         self.path.as_str()
+    }
+
+    /// Advertises this machine as a Wi-Fi Display **source** during discovery.
+    ///
+    /// A sink decides whether to answer with its own WFD Information Elements
+    /// based on what the probe request carries. Several receivers — Amazon Fire
+    /// TV among them — stay silent for a peer that does not identify itself as
+    /// a WFD device, and the search then finds a plain P2P peer with no WFD
+    /// IEs, which discovery filters out. The device is right there and never
+    /// appears in the list.
+    ///
+    /// NetworkManager only applies the `wfd-ies` of a *connection*, which is
+    /// too late: by then the sink already has to have been found. The property
+    /// lives one layer below, on wpa_supplicant itself.
+    ///
+    /// Best effort by design. It fails, harmlessly, when:
+    /// - wpa_supplicant is not on the bus (NetworkManager running with `iwd`);
+    /// - it was built without `CONFIG_WIFI_DISPLAY`, and the property does not
+    ///   exist;
+    /// - D-Bus policy refuses the write to a non-root caller.
+    ///
+    /// In every one of those cases discovery goes on working for the sinks that
+    /// advertise unprompted; only the pickier ones stay hidden, and the log
+    /// says why.
+    async fn advertise_as_wfd_source(conn: &Connection) {
+        let supplicant = match WpaSupplicantProxy::new(conn).await {
+            Ok(proxy) => proxy,
+            Err(err) => {
+                tracing::debug!(%err, "wpa_supplicant is not on the bus; not advertising WFD IEs");
+                return;
+            }
+        };
+
+        // Reading first tells "the property does not exist" (no
+        // CONFIG_WIFI_DISPLAY) apart from "the write was refused" (D-Bus
+        // policy). They call for different actions from whoever is debugging.
+        if let Err(err) = supplicant.wfd_ies().await {
+            tracing::info!(
+                %err,
+                "wpa_supplicant has no WFDIEs property (built without CONFIG_WIFI_DISPLAY); \
+                 receivers that only answer WFD sources will not appear"
+            );
+            return;
+        }
+
+        match supplicant.set_wfd_ies(WFD_SOURCE_IES).await {
+            Ok(()) => tracing::debug!("advertising this machine as a Wi-Fi Display source"),
+            Err(err) => tracing::info!(
+                %err,
+                "could not set the WFD IEs on wpa_supplicant (a D-Bus policy usually \
+                 restricts this to root); pickier receivers may not appear"
+            ),
+        }
     }
 
     /// Starts (or renews) the scan for Wi-Fi Direct peers.
@@ -325,7 +408,7 @@ impl P2pDevice {
             .map_err(|e| classify(e, "StartFind"))
     }
 
-    /// Interrompe a varredura.
+    /// Stops the scan.
     pub async fn stop_find(&self) -> Result<()> {
         self.p2p
             .stop_find()
@@ -348,11 +431,11 @@ impl P2pDevice {
         loop {
             if nd_core::radio::is_quiet() {
                 if let Err(err) = self.stop_find().await {
-                    tracing::debug!(%err, "falha ao pausar a varredura P2P");
+                    tracing::debug!(%err, "failed to pause P2P scanning");
                 }
                 tracing::info!("P2P scanning paused while streaming");
                 nd_core::radio::until_free().await;
-                tracing::info!("varredura P2P retomada");
+                tracing::info!("P2P scanning resumed");
             } else {
                 // Do not wait for the next tick to pause: a stream may start
                 // right after a renewal, which would leave 20 s of scanning on
@@ -364,9 +447,9 @@ impl P2pDevice {
             }
 
             if let Err(err) = self.start_find().await {
-                tracing::warn!(%err, "falha ao renovar a varredura P2P");
+                tracing::warn!(%err, "failed to renew the P2P scan");
             } else {
-                tracing::debug!("varredura P2P renovada");
+                tracing::debug!("P2P scan renewed");
             }
         }
     }
@@ -620,7 +703,7 @@ impl P2pDevice {
         let mut last = NdError::Network("could not form the P2P group".into());
 
         for attempt in 1..=attempts.max(1) {
-            tracing::info!(attempt, "formando grupo Wi-Fi Direct");
+            tracing::info!(attempt, "forming the Wi-Fi Direct group");
             let active = match self.connect(peer_path).await {
                 Ok(a) => a,
                 Err(e) => {
@@ -663,7 +746,7 @@ impl P2pDevice {
                 }
             }
 
-            tracing::warn!(attempt, err = %last, "tentativa de grupo Wi-Fi Direct falhou");
+            tracing::warn!(attempt, err = %last, "the Wi-Fi Direct group attempt failed");
             let _ = self.disconnect(&active).await;
         }
 
@@ -744,18 +827,44 @@ mod tests {
 
     #[test]
     fn wfd_source_ies_announce_port_7236() {
-        // Subelemento 0, len 6; bytes 5-6 = porta RTSP em big-endian.
-        assert_eq!(WFD_SOURCE_IES[0], 0x00, "subelemento Device Information");
+        // Subelement 0, len 6; bytes 5-6 = the RTSP port, big-endian.
+        assert_eq!(WFD_SOURCE_IES[0], 0x00, "the Device Information subelement");
         assert_eq!(
             u16::from_be_bytes([WFD_SOURCE_IES[1], WFD_SOURCE_IES[2]]),
             6,
-            "comprimento declarado"
+            "the declared length"
         );
         let port = u16::from_be_bytes([WFD_SOURCE_IES[5], WFD_SOURCE_IES[6]]);
-        assert_eq!(port, 7236, "porta RTSP anunciada");
-        // Bits 0-1 do bitmap: 00 = WFD source.
+        assert_eq!(port, 7236, "the advertised RTSP port");
+        // Bits 0-1 of the bitmap: 00 = WFD source.
         let bitmap = u16::from_be_bytes([WFD_SOURCE_IES[3], WFD_SOURCE_IES[4]]);
         assert_eq!(bitmap & 0b11, 0, "the device type must be source");
+    }
+
+    #[test]
+    fn the_same_ies_are_used_for_searching_and_for_connecting() {
+        // These bytes go out in two very different places: the wpa_supplicant
+        // property during discovery, and the `wfd-ies` of the NetworkManager
+        // connection when the group is formed. Announcing one thing while
+        // searching and another while connecting is how a sink answers the
+        // probe and then refuses the session.
+        //
+        // The byte sequence is the one the reference implementation documents;
+        // a receiver that only answers WFD sources compares it field by field.
+        assert_eq!(
+            WFD_SOURCE_IES,
+            &[0x00, 0x00, 0x06, 0x00, 0x90, 0x1c, 0x44, 0x00, 0xc8],
+            "the IEs must stay byte-identical to the Wi-Fi Display spec"
+        );
+
+        // The declared length has to match what actually follows it, or the
+        // sink discards the whole element without a word.
+        let declared = u16::from_be_bytes([WFD_SOURCE_IES[1], WFD_SOURCE_IES[2]]) as usize;
+        assert_eq!(
+            declared,
+            WFD_SOURCE_IES.len() - 3,
+            "the declared length must match the subelement's body"
+        );
     }
 
     #[test]

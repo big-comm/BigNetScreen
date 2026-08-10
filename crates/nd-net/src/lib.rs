@@ -55,7 +55,7 @@ pub fn detect_gpu_driver_in(drm_root: &Path) -> GpuDriver {
             continue;
         };
         let driver = GpuDriver::from_kernel_module(module);
-        tracing::info!(%card, %module, ?driver, "driver KMS detectado");
+        tracing::info!(%card, %module, ?driver, "KMS driver detected");
         if driver != GpuDriver::Unknown {
             return driver;
         }
@@ -81,6 +81,6 @@ mod tests {
         // It does not assert which one (that varies per machine), only that
         // the function runs without panicking over the real sysfs.
         let driver = detect_gpu_driver();
-        tracing::info!(?driver, "driver detectado");
+        tracing::info!(?driver, "driver detected");
     }
 }

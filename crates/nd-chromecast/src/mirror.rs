@@ -147,11 +147,11 @@ pub struct Offer {
 /// What the receiver answered.
 #[derive(Clone, Debug)]
 pub struct Answer {
-    /// Porta UDP onde ele espera o RTP.
+    /// The UDP port where it expects the RTP.
     pub udp_port: u16,
     /// Indices of the streams it accepted.
     pub send_indexes: Vec<u32>,
-    /// SSRCs **dele** (um por stream aceita), usados no RTCP.
+    /// **Its** SSRCs (one per accepted stream), used by RTCP.
     pub ssrcs: Vec<u32>,
 }
 
@@ -346,7 +346,7 @@ pub async fn negotiate(
 ) -> Result<Negotiated> {
     let seq_num = 1;
     let (payload, offer) = build_offer(cfg, seq_num)?;
-    tracing::debug!(%payload, "enviando OFFER de espelhamento");
+    tracing::debug!(%payload, "sending the mirroring OFFER");
 
     channel
         .send_json(NS_WEBRTC, &app.transport_id, &payload)

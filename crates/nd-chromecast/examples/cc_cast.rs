@@ -105,7 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         Err(err) => {
-            eprintln!("falhou: {err}");
+            eprintln!("failed: {err}");
             if let Some(detail) = status.message() {
                 eprintln!("detalhe: {detail}");
             }

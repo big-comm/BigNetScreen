@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-08-08 21:38-0300\n"
+"POT-Creation-Date: 2026-08-09 15:42-0300\n"
 "PO-Revision-Date: 2026-08-08 18:09\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: French <fr@li.org>\n"
@@ -13,15 +13,20 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
-#: crates/nd-gui/src/app.rs:608
+#: crates/nd-gui/src/app.rs:679
 msgid "1 receiver found"
 msgstr "1 récepteur trouvé"
 
-#: crates/nd-gui/src/app.rs:679
+#: crates/nd-gui/src/app.rs:475
+#, fuzzy
+msgid "A new screen"
+msgstr "Écran entier"
+
+#: crates/nd-gui/src/app.rs:750
 msgid "A stream is already running"
 msgstr "Un flux est déjà en cours d’exécution"
 
-#: crates/nd-gui/src/app.rs:382
+#: crates/nd-gui/src/app.rs:473
 msgid "A window"
 msgstr "Une fenêtre"
 
@@ -33,31 +38,35 @@ msgstr "AirPlay"
 msgid "Chromecast"
 msgstr "Chromecast"
 
-#: crates/nd-gui/src/app.rs:839
+#: crates/nd-gui/src/app.rs:964
 msgid ""
-"Chromecasts and TVs show up on their own. For Miracast, put the TV or the "
-"projector into “Screen Mirroring” mode."
+"Chromecasts show up on their own. A TV or projector only appears while it is "
+"in screen mirroring mode — on Fire TV, under Settings › Display & Sounds › "
+"Display Mirroring."
 msgstr ""
-"Les Chromecasts et les téléviseurs apparaissent automatiquement. Pour "
-"Miracast, mettez le téléviseur ou le projecteur en mode « Miroir d'écran »."
 
-#: crates/nd-gui/src/app.rs:64 crates/nd-gui/src/app.rs:696
+#: crates/nd-gui/src/app.rs:64 crates/nd-gui/src/app.rs:767
 msgid "Connecting…"
 msgstr "Connexion…"
+
+#: crates/nd-gui/src/app.rs:476
+msgid ""
+"Creates an extra desktop on the receiver instead of duplicating this one"
+msgstr ""
 
 #: crates/nd-gui/src/app.rs:69
 msgid "Failed"
 msgstr "Échec"
 
-#: crates/nd-gui/src/app.rs:342
+#: crates/nd-gui/src/app.rs:355
 msgid "Got it"
 msgstr "Compris"
 
-#: crates/nd-gui/src/app.rs:780
+#: crates/nd-gui/src/app.rs:863
 msgid "Local network discovery unavailable"
 msgstr "Découverte du réseau local indisponible"
 
-#: crates/nd-gui/src/app.rs:838
+#: crates/nd-gui/src/app.rs:960
 msgid "Looking for receivers…"
 msgstr "Recherche de récepteurs…"
 
@@ -65,7 +74,7 @@ msgstr "Recherche de récepteurs…"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:822
+#: crates/nd-gui/src/app.rs:944
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
@@ -73,16 +82,16 @@ msgstr ""
 "Miracast ne fonctionne pas dans la version Flatpak (elle nécessite le "
 "NetworkManager système)"
 
-#: crates/nd-gui/src/app.rs:829
+#: crates/nd-gui/src/app.rs:951
 msgid "Miracast unavailable"
 msgstr "Miracast indisponible"
 
-#: crates/nd-gui/src/app.rs:827
+#: crates/nd-gui/src/app.rs:949
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr ""
 "Miracast indisponible : cette carte Wi-Fi ne prend pas en charge Wi-Fi Direct"
 
-#: crates/nd-gui/src/app.rs:605
+#: crates/nd-gui/src/app.rs:676
 msgid "No receivers found"
 msgstr "Aucun récepteur trouvé"
 
@@ -94,20 +103,20 @@ msgstr "Ouverture du port du pare-feu…"
 msgid "Preparing the video…"
 msgstr "Préparation de la vidéo…"
 
-#: crates/nd-gui/src/app.rs:316
+#: crates/nd-gui/src/app.rs:329
 msgid "Scan again"
 msgstr "Rechercher à nouveau"
 
-#: crates/nd-gui/src/app.rs:436 crates/nd-gui/src/app.rs:471
-#: crates/nd-gui/src/app.rs:603
+#: crates/nd-gui/src/app.rs:449 crates/nd-gui/src/app.rs:510
+#: crates/nd-gui/src/app.rs:674
 msgid "Searching…"
 msgstr "Recherche…"
 
-#: crates/nd-gui/src/app.rs:323
+#: crates/nd-gui/src/app.rs:336
 msgid "Stop"
 msgstr "Arrêter"
 
-#: crates/nd-gui/src/app.rs:668
+#: crates/nd-gui/src/app.rs:739
 msgid "Stopping…"
 msgstr "Arrêt…"
 
@@ -119,15 +128,20 @@ msgstr "Streaming"
 msgid "Test"
 msgstr "Test"
 
+#: crates/nd-gui/src/app.rs:630
+msgid ""
+"This desktop cannot create an extra screen (it needs GNOME running natively)"
+msgstr ""
+
 #: crates/nd-gui/src/app.rs:66
 msgid "Waiting for the receiver…"
 msgstr "En attente du récepteur…"
 
-#: crates/nd-gui/src/app.rs:362
+#: crates/nd-gui/src/app.rs:375
 msgid "What to share"
 msgstr "Quoi partager"
 
-#: crates/nd-gui/src/app.rs:371
+#: crates/nd-gui/src/app.rs:472
 msgid "Whole screen"
 msgstr "Écran entier"
 
@@ -135,18 +149,26 @@ msgstr "Écran entier"
 msgid "discovery only"
 msgstr "découverte uniquement"
 
-#: crates/nd-gui/src/app.rs:727
+#: crates/nd-gui/src/app.rs:798
 msgid "instant response"
 msgstr "réponse instantanée"
 
-#: crates/nd-gui/src/app.rs:731
+#: crates/nd-gui/src/app.rs:802
 msgid "quick response"
 msgstr "réponse rapide"
 
-#: crates/nd-gui/src/app.rs:610
+#: crates/nd-gui/src/app.rs:681
 msgid "receivers found"
 msgstr "récepteurs trouvés"
 
-#: crates/nd-gui/src/app.rs:690
+#: crates/nd-gui/src/app.rs:761
 msgid "shows up in discovery only"
 msgstr "visible uniquement en découverte"
+
+#~ msgid ""
+#~ "Chromecasts and TVs show up on their own. For Miracast, put the TV or the "
+#~ "projector into “Screen Mirroring” mode."
+#~ msgstr ""
+#~ "Les Chromecasts et les téléviseurs apparaissent automatiquement. Pour "
+#~ "Miracast, mettez le téléviseur ou le projecteur en mode « Miroir "
+#~ "d'écran »."

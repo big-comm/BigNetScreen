@@ -22,7 +22,7 @@ fn main() {
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
         sandboxed = nd_capture::is_sandboxed(),
-        "BigNetScreen iniciando"
+        "BigNetScreen starting"
     );
 
     // Useful in a bug report: which encoder will actually be used.

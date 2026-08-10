@@ -415,7 +415,7 @@ impl CastChannel {
 /// A running receiver app.
 #[derive(Clone, Debug)]
 pub struct LaunchedApp {
-    /// Destino das mensagens dirigidas ao app.
+    /// Where messages addressed to the app go.
     pub transport_id: String,
     pub session_id: String,
 }
@@ -438,7 +438,7 @@ async fn send_raw(
     tracing::trace!(%namespace, %destination, %payload, ">>> Cast enviado");
     let buf = msg.encode_to_vec();
     if buf.len() > MAX_MESSAGE_BYTES {
-        return Err(NdError::Protocol("mensagem Cast grande demais".into()));
+        return Err(NdError::Protocol("Cast message too large".into()));
     }
 
     let mut guard = writer.lock().await;
@@ -472,7 +472,7 @@ async fn read_message(reader: &mut ReadHalf<TlsStream<TcpStream>>) -> Result<(St
     tracing::trace!(
         namespace = %msg.namespace,
         payload = msg.payload_utf8.as_deref().unwrap_or(""),
-        "<<< Cast recebido"
+        "<<< Cast received"
     );
     let payload = msg
         .payload_utf8
@@ -669,7 +669,7 @@ mod tests {
             &[],
             UnixTime::now(),
         );
-        assert!(result.is_err(), "certificado malformado foi aceito");
+        assert!(result.is_err(), "a malformed certificate was accepted");
     }
 
     #[test]

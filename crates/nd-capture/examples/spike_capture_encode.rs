@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let encoder = pipeline::best_encoder(driver)?;
     println!("encoder escolhido: {encoder:?} (driver {driver:?})");
 
-    println!("solicitando captura ao portal…");
+    println!("requesting capture from the portal…");
     let backend = select_backend().await;
     let source = backend.start(SourceType::Monitor).await?;
     let (width, height) = source.size_or((1920, 1080));
@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (pipeline, mut events) = pipeline::build_pipeline(&desc, cfg.latency_ms())?;
     pipeline.set_state(gst::State::Playing)?;
-    println!("gravando por {RECORD_SECS}s…");
+    println!("recording for {RECORD_SECS}s…");
 
     tokio::select! {
         _ = tokio::time::sleep(Duration::from_secs(RECORD_SECS)) => {}

@@ -4,7 +4,7 @@
 pkgname=bignetscreen
 pkgver=0.1.0
 pkgrel=1
-pkgdesc="Transmita sua tela para receptores Miracast (Wi-Fi Display) e Chromecast"
+pkgdesc="Mirror your screen to Miracast (Wi-Fi Display) and Chromecast receivers"
 arch=('x86_64' 'aarch64')
 url="https://github.com/big-comm/BigNetScreen"
 license=('GPL-3.0-or-later')

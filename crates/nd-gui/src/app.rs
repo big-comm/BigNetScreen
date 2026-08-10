@@ -106,7 +106,7 @@ pub struct SinkRow {
 
 #[derive(Debug)]
 pub enum SinkRowMsg {
-    /// Estado/mensagem vindos do sink correspondente.
+    /// State and message coming from the corresponding sink.
     Update {
         state: SinkState,
         message: Option<String>,
@@ -243,10 +243,16 @@ pub struct AppModel {
     status: String,
     /// Providers that failed to start (shown as a banner).
     issues: Vec<ProviderIssue>,
-    /// `true` enquanto vale mostrar "procurando".
+    /// `true` while it is still worth showing "searching".
     searching: bool,
     /// The running cast session (the sink's id).
     active_cast: Option<String>,
+    /// Is a virtual monitor available in this environment?
+    ///
+    /// Probed once at start-up: it depends on the compositor (Mutter offers
+    /// it, most portals do not), and asking the user to find that out by
+    /// hitting an error would be poor manners.
+    virtual_available: bool,
     /// What to capture when the user picks a receiver.
     source_type: SourceType,
     /// The scan generation: discards events from an older discovery run.
@@ -278,8 +284,10 @@ pub enum AppCmd {
         provider: &'static str,
         generation: u64,
     },
-    /// Prazo do "procurando" esgotado.
+    /// The "searching" deadline elapsed.
     SearchTimedOut(u64),
+    /// The result of probing for virtual monitor support.
+    VirtualSupported(bool),
     /// The periodic re-read of the sinks' state.
     PollStates,
     /// A cast session ended.
@@ -299,8 +307,13 @@ impl Component for AppModel {
     view! {
         adw::ApplicationWindow {
             set_title: Some("BigNetScreen"),
-            set_default_width: 460,
-            set_default_height: 700,
+            // Wide enough for the three source options side by side with the
+            // longest translations, and tall enough to show a handful of
+            // receivers without the list looking lost in empty space.
+            set_default_width: 560,
+            set_default_height: 620,
+            set_width_request: 360,
+            set_height_request: 400,
 
             adw::ToolbarView {
                 add_top_bar = &adw::HeaderBar {
@@ -351,43 +364,43 @@ impl Component for AppModel {
                         set_margin_start: 12,
                         set_margin_end: 12,
 
-                        // It has to be a `ListBox`: `adw::ActionRow` is a
-                        // `GtkListBoxRow`, and loose inside a `gtk::Box` GTK
-                        // complains when trying to focus the row.
-                        gtk::ListBox {
-                            set_selection_mode: gtk::SelectionMode::None,
-                            add_css_class: "boxed-list",
+                        gtk::Box {
+                            set_orientation: gtk::Orientation::Vertical,
 
-                            adw::ActionRow {
-                                set_title: &tr!("What to share"),
+                            // The title on its own line and the options
+                            // below, at full width. As a row suffix the three
+                            // buttons squeezed the label until GTK hyphenated
+                            // it across three lines.
+                            gtk::Label {
+                                set_label: &tr!("What to share"),
+                                set_xalign: 0.0,
+                                set_margin_bottom: 6,
+                                add_css_class: "heading",
+                            },
+
+                            #[name = "source_toggles"]
+                            adw::ToggleGroup {
+                                set_hexpand: true,
                                 #[watch]
                                 set_sensitive: model.active_cast.is_none(),
 
-                                add_suffix = &gtk::Box {
-                                    set_valign: gtk::Align::Center,
-                                    add_css_class: "linked",
+                                // The toggles are added in `init`: the
+                                // builder takes them by value, which the view
+                                // macro cannot express.
 
-                                    gtk::ToggleButton {
-                                        set_label: &tr!("Whole screen"),
-                                        #[watch]
-                                        set_active: model.source_type == SourceType::Monitor,
-                                        connect_toggled[sender] => move |btn| {
-                                            if btn.is_active() {
-                                                sender.input(AppMsg::SetSource(SourceType::Monitor));
-                                            }
-                                        },
-                                    },
+                                #[watch]
+                                set_active: match model.source_type {
+                                    SourceType::Monitor => 0,
+                                    SourceType::Window => 1,
+                                    SourceType::Virtual => 2,
+                                },
 
-                                    gtk::ToggleButton {
-                                        set_label: &tr!("A window"),
-                                        #[watch]
-                                        set_active: model.source_type == SourceType::Window,
-                                        connect_toggled[sender] => move |btn| {
-                                            if btn.is_active() {
-                                                sender.input(AppMsg::SetSource(SourceType::Window));
-                                            }
-                                        },
-                                    },
+                                connect_active_notify[sender] => move |group| {
+                                    sender.input(AppMsg::SetSource(match group.active() {
+                                        1 => SourceType::Window,
+                                        2 => SourceType::Virtual,
+                                        _ => SourceType::Monitor,
+                                    }));
                                 },
                             },
                         },
@@ -438,6 +451,7 @@ impl Component for AppModel {
             searching: true,
             active_cast: None,
             source_type: SourceType::Monitor,
+            virtual_available: false,
             generation: 0,
         };
 
@@ -447,8 +461,33 @@ impl Component for AppModel {
         let sinks_box = model.sinks.widget();
         let widgets = view_output!();
 
+        // The three source options. Added here because `AdwToggleGroup::add`
+        // takes the toggle by value, which the view macro cannot express.
+        //
+        // The virtual monitor toggle is created disabled and only enabled once
+        // the probe answers: on KDE, Sway or under Flatpak the option does not
+        // exist, and offering something that always fails is worse than not
+        // offering it.
+        for (label, tooltip) in [
+            (tr!("Whole screen"), None),
+            (tr!("A window"), None),
+            (
+                tr!("A new screen"),
+                Some(tr!("Creates an extra desktop on the receiver instead of \
+                     duplicating this one")),
+            ),
+        ] {
+            let toggle = adw::Toggle::builder().label(&label).build();
+            if let Some(tip) = tooltip {
+                toggle.set_tooltip(&tip);
+            }
+            widgets.source_toggles.add(toggle);
+        }
+        widgets.source_toggles.set_active(0);
+
         start_discovery(&sender, 0);
         start_state_poll(&sender);
+        probe_virtual_support(&sender);
 
         ComponentParts { model, widgets }
     }
@@ -459,10 +498,10 @@ impl Component for AppModel {
             AppMsg::Stop => self.stop_cast(&sender),
             AppMsg::SetSource(source) => {
                 self.source_type = source;
-                tracing::info!(?source, "fonte de captura escolhida");
+                tracing::info!(?source, "capture source chosen");
             }
             AppMsg::Rescan => {
-                // Invalida a descoberta anterior e limpa a lista.
+                // Invalidate the previous discovery run and clear the list.
                 self.generation += 1;
                 self.issues.clear();
                 self.searching = true;
@@ -475,8 +514,9 @@ impl Component for AppModel {
         }
     }
 
-    fn update_cmd(
+    fn update_cmd_with_view(
         &mut self,
+        widgets: &mut Self::Widgets,
         message: Self::CommandOutput,
         sender: ComponentSender<Self>,
         _root: &Self::Root,
@@ -489,14 +529,32 @@ impl Component for AppModel {
                 let info = handle.0.info();
                 let subtitle = subtitle_for(&info);
                 let mut guard = self.sinks.guard();
-                if !guard.iter().any(|r| r.id == info.id) {
-                    guard.push_back(SinkRowInit {
-                        id: info.id.clone(),
-                        name: info.display_name.clone(),
-                        subtitle,
-                        icon: icon_for(info.kind),
-                        castable: info.kind.is_castable(),
-                    });
+                let existing: Vec<(String, bool)> =
+                    guard.iter().map(|r| (r.name.clone(), r.castable)).collect();
+                let already_listed = guard.iter().any(|r| r.id == info.id);
+
+                match placement(&existing, &info.display_name, info.kind.is_castable()) {
+                    _ if already_listed => {}
+                    Placement::Skip => {}
+                    Placement::Replace(index) => {
+                        guard.remove(index);
+                        guard.push_back(SinkRowInit {
+                            id: info.id.clone(),
+                            name: info.display_name.clone(),
+                            subtitle,
+                            icon: icon_for(info.kind),
+                            castable: info.kind.is_castable(),
+                        });
+                    }
+                    Placement::Add => {
+                        guard.push_back(SinkRowInit {
+                            id: info.id.clone(),
+                            name: info.display_name.clone(),
+                            subtitle,
+                            icon: icon_for(info.kind),
+                            castable: info.kind.is_castable(),
+                        });
+                    }
                 }
                 drop(guard);
                 // `entry`: an mDNS re-resolve must not replace the instance —
@@ -560,6 +618,19 @@ impl Component for AppModel {
                     return;
                 }
                 self.issues.retain(|i| i.provider != provider);
+            }
+            AppCmd::VirtualSupported(available) => {
+                tracing::info!(available, "virtual monitor support");
+                self.virtual_available = available;
+                // Disabled rather than hidden: the option keeps its place, and
+                // the tooltip can then explain why it is unavailable here.
+                if let Some(toggle) = widgets.source_toggles.toggle(2) {
+                    toggle.set_enabled(available);
+                    if !available {
+                        toggle.set_tooltip(&tr!("This desktop cannot create an extra screen \
+                             (it needs GNOME running natively)"));
+                    }
+                }
             }
             AppCmd::SearchTimedOut(generation) => {
                 if generation == self.generation && self.registry.is_empty() {
@@ -746,6 +817,18 @@ async fn run_cast(sink: Arc<dyn Sink>, source_type: SourceType) -> std::result::
     result
 }
 
+/// Asks the capture backend, once, whether it can create a virtual monitor.
+///
+/// Done in the background because it touches D-Bus, and the answer only
+/// decides whether one button is shown — the window must not wait on it.
+fn probe_virtual_support(sender: &ComponentSender<AppModel>) {
+    sender.oneshot_command(async move {
+        let backend = nd_capture::select_backend_for(SourceType::Virtual).await;
+        let supported = backend.supported_sources().await;
+        AppCmd::VirtualSupported(supported.contains(&SourceType::Virtual))
+    });
+}
+
 fn start_state_poll(sender: &ComponentSender<AppModel>) {
     sender.oneshot_command(async move {
         tokio::time::sleep(STATE_POLL).await;
@@ -753,7 +836,7 @@ fn start_state_poll(sender: &ComponentSender<AppModel>) {
     });
 }
 
-/// Dispara a descoberta e o prazo do estado vazio.
+/// Kicks off discovery and the empty-state deadline.
 fn start_discovery(sender: &ComponentSender<AppModel>, generation: u64) {
     sender.command(move |out, shutdown| {
         shutdown
@@ -815,6 +898,45 @@ async fn run_discovery(out: relm4::Sender<AppCmd>, generation: u64) {
     }
 }
 
+/// What to do with a receiver that has just been discovered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Placement {
+    /// Add it as a new row.
+    Add,
+    /// Ignore it: the same device is already listed, in an equal or better way.
+    Skip,
+    /// Take the place of the row at this index, which is the same device
+    /// discovered through a protocol we cannot stream to.
+    Replace(usize),
+}
+
+/// Decides where a newly discovered receiver goes in the list.
+///
+/// One piece of equipment often announces itself over more than one protocol —
+/// a Samsung projector shows up as AirPlay (which we only discover) *and* as
+/// Miracast (which we can actually stream to). Listing both puts the same name
+/// twice, one of them inert, and the user has to guess which is which.
+///
+/// The rule is deliberately narrow: merge only when the name matches exactly
+/// **and** one of the two is discovery-only. Two genuinely different devices
+/// sharing a name is unlikely, and even then nothing is lost, because the
+/// entry that gives way is the one that could not stream anyway.
+fn placement(existing: &[(String, bool)], name: &str, castable: bool) -> Placement {
+    match existing.iter().position(|(n, _)| n == name) {
+        None => Placement::Add,
+        Some(index) => {
+            let (_, listed_castable) = &existing[index];
+            match (listed_castable, castable) {
+                // The one already listed cannot stream and this one can: it
+                // takes its place.
+                (false, true) => Placement::Replace(index),
+                // Anything else: what is listed is as good or better.
+                _ => Placement::Skip,
+            }
+        }
+    }
+}
+
 /// Turns the provider's technical error into something the user can act on.
 fn friendly_reason(provider: &str, reason: &str) -> String {
     if provider == "wfd-p2p" {
@@ -836,11 +958,63 @@ fn build_placeholder() -> adw::StatusPage {
     let page = adw::StatusPage::builder()
         .icon_name("video-display-symbolic")
         .title(tr!("Looking for receivers…"))
+        // Naming the menu path is not padding: a Fire TV only advertises
+        // itself while that screen is open, and without the hint people
+        // conclude the app cannot see their device.
         .description(tr!(
-            "Chromecasts and TVs show up on their own. For Miracast, put the TV \
-             or the projector into “Screen Mirroring” mode."
+            "Chromecasts show up on their own. A TV or projector only appears \
+             while it is in screen mirroring mode — on Fire TV, under \
+             Settings › Display & Sounds › Display Mirroring."
         ))
         .build();
     page.add_css_class("compact");
     page
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_streamable_entry_wins_over_the_discovery_only_one() {
+        // The real case: a Samsung projector announces itself over AirPlay,
+        // which we only discover, and over Miracast, which we can stream to.
+        // Listing both put the same name twice, one of the rows inert.
+        let listed = vec![("Samsung Projector LSP3".to_string(), false)];
+        assert_eq!(
+            placement(&listed, "Samsung Projector LSP3", true),
+            Placement::Replace(0),
+            "the Miracast entry must take the AirPlay entry's place"
+        );
+
+        // And in the other order: with the streamable one already listed, the
+        // discovery-only announcement adds nothing.
+        let listed = vec![("Samsung Projector LSP3".to_string(), true)];
+        assert_eq!(
+            placement(&listed, "Samsung Projector LSP3", false),
+            Placement::Skip
+        );
+    }
+
+    #[test]
+    fn different_devices_are_never_merged() {
+        let listed = vec![
+            ("Living Room TV".to_string(), true),
+            ("Bedroom projector".to_string(), false),
+        ];
+        assert_eq!(placement(&listed, "Kitchen display", true), Placement::Add);
+        assert_eq!(placement(&[], "Anything", false), Placement::Add);
+    }
+
+    #[test]
+    fn two_streamable_entries_with_the_same_name_do_not_replace_each_other() {
+        // Two receivers genuinely named alike: replacing one with the other
+        // would make a working device vanish from the list.
+        let listed = vec![("Chromecast".to_string(), true)];
+        assert_eq!(placement(&listed, "Chromecast", true), Placement::Skip);
+
+        // The same goes for two inert ones: no point swapping one for the other.
+        let listed = vec![("Chromecast".to_string(), false)];
+        assert_eq!(placement(&listed, "Chromecast", false), Placement::Skip);
+    }
 }

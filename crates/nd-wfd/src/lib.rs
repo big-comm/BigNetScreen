@@ -33,7 +33,7 @@ const RETRY_BASE: Duration = Duration::from_secs(2);
 /// Ceiling of the exponential reconnection backoff.
 const RETRY_MAX: Duration = Duration::from_secs(30);
 
-/// Provider de descoberta WFD-P2P (Miracast) via Wi-Fi Direct.
+/// WFD-P2P (Miracast) discovery provider over Wi-Fi Direct.
 pub struct WfdP2pProvider;
 
 #[async_trait]
@@ -71,11 +71,11 @@ impl Provider for WfdP2pProvider {
                         // A fixed regression: a single D-Bus failure used to
                         // end discovery silently, leaving the user on
                         // "Searching…" forever.
-                        tracing::warn!(%err, "descoberta P2P falhou; tentando de novo");
+                        tracing::warn!(%err, "P2P discovery failed; retrying");
                         if tx
                             .unbounded_send(DiscoveryEvent::ProviderUnavailable {
                                 provider: "wfd-p2p",
-                                reason: format!("{err} — tentando reconectar"),
+                                reason: format!("{err} — reconnecting"),
                             })
                             .is_err()
                         {
@@ -125,6 +125,10 @@ async fn run_discovery(
 ) -> Result<()> {
     use futures::future::FutureExt;
 
+    // Peers already reported as "seen, but not offering themselves". Kept so
+    // the log carries one line per device rather than one per announcement.
+    let mut seen_without_wfd: HashSet<String> = HashSet::new();
+
     let mut events = Box::pin(device.peer_events().await?);
     // NetworkManager's scan expires; renewing it is what makes a receiver
     // switched on after the app appear in the list.
@@ -138,17 +142,37 @@ async fn run_discovery(
 
         let Some(event) = event else {
             return Err(NdError::Network(
-                "o NetworkManager parou de enviar eventos de peer".into(),
+                "NetworkManager stopped sending peer events".into(),
             ));
         };
 
         let message = match event {
             PeerEvent::Added(peer) => {
                 // Only peers advertising Wi-Fi Display are Miracast receivers.
-                if !peer.is_wfd || !known.insert(peer.path.clone()) {
+                if !peer.is_wfd {
+                    // Logged rather than dropped in silence. A receiver that is
+                    // switched on but not in mirroring mode shows up here, and
+                    // this line is the only way to tell "the TV was never seen"
+                    // from "the TV was seen and is not offering itself". Amazon
+                    // Fire TV only advertises WFD while its Display Mirroring
+                    // screen is open, and that had people concluding the app
+                    // could not see their device at all.
+                    if seen_without_wfd.insert(peer.path.clone()) {
+                        tracing::info!(
+                            name = %peer.name,
+                            mac = %peer.hw_address,
+                            "Wi-Fi Direct peer found without Wi-Fi Display: it is not \
+                             offering itself as a receiver. On a TV or projector, open the \
+                             screen mirroring mode (on Fire TV: Settings › Display & Sounds \
+                             › Display Mirroring)"
+                        );
+                    }
                     continue;
                 }
-                tracing::info!(name = %peer.name, mac = %peer.hw_address, "sink Miracast encontrado");
+                if !known.insert(peer.path.clone()) {
+                    continue;
+                }
+                tracing::info!(name = %peer.name, mac = %peer.hw_address, "Miracast sink found");
                 DiscoveryEvent::Added(Arc::new(WfdSink::new(&peer)) as Arc<dyn Sink>)
             }
             PeerEvent::Removed { path } => {
@@ -346,7 +370,7 @@ pub mod cast {
         let listener = TcpListener::bind((our_ip, RTSP_PORT)).await.map_err(|e| {
             NdError::Network(format!("could not listen on {our_ip}:{RTSP_PORT}: {e}"))
         })?;
-        tracing::info!(%our_ip, "servidor RTSP/WFD no ar; aguardando o sink");
+        tracing::info!(%our_ip, "RTSP/WFD server listening; waiting for the sink");
 
         let accepted = tokio::select! {
             result = tokio::time::timeout(ACCEPT_TIMEOUT, listener.accept()) => result,
@@ -366,7 +390,7 @@ pub mod cast {
         if !addr.ip().is_ipv4() && !addr.ip().is_ipv6() {
             return Err(NdError::Protocol("invalid source address".into()));
         }
-        tracing::info!(%addr, "sink conectou");
+        tracing::info!(%addr, "the sink connected");
 
         status.set(SinkState::WaitStreaming);
         let driver = nd_net::detect_gpu_driver();

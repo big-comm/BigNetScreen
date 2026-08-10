@@ -459,7 +459,7 @@ where
         body,
     };
     tracing::trace!(
-        "\n<<< RECEBIDO <<<\n{}\n{}\n{}",
+        "\n<<< RECEIVED <<<\n{}\n{}\n{}",
         msg.start_line,
         msg.headers
             .iter()
@@ -573,7 +573,7 @@ pub async fn negotiate_caps(stream: TcpStream) -> Result<SinkCaps> {
                 }
             }
             other => {
-                tracing::debug!(method = ?other, "request inesperado; respondendo 200");
+                tracing::debug!(method = ?other, "unexpected request; answering 200");
                 send(
                     &mut writer,
                     &format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\n\r\n", msg.cseq_str()),
@@ -778,13 +778,13 @@ pub async fn cast_to_sink(stream: TcpStream, cfg: WfdCastConfig) -> Result<()> {
                     pending.insert(cseq, Awaiting::TriggerSetup);
                 }
                 Awaiting::TriggerSetup => {
-                    tracing::debug!("aguardando SETUP do sink");
+                    tracing::debug!("waiting for the sink's SETUP");
                 }
             }
             continue;
         }
 
-        // Request vindo do sink.
+        // A request coming from the sink.
         match msg.method() {
             Some("OPTIONS") => {
                 send(
@@ -852,7 +852,7 @@ pub async fn cast_to_sink(stream: TcpStream, cfg: WfdCastConfig) -> Result<()> {
                     NdError::Protocol("PLAY received before the format was negotiated".into())
                 })?;
 
-                tracing::info!(sink = %cfg.sink_ip, port = sink_rtp_port, "PLAY — iniciando streaming");
+                tracing::info!(sink = %cfg.sink_ip, port = sink_rtp_port, "PLAY — starting the stream");
                 let monitored = start_pipeline(&cfg, &mode, sink_rtp_port).await?;
                 // A guard rather than a bare value: ending through an error,
                 // a TEARDOWN or the Stop button all have to pass through
@@ -980,7 +980,7 @@ async fn start_pipeline(
         // to fall back to, and spending the verification time would only delay
         // the picture.
         if index == last {
-            tracing::info!(?encoder, "encoder em uso");
+            tracing::info!(?encoder, "encoder in use");
             let _ = pipeline::query_min_latency_ms(&monitored.pipeline);
             return Ok(monitored);
         }
@@ -988,7 +988,7 @@ async fn start_pipeline(
         tokio::time::sleep(ENCODER_PROBE).await;
         let frames = monitored.frames_encoded();
         if frames > 0 {
-            tracing::info!(?encoder, frames, "encoder em uso");
+            tracing::info!(?encoder, frames, "encoder in use");
             let _ = pipeline::query_min_latency_ms(&monitored.pipeline);
             return Ok(monitored);
         }

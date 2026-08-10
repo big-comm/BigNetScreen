@@ -55,9 +55,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("  estado: {state:?}");
         if state == ActiveState::Activated {
             let ips = device.addresses(&active).await.unwrap_or_default();
-            eprintln!("✅ grupo P2P formado! nosso IP no link: {ips:?}");
-            eprintln!("   (servidor RTSP/WFD escutaria na 7236 desse IP — Fase 3c)");
-            eprintln!("   mantendo o grupo vivo por 15s (veja o projetor seguir em 'conectando')…");
+            eprintln!("✅ P2P group formed! our IP on the link: {ips:?}");
+            eprintln!("   (the RTSP/WFD server would listen on 7236 of that IP)");
+            eprintln!(
+                "   keeping the group alive for 15s (watch the projector sit on 'connecting')…"
+            );
             tokio::time::sleep(Duration::from_secs(15)).await;
             break;
         }

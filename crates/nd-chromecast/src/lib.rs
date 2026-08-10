@@ -249,7 +249,7 @@ impl MdnsSink {
         self.address
     }
 
-    /// Porta anunciada no mDNS (8009 nos Chromecasts).
+    /// The port announced over mDNS (8009 on Chromecasts).
     pub fn port(&self) -> u16 {
         self.port
     }

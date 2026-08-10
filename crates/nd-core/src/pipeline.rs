@@ -186,7 +186,7 @@ pub fn build_pipeline(
     latency_ms: u64,
 ) -> Result<(gst::Pipeline, PipelineEvents)> {
     init()?;
-    tracing::debug!(%description, latency_ms, "construindo pipeline");
+    tracing::debug!(%description, latency_ms, "building the pipeline");
 
     let element = gst::parse::launch(description).map_err(|e| NdError::Gst(e.to_string()))?;
     let pipeline = element
@@ -223,7 +223,7 @@ pub fn build_pipeline(
                 }
                 gst::MessageView::Warning(w) => {
                     let message = w.error().to_string();
-                    tracing::warn!(%message, "aviso do pipeline");
+                    tracing::warn!(%message, "pipeline warning");
                     let _ = tx.unbounded_send(PipelineEvent::Warning { message });
                 }
                 gst::MessageView::Eos(_) => {
@@ -370,7 +370,7 @@ impl H264Encoder {
         !matches!(self, H264Encoder::X264 | H264Encoder::OpenH264)
     }
 
-    /// Usa a stack VA-API (permite converter/escalar na GPU com `vapostproc`).
+    /// Uses the VA-API stack (allowing conversion/scaling on the GPU with `vapostproc`).
     pub fn is_va(self) -> bool {
         matches!(self, H264Encoder::VaH264 | H264Encoder::VaapiH264)
     }
@@ -614,7 +614,7 @@ impl PipelineGuard {
 impl Drop for PipelineGuard {
     fn drop(&mut self) {
         if let Err(err) = self.pipeline.set_state(gst::State::Null) {
-            tracing::debug!(%err, "falha ao levar o pipeline a NULL");
+            tracing::debug!(%err, "failed to take the pipeline to NULL");
         }
     }
 }
@@ -686,7 +686,7 @@ pub fn best_encoder(driver: GpuDriver) -> Result<H264Encoder> {
     tracing::info!(?available, ?driver, ?chosen, "H.264 encoder selection");
     chosen.ok_or_else(|| {
         NdError::Unsupported(
-            "nenhum encoder H.264 encontrado — instale gst-plugins-ugly (x264) \
+            "no H.264 encoder found — install gst-plugins-ugly (x264) \
              ou gst-plugins-bad (openh264/va)"
                 .into(),
         )
@@ -707,7 +707,21 @@ pub enum VideoSource {
     /// session authorised. `fd` is the portal's remote descriptor (mandatory
     /// under Flatpak); with Mutter directly the node lives in the session's own
     /// daemon and `fd` is `None`.
-    PipeWire { fd: Option<RawFd>, node_id: u32 },
+    PipeWire {
+        fd: Option<RawFd>,
+        node_id: u32,
+        /// The size to demand from the producer, when it must not be left open.
+        ///
+        /// A **virtual monitor** has no panel to take a resolution from, so
+        /// Mutter leaves it to PipeWire to negotiate one — and creates the
+        /// screen at whatever comes out of that negotiation. With the size only
+        /// fixed downstream of the scaler, `pipewiresrc` accepted anything and
+        /// the monitor was created at **16x16**, then stretched to fill the
+        /// receiver. That is what a blurry picture looks like from here.
+        ///
+        /// `None` for a real monitor: its resolution is its own.
+        size: Option<(u32, u32)>,
+    },
     /// A test pattern (diagnostic, needing no capture session).
     Test,
     /// An **animated** pattern with a clock overlaid.
@@ -720,19 +734,39 @@ pub enum VideoSource {
 }
 
 impl VideoSource {
-    fn description(&self) -> String {
+    /// The GStreamer fragment that produces this source's frames.
+    ///
+    /// Public so diagnostics can build a pipeline of their own — the
+    /// `cursor_probe` example needs raw video, where the production pipelines
+    /// all end in an encoder.
+    pub fn description(&self) -> String {
         match self {
             // `keepalive-time`/`resend-last` make the source re-emit the last
             // frame when the screen is still. Without them the encoder starves
             // and the receiver drops the session for lack of data.
-            VideoSource::PipeWire { fd, node_id } => {
+            VideoSource::PipeWire { fd, node_id, size } => {
                 let fd_prop = match fd {
                     Some(fd) => format!("fd={fd} "),
                     None => String::new(),
                 };
+                // No caps are forced on the producer, and that is deliberate.
+                //
+                // Demanding a size here looked like the way to stop Mutter
+                // creating a 16x16 virtual monitor. What it actually did was
+                // make the authorised node unable to satisfy the negotiation —
+                // and `pipewiresrc`, whose `autoconnect` defaults to true,
+                // then went looking for another video peer and found the
+                // laptop's **webcam**, which went out to the projector.
+                //
+                // Turning `autoconnect` off is not the fix either: with it off
+                // the element never connects at all (measured: zero frames,
+                // the monitor is never created). So the size stays negotiated,
+                // and sizing the virtual monitor properly is still open.
+                let _ = size;
+                let caps = String::new();
                 format!(
                     "pipewiresrc {fd_prop}path={node_id} do-timestamp=true \
-                     keepalive-time=1000 resend-last=true"
+                     keepalive-time=1000 resend-last=true{caps}"
                 )
             }
             VideoSource::Test => "videotestsrc is-live=true".to_string(),
@@ -1460,6 +1494,7 @@ mod tests {
         let src = VideoSource::PipeWire {
             fd: Some(7),
             node_id: 42,
+            size: None,
         };
         let transport = WfdTransport::new(IpAddr::V4(Ipv4Addr::new(192, 168, 49, 1)), 19000);
         wfd_pipeline_description(cfg, &src, &transport)
@@ -1473,6 +1508,7 @@ mod tests {
         let src = VideoSource::PipeWire {
             fd: None,
             node_id: 42,
+            size: None,
         };
         let desc = chromecast_pipeline_description(&cfg, &src);
         assert!(desc.contains("pipewiresrc path=42"), "{desc}");
@@ -1583,6 +1619,39 @@ mod tests {
         let cfg = StreamConfig::default();
         assert!(cfg.audio_queue().contains("leaky=downstream"));
         assert!(!cfg.mirror_audio_queue().contains("leaky"));
+    }
+
+    #[test]
+    fn the_capture_source_never_has_caps_forced_on_it() {
+        // A privacy regression seen in the field, and the reason this is a
+        // test rather than a comment.
+        //
+        // `pipewiresrc` documents `autoconnect` as "Attempt to find a peer to
+        // connect to" and defaults it to true. Forcing a size on the producer
+        // made the authorised node unable to negotiate, the element went
+        // looking for another video peer, and the laptop's **webcam** was
+        // streamed to the projector.
+        //
+        // The portal path is protected by its `fd`: that PipeWire remote holds
+        // only the node the user authorised, cameras included in nothing. The
+        // Mutter path has no `fd` and lives in the session's own daemon, where
+        // the camera does exist — so nothing may narrow the negotiation there.
+        for size in [None, Some((1920, 1080))] {
+            let desc = VideoSource::PipeWire {
+                fd: None,
+                node_id: 42,
+                size,
+            }
+            .description();
+            assert!(
+                !desc.contains("video/x-raw,width"),
+                "no caps may be forced on the producer: {desc}"
+            );
+            assert!(
+                desc.contains("path=42"),
+                "and the node must be named: {desc}"
+            );
+        }
     }
 
     #[test]

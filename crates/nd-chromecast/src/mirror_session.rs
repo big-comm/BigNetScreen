@@ -321,7 +321,7 @@ impl StreamSender {
             self.stats,
         );
         if let Err(err) = self.socket.send(&report) {
-            tracing::debug!(stream = self.label, %err, "falha ao enviar sender report");
+            tracing::debug!(stream = self.label, %err, "failed to send a sender report");
         }
     }
 
@@ -348,7 +348,7 @@ struct FlowWatch {
     frames: u64,
     /// Timestamp jumps larger than twice the expected interval.
     pts_jumps: u64,
-    /// Maior salto observado, em ms.
+    /// The largest jump observed, in ms.
     worst_pts_jump_ms: u64,
     /// The largest wall-clock gap between two sends, in ms.
     worst_send_gap_ms: u64,
@@ -410,7 +410,7 @@ fn prune_history(history: &mut History, now: std::time::Instant) {
 /// The outcome of one round of retransmissions.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct Retransmission {
-    /// Pacotes efetivamente reenviados.
+    /// Packets actually resent.
     sent: usize,
     /// Requests that could no longer be served: the frame left the history.
     expired: usize,
@@ -608,7 +608,7 @@ async fn stream(
     tracing::info!(
         destino = %target,
         streams = senders.len(),
-        "iniciando espelhamento Cast"
+        "starting Cast mirroring"
     );
 
     gst_pipeline
@@ -747,7 +747,7 @@ async fn stream(
         result = &mut done_rx => result.unwrap_or(Ok(())),
         event = futures::StreamExt::next(&mut events) => match event {
             Some(pipeline::PipelineEvent::Error { message, debug: details }) => {
-                tracing::error!(%message, %details, "pipeline do espelhamento falhou");
+                tracing::error!(%message, %details, "the mirroring pipeline failed");
                 Err(NdError::Gst(message))
             }
             _ => Ok(()),

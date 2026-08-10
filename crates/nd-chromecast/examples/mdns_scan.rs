@@ -24,7 +24,7 @@ fn main() {
         .map(|t| (*t, daemon.browse(t).expect("browse")))
         .collect();
 
-    println!("varrendo por 12s (nosso mdns-sd)…\n");
+    println!("browsing for 12s (our own mdns-sd)…\n");
     let start = Instant::now();
     let mut count = 0;
     while start.elapsed() < Duration::from_secs(12) {

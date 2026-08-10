@@ -18,7 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
 
-    println!("localizando device Wi-Fi P2P…");
+    println!("locating the Wi-Fi P2P device…");
     let device = P2pDevice::open().await?;
     println!("StartFind…");
     device.start_find().await?;

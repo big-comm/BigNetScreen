@@ -30,5 +30,5 @@
 # Compiled translations and Makefile artefacts
 /build/
 
-# Fontes geradas para o Flatpak
+# Sources generated for Flatpak
 /build-aux/flatpak/cargo-sources.json

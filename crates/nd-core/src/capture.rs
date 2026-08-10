@@ -67,6 +67,12 @@ impl CaptureSource {
         VideoSource::PipeWire {
             fd: self.raw_fd(),
             node_id: self.node_id,
+            // A virtual monitor has no panel of its own: whatever the pipeline
+            // negotiates *is* the screen's resolution, so it has to be asked
+            // for explicitly. A real monitor keeps its own.
+            size: (self.source_type == SourceType::Virtual)
+                .then_some(self.size)
+                .flatten(),
         }
     }
 

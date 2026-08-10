@@ -27,10 +27,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let with_audio = std::env::args().nth(2).as_deref() != Some("video-only");
 
-    println!("conectando a {ip}…");
+    println!("connecting to {ip}…");
     let channel = CastChannel::connect(ip).await?;
 
-    println!("iniciando o app de espelhamento {MIRRORING_APP_ID}…");
+    println!("starting the mirroring app {MIRRORING_APP_ID}…");
     let app = channel.launch(MIRRORING_APP_ID).await?;
     println!("app: transport={}", app.transport_id);
 
@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     };
     println!(
-        "oferecendo h264 {}x{}@{}{}…",
+        "offering h264 {}x{}@{}{}…",
         cfg.width,
         cfg.height,
         cfg.fps,
@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Err(err) => {
-            println!("\n❌ falhou: {err}");
+            println!("\n❌ failed: {err}");
             return Err(err.into());
         }
     }

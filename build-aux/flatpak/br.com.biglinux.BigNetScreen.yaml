@@ -3,10 +3,10 @@
 # A structural limitation of the sandbox: NetworkManager and firewalld live on
 # the **system** bus, which Flatpak does not grant access to. Therefore:
 #
-#   Chromecast → funciona plenamente (mDNS + TCP via --share=network)
+#   Chromecast → works fully (mDNS + TCP through --share=network)
 #   Miracast   → unavailable; the app detects the sandbox and says so in the UI
 #
-# A captura de tela usa exclusivamente o portal (ashpd), nunca o Mutter direto.
+# Screen capture goes exclusively through the portal (ashpd), never Mutter directly.
 #
 # Antes de construir, gere as fontes do Cargo:
 #   python3 flatpak-cargo-generator.py Cargo.lock -o cargo-sources.json
@@ -33,7 +33,7 @@ finish-args:
   - --device=dri
   # System audio for the cast's audio track.
   - --socket=pulseaudio
-  # Captura de tela via portal ScreenCast (nada de --talk-name do Mutter).
+  # Screen capture through the ScreenCast portal (no --talk-name for Mutter).
   - --talk-name=org.freedesktop.portal.Desktop
   # PipeWire: the portal hands over the fd, but the remote is still opened here.
   - --filesystem=xdg-run/pipewire-0:ro

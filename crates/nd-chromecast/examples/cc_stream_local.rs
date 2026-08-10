@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         server.url()
     );
     println!("         ffprobe /tmp/cc.mkv\n");
-    println!("servindo por {secs}s…\n");
+    println!("serving for {secs}s…\n");
 
     let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
     let play = gst_pipeline.clone();

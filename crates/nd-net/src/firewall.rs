@@ -166,7 +166,7 @@ async fn default_zone(conn: &Connection) -> Result<Option<String>> {
     let proxy = match FirewallDProxy::new(conn).await {
         Ok(p) => p,
         Err(err) => {
-            tracing::debug!(%err, "firewalld ausente");
+            tracing::debug!(%err, "firewalld absent");
             return Ok(None);
         }
     };
@@ -202,7 +202,7 @@ pub async fn release(lease: FirewallLease) {
         match zone_proxy.remove_port(&lease.zone, port, proto).await {
             Ok(_) => tracing::info!(zone = %lease.zone, %port, %proto, "porta fechada"),
             Err(err) => {
-                tracing::warn!(zone = %lease.zone, %port, %proto, %err, "falha ao fechar a porta")
+                tracing::warn!(zone = %lease.zone, %port, %proto, %err, "failed to close the port")
             }
         }
     }
