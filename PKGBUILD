@@ -39,6 +39,17 @@ optdepends=(
 # the gettext functions come from glibc.
 makedepends=('rust' 'cargo' 'git' 'gettext')
 
+# `makepkg` enables link-time optimisation for C globally, which appends
+# `-flto=auto` to CFLAGS. That reaches the C and assembly that `ring` (the
+# cryptography behind the Cast channel's TLS) compiles through its build
+# script: with LTO those objects hold GCC bitcode instead of machine code,
+# rustc bundles them into the crate's rlib, and the final link — done by lld,
+# without GCC's LTO plugin — fails with every `ring_core_*` symbol undefined.
+#
+# Nothing is lost by turning it off: Cargo does its own LTO for the Rust code,
+# which is all but a few hundred kilobytes of this package.
+options=(!lto)
+
 source=("$pkgname::git+$url.git")
 sha256sums=('SKIP')
 
