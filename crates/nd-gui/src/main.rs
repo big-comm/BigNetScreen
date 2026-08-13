@@ -18,7 +18,7 @@ const APP_ID: &str = "br.com.biglinux.BigNetScreen";
 ///
 /// That is also why it is not read from the environment. A second source would
 /// win over this one and the tool's increment would never reach the interface.
-pub const APP_VERSION: &str = "0.1.2";
+pub const APP_VERSION: &str = "0.1.3";
 
 fn main() {
     tracing_subscriber::fmt()

@@ -23,9 +23,6 @@
 # means the work never reaches the package.
 /locale/
 
-# A copy of the BigCommunity packaging template, kept locally for reference.
-/pkgbuild/
-
 # ===== Local build output (make) =====
 /build
 # Compiled .mo catalogues: produced by `make locale` and by translation
