@@ -9,19 +9,16 @@ use relm4::RelmApp;
 
 const APP_ID: &str = "br.com.biglinux.BigNetScreen";
 
-/// The version this build reports.
+/// The application's version.
 ///
-/// `APP_VERSION` from the build environment when the packaging sets it — the
-/// package is numbered by date and `Cargo.toml` cannot know that number — and
-/// the crate's own version otherwise, so a plain `cargo build` still says
-/// something true.
-/// An **empty** value counts as absent, which is not pedantry: `make` passes
-/// the variable through whether or not it was given one, so the ordinary
-/// `make` would otherwise build a binary that reports no version at all.
-pub const APP_VERSION: &str = match option_env!("APP_VERSION") {
-    Some(version) if !version.is_empty() => version,
-    _ => env!("CARGO_PKG_VERSION"),
-};
+/// A plain literal on purpose: the packaging tool finds this constant by
+/// pattern and rewrites the number when it publishes a release, so the version
+/// in the About dialog is the version that was shipped, with nobody having to
+/// remember to edit it.
+///
+/// That is also why it is not read from the environment. A second source would
+/// win over this one and the tool's increment would never reach the interface.
+pub const APP_VERSION: &str = "0.1.1";
 
 fn main() {
     tracing_subscriber::fmt()

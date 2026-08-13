@@ -38,6 +38,12 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "io-util", 
 
 [profile.release]
 opt-level = 3
-lto = "fat"
+# `thin`, not `fat`. Fat LTO hands the linker one combined object plus the
+# rlibs that could not be merged — which is only `ring`, because it carries
+# assembly compiled by its build script. Resolving symbols from that archive
+# against an LTO'd object depends on the linker's behaviour, and the CI's
+# `ld.lld` left every `ring_core_*` symbol undefined while the same code links
+# here. Thin LTO removes the interaction and costs about 5% in binary size.
+lto = "thin"
 codegen-units = 1
 strip = true

@@ -52,10 +52,7 @@ build() {
   cd "$pkgname"
   export RUSTUP_TOOLCHAIN=stable
   export CARGO_TARGET_DIR=target
-  # What the application reports in its log and its About dialog. Taken from
-  # the package's own version so the two can never disagree.
-  export APP_VERSION="$pkgver-$pkgrel"
-  make PREFIX=/usr APP_VERSION="$APP_VERSION"
+  make PREFIX=/usr
 }
 
 check() {
