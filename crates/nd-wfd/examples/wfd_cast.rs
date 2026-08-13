@@ -93,7 +93,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    let result = cast_to_sink(stream, cfg).await;
+    // The example has no interface to report to, so it hands the session a
+    // status of its own and throws it away.
+    let status = nd_core::sink::SinkStatus::new();
+    let result = cast_to_sink(stream, cfg, &status).await;
 
     firewall::release(lease).await;
     let _ = device.disconnect(&active).await;

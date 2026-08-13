@@ -4,6 +4,7 @@
 //! machine spelled out in an `enum` (instead of loose integers) and an `async`
 //! lifecycle (instead of the callback soup plus a hand-rolled `GCancellable`).
 
+use std::net::SocketAddr;
 use std::sync::{Mutex, PoisonError};
 
 use async_trait::async_trait;
@@ -98,10 +99,39 @@ pub struct SinkStatus {
     inner: Mutex<StatusInner>,
 }
 
+/// What the session actually settled on, once it has settled on it.
+///
+/// Every field here is **negotiated, not requested**. A receiver that agreed to
+/// 1280x720 while the preference asked for 1080p is described by what it
+/// agreed to, because that is what is on the wall. Showing the request instead
+/// would be a number the interface made up.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StreamLink {
+    pub width: u32,
+    pub height: u32,
+    pub fps: u32,
+    /// Where the receiver is reached, and on which control port.
+    ///
+    /// Kept because it is the only address that is certainly reachable: a
+    /// Miracast receiver is announced by MAC and only acquires an IP once the
+    /// Wi-Fi Direct group exists.
+    pub endpoint: Option<SocketAddr>,
+}
+
+impl StreamLink {
+    /// "1920 × 1080 · 60 Hz", for showing.
+    ///
+    /// The multiplication sign is the typographic one, not the letter x.
+    pub fn describe(&self) -> String {
+        format!("{} × {} · {} Hz", self.width, self.height, self.fps)
+    }
+}
+
 #[derive(Clone, Debug)]
 struct StatusInner {
     state: SinkState,
     message: Option<String>,
+    link: Option<StreamLink>,
 }
 
 impl Default for StatusInner {
@@ -109,6 +139,7 @@ impl Default for StatusInner {
         Self {
             state: SinkState::Disconnected,
             message: None,
+            link: None,
         }
     }
 }
@@ -135,6 +166,26 @@ impl SinkStatus {
             .clone()
     }
 
+    /// What the running session settled on, if it has got that far.
+    pub fn link(&self) -> Option<StreamLink> {
+        self.inner
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .link
+    }
+
+    /// Records what the session negotiated.
+    ///
+    /// Called by the protocol once, after negotiation and before the first
+    /// frame — the point at which the numbers stop being a request.
+    pub fn set_link(&self, link: StreamLink) {
+        tracing::info!(?link, "session negotiated");
+        self.inner
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .link = Some(link);
+    }
+
     /// Changes the state.
     ///
     /// An error state is **not** overwritten by `Disconnected`: that is how the
@@ -149,6 +200,12 @@ impl SinkStatus {
         if state != SinkState::Error {
             guard.message = None;
         }
+        // The negotiated mode describes a *running* session. Keeping it past
+        // the end would leave "1920 × 1080 · 60 Hz" on screen next to a
+        // receiver that is no longer connected.
+        if matches!(state, SinkState::Disconnected | SinkState::Error) {
+            guard.link = None;
+        }
     }
 
     /// Records a terminal error along with its cause.
@@ -156,6 +213,7 @@ impl SinkStatus {
         let mut guard = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
         guard.state = SinkState::Error;
         guard.message = Some(message.into());
+        guard.link = None;
     }
 
     /// Returns to idle, clearing any previous error (a fresh attempt).
@@ -163,6 +221,7 @@ impl SinkStatus {
         let mut guard = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
         guard.state = SinkState::Disconnected;
         guard.message = None;
+        guard.link = None;
     }
 }
 
@@ -190,6 +249,14 @@ pub trait Sink: Send + Sync {
 
     /// The message attached to [`SinkState::Error`], if any.
     fn error_message(&self) -> Option<String> {
+        None
+    }
+
+    /// What the running session negotiated, once it has.
+    ///
+    /// `None` for a receiver that is idle, still connecting, or of a protocol
+    /// that does not report it.
+    fn link(&self) -> Option<StreamLink> {
         None
     }
 

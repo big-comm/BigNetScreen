@@ -1151,6 +1151,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -1159,6 +1160,7 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "gettext-rs",
+ "gtk4",
  "libadwaita",
  "nd-capture",
  "nd-chromecast",

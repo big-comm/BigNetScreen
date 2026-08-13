@@ -1,0 +1,201 @@
+/* BigNetScreen — the look of the application.
+ *
+ * Written against libadwaita's named colours rather than fixed values wherever
+ * one exists, so the window follows the desktop's theme and accent instead of
+ * insisting on its own. The exceptions are the parts of the design that *are*
+ * a colour: the hero card's gradient and the badges.
+ */
+
+/* The identity block at the top of the sidebar. */
+.app-identity {
+  padding: 14px 12px 8px 12px;
+}
+
+.app-identity .title {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.app-identity .subtitle {
+  font-size: 0.8rem;
+  opacity: 0.6;
+}
+
+/* The application's mark: a rounded square in the accent colour. */
+.app-mark {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  border-radius: 12px;
+  min-width: 38px;
+  min-height: 38px;
+  color: #ffffff;
+}
+
+/* The card at the foot of the sidebar, showing what is connected. */
+.connected-card {
+  background-color: alpha(currentColor, 0.05);
+  border: 1px solid alpha(currentColor, 0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin: 6px;
+}
+
+.connected-card .caption {
+  font-size: 0.78rem;
+  opacity: 0.6;
+}
+
+/* The green dot next to a live connection. */
+.live-dot {
+  color: @success_color;
+  font-size: 0.7rem;
+}
+
+/* Page headings. */
+.page-title {
+  font-size: 1.7rem;
+  font-weight: 800;
+}
+
+.page-subtitle {
+  opacity: 0.65;
+}
+
+.section-heading {
+  font-weight: 700;
+  opacity: 0.75;
+  margin-bottom: 2px;
+}
+
+/* The panel showing the receiver currently in use. The gradient is the one
+ * part of the design that is a colour rather than a role, so it is written
+ * out; the text on it is forced white because the gradient is dark in both
+ * light and dark themes. */
+.hero-card {
+  background: linear-gradient(160deg, #7c3aed 0%, #5b21b6 55%, #4c1d95 100%);
+  border-radius: 16px;
+  padding: 22px 18px;
+  color: #ffffff;
+}
+
+.hero-card .hero-name {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.hero-card .hero-detail {
+  color: alpha(#ffffff, 0.75);
+}
+
+.hero-card .hero-chip {
+  background-color: alpha(#ffffff, 0.15);
+  border-radius: 999px;
+  padding: 3px 12px;
+  color: #ffffff;
+}
+
+/* A plain information card: connection quality, tips, the media queue. */
+.info-card {
+  background-color: alpha(currentColor, 0.05);
+  border: 1px solid alpha(currentColor, 0.08);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
+/* Badges on a device row.
+ *
+ * `min-height` and a small padding, because a label with no height of its own
+ * stretches to the row and the pill comes out as tall as the row is — touching
+ * the separators above and below it. */
+.badge {
+  border-radius: 999px;
+  padding: 1px 10px;
+  min-height: 20px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.badge.connected {
+  background-color: alpha(@success_color, 0.18);
+  color: @success_color;
+}
+
+.badge.available {
+  background-color: alpha(currentColor, 0.1);
+  opacity: 0.85;
+}
+
+.badge.warning {
+  background-color: alpha(@warning_color, 0.18);
+  color: @warning_color;
+}
+
+/* The coloured square in front of each "what to share" option.
+ *
+ * Square, and big enough to read at a glance: these four are the choice the
+ * page exists to offer, so they carry more weight than a list icon would. The
+ * width and height are equal on purpose — a rounded rectangle read as a badge
+ * rather than as an icon. */
+.share-icon {
+  border-radius: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 2px 4px 2px 0;
+  color: #ffffff;
+}
+
+.share-icon.screen {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+}
+
+.share-icon.window {
+  background: linear-gradient(135deg, #6366f1, #4338ca);
+}
+
+.share-icon.virtual {
+  background: linear-gradient(135deg, #b45309, #92400e);
+}
+
+.share-icon.media {
+  background: linear-gradient(135deg, #d97706, #b45309);
+}
+
+/* Media tiles. */
+.media-tile {
+  border-radius: 12px;
+  padding: 0;
+}
+
+.media-tile.selected {
+  outline: 2px solid @accent_bg_color;
+  outline-offset: -2px;
+}
+
+.media-tile .thumb {
+  border-radius: 12px;
+  background-color: alpha(currentColor, 0.07);
+}
+
+.media-name {
+  font-size: 0.82rem;
+  padding: 4px 6px;
+}
+
+/* The strip along the bottom of the media page. */
+.action-bar {
+  background-color: alpha(currentColor, 0.05);
+  border: 1px solid alpha(currentColor, 0.08);
+  border-radius: 14px;
+  padding: 10px 14px;
+}
+
+/* Signal strength, drawn as text so it needs no icon theme. */
+.signal-good {
+  color: @success_color;
+  font-weight: 700;
+}
+
+.signal-weak {
+  color: @warning_color;
+  font-weight: 700;
+}

@@ -244,6 +244,10 @@ impl Sink for WfdSink {
         self.status.message()
     }
 
+    fn link(&self) -> Option<nd_core::sink::StreamLink> {
+        self.status.link()
+    }
+
     async fn start_stream(&self, source: CaptureSource) -> Result<()> {
         self.status.set(SinkState::Connecting);
 
@@ -305,7 +309,24 @@ pub mod cast {
     /// Time per attempt until the group has an IP.
     const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
     /// How long to wait for the sink to open the RTSP connection.
-    const ACCEPT_TIMEOUT: Duration = Duration::from_secs(40);
+    ///
+    /// Measured, not guessed: in the sessions that worked, the receiver
+    /// associated one second after the group started and opened RTSP within
+    /// about ten. Waiting forty seconds only made a failure take forty seconds
+    /// — and the failure that does happen is not cured by waiting, it is cured
+    /// by forming the group again.
+    const ACCEPT_TIMEOUT: Duration = Duration::from_secs(20);
+
+    /// How long to leave the radio alone between session attempts.
+    const RETRY_SETTLE: Duration = Duration::from_secs(3);
+
+    /// How many times to form the group and wait for the receiver.
+    ///
+    /// A receiver that completes the pairing and then never joins is the
+    /// common Miracast failure, and it clears on a fresh group. Doing that
+    /// automatically is the difference between "it did not work" and "it took
+    /// a moment".
+    const SESSION_ATTEMPTS: u32 = 3;
 
     /// Runs the whole session: P2P group → firewall → RTSP → streaming.
     ///
@@ -318,23 +339,58 @@ pub mod cast {
         cancel: tokio::sync::watch::Receiver<bool>,
     ) -> Result<()> {
         let device = P2pDevice::open().await?;
+        let mut source = source;
+        let mut last: Option<NdError> = None;
 
-        status.set(SinkState::Connecting);
-        let (active, our_ip) = device
-            .connect_and_wait(sink.peer_path(), CONNECT_ATTEMPTS, CONNECT_TIMEOUT)
-            .await?;
+        for attempt in 1..=SESSION_ATTEMPTS {
+            status.set(SinkState::Connecting);
+            let (active, our_ip) = device
+                .connect_and_wait(sink.peer_path(), CONNECT_ATTEMPTS, CONNECT_TIMEOUT)
+                .await?;
 
-        // Radio silence **only once the group is formed**: forming it depends
-        // on the radio being in a searching state, and silencing it earlier
-        // would be pulling the bridge out from under us. From here on, going
-        // on looking for peers would only disturb the link we just established
-        // (`nd_core::radio`).
-        let _radio = nd_core::radio::quiet();
+            // Radio silence **only once the group is formed**: forming it
+            // depends on the radio being in a searching state, and silencing it
+            // earlier would be pulling the bridge out from under us. From here
+            // on, going on looking for peers would only disturb the link we
+            // just established (`nd_core::radio`).
+            let quiet = nd_core::radio::quiet();
 
-        // Always tear the group down on exit, errors and cancellation included.
-        let result = run_session(&device, &active, our_ip, source, status, cancel).await;
-        let _ = device.disconnect(&active).await;
-        result
+            let outcome =
+                run_session(&device, &active, our_ip, source, status, cancel.clone()).await;
+            // Always tear the group down, errors and cancellation included.
+            // The receiver has to see it go away before it will accept a new
+            // one, which is exactly what the next attempt depends on.
+            let _ = device.disconnect(&active).await;
+            drop(quiet);
+
+            match outcome {
+                Ok(()) => return Ok(()),
+                Err(NdError::SinkNeverConnected { capture, reason })
+                    if attempt < SESSION_ATTEMPTS =>
+                {
+                    tracing::warn!(attempt, %reason, "the receiver never connected; trying again");
+                    status.set(SinkState::Connecting);
+                    // Two waits, not one delay for both: NetworkManager needs
+                    // a moment to finish removing the activation, and the
+                    // receiver needs to notice the group has gone before it
+                    // will accept a new one.
+                    tokio::time::sleep(RETRY_SETTLE).await;
+                    // The capture is handed back so the next attempt can use
+                    // it: asking the portal again would put a permission
+                    // dialog in front of someone who already agreed.
+                    source = *capture;
+                    last = Some(NdError::Protocol(reason));
+                }
+                Err(NdError::SinkNeverConnected { reason, .. }) => {
+                    return Err(NdError::Protocol(reason))
+                }
+                Err(err) => return Err(err),
+            }
+        }
+
+        Err(last.unwrap_or_else(|| {
+            NdError::Protocol("the receiver never opened the connection".into())
+        }))
     }
 
     async fn run_session(
@@ -352,7 +408,7 @@ pub mod cast {
         // all.
         let lease = firewall::ensure_ports_open(interface.as_deref()).await?;
 
-        let result = serve(our_ip, source, status, cancel).await;
+        let result = serve(our_ip, interface.as_deref(), source, status, cancel).await;
 
         firewall::release(lease).await;
         result
@@ -360,6 +416,7 @@ pub mod cast {
 
     async fn serve(
         our_ip: IpAddr,
+        interface: Option<&str>,
         source: CaptureSource,
         status: &SinkStatus,
         mut cancel: tokio::sync::watch::Receiver<bool>,
@@ -376,15 +433,34 @@ pub mod cast {
             result = tokio::time::timeout(ACCEPT_TIMEOUT, listener.accept()) => result,
             _ = cancel.changed() => return Ok(()),
         };
-        let (stream, addr) = accepted
-            .map_err(|_| {
-                NdError::Protocol(
-                    "the receiver did not open the RTSP connection — check that it is still \
-                     in Screen Mirroring mode"
-                        .into(),
-                )
-            })?
-            .map_err(|e| NdError::Network(e.to_string()))?;
+        let (stream, addr) = match accepted {
+            Ok(result) => result.map_err(|e| NdError::Network(e.to_string()))?,
+            Err(_) => {
+                // Which step failed changes the advice, so look before
+                // speaking: did anything at all take an address on this link?
+                let peers = interface
+                    .map(nd_net::p2p::peers_on_link)
+                    .unwrap_or_default();
+                let reason = if peers.is_empty() {
+                    tracing::warn!(
+                        ?interface,
+                        "nothing joined the Wi-Fi Direct link; the receiver paired and dropped"
+                    );
+                    "the receiver paired and then never joined — trying again with a fresh \
+                     connection"
+                        .to_string()
+                } else {
+                    tracing::warn!(?peers, "the receiver joined but never opened RTSP");
+                    "the receiver joined but never started mirroring — check that Screen \
+                     Mirroring is still open on it"
+                        .to_string()
+                };
+                return Err(NdError::SinkNeverConnected {
+                    capture: Box::new(source),
+                    reason,
+                });
+            }
+        };
 
         // We only accept the peer from our own P2P link.
         if !addr.ip().is_ipv4() && !addr.ip().is_ipv6() {
@@ -397,12 +473,13 @@ pub mod cast {
         let encoder = pipeline::best_encoder(driver)?;
         // The captured screen's aspect ratio guides the WFD mode choice.
         let cfg = WfdCastConfig::new(our_ip, addr.ip(), source.video_source(), encoder)
+            .with_audio(source.audio_source())
             .with_source_size(source.size_or((1920, 1080)));
 
         status.set(SinkState::Streaming);
         // The RTSP session runs until TEARDOWN, an error, or the user stopping it.
         let result = tokio::select! {
-            result = cast_to_sink(stream, cfg) => result,
+            result = cast_to_sink(stream, cfg, status) => result,
             _ = cancel.changed() => {
                 tracing::info!("Miracast session ended at the user's request");
                 Ok(())

@@ -12,6 +12,7 @@
 
 pub mod firewall;
 pub mod p2p;
+pub mod probe;
 
 use std::path::Path;
 

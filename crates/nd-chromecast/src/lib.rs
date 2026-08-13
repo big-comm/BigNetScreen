@@ -7,7 +7,9 @@
 //! explicit `shutdown()`).
 
 pub mod cast;
+pub mod file_server;
 pub mod http;
+pub mod media;
 pub mod mirror;
 pub mod mirror_session;
 pub mod rtcp;
@@ -267,6 +269,10 @@ impl Sink for MdnsSink {
 
     fn error_message(&self) -> Option<String> {
         self.status.message()
+    }
+
+    fn link(&self) -> Option<nd_core::sink::StreamLink> {
+        self.status.link()
     }
 
     async fn start_stream(&self, source: CaptureSource) -> Result<()> {

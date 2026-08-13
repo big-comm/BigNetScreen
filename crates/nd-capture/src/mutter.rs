@@ -564,6 +564,8 @@ impl CaptureBackend for MutterBackend {
                 node_id: monitor_node,
                 source_type,
                 size: Some(size),
+                // A real capture, not a file being played.
+                media: None,
             });
         }
 
@@ -583,6 +585,8 @@ impl CaptureBackend for MutterBackend {
             node_id,
             source_type,
             size: (source_type == SourceType::Virtual).then_some(size),
+            // A real capture, not a file being played.
+            media: None,
         })
     }
 

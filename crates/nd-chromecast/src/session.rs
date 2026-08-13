@@ -103,6 +103,13 @@ pub fn set_latency_preference(pref: LatencyPreference) {
 
 /// The current preference.
 pub fn latency_preference() -> LatencyPreference {
+    // The film profile decides this too. There is one choice to make — quick
+    // response or smooth playback — and it should not have to be made once per
+    // protocol; on this path "smooth" simply means leaving the receiver's own
+    // buffer alone instead of draining it.
+    if nd_core::latency::is_film() {
+        return LatencyPreference::Smooth;
+    }
     match PREFERENCE.load(std::sync::atomic::Ordering::Relaxed) {
         1 => LatencyPreference::Smooth,
         _ => LatencyPreference::Responsive,
@@ -347,7 +354,10 @@ pub async fn run_with_video(
     // The user's screen rarely has the receiver's aspect ratio. Shrinking to
     // fit while preserving that ratio avoids sending 1920x1200 to a 1080p
     // panel (which would rescale) and avoids stretching the picture.
-    let (width, height) = StreamConfig::fit_within(size, pipeline::CHROMECAST_MAX_RESOLUTION);
+    let (width, height) = StreamConfig::fit_within(
+        size,
+        StreamConfig::capped_by_preference(pipeline::CHROMECAST_MAX_RESOLUTION),
+    );
     if (width, height) != size {
         tracing::info!(
             origem = format!("{}x{}", size.0, size.1),
@@ -358,10 +368,24 @@ pub async fn run_with_video(
     let cfg = StreamConfig {
         width,
         height,
+        // The Cast paths have no frame rate to negotiate against, so the
+        // preference is the whole answer, capped at what H.264 mirroring
+        // receivers accept.
+        fps: StreamConfig::capped_fps(60),
         encoder,
         audio: pipeline::AudioSource::detect(),
         ..Default::default()
     };
+    // What the session settled on, for the interface to show. The receiver's
+    // control port is the one it is reached on, so the same value doubles as
+    // the address to measure the link against.
+    status.set_link(nd_core::sink::StreamLink {
+        width: cfg.width,
+        height: cfg.height,
+        fps: cfg.fps,
+        endpoint: Some(std::net::SocketAddr::new(receiver_ip, crate::cast::PORT)),
+    });
+
     let desc = pipeline::chromecast_pipeline_description(&cfg, &video);
     let (built, mut events) = pipeline::build_pipeline(&desc, cfg.latency_ms())?;
     // From here on, any `?` still takes the pipeline down.

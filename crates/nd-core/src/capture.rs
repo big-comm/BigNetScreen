@@ -49,6 +49,23 @@ pub struct CaptureSource {
     pub source_type: SourceType,
     /// Known dimensions, when the backend reports them (None = negotiate).
     pub size: Option<(u32, u32)>,
+    /// When set, this is not a capture at all: it is a file being played to the
+    /// receiver in place of the screen.
+    ///
+    /// Modelled here rather than as a separate kind of session because every
+    /// protocol already knows how to send "a source" — making a file one of
+    /// those means Miracast, Cast mirroring, the resolution caps and the stop
+    /// button all keep working with no changes of their own.
+    pub media: Option<MediaPlayback>,
+}
+
+/// A file being played to a receiver instead of a screen.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MediaPlayback {
+    pub path: std::path::PathBuf,
+    pub kind: crate::media::MediaKind,
+    /// The name to show when the file has no picture of its own.
+    pub title: String,
 }
 
 impl CaptureSource {
@@ -63,7 +80,40 @@ impl CaptureSource {
     /// the pipeline was assembled without `fd=`/`path=` and captured some
     /// arbitrary node from the PipeWire daemon instead of the stream the user
     /// authorised.
+    /// A source that plays a file rather than capturing anything.
+    ///
+    /// `size` is what the file will be scaled to; the receiver's own limit and
+    /// the person's quality preference still apply on top of it.
+    pub fn media_file(playback: MediaPlayback, size: (u32, u32)) -> Self {
+        Self {
+            pipewire_fd: None,
+            node_id: 0,
+            source_type: SourceType::Monitor,
+            size: Some(size),
+            media: Some(playback),
+        }
+    }
+
+    /// The sound that goes with this source.
+    ///
+    /// A file brings its own; a screen capture takes whatever the preferences
+    /// say. Deciding it here keeps the two from disagreeing — sending a film
+    /// with the computer's system audio over it is not what anyone meant.
+    pub fn audio_source(&self) -> crate::pipeline::AudioSource {
+        match &self.media {
+            Some(_) => crate::pipeline::AudioSource::MediaFile,
+            None => crate::pipeline::AudioSource::detect(),
+        }
+    }
+
     pub fn video_source(&self) -> VideoSource {
+        if let Some(playback) = &self.media {
+            return VideoSource::MediaFile {
+                path: playback.path.clone(),
+                kind: playback.kind,
+                title: playback.title.clone(),
+            };
+        }
         VideoSource::PipeWire {
             fd: self.raw_fd(),
             node_id: self.node_id,

@@ -1,74 +1,58 @@
-//! The application's root component (relm4 + libadwaita).
+//! The window: a sidebar, a page for each thing the application does, and the
+//! state that outlives any one of them.
 //!
-//! It discovers receivers (Chromecast/AirPlay over mDNS, Miracast over Wi-Fi
-//! Direct) through a `MetaProvider` running in the background and shows each
-//! one as a clickable row. Clicking starts the screen capture and the cast.
+//! The pages are components in [`crate::pages`]; this module is what they have
+//! in common. It owns the receivers that discovery finds, the running session
+//! and the preferences, and it is the only place a cast is started or stopped.
+//! Pages ask; this decides.
 //!
 //! Design points worth knowing:
 //!
-//! - **failures are visible**: an unavailable provider becomes a banner
-//!   explaining why, instead of a `warn` in the log with the UI stuck on
-//!   "Searching…";
-//! - **there is a way to retry**: a rescan button in the header;
-//! - **the empty state has a deadline**: after a few seconds with nothing
-//!   found, the screen explains what to check instead of spinning forever;
-//! - **an existing receiver is updated, not replaced**: swapping the `Arc`
-//!   mid-session would lose the connection state;
+//! - **failures are visible**: a protocol that will not start becomes a banner
+//!   saying why, not a `warn` in a log with the window stuck on "Searching…";
+//! - **an existing receiver is updated, never replaced**: swapping the `Arc`
+//!   mid-session would lose the connection that is running on it;
+//! - **the pages are told, they do not ask**: every poll pushes the current list
+//!   of receivers to whichever pages show one, so two parts of the window
+//!   cannot disagree about what is connected;
 //! - all text goes through `tr!()` (gettext).
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use futures::StreamExt;
 use relm4::adw::{self, prelude::*};
-use relm4::factory::{DynamicIndex, FactoryComponent, FactorySender, FactoryVecDeque};
 use relm4::gtk;
 use relm4::prelude::*;
 
+use nd_chromecast::file_server::MediaFile;
+use nd_chromecast::media::{MediaSession, MediaStatus};
 use nd_chromecast::MdnsProvider;
 use nd_core::capture::SourceType;
 use nd_core::meta::MetaProvider;
 use nd_core::provider::{DiscoveryEvent, Provider};
-use nd_core::sink::{Sink, SinkKind, SinkState};
+use nd_core::settings::{self, Protocol, Settings};
+use nd_core::sink::{Sink, SinkKind};
 use nd_wfd::WfdP2pProvider;
 
+use crate::pages::devices::{DevicesMsg, DevicesOutput, DevicesPage};
+use crate::pages::home::{HomeMsg, HomeOutput, HomePage};
+use crate::pages::media::{MediaMsg, MediaOutput, MediaPage};
+use crate::pages::settings::{SettingsMsg, SettingsOutput, SettingsPage};
+use crate::pages::{DeviceEntry, Page, SessionInfo};
 use crate::tr;
 
-/// After this long with no receiver, the screen stops saying "searching".
+/// After this long with no receiver, the window stops saying "searching".
 const EMPTY_HINT_AFTER: Duration = Duration::from_secs(12);
-/// How often the UI re-reads the state of sinks in a session.
+/// How often the state of the receivers is re-read and pushed to the pages.
 const STATE_POLL: Duration = Duration::from_millis(400);
-
-fn protocol_label(kind: SinkKind) -> String {
-    match kind {
-        SinkKind::Chromecast => tr!("Chromecast"),
-        SinkKind::AirPlay => tr!("AirPlay"),
-        SinkKind::WfdP2p | SinkKind::WfdMice => tr!("Miracast"),
-        SinkKind::Dummy => tr!("Test"),
-    }
-}
-
-fn icon_for(kind: SinkKind) -> &'static str {
-    match kind {
-        SinkKind::Chromecast => "tv-symbolic",
-        SinkKind::AirPlay => "display-projector-symbolic",
-        SinkKind::WfdP2p | SinkKind::WfdMice => "video-display-symbolic",
-        SinkKind::Dummy => "applications-system-symbolic",
-    }
-}
-
-fn state_label(state: SinkState) -> String {
-    match state {
-        SinkState::Disconnected => String::new(),
-        SinkState::Connecting => tr!("Connecting…"),
-        SinkState::EnsuringFirewall => tr!("Opening the firewall port…"),
-        SinkState::WaitSocket => tr!("Waiting for the receiver…"),
-        SinkState::WaitStreaming => tr!("Preparing the video…"),
-        SinkState::Streaming => tr!("Streaming"),
-        SinkState::Error => tr!("Failed"),
-    }
-}
+/// How long to wait between measurements of the link.
+///
+/// Long enough to be unnoticeable to the receiver, short enough that the card
+/// reflects a Wi-Fi that has just got worse.
+const LINK_PROBE_INTERVAL: Duration = Duration::from_secs(3);
 
 /// Wrapper for carrying an `Arc<dyn Sink>` as a `CommandOutput`.
 #[derive(Clone)]
@@ -80,156 +64,7 @@ impl std::fmt::Debug for DiscoveredSink {
     }
 }
 
-// ----------------------------------------------------------------------------
-// A row in the list (one receiver)
-// ----------------------------------------------------------------------------
-
-#[derive(Debug, Clone)]
-pub struct SinkRowInit {
-    pub id: String,
-    pub name: String,
-    pub subtitle: String,
-    pub icon: &'static str,
-    pub castable: bool,
-}
-
-#[derive(Debug)]
-pub struct SinkRow {
-    id: String,
-    name: String,
-    subtitle: String,
-    icon: &'static str,
-    castable: bool,
-    state: SinkState,
-    detail: String,
-}
-
-#[derive(Debug)]
-pub enum SinkRowMsg {
-    /// State and message coming from the corresponding sink.
-    Update {
-        state: SinkState,
-        message: Option<String>,
-        subtitle: String,
-        name: String,
-    },
-}
-
-#[derive(Debug)]
-pub enum SinkRowOutput {
-    Activated(String),
-}
-
-#[relm4::factory(pub)]
-impl FactoryComponent for SinkRow {
-    type Init = SinkRowInit;
-    type Input = SinkRowMsg;
-    type Output = SinkRowOutput;
-    type CommandOutput = ();
-    type ParentWidget = gtk::ListBox;
-
-    view! {
-        adw::ActionRow {
-            #[watch]
-            set_title: &self.name,
-            #[watch]
-            set_subtitle: &self.display_subtitle(),
-            #[watch]
-            set_activatable: self.castable && !self.state.is_busy(),
-            #[watch]
-            set_sensitive: self.castable,
-
-            add_prefix = &gtk::Image {
-                set_icon_name: Some(self.icon),
-            },
-
-            add_suffix = &adw::Spinner {
-                #[watch]
-                set_visible: self.state.is_busy(),
-            },
-
-            add_suffix = &gtk::Image {
-                set_icon_name: Some("dialog-error-symbolic"),
-                add_css_class: "error",
-                #[watch]
-                set_visible: self.state == SinkState::Error,
-            },
-
-            add_suffix = &gtk::Image {
-                set_icon_name: Some("media-playback-start-symbolic"),
-                add_css_class: "success",
-                #[watch]
-                set_visible: self.state == SinkState::Streaming,
-            },
-
-            add_suffix = &gtk::Image {
-                set_icon_name: Some("go-next-symbolic"),
-                add_css_class: "dim-label",
-                #[watch]
-                set_visible: self.castable
-                    && matches!(self.state, SinkState::Disconnected),
-            },
-
-            connect_activated[sender, id = self.id.clone()] => move |_| {
-                sender.output(SinkRowOutput::Activated(id.clone())).ok();
-            },
-        }
-    }
-
-    fn init_model(init: Self::Init, _index: &DynamicIndex, _sender: FactorySender<Self>) -> Self {
-        Self {
-            id: init.id,
-            name: init.name,
-            subtitle: init.subtitle,
-            icon: init.icon,
-            castable: init.castable,
-            state: SinkState::Disconnected,
-            detail: String::new(),
-        }
-    }
-
-    fn update(&mut self, message: Self::Input, _sender: FactorySender<Self>) {
-        match message {
-            SinkRowMsg::Update {
-                state,
-                message,
-                subtitle,
-                name,
-            } => {
-                self.state = state;
-                self.subtitle = subtitle;
-                self.name = name;
-                self.detail = message.unwrap_or_default();
-            }
-        }
-    }
-}
-
-impl SinkRow {
-    /// The subtitle shown: protocol + address, or the state when there is
-    /// something to say (progress, or the cause of an error).
-    fn display_subtitle(&self) -> String {
-        if self.state == SinkState::Error && !self.detail.is_empty() {
-            return self.detail.clone();
-        }
-        let state = state_label(self.state);
-        if state.is_empty() {
-            if self.castable {
-                self.subtitle.clone()
-            } else {
-                format!("{} · {}", self.subtitle, tr!("discovery only"))
-            }
-        } else {
-            format!("{} · {}", self.subtitle, state)
-        }
-    }
-}
-
-// ----------------------------------------------------------------------------
-// Janela principal
-// ----------------------------------------------------------------------------
-
-/// A banner about an unavailable protocol.
+/// A banner about a protocol that could not start.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ProviderIssue {
     provider: &'static str,
@@ -237,37 +72,61 @@ struct ProviderIssue {
 }
 
 pub struct AppModel {
-    sinks: FactoryVecDeque<SinkRow>,
-    /// Receptores descobertos, por id.
+    home: Controller<HomePage>,
+    devices: Controller<DevicesPage>,
+    media: Controller<MediaPage>,
+    settings_page: Controller<SettingsPage>,
+
+    page: Page,
+    /// Receivers found, by id.
     registry: HashMap<String, Arc<dyn Sink>>,
+    /// The order they were found in, so the list does not shuffle on each poll.
+    order: Vec<String>,
     status: String,
-    /// Providers that failed to start (shown as a banner).
     issues: Vec<ProviderIssue>,
-    /// `true` while it is still worth showing "searching".
+    /// Is it still worth saying "searching"?
     searching: bool,
-    /// The running cast session (the sink's id).
+    /// The running cast (the receiver's id).
     active_cast: Option<String>,
-    /// Is a virtual monitor available in this environment?
-    ///
-    /// Probed once at start-up: it depends on the compositor (Mutter offers
-    /// it, most portals do not), and asking the user to find that out by
-    /// hitting an error would be poor manners.
+    /// Is a virtual monitor available on this desktop?
     virtual_available: bool,
-    /// What to capture when the user picks a receiver.
+    /// What will be captured when a receiver is picked.
     source_type: SourceType,
-    /// The scan generation: discards events from an older discovery run.
+    /// The discovery generation: discards events from a previous run.
     generation: u64,
+    settings: Settings,
+    /// The receiver files are being sent to, and the session doing it.
+    media_session: Option<MediaSession>,
+    /// The last measurement of the link in the running session.
+    ///
+    /// Two levels on purpose: the outer `None` means *not measured yet* (the
+    /// card says "measuring"), the inner `None` means *the receiver did not
+    /// answer* (the card says so). One `Option` would have to call one of those
+    /// the other.
+    measured: Option<Option<Duration>>,
+    /// Is a measurement in flight? One at a time: the probe opens a connection
+    /// to the receiver, and stacking them up would be rude to firmware that
+    /// accepts few.
+    probing: bool,
 }
 
 #[derive(Debug)]
 pub enum AppMsg {
-    Activated(String),
-    /// Stop the running stream.
+    Navigate(Page),
+    /// Start streaming to this receiver.
+    Cast(String),
     Stop,
-    /// Change what will be captured (the whole screen or a window).
     SetSource(SourceType),
     Rescan,
     DismissIssues,
+    SetAutoDiscovery(bool),
+    SettingsChanged(Settings),
+    /// Send these files to the receiver with this id.
+    SendMedia(Vec<MediaFile>, String),
+    CancelMedia,
+    /// Send files to this receiver (from the devices page).
+    MediaTarget(String),
+    About,
 }
 
 #[derive(Debug)]
@@ -288,13 +147,32 @@ pub enum AppCmd {
     SearchTimedOut(u64),
     /// The result of probing for virtual monitor support.
     VirtualSupported(bool),
-    /// The periodic re-read of the sinks' state.
+    /// The periodic re-read of the receivers' state.
     PollStates,
     /// A cast session ended.
     CastFinished {
         id: String,
         error: Option<String>,
     },
+    /// The measured round trip to the receiver, or `None` for no answer.
+    LinkMeasured(Option<Duration>),
+    /// A media session started, or failed to.
+    ///
+    /// Carried in a wrapper because a live session owns a socket and a task,
+    /// neither of which has anything sensible to print.
+    MediaStarted(StartedMedia),
+}
+
+/// The outcome of starting a media session.
+pub struct StartedMedia(pub Result<Box<MediaSession>, String>);
+
+impl std::fmt::Debug for StartedMedia {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            Ok(_) => write!(f, "StartedMedia(running)"),
+            Err(err) => write!(f, "StartedMedia({err})"),
+        }
+    }
 }
 
 #[relm4::component(pub)]
@@ -307,123 +185,185 @@ impl Component for AppModel {
     view! {
         adw::ApplicationWindow {
             set_title: Some("BigNetScreen"),
-            // Wide enough for the three source options side by side with the
-            // longest translations, and tall enough to show a handful of
-            // receivers without the list looking lost in empty space.
-            set_default_width: 560,
-            set_default_height: 620,
-            set_width_request: 360,
-            set_height_request: 400,
+            // Room for the sidebar, a list and the panel beside it. Below this
+            // the split view folds the sidebar away rather than squeezing it.
+            set_default_width: 1080,
+            set_default_height: 720,
+            set_width_request: 420,
+            set_height_request: 480,
 
-            adw::ToolbarView {
-                add_top_bar = &adw::HeaderBar {
-                    #[wrap(Some)]
-                    set_title_widget = &adw::WindowTitle {
-                        set_title: "BigNetScreen",
-                        #[watch]
-                        set_subtitle: &model.status,
-                    },
-
-                    pack_end = &gtk::Button {
-                        set_icon_name: "view-refresh-symbolic",
-                        set_tooltip_text: Some(&tr!("Scan again")),
-                        #[watch]
-                        set_sensitive: model.active_cast.is_none(),
-                        connect_clicked => AppMsg::Rescan,
-                    },
-
-                    pack_start = &gtk::Button {
-                        set_label: &tr!("Stop"),
-                        add_css_class: "destructive-action",
-                        #[watch]
-                        set_visible: model.active_cast.is_some(),
-                        connect_clicked => AppMsg::Stop,
-                    },
-                },
+            #[name = "split"]
+            adw::OverlaySplitView {
+                set_max_sidebar_width: 260.0,
+                set_min_sidebar_width: 220.0,
 
                 #[wrap(Some)]
-                set_content = &gtk::Box {
+                // No header bar over the sidebar: an empty one only pushed the
+                // name of the application a title bar's height down the page.
+                // The identity block sits at the very top instead, wrapped in a
+                // `WindowHandle` so that area still drags the window — which is
+                // what the header bar was quietly providing.
+                set_sidebar = &gtk::Box {
                     set_orientation: gtk::Orientation::Vertical,
 
-                    // Banners for unavailable protocols: the reason is
-                    // visible to the user, not just in the log.
-                    adw::Banner {
-                        #[watch]
-                        set_revealed: !model.issues.is_empty(),
-                        #[watch]
-                        set_title: &model.issues_summary(),
-                        set_button_label: Some(&tr!("Got it")),
-                        connect_button_clicked => AppMsg::DismissIssues,
-                    },
-
-                    // What to capture. The portal still asks *which* monitor
-                    // or window; here the user picks the kind.
-                    adw::Clamp {
-                        set_maximum_size: 520,
-                        set_margin_top: 12,
-                        set_margin_start: 12,
-                        set_margin_end: 12,
-
+                    gtk::WindowHandle {
+                        // The identity block.
                         gtk::Box {
-                            set_orientation: gtk::Orientation::Vertical,
+                            set_spacing: 10,
+                            add_css_class: "app-identity",
 
-                            // The title on its own line and the options
-                            // below, at full width. As a row suffix the three
-                            // buttons squeezed the label until GTK hyphenated
-                            // it across three lines.
-                            gtk::Label {
-                                set_label: &tr!("What to share"),
-                                set_xalign: 0.0,
-                                set_margin_bottom: 6,
-                                add_css_class: "heading",
+                            gtk::Image {
+                                set_icon_name: Some("tv-symbolic"),
+                                set_pixel_size: 22,
+                                add_css_class: "app-mark",
                             },
+                            gtk::Box {
+                                set_orientation: gtk::Orientation::Vertical,
+                                set_valign: gtk::Align::Center,
 
-                            #[name = "source_toggles"]
-                            adw::ToggleGroup {
-                                set_hexpand: true,
-                                #[watch]
-                                set_sensitive: model.active_cast.is_none(),
-
-                                // The toggles are added in `init`: the
-                                // builder takes them by value, which the view
-                                // macro cannot express.
-
-                                #[watch]
-                                set_active: match model.source_type {
-                                    SourceType::Monitor => 0,
-                                    SourceType::Window => 1,
-                                    SourceType::Virtual => 2,
+                                gtk::Label {
+                                    set_label: "BigNetScreen",
+                                    set_xalign: 0.0,
+                                    add_css_class: "title",
                                 },
-
-                                connect_active_notify[sender] => move |group| {
-                                    sender.input(AppMsg::SetSource(match group.active() {
-                                        1 => SourceType::Window,
-                                        2 => SourceType::Virtual,
-                                        _ => SourceType::Monitor,
-                                    }));
+                                gtk::Label {
+                                    set_label: &tr!("Share your screen wirelessly"),
+                                    set_xalign: 0.0,
+                                    add_css_class: "subtitle",
                                 },
                             },
                         },
                     },
 
-                    gtk::ScrolledWindow {
-                        set_vexpand: true,
-                        set_hscrollbar_policy: gtk::PolicyType::Never,
+                    #[name = "nav"]
+                        gtk::ListBox {
+                            set_margin_all: 8,
+                            add_css_class: "navigation-sidebar",
+                            connect_row_selected[sender] => move |_, row| {
+                                if let Some(row) = row {
+                                    sender.input(AppMsg::Navigate(
+                                        Page::all()[row.index().max(0) as usize],
+                                    ));
+                                }
+                            },
+                        },
+
+                        gtk::Box { set_vexpand: true },
+
+                        // What is connected, at the foot of the sidebar.
+                        gtk::Box {
+                            set_orientation: gtk::Orientation::Vertical,
+                            add_css_class: "connected-card",
+                            #[watch]
+                            set_visible: model.active_cast.is_some(),
+
+                            gtk::Box {
+                                set_spacing: 6,
+
+                                gtk::Label {
+                                    set_label: &tr!("Connected to"),
+                                    set_hexpand: true,
+                                    set_xalign: 0.0,
+                                    add_css_class: "caption",
+                                },
+                                gtk::Label {
+                                    set_label: "●",
+                                    add_css_class: "live-dot",
+                                },
+                            },
+                            gtk::Label {
+                                #[watch]
+                                set_label: &model.session_info()
+                                    .map(|s| s.name)
+                                    .unwrap_or_default(),
+                                set_xalign: 0.0,
+                                set_ellipsize: gtk::pango::EllipsizeMode::End,
+                                add_css_class: "heading",
+                            },
+                            gtk::Label {
+                                #[watch]
+                                set_label: &model.session_info()
+                                    .map(|s| s.address)
+                                    .unwrap_or_default(),
+                                set_xalign: 0.0,
+                                add_css_class: "dim-label",
+                            },
+                        },
+
+                        gtk::Box {
+                            set_spacing: 6,
+                            set_margin_all: 8,
+
+                            gtk::Button {
+                                set_icon_name: "help-about-symbolic",
+                                set_tooltip_text: Some(&tr!("About BigNetScreen")),
+                                connect_clicked => AppMsg::About,
+                            },
+                        },
+                },
+
+                #[wrap(Some)]
+                set_content = &adw::ToolbarView {
+                    add_top_bar = &adw::HeaderBar {
+                        add_css_class: "flat",
 
                         #[wrap(Some)]
-                        set_child = &adw::Clamp {
-                            set_maximum_size: 520,
-                            set_margin_top: 18,
-                            set_margin_bottom: 18,
-                            set_margin_start: 12,
-                            set_margin_end: 12,
+                        set_title_widget = &adw::WindowTitle {
+                            #[watch]
+                            set_title: &model.page.title(),
+                            #[watch]
+                            set_subtitle: &model.status,
+                        },
 
-                            #[local_ref]
-                            sinks_box -> gtk::ListBox {
-                                set_selection_mode: gtk::SelectionMode::None,
-                                set_valign: gtk::Align::Start,
-                                add_css_class: "boxed-list",
+                        pack_start = &gtk::ToggleButton {
+                            set_icon_name: "sidebar-show-symbolic",
+                            set_tooltip_text: Some(&tr!("Show the sidebar")),
+                            #[watch]
+                            set_active: split.shows_sidebar(),
+                            connect_toggled[split] => move |button| {
+                                split.set_show_sidebar(button.is_active());
                             },
+                        },
+
+                        pack_end = &gtk::Button {
+                            set_icon_name: "view-refresh-symbolic",
+                            set_tooltip_text: Some(&tr!("Scan again")),
+                            #[watch]
+                            set_sensitive: model.active_cast.is_none(),
+                            connect_clicked => AppMsg::Rescan,
+                        },
+
+                        pack_end = &gtk::Button {
+                            set_label: &tr!("Stop"),
+                            add_css_class: "destructive-action",
+                            #[watch]
+                            set_visible: model.active_cast.is_some()
+                                || model.media_session.is_some(),
+                            connect_clicked => AppMsg::Stop,
+                        },
+                    },
+
+                    #[wrap(Some)]
+                    set_content = &gtk::Box {
+                        set_orientation: gtk::Orientation::Vertical,
+
+                        adw::Banner {
+                            #[watch]
+                            set_revealed: !model.issues.is_empty(),
+                            #[watch]
+                            set_title: &model.issues_summary(),
+                            set_button_label: Some(&tr!("Got it")),
+                            connect_button_clicked => AppMsg::DismissIssues,
+                        },
+
+                        #[name = "stack"]
+                        gtk::Stack {
+                            set_vexpand: true,
+                            // The visible page is set from `update_with_view`
+                            // rather than watched here: the pages are added to
+                            // the stack after this view is built, so a watch
+                            // would fire once against an empty stack.
+                            set_transition_type: gtk::StackTransitionType::Crossfade,
                         },
                     },
                 },
@@ -436,84 +376,197 @@ impl Component for AppModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let sinks =
-            FactoryVecDeque::builder()
-                .launch_default()
-                .forward(sender.input_sender(), |output| match output {
-                    SinkRowOutput::Activated(id) => AppMsg::Activated(id),
-                });
+        let current = settings::current();
+
+        let home = HomePage::builder()
+            .launch(())
+            .forward(sender.input_sender(), |output| match output {
+                HomeOutput::Cast(id) => AppMsg::Cast(id),
+                HomeOutput::Source(source) => AppMsg::SetSource(source),
+                HomeOutput::Stop => AppMsg::Stop,
+                HomeOutput::Navigate(page) => AppMsg::Navigate(page),
+            });
+        let devices = DevicesPage::builder()
+            .launch(())
+            .forward(sender.input_sender(), |output| match output {
+                DevicesOutput::Cast(id) => AppMsg::Cast(id),
+                DevicesOutput::Stop => AppMsg::Stop,
+                DevicesOutput::Rescan => AppMsg::Rescan,
+                DevicesOutput::AutoDiscovery(on) => AppMsg::SetAutoDiscovery(on),
+                DevicesOutput::SendMedia(id) => AppMsg::MediaTarget(id),
+            });
+        let media = MediaPage::builder()
+            .launch(())
+            .forward(sender.input_sender(), |output| match output {
+                MediaOutput::Send(files, target) => AppMsg::SendMedia(files, target),
+                MediaOutput::Cancel => AppMsg::CancelMedia,
+            });
+        let settings_page = SettingsPage::builder().launch(()).forward(
+            sender.input_sender(),
+            |output| match output {
+                SettingsOutput::Changed(settings) => AppMsg::SettingsChanged(settings),
+            },
+        );
 
         let model = AppModel {
-            sinks,
+            home,
+            devices,
+            media,
+            settings_page,
+            page: Page::Home,
             registry: HashMap::new(),
-            status: tr!("Searching…"),
+            order: Vec::new(),
+            status: if current.auto_discovery {
+                tr!("Searching…")
+            } else {
+                tr!("Automatic discovery is off")
+            },
             issues: Vec::new(),
-            searching: true,
+            searching: current.auto_discovery,
             active_cast: None,
-            source_type: SourceType::Monitor,
             virtual_available: false,
+            source_type: SourceType::Monitor,
             generation: 0,
+            settings: current.clone(),
+            media_session: None,
+            measured: None,
+            probing: false,
         };
 
-        let placeholder = build_placeholder();
-        model.sinks.widget().set_placeholder(Some(&placeholder));
-
-        let sinks_box = model.sinks.widget();
         let widgets = view_output!();
 
-        // The three source options. Added here because `AdwToggleGroup::add`
-        // takes the toggle by value, which the view macro cannot express.
-        //
-        // The virtual monitor toggle is created disabled and only enabled once
-        // the probe answers: on KDE, Sway or under Flatpak the option does not
-        // exist, and offering something that always fails is worse than not
-        // offering it.
-        for (label, tooltip) in [
-            (tr!("Whole screen"), None),
-            (tr!("A window"), None),
-            (
-                tr!("A new screen"),
-                Some(tr!("Creates an extra desktop on the receiver instead of \
-                     duplicating this one")),
-            ),
-        ] {
-            let toggle = adw::Toggle::builder().label(&label).build();
-            if let Some(tip) = tooltip {
-                toggle.set_tooltip(&tip);
-            }
-            widgets.source_toggles.add(toggle);
+        // The sidebar's entries, in the same order as `Page::all()` — the
+        // selection handler maps a row index straight onto that array.
+        for page in Page::all() {
+            let row = adw::ActionRow::builder().title(page.title()).build();
+            row.add_prefix(&gtk::Image::from_icon_name(page.icon()));
+            widgets.nav.append(&row);
         }
-        widgets.source_toggles.set_active(0);
+        if let Some(row) = widgets.nav.row_at_index(0) {
+            widgets.nav.select_row(Some(&row));
+        }
 
-        start_discovery(&sender, 0);
+        widgets
+            .stack
+            .add_named(model.home.widget(), Some(Page::Home.id()));
+        widgets
+            .stack
+            .add_named(model.devices.widget(), Some(Page::Devices.id()));
+        widgets
+            .stack
+            .add_named(model.media.widget(), Some(Page::Media.id()));
+        widgets
+            .stack
+            .add_named(model.settings_page.widget(), Some(Page::Settings.id()));
+
+        // The pages are added after the view is built, so the first pass of
+        // `set_visible_child_name` ran against an empty stack. Setting it here
+        // is what keeps the window from opening blank for a fraction of a
+        // second (and GTK from warning that "home" does not exist).
+        widgets.stack.set_visible_child_name(model.page.id());
+
+        if current.auto_discovery {
+            start_discovery(&sender, 0, current.protocol);
+        }
         start_state_poll(&sender);
         probe_virtual_support(&sender);
 
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, message: Self::Input, sender: ComponentSender<Self>, _root: &Self::Root) {
+    fn update_with_view(
+        &mut self,
+        widgets: &mut Self::Widgets,
+        message: Self::Input,
+        sender: ComponentSender<Self>,
+        root: &Self::Root,
+    ) {
         match message {
-            AppMsg::Activated(id) => self.begin_cast(id, &sender),
-            AppMsg::Stop => self.stop_cast(&sender),
+            AppMsg::Navigate(page) => self.page = page,
+            AppMsg::Cast(id) => self.begin_cast(id, &sender),
+            AppMsg::Stop => self.stop_everything(&sender),
             AppMsg::SetSource(source) => {
                 self.source_type = source;
                 tracing::info!(?source, "capture source chosen");
+                self.status = match source {
+                    SourceType::Monitor => tr!("Pick a device to share your screen with"),
+                    SourceType::Window => tr!("Pick a device to share a window with"),
+                    SourceType::Virtual => tr!("Pick a device for the extra screen"),
+                };
             }
             AppMsg::Rescan => {
-                // Invalidate the previous discovery run and clear the list.
                 self.generation += 1;
                 self.issues.clear();
                 self.searching = true;
                 self.registry.clear();
-                self.sinks.guard().clear();
+                self.order.clear();
                 self.status = tr!("Searching…");
-                start_discovery(&sender, self.generation);
+                start_discovery(&sender, self.generation, self.settings.protocol);
             }
             AppMsg::DismissIssues => self.issues.clear(),
+            AppMsg::SetAutoDiscovery(on) => {
+                self.settings.auto_discovery = on;
+                settings::set(self.settings.clone());
+                self.settings_page.emit(SettingsMsg::Reload);
+                if on {
+                    sender.input(AppMsg::Rescan);
+                }
+            }
+            AppMsg::SettingsChanged(new) => {
+                let protocol_changed = new.protocol != self.settings.protocol;
+                self.settings = new;
+                self.devices.emit(DevicesMsg::Devices(self.entries()));
+                // Changing which protocols to look for is the one setting that
+                // cannot wait for the next session: the list on screen is the
+                // result of the old choice.
+                if protocol_changed {
+                    sender.input(AppMsg::Rescan);
+                }
+            }
+            AppMsg::MediaTarget(id) => {
+                // Chosen on the devices page: the media page opens with that
+                // receiver already selected, because the person just said so.
+                self.media.emit(MediaMsg::Choose(id));
+                self.page = Page::Media;
+            }
+            AppMsg::SendMedia(files, target) => self.send_media(files, target, &sender),
+            AppMsg::CancelMedia => {
+                // Dropping the session stops playback and takes the file server
+                // down with it.
+                self.media_session = None;
+                self.media.emit(MediaMsg::Status(None));
+                self.refresh_status();
+            }
+            AppMsg::About => show_about(root),
         }
+
+        // The page the model says is current.
+        widgets.stack.set_visible_child_name(self.page.id());
+
+        // A page can also be reached without touching the sidebar — "Media" on
+        // the home page, or "Send media" on a device. The highlight has to
+        // follow, or it points at the page the person just left.
+        let index = Page::all()
+            .iter()
+            .position(|page| *page == self.page)
+            .unwrap_or(0) as i32;
+        if widgets.nav.selected_row().map(|row| row.index()) != Some(index) {
+            if let Some(row) = widgets.nav.row_at_index(index) {
+                widgets.nav.select_row(Some(&row));
+            }
+        }
+
+        self.update_view(widgets, sender);
     }
 
+    /// Handles a background result **and repaints**.
+    ///
+    /// The repaint is not optional. `update_cmd_with_view` replaces the default
+    /// cycle, so whoever implements it owns the view update — without the call
+    /// at the end, nothing arriving from a command reaches the window. The
+    /// symptom was Stop appearing to need two clicks: the first really did end
+    /// the session, and the header went on saying "Stopping…" because the result
+    /// of that work never repainted.
     fn update_cmd_with_view(
         &mut self,
         widgets: &mut Self::Widgets,
@@ -527,75 +580,52 @@ impl Component for AppModel {
                     return;
                 }
                 let info = handle.0.info();
-                let subtitle = subtitle_for(&info);
-                let mut guard = self.sinks.guard();
-                let existing: Vec<(String, bool)> =
-                    guard.iter().map(|r| (r.name.clone(), r.castable)).collect();
-                let already_listed = guard.iter().any(|r| r.id == info.id);
-
-                match placement(&existing, &info.display_name, info.kind.is_castable()) {
-                    _ if already_listed => {}
+                let id = info.id.clone();
+                match self.placement(&info.display_name, info.kind.is_castable()) {
                     Placement::Skip => {}
-                    Placement::Replace(index) => {
-                        guard.remove(index);
-                        guard.push_back(SinkRowInit {
-                            id: info.id.clone(),
-                            name: info.display_name.clone(),
-                            subtitle,
-                            icon: icon_for(info.kind),
-                            castable: info.kind.is_castable(),
-                        });
+                    Placement::Replace(old_id) => {
+                        self.registry.remove(&old_id);
+                        if let Some(index) = self.order.iter().position(|i| i == &old_id) {
+                            // Keeps the receiver where the person last saw it.
+                            self.order[index] = id.clone();
+                        }
+                        self.registry.insert(id, handle.0);
                     }
                     Placement::Add => {
-                        guard.push_back(SinkRowInit {
-                            id: info.id.clone(),
-                            name: info.display_name.clone(),
-                            subtitle,
-                            icon: icon_for(info.kind),
-                            castable: info.kind.is_castable(),
-                        });
+                        if !self.order.contains(&id) {
+                            self.order.push(id.clone());
+                        }
+                        // `entry`: an mDNS re-resolve must not replace an
+                        // instance that may be mid-session.
+                        self.registry.entry(id).or_insert(handle.0);
                     }
                 }
-                drop(guard);
-                // `entry`: an mDNS re-resolve must not replace the instance —
-                // it may be in the middle of a session.
-                self.registry.entry(info.id).or_insert(handle.0);
                 self.searching = false;
                 self.refresh_status();
+                self.push_devices();
             }
             AppCmd::Updated(handle, generation) => {
                 if generation != self.generation {
                     return;
                 }
-                let info = handle.0.info();
-                let subtitle = subtitle_for(&info);
-                if let Some(index) = self.index_of(&info.id) {
-                    self.sinks.send(
-                        index,
-                        SinkRowMsg::Update {
-                            state: handle.0.state(),
-                            message: handle.0.error_message(),
-                            subtitle,
-                            name: info.display_name,
-                        },
-                    );
+                let id = handle.0.info().id;
+                if self.registry.contains_key(&id) {
+                    self.push_devices();
                 }
             }
             AppCmd::Removed(id, generation) => {
                 if generation != self.generation {
                     return;
                 }
-                // Never remove the receiver that is streaming right now: a
-                // momentary mDNS dropout would take the active session's row
-                // away.
+                // Never remove the receiver that is streaming: a momentary mDNS
+                // dropout would take the running session's row away.
                 if self.active_cast.as_deref() == Some(id.as_str()) {
                     return;
                 }
-                if let Some(index) = self.index_of(&id) {
-                    self.sinks.guard().remove(index);
-                }
                 self.registry.remove(&id);
+                self.order.retain(|listed| listed != &id);
                 self.refresh_status();
+                self.push_devices();
             }
             AppCmd::ProviderUnavailable {
                 provider,
@@ -617,35 +647,36 @@ impl Component for AppModel {
                 if generation != self.generation {
                     return;
                 }
-                self.issues.retain(|i| i.provider != provider);
+                self.issues.retain(|issue| issue.provider != provider);
             }
             AppCmd::VirtualSupported(available) => {
                 tracing::info!(available, "virtual monitor support");
                 self.virtual_available = available;
-                // Disabled rather than hidden: the option keeps its place, and
-                // the tooltip can then explain why it is unavailable here.
-                if let Some(toggle) = widgets.source_toggles.toggle(2) {
-                    toggle.set_enabled(available);
-                    if !available {
-                        toggle.set_tooltip(&tr!("This desktop cannot create an extra screen \
-                             (it needs GNOME running natively)"));
-                    }
-                }
+                self.home.emit(HomeMsg::VirtualAvailable(available));
             }
             AppCmd::SearchTimedOut(generation) => {
                 if generation == self.generation && self.registry.is_empty() {
                     self.searching = false;
                     self.refresh_status();
+                    self.home.emit(HomeMsg::Searching(false));
                 }
             }
             AppCmd::PollStates => {
-                self.sync_states();
+                self.push_devices();
+                self.push_media_status();
+                self.measure_link(&sender);
                 start_state_poll(&sender);
+            }
+            AppCmd::LinkMeasured(round_trip) => {
+                self.probing = false;
+                self.measured = Some(round_trip);
             }
             AppCmd::CastFinished { id, error } => {
                 if self.active_cast.as_deref() == Some(id.as_str()) {
                     self.active_cast = None;
                 }
+                // The measurement belonged to that session.
+                self.measured = None;
                 match error {
                     Some(err) => {
                         tracing::warn!(%id, %err, "cast session ended with an error");
@@ -656,80 +687,230 @@ impl Component for AppModel {
                         self.refresh_status();
                     }
                 }
-                self.sync_states();
+                self.push_devices();
             }
+            AppCmd::MediaStarted(StartedMedia(result)) => match result {
+                Ok(session) => {
+                    self.media_session = Some(*session);
+                    self.status = tr!("Sending files…");
+                }
+                Err(err) => {
+                    tracing::warn!(%err, "sending media failed");
+                    self.status = err;
+                }
+            },
         }
+
+        // Repaint. Everything above only changed the model.
+        self.update_view(widgets, sender);
     }
 }
 
+/// What to do with a receiver that has just been discovered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Placement {
+    Add,
+    /// Ignore it: the same device is already listed, in an equal or better way.
+    Skip,
+    /// Take the place of this receiver, which is the same device discovered
+    /// through a protocol we cannot stream to.
+    Replace(String),
+}
+
 impl AppModel {
-    fn index_of(&self, id: &str) -> Option<usize> {
-        self.sinks.iter().position(|r| r.id == id)
+    /// Decides where a newly discovered receiver goes.
+    ///
+    /// One piece of equipment often announces itself over more than one
+    /// protocol — a Samsung projector shows up as AirPlay (which we only
+    /// discover) *and* as Miracast (which we can stream to). Listing both puts
+    /// the same name twice, one of them inert, and the person has to guess.
+    ///
+    /// The rule is deliberately narrow: merge only when the name matches
+    /// exactly **and** one of the two is discovery-only. Two different devices
+    /// sharing a name is unlikely, and even then nothing is lost, because the
+    /// entry that gives way could not stream anyway.
+    fn placement(&self, name: &str, castable: bool) -> Placement {
+        for (id, sink) in &self.registry {
+            let info = sink.info();
+            if info.display_name != name {
+                continue;
+            }
+            return match (info.kind.is_castable(), castable) {
+                (false, true) => Placement::Replace(id.clone()),
+                _ => Placement::Skip,
+            };
+        }
+        Placement::Add
+    }
+
+    /// The receivers, in the order they were found.
+    fn entries(&self) -> Vec<DeviceEntry> {
+        self.order
+            .iter()
+            .filter_map(|id| {
+                let sink = self.registry.get(id)?;
+                Some(DeviceEntry::from_info(
+                    &sink.info(),
+                    sink.state(),
+                    sink.error_message(),
+                    sink.link(),
+                ))
+            })
+            .collect()
+    }
+
+    /// Pushes the current list to every page that shows receivers.
+    fn push_devices(&mut self) {
+        let entries = self.entries();
+        self.home.emit(HomeMsg::Devices(entries.clone()));
+        self.home.emit(HomeMsg::Session(self.session_info()));
+        self.devices.emit(DevicesMsg::Devices(entries));
+        self.devices
+            .emit(DevicesMsg::Active(self.active_cast.clone()));
+        self.media.emit(MediaMsg::Targets(self.media_receivers()));
+        // The selected capture mode lives here, so the switches on the home
+        // page are told rather than left to remember on their own.
+        self.home.emit(HomeMsg::Source(self.source_type));
+    }
+
+    fn push_media_status(&mut self) {
+        let status: Option<MediaStatus> = self.media_session.as_ref().map(|s| s.status());
+        // A finished queue clears itself: leaving "playing 3 of 3" on screen
+        // after the last file ended would be untrue within a second.
+        if let Some(status) = &status {
+            if status.finished && status.error.is_none() {
+                self.media_session = None;
+                self.media.emit(MediaMsg::Status(None));
+                self.refresh_status();
+                return;
+            }
+        }
+        self.media.emit(MediaMsg::Status(status));
+    }
+
+    /// What is streaming right now.
+    fn session_info(&self) -> Option<SessionInfo> {
+        let id = self.active_cast.as_ref()?;
+        let sink = self.registry.get(id)?;
+        let info = sink.info();
+        let link = sink.link();
+        Some(SessionInfo {
+            id: id.clone(),
+            name: info.display_name.clone(),
+            protocol: crate::pages::protocol_label(info.kind),
+            address: info.address.clone().unwrap_or_default(),
+            // The mode the two ends **agreed on**, which the protocol records
+            // when it settles it. Empty until then: printing the preference
+            // instead would show "1920 × 1080" for a link that came out at
+            // 1280 × 720.
+            mode: link.map(|l| l.describe()).unwrap_or_default(),
+            state: sink.state(),
+            measurable: link.and_then(|l| l.endpoint).is_some(),
+            quality: self.measured.map(nd_net::probe::Quality::of),
+            round_trip_ms: self.measured.flatten().map(|rtt| rtt.as_millis() as u64),
+        })
+    }
+
+    /// The Chromecast that files would be sent to, if there is one.
+    ///
+    /// Preference order: the receiver picked on the devices page, then the one
+    /// being streamed to, then the only Chromecast around. Miracast is never a
+    /// candidate — it can be a screen, and knows nothing about playing a file.
+    /// The receivers that can play a file, for the person to choose from.
+    ///
+    /// There is deliberately **no** "best guess" here. The previous version
+    /// fell back to the first Chromecast it had found, and sent a song to a
+    /// projector in another room that nobody had chosen — a mistake the person
+    /// cannot undo from this side of the network. Casting to a device is
+    /// visible to whoever is standing in front of it, so it takes an explicit
+    /// choice, every time.
+    ///
+    /// Both protocols can be a destination, by different means: a Chromecast
+    /// is handed the file and plays it itself, while a Miracast receiver is a
+    /// screen, so the file is decoded here and sent as the picture.
+    fn media_receivers(&self) -> Vec<(String, String)> {
+        self.order
+            .iter()
+            .filter_map(|id| {
+                let info = self.registry.get(id)?.info();
+                match info.kind {
+                    // Without a usable address there is nothing to send to.
+                    SinkKind::Chromecast => {
+                        info.address.as_ref()?.parse::<IpAddr>().ok()?;
+                    }
+                    // A Miracast receiver has no address until the group is
+                    // formed, and needs none here: the session builds it.
+                    SinkKind::WfdP2p | SinkKind::WfdMice => {}
+                    _ => return None,
+                }
+                Some((id.clone(), info.display_name))
+            })
+            .collect()
+    }
+
+    /// Measures the link to the receiver, at most one probe at a time.
+    ///
+    /// Only while something is streaming, and only when the protocol has told
+    /// us where the receiver is: a Miracast receiver is announced by MAC and
+    /// has no address at all until the Wi-Fi Direct group exists.
+    fn measure_link(&mut self, sender: &ComponentSender<Self>) {
+        if self.probing {
+            return;
+        }
+        let Some(endpoint) = self
+            .active_cast
+            .as_ref()
+            .and_then(|id| self.registry.get(id))
+            .and_then(|sink| sink.link())
+            .and_then(|link| link.endpoint)
+        else {
+            return;
+        };
+        self.probing = true;
+        sender.oneshot_command(async move {
+            // Spaced out rather than run on every poll: the poll is there to
+            // keep the list fresh, and opening a connection to the receiver
+            // two and a half times a second would be rude to its firmware.
+            tokio::time::sleep(LINK_PROBE_INTERVAL).await;
+            AppCmd::LinkMeasured(nd_net::probe::round_trip(endpoint).await)
+        });
     }
 
     fn refresh_status(&mut self) {
-        let n = self.registry.len();
-        self.status = if n == 0 {
+        if !self.settings.auto_discovery && self.registry.is_empty() {
+            self.status = tr!("Automatic discovery is off");
+            return;
+        }
+        let count = self.registry.len();
+        self.status = if count == 0 {
             if self.searching {
                 tr!("Searching…")
             } else {
                 tr!("No receivers found")
             }
-        } else if n == 1 {
+        } else if count == 1 {
             tr!("1 receiver found")
         } else {
-            format!("{n} {}", tr!("receivers found"))
+            format!("{count} {}", tr!("receivers found"))
         };
     }
 
     fn issues_summary(&self) -> String {
         self.issues
             .iter()
-            .map(|i| i.reason.clone())
+            .map(|issue| issue.reason.clone())
             .collect::<Vec<_>>()
             .join(" · ")
     }
 
-    /// Re-reads each sink's state and reflects it in the rows.
-    fn sync_states(&mut self) {
-        let updates: Vec<(usize, SinkState, Option<String>, String, String)> = self
-            .sinks
-            .iter()
-            .enumerate()
-            .filter_map(|(index, row)| {
-                let sink = self.registry.get(&row.id)?;
-                let state = sink.state();
-                let message = sink.error_message();
-                if state == row.state && message.unwrap_or_default() == row.detail {
-                    return None;
-                }
-                let info = sink.info();
-                Some((
-                    index,
-                    state,
-                    sink.error_message(),
-                    subtitle_for(&info),
-                    info.display_name,
-                ))
-            })
-            .collect();
-
-        for (index, state, message, subtitle, name) in updates {
-            self.sinks.send(
-                index,
-                SinkRowMsg::Update {
-                    state,
-                    message,
-                    subtitle,
-                    name,
-                },
-            );
+    /// Ends whatever is running: the stream, the file sending, or both.
+    fn stop_everything(&mut self, sender: &ComponentSender<Self>) {
+        if self.media_session.is_some() {
+            self.media_session = None;
+            self.media.emit(MediaMsg::Status(None));
         }
-    }
-
-    /// Ends the running stream.
-    fn stop_cast(&mut self, sender: &ComponentSender<Self>) {
         let Some(id) = self.active_cast.clone() else {
+            self.refresh_status();
             return;
         };
         let Some(sink) = self.registry.get(&id).cloned() else {
@@ -737,8 +918,8 @@ impl AppModel {
         };
         tracing::info!(%id, "stopping the stream at the user's request");
         self.status = tr!("Stopping…");
-        // `stop_stream` signals the session; the `begin_cast` command returns
-        // on its own and emits `CastFinished`.
+        // `stop_stream` signals the session; the `begin_cast` command returns on
+        // its own and emits `CastFinished`.
         sender.oneshot_command(async move {
             let _ = sink.stop_stream().await;
             AppCmd::PollStates
@@ -766,6 +947,7 @@ impl AppModel {
         tracing::info!(name = %info.display_name, "starting the stream");
         self.status = format!("{} · {}", info.display_name, tr!("Connecting…"));
         self.active_cast = Some(id.clone());
+        self.page = Page::Home;
 
         let source_type = self.source_type;
         sender.oneshot_command(async move {
@@ -773,39 +955,119 @@ impl AppModel {
             AppCmd::CastFinished { id, error }
         });
     }
-}
 
-fn subtitle_for(info: &nd_core::sink::SinkInfo) -> String {
-    let base = match &info.address {
-        Some(addr) => format!("{} · {}", protocol_label(info.kind), addr),
-        None => protocol_label(info.kind),
-    };
-    match latency_hint(info.kind) {
-        Some(hint) => format!("{base} · {hint}"),
-        None => base,
+    /// Starts sending files to the receiver the person chose.
+    ///
+    /// The two protocols do genuinely different things here, and the difference
+    /// is worth knowing before choosing:
+    ///
+    /// - a **Chromecast** is given a URL and plays the file itself. The quality
+    ///   is the file's, and this computer only serves bytes;
+    /// - a **Miracast** receiver is a screen and nothing else, so the file is
+    ///   decoded here and streamed as the picture. It costs a re-encode, and
+    ///   the playback stops if this computer does.
+    fn send_media(
+        &mut self,
+        files: Vec<MediaFile>,
+        target: String,
+        sender: &ComponentSender<Self>,
+    ) {
+        let Some(sink) = self.registry.get(&target).cloned() else {
+            self.status = tr!("That device is no longer available");
+            return;
+        };
+        // Sending files and mirroring the screen are two things the receiver
+        // cannot do at once. Saying so beats the picture vanishing with no
+        // explanation.
+        if self.active_cast.is_some() {
+            self.status = tr!("Stop sharing your screen before sending files");
+            return;
+        }
+
+        let info = sink.info();
+        tracing::info!(name = %info.display_name, count = files.len(), "sending files");
+        self.status = format!("{} · {}", info.display_name, tr!("Sending files…"));
+
+        if info.kind == SinkKind::Chromecast {
+            let Some(address) = info.address.as_ref().and_then(|a| a.parse::<IpAddr>().ok()) else {
+                self.status = tr!("That device is no longer available");
+                return;
+            };
+            let port = self.settings.port;
+            let sender_name = self.settings.display_name();
+            sender.oneshot_command(async move {
+                let result = MediaSession::start(address, files, port, sender_name)
+                    .await
+                    .map(Box::new)
+                    .map_err(|e| e.to_string());
+                AppCmd::MediaStarted(StartedMedia(result))
+            });
+            return;
+        }
+
+        // The mirroring route. It is a cast session like any other, so the Stop
+        // button, the status on the row and the audio guard all apply — the
+        // only difference is what is being sent.
+        self.active_cast = Some(target.clone());
+        self.page = Page::Home;
+        sender.oneshot_command(async move {
+            let error = play_files_by_mirroring(sink, files).await.err();
+            AppCmd::CastFinished { id: target, error }
+        });
     }
 }
 
-/// The delay to expect, per protocol.
+/// Plays a queue of files to a receiver that can only be a screen.
 ///
-/// Not a cosmetic detail: the two paths differ by an order of magnitude, and
-/// the user needs to know that **before** choosing. Miracast opens a direct
-/// link and we control the latency end to end. Chromecast uses the device's
-/// mirroring app, and only falls back to the media player — which buffers for
-/// seconds — on receivers without mirroring support.
-fn latency_hint(kind: SinkKind) -> Option<String> {
-    match kind {
-        SinkKind::WfdP2p | SinkKind::WfdMice => Some(tr!("instant response")),
-        // Chromecast uses the mirroring app (direct RTP). It only falls back
-        // to the HTTP path — which does cost seconds — on devices without
-        // mirroring, and the row itself shows that state.
-        SinkKind::Chromecast => Some(tr!("quick response")),
-        _ => None,
+/// One session per file, in order. Not one session for the queue: the pipeline
+/// is built around a single decoder, and swapping the file inside a running
+/// session would mean rebuilding it anyway — with the receiver watching the
+/// picture disappear and come back regardless.
+async fn play_files_by_mirroring(
+    sink: Arc<dyn Sink>,
+    files: Vec<MediaFile>,
+) -> std::result::Result<(), String> {
+    let _audio = nd_core::audio_state::AudioGuard::start();
+
+    for file in files {
+        let playback = nd_core::capture::MediaPlayback {
+            path: file.path.clone(),
+            kind: file.kind,
+            title: file.title(),
+        };
+        let source = nd_core::capture::CaptureSource::media_file(playback, (1920, 1080));
+
+        let playing = sink.start_stream(source);
+        match file.kind {
+            // A photograph has no end to reach: the session would sit on that
+            // one frame until somebody pressed stop.
+            nd_core::media::MediaKind::Photo => {
+                let shown = tokio::time::timeout(
+                    Duration::from_secs(nd_chromecast::media::PHOTO_SECONDS),
+                    playing,
+                )
+                .await;
+                let _ = sink.stop_stream().await;
+                if let Ok(Err(err)) = shown {
+                    return Err(err.to_string());
+                }
+            }
+            // A film or a track ends on its own, and the session ends with it.
+            _ => playing.await.map_err(|e| e.to_string())?,
+        }
     }
+    Ok(())
 }
 
-/// Runs a cast session: screen capture plus sink.
+/// Runs a cast session: screen capture plus receiver.
 async fn run_cast(sink: Arc<dyn Sink>, source_type: SourceType) -> std::result::Result<(), String> {
+    // Started before anything is captured and dropped after everything is torn
+    // down. Sharing a screen records the default output's monitor, and the
+    // *departure* of that recording makes an effects chain rebuild itself —
+    // which is when the desktop's default output gets rewritten behind the
+    // person's back. The guard puts it back.
+    let _audio = nd_core::audio_state::AudioGuard::start();
+
     let backend = nd_capture::select_backend_for(source_type).await;
     let source = backend
         .start(source_type)
@@ -818,9 +1080,6 @@ async fn run_cast(sink: Arc<dyn Sink>, source_type: SourceType) -> std::result::
 }
 
 /// Asks the capture backend, once, whether it can create a virtual monitor.
-///
-/// Done in the background because it touches D-Bus, and the answer only
-/// decides whether one button is shown — the window must not wait on it.
 fn probe_virtual_support(sender: &ComponentSender<AppModel>) {
     sender.oneshot_command(async move {
         let backend = nd_capture::select_backend_for(SourceType::Virtual).await;
@@ -837,10 +1096,10 @@ fn start_state_poll(sender: &ComponentSender<AppModel>) {
 }
 
 /// Kicks off discovery and the empty-state deadline.
-fn start_discovery(sender: &ComponentSender<AppModel>, generation: u64) {
+fn start_discovery(sender: &ComponentSender<AppModel>, generation: u64, protocol: Protocol) {
     sender.command(move |out, shutdown| {
         shutdown
-            .register(async move { run_discovery(out, generation).await })
+            .register(async move { run_discovery(out, generation, protocol).await })
             .drop_on_shutdown()
     });
 
@@ -850,23 +1109,31 @@ fn start_discovery(sender: &ComponentSender<AppModel>, generation: u64) {
     });
 }
 
-/// Runs discovery across every provider and emits events to the UI.
-async fn run_discovery(out: relm4::Sender<AppCmd>, generation: u64) {
+/// Runs discovery across the chosen providers and emits events to the window.
+async fn run_discovery(out: relm4::Sender<AppCmd>, generation: u64, protocol: Protocol) {
     let mut providers: Vec<Arc<dyn Provider>> = Vec::new();
 
-    // A single mDNS daemon for both Chromecast and AirPlay.
-    match MdnsProvider::all_media_receivers() {
-        Ok(provider) => providers.push(Arc::new(provider)),
-        Err(err) => {
-            let _ = out.send(AppCmd::ProviderUnavailable {
-                provider: "mdns",
-                reason: format!("{}: {err}", tr!("Local network discovery unavailable")),
-                generation,
-            });
+    // A preference for one protocol is honoured by **not starting** the other.
+    // Filtering the list afterwards would leave the radio scanning for Wi-Fi
+    // Direct peers during a Cast session, which is exactly the contention the
+    // preference exists to avoid.
+    if wants_network_discovery(protocol) {
+        // A single mDNS daemon serves both Chromecast and AirPlay.
+        match MdnsProvider::all_media_receivers() {
+            Ok(provider) => providers.push(Arc::new(provider)),
+            Err(err) => {
+                let _ = out.send(AppCmd::ProviderUnavailable {
+                    provider: "mdns",
+                    reason: format!("{}: {err}", tr!("Local network discovery unavailable")),
+                    generation,
+                });
+            }
         }
     }
 
-    providers.push(Arc::new(WfdP2pProvider));
+    if wants_wifi_direct(protocol) {
+        providers.push(Arc::new(WfdP2pProvider));
+    }
 
     if std::env::var_os("NETWORK_DISPLAYS_DUMMY").is_some() {
         providers.push(Arc::new(nd_core::dummy::DummyProvider));
@@ -898,46 +1165,21 @@ async fn run_discovery(out: relm4::Sender<AppCmd>, generation: u64) {
     }
 }
 
-/// What to do with a receiver that has just been discovered.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Placement {
-    /// Add it as a new row.
-    Add,
-    /// Ignore it: the same device is already listed, in an equal or better way.
-    Skip,
-    /// Take the place of the row at this index, which is the same device
-    /// discovered through a protocol we cannot stream to.
-    Replace(usize),
+/// Should mDNS (Chromecast and AirPlay) be scanned for?
+fn wants_network_discovery(protocol: Protocol) -> bool {
+    matches!(protocol, Protocol::Auto | Protocol::Cast)
 }
 
-/// Decides where a newly discovered receiver goes in the list.
+/// Should Wi-Fi Direct (Miracast) be scanned for?
 ///
-/// One piece of equipment often announces itself over more than one protocol —
-/// a Samsung projector shows up as AirPlay (which we only discover) *and* as
-/// Miracast (which we can actually stream to). Listing both puts the same name
-/// twice, one of them inert, and the user has to guess which is which.
-///
-/// The rule is deliberately narrow: merge only when the name matches exactly
-/// **and** one of the two is discovery-only. Two genuinely different devices
-/// sharing a name is unlikely, and even then nothing is lost, because the
-/// entry that gives way is the one that could not stream anyway.
-fn placement(existing: &[(String, bool)], name: &str, castable: bool) -> Placement {
-    match existing.iter().position(|(n, _)| n == name) {
-        None => Placement::Add,
-        Some(index) => {
-            let (_, listed_castable) = &existing[index];
-            match (listed_castable, castable) {
-                // The one already listed cannot stream and this one can: it
-                // takes its place.
-                (false, true) => Placement::Replace(index),
-                // Anything else: what is listed is as good or better.
-                _ => Placement::Skip,
-            }
-        }
-    }
+/// This one costs more than a socket: the radio leaves the access point to
+/// scan for peers, which is why a preference for Cast has to *stop* it rather
+/// than filter its results.
+fn wants_wifi_direct(protocol: Protocol) -> bool {
+    matches!(protocol, Protocol::Auto | Protocol::Miracast)
 }
 
-/// Turns the provider's technical error into something the user can act on.
+/// Turns a provider's technical error into something a person can act on.
 fn friendly_reason(provider: &str, reason: &str) -> String {
     if provider == "wfd-p2p" {
         if nd_capture::is_sandboxed() {
@@ -953,22 +1195,17 @@ fn friendly_reason(provider: &str, reason: &str) -> String {
     reason.to_string()
 }
 
-/// Estado vazio do `ListBox`.
-fn build_placeholder() -> adw::StatusPage {
-    let page = adw::StatusPage::builder()
-        .icon_name("video-display-symbolic")
-        .title(tr!("Looking for receivers…"))
-        // Naming the menu path is not padding: a Fire TV only advertises
-        // itself while that screen is open, and without the hint people
-        // conclude the app cannot see their device.
-        .description(tr!(
-            "Chromecasts show up on their own. A TV or projector only appears \
-             while it is in screen mirroring mode — on Fire TV, under \
-             Settings › Display & Sounds › Display Mirroring."
-        ))
+fn show_about(root: &adw::ApplicationWindow) {
+    let dialog = adw::AboutDialog::builder()
+        .application_name("BigNetScreen")
+        .application_icon("tv-symbolic")
+        .version(crate::APP_VERSION)
+        .developer_name("BigCommunity")
+        .website("https://github.com/big-comm/BigNetScreen")
+        .license_type(gtk::License::Gpl30)
+        .comments(tr!("Share your screen with a TV, projector or Chromecast."))
         .build();
-    page.add_css_class("compact");
-    page
+    dialog.present(Some(root));
 }
 
 #[cfg(test)]
@@ -976,45 +1213,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_streamable_entry_wins_over_the_discovery_only_one() {
-        // The real case: a Samsung projector announces itself over AirPlay,
-        // which we only discover, and over Miracast, which we can stream to.
-        // Listing both put the same name twice, one of the rows inert.
-        let listed = vec![("Samsung Projector LSP3".to_string(), false)];
-        assert_eq!(
-            placement(&listed, "Samsung Projector LSP3", true),
-            Placement::Replace(0),
-            "the Miracast entry must take the AirPlay entry's place"
-        );
+    fn choosing_one_protocol_stops_the_other_from_scanning() {
+        // Not a filter over the results: the Wi-Fi Direct scan takes the radio
+        // off the access point, which is the contention this preference exists
+        // to avoid. Asking for Cast has to leave that scan unstarted.
+        assert!(wants_network_discovery(Protocol::Cast));
+        assert!(!wants_wifi_direct(Protocol::Cast));
 
-        // And in the other order: with the streamable one already listed, the
-        // discovery-only announcement adds nothing.
-        let listed = vec![("Samsung Projector LSP3".to_string(), true)];
-        assert_eq!(
-            placement(&listed, "Samsung Projector LSP3", false),
-            Placement::Skip
-        );
+        assert!(wants_wifi_direct(Protocol::Miracast));
+        assert!(!wants_network_discovery(Protocol::Miracast));
     }
 
     #[test]
-    fn different_devices_are_never_merged() {
-        let listed = vec![
-            ("Living Room TV".to_string(), true),
-            ("Bedroom projector".to_string(), false),
-        ];
-        assert_eq!(placement(&listed, "Kitchen display", true), Placement::Add);
-        assert_eq!(placement(&[], "Anything", false), Placement::Add);
-    }
-
-    #[test]
-    fn two_streamable_entries_with_the_same_name_do_not_replace_each_other() {
-        // Two receivers genuinely named alike: replacing one with the other
-        // would make a working device vanish from the list.
-        let listed = vec![("Chromecast".to_string(), true)];
-        assert_eq!(placement(&listed, "Chromecast", true), Placement::Skip);
-
-        // The same goes for two inert ones: no point swapping one for the other.
-        let listed = vec![("Chromecast".to_string(), false)];
-        assert_eq!(placement(&listed, "Chromecast", false), Placement::Skip);
+    fn the_default_looks_for_everything() {
+        // Anything else would make a receiver invisible for a reason the
+        // person never chose.
+        assert!(wants_network_discovery(Protocol::Auto));
+        assert!(wants_wifi_direct(Protocol::Auto));
     }
 }

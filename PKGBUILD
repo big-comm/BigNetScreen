@@ -21,17 +21,23 @@ depends=(
   'gst-plugin-pipewire'  # pipewiresrc
   'pipewire'
   'xdg-desktop-portal'
-  'gettext'
+  # `pactl`: the application puts the default audio device back after a
+  # session. Not optional — sharing a screen disturbs the sound settings on
+  # desktops with an effects chain, and leaving that unrepaired is a fault the
+  # person has to fix by hand.
+  'libpulse'
 )
 optdepends=(
   'networkmanager: Miracast discovery and connection (Wi-Fi Direct)'
   'firewalld: automatically opens RTSP port 7236 on the P2P link'
-  'intel-media-driver: encode por hardware VA-API em GPUs Intel'
-  'libva-mesa-driver: encode por hardware VA-API em GPUs AMD'
-  'xdg-desktop-portal-gnome: captura de tela no GNOME'
-  'xdg-desktop-portal-kde: captura de tela no KDE'
+  'intel-media-driver: VA-API hardware encoding on Intel GPUs'
+  'libva-mesa-driver: VA-API hardware encoding on AMD GPUs'
+  'xdg-desktop-portal-gnome: screen capture on GNOME'
+  'xdg-desktop-portal-kde: screen capture on KDE'
 )
-makedepends=('rust' 'cargo' 'git')
+# `gettext` is a build-time tool (msgfmt compiles the catalogues); at runtime
+# the gettext functions come from glibc.
+makedepends=('rust' 'cargo' 'git' 'gettext')
 
 source=("$pkgname::git+$url.git")
 sha256sums=('SKIP')
@@ -46,7 +52,10 @@ build() {
   cd "$pkgname"
   export RUSTUP_TOOLCHAIN=stable
   export CARGO_TARGET_DIR=target
-  make PREFIX=/usr
+  # What the application reports in its log and its About dialog. Taken from
+  # the package's own version so the two can never disagree.
+  export APP_VERSION="$pkgver-$pkgrel"
+  make PREFIX=/usr APP_VERSION="$APP_VERSION"
 }
 
 check() {

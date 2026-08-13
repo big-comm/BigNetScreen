@@ -1,10 +1,10 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: bignetscreen\n"
+"Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-08-09 15:42-0300\n"
-"PO-Revision-Date: 2026-08-08 18:13\n"
+"POT-Creation-Date: 2026-08-08 23:29-0300\n"
+"PO-Revision-Date: 2026-08-13 14:47-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Dutch <nl@li.org>\n"
 "Language: nl\n"
@@ -12,69 +12,285 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/app.rs:679
+#: crates/nd-gui/src/pages/settings.rs:220
+msgid ""
+"0 lets the system choose. Set one only if you opened a port on your firewall"
+" by hand."
+msgstr ""
+"0 laat het systeem kiezen. Stel alleen een waarde in als u handmatig een "
+"poort op uw firewall hebt geopend."
+
+#: crates/nd-gui/src/pages/devices.rs:437
+msgid "1 device found"
+msgstr "1 apparaat gevonden"
+
+#: crates/nd-gui/src/pages/media.rs:651
+msgid "1 file selected"
+msgstr "1 bestand geselecteerd"
+
+#: crates/nd-gui/src/app.rs:892
 msgid "1 receiver found"
 msgstr "1 ontvanger gevonden"
 
-#: crates/nd-gui/src/app.rs:475
-#, fuzzy
-msgid "A new screen"
-msgstr "Heel scherm"
+#: crates/nd-gui/src/pages/settings.rs:130
+msgid "30 FPS"
+msgstr "30 FPS"
 
-#: crates/nd-gui/src/app.rs:750
+#: crates/nd-gui/src/pages/settings.rs:130
+msgid "60 FPS"
+msgstr "60 FPS"
+
+#: crates/nd-gui/src/pages/settings.rs:128
+msgid "60 is smoother and costs about half as much again in bandwidth"
+msgstr "60 is vloeiender en kost ongeveer de helft meer bandbreedte"
+
+#: crates/nd-gui/src/pages/settings.rs:109
+msgid "A ceiling: a smaller screen is sent as it is"
+msgstr "Een maximum: een kleiner scherm wordt verstuurd zoals het is"
+
+#: crates/nd-gui/src/pages/home.rs:431
+msgid "A new screen"
+msgstr "Een nieuw scherm"
+
+#: crates/nd-gui/src/app.rs:931
 msgid "A stream is already running"
 msgstr "Er draait al een stream"
 
-#: crates/nd-gui/src/app.rs:473
+#: crates/nd-gui/src/pages/home.rs:424
 msgid "A window"
 msgstr "Een venster"
 
-#: crates/nd-gui/src/app.rs:46
+#: crates/nd-gui/src/app.rs:299
+msgid "About BigNetScreen"
+msgstr "Over BigNetScreen"
+
+#: crates/nd-gui/src/pages/devices.rs:264
+msgid "Address"
+msgstr "Adres"
+
+#: crates/nd-gui/src/pages/mod.rs:150
 msgid "AirPlay"
 msgstr "AirPlay"
 
-#: crates/nd-gui/src/app.rs:45
+#: crates/nd-gui/src/pages/devices.rs:321
+msgid "All protocols"
+msgstr "Alle protocollen"
+
+#: crates/nd-gui/src/pages/settings.rs:153
+msgid "Audio"
+msgstr "Audio"
+
+#: crates/nd-gui/src/pages/settings.rs:93
+msgid "Automatic"
+msgstr "Automatisch"
+
+#: crates/nd-gui/src/pages/devices.rs:168
+#: crates/nd-gui/src/pages/settings.rs:202
+msgid "Automatic discovery"
+msgstr "Automatische detectie"
+
+#: crates/nd-gui/src/app.rs:422 crates/nd-gui/src/app.rs:881
+msgid "Automatic discovery is off"
+msgstr "Automatische detectie is uit"
+
+#: crates/nd-gui/src/pages/mod.rs:128
+msgid "Available"
+msgstr "Beschikbaar"
+
+#: crates/nd-gui/src/pages/settings.rs:142
+msgid ""
+"Buffers the picture so video plays smoothly. Everything arrives later, the "
+"pointer included — best when you are only watching."
+msgstr ""
+"Buffer het beeld zodat video soepel afspeelt. Alles komt later aan, ook de "
+"aanwijzer — het beste wanneer u alleen maar kijkt."
+
+#: crates/nd-gui/src/pages/media.rs:548
+msgid "Choose a device…"
+msgstr "Kies een apparaat…"
+
+#: crates/nd-gui/src/pages/media.rs:731
+msgid "Choose a folder"
+msgstr "Kies een map"
+
+#: crates/nd-gui/src/pages/media.rs:733
+msgid "Choose files"
+msgstr "Kies bestanden"
+
+#: crates/nd-gui/src/pages/home.rs:425
+msgid "Choose one window to share"
+msgstr "Kies één venster om te delen"
+
+#: crates/nd-gui/src/pages/home.rs:196
+msgid "Choose what to share, then pick a device to send it to."
+msgstr ""
+"Kies wat je wilt delen en selecteer daarna een apparaat om het naartoe te "
+"sturen."
+
+#: crates/nd-gui/src/pages/media.rs:573
+msgid "Choose which device to send to."
+msgstr "Kies naar welk apparaat je wilt verzenden."
+
+#: crates/nd-gui/src/pages/mod.rs:149
 msgid "Chromecast"
 msgstr "Chromecast"
 
-#: crates/nd-gui/src/app.rs:964
-msgid ""
-"Chromecasts show up on their own. A TV or projector only appears while it is "
-"in screen mirroring mode — on Fire TV, under Settings › Display & Sounds › "
-"Display Mirroring."
-msgstr ""
+#: crates/nd-gui/src/pages/devices.rs:322
+msgid "Chromecast / AirPlay"
+msgstr "Chromecast / AirPlay"
 
-#: crates/nd-gui/src/app.rs:64 crates/nd-gui/src/app.rs:767
+#: crates/nd-gui/src/pages/settings.rs:95
+msgid "Chromecast / AirPlay only"
+msgstr "Alleen Chromecast / AirPlay"
+
+#: crates/nd-gui/src/pages/home.rs:646 crates/nd-gui/src/pages/home.rs:723
+msgid ""
+"Chromecasts show up on their own. A TV or projector only appears while it is"
+" in screen mirroring mode — on Fire TV, under Settings › Display and Sounds "
+"› Display Mirroring."
+msgstr ""
+"Chromecasts verschijnen vanzelf. Een tv of projector verschijnt alleen "
+"terwijl deze in de schermspiegelmodus staat — op Fire TV onder Instellingen "
+"› Beeld en geluid › Schermspiegeling."
+
+#: crates/nd-gui/src/pages/mod.rs:125
+msgid "Connected"
+msgstr "Verbonden"
+
+#: crates/nd-gui/src/app.rs:264
+msgid "Connected to"
+msgstr "Verbonden met"
+
+#: crates/nd-gui/src/app.rs:948 crates/nd-gui/src/pages/mod.rs:168
 msgid "Connecting…"
 msgstr "Verbinden…"
 
-#: crates/nd-gui/src/app.rs:476
-msgid ""
-"Creates an extra desktop on the receiver instead of duplicating this one"
-msgstr ""
+#: crates/nd-gui/src/pages/home.rs:340
+msgid "Connection"
+msgstr "Verbinding"
 
-#: crates/nd-gui/src/app.rs:69
+#: crates/nd-gui/src/pages/home.rs:338
+msgid "Connection quality"
+msgstr "Verbindingskwaliteit"
+
+#: crates/nd-gui/src/pages/home.rs:432
+msgid "Create an extra screen just for sharing"
+msgstr "Maak een extra scherm speciaal voor delen"
+
+#: crates/nd-gui/src/pages/devices.rs:102 crates/nd-gui/src/pages/mod.rs:47
+msgid "Devices"
+msgstr "Apparaten"
+
+#: crates/nd-gui/src/pages/devices.rs:234 crates/nd-gui/src/pages/home.rs:314
+msgid "Disconnect"
+msgstr "Verbinding verbreken"
+
+#: crates/nd-gui/src/pages/settings.rs:197
+msgid "Discovery and devices"
+msgstr "Detectie en apparaten"
+
+#: crates/nd-gui/src/pages/devices.rs:424 crates/nd-gui/src/pages/mod.rs:129
+#: crates/nd-gui/src/pages/mod.rs:299
+msgid "Discovery only"
+msgstr "Alleen detectie"
+
+#: crates/nd-gui/src/pages/mod.rs:223
+msgid "Excellent"
+msgstr "Uitstekend"
+
+#: crates/nd-gui/src/pages/mod.rs:126 crates/nd-gui/src/pages/mod.rs:173
 msgid "Failed"
 msgstr "Mislukt"
+
+#: crates/nd-gui/src/pages/settings.rs:140
+msgid "Film mode"
+msgstr "Filmmodus"
+
+#: crates/nd-gui/src/pages/devices.rs:107
+msgid "Find and connect to nearby wireless receivers."
+msgstr "Zoek en maak verbinding met draadloze ontvangers in de buurt."
+
+#: crates/nd-gui/src/pages/media.rs:672
+msgid "Finished"
+msgstr "Voltooid"
+
+#: crates/nd-gui/src/pages/settings.rs:218
+msgid "Fixed port"
+msgstr "Vaste poort"
+
+#: crates/nd-gui/src/pages/settings.rs:126
+msgid "Frame rate"
+msgstr "Framesnelheid"
+
+#: crates/nd-gui/src/pages/mod.rs:224
+msgid "Good"
+msgstr "Goed"
 
 #: crates/nd-gui/src/app.rs:355
 msgid "Got it"
 msgstr "Begrepen"
 
-#: crates/nd-gui/src/app.rs:863
+#: crates/nd-gui/src/pages/settings.rs:111
+msgid "High (1080p)"
+msgstr "Hoog (1080p)"
+
+#: crates/nd-gui/src/pages/mod.rs:46
+msgid "Home"
+msgstr "Startscherm"
+
+#: crates/nd-gui/src/pages/settings.rs:158
+msgid "Include system audio"
+msgstr "Systeemaudio opnemen"
+
+#: crates/nd-gui/src/pages/settings.rs:167
+msgid "Include the microphone"
+msgstr "Microfoon opnemen"
+
+#: crates/nd-gui/src/pages/home.rs:651
+msgid "Keep every device on the same Wi-Fi network for the best results."
+msgstr ""
+"Zorg dat alle apparaten op hetzelfde wifi-netwerk zitten voor de beste "
+"resultaten."
+
+#: crates/nd-gui/src/app.rs:1127
 msgid "Local network discovery unavailable"
 msgstr "Lokaal netwerk zoeken is niet beschikbaar"
 
-#: crates/nd-gui/src/app.rs:960
+#: crates/nd-gui/src/pages/settings.rs:203
+msgid "Look for receivers as soon as the app starts"
+msgstr "Direct naar ontvangers zoeken zodra de app start"
+
+#: crates/nd-gui/src/pages/home.rs:709
 msgid "Looking for receivers…"
 msgstr "Op zoek naar ontvangers…"
 
-#: crates/nd-gui/src/app.rs:47
+#: crates/nd-gui/src/pages/settings.rs:113
+msgid "Low (480p)"
+msgstr "Laag (480p)"
+
+#: crates/nd-gui/src/pages/mod.rs:220
+msgid "Measuring…"
+msgstr "Meten…"
+
+#: crates/nd-gui/src/pages/home.rs:438 crates/nd-gui/src/pages/mod.rs:48
+msgid "Media"
+msgstr "Media"
+
+#: crates/nd-gui/src/pages/settings.rs:112
+msgid "Medium (720p)"
+msgstr "Medium (720p)"
+
+#: crates/nd-gui/src/pages/settings.rs:175
+msgid "Microphone volume"
+msgstr "Microfoonvolume"
+
+#: crates/nd-gui/src/pages/devices.rs:323 crates/nd-gui/src/pages/mod.rs:151
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:944
+#: crates/nd-gui/src/app.rs:1187
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
@@ -82,92 +298,328 @@ msgstr ""
 "Miracast werkt niet in de Flatpak-build (hiervoor is de systeem-"
 "NetworkManager nodig)"
 
-#: crates/nd-gui/src/app.rs:951
+#: crates/nd-gui/src/pages/settings.rs:94
+msgid "Miracast only"
+msgstr "Alleen Miracast"
+
+#: crates/nd-gui/src/app.rs:1193
 msgid "Miracast unavailable"
 msgstr "Miracast niet beschikbaar"
 
-#: crates/nd-gui/src/app.rs:949
+#: crates/nd-gui/src/app.rs:1191
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr ""
 "Miracast niet beschikbaar: deze Wi-Fi-kaart ondersteunt geen Wi-Fi Direct"
 
-#: crates/nd-gui/src/app.rs:676
+#: crates/nd-gui/src/pages/devices.rs:223
+msgid "Mirror screen"
+msgstr "Scherm spiegelen"
+
+#: crates/nd-gui/src/pages/settings.rs:168
+msgid "Mix your voice into what is sent"
+msgstr "Meng je stem met wat er wordt verzonden"
+
+#: crates/nd-gui/src/pages/media.rs:453
+msgid "Music"
+msgstr "Muziek"
+
+#: crates/nd-gui/src/pages/media.rs:570
+msgid "No device found yet. Turn your TV, projector or Chromecast on."
+msgstr ""
+"Nog geen apparaat gevonden. Schakel uw tv, projector of Chromecast in."
+
+#: crates/nd-gui/src/pages/devices.rs:436
+msgid "No devices found"
+msgstr "Geen apparaten gevonden"
+
+#: crates/nd-gui/src/pages/media.rs:644
+msgid "No music in your Music folder. Use “Select files”."
+msgstr "Geen muziek in uw muziekmap. Gebruik 'Bestanden selecteren'."
+
+#: crates/nd-gui/src/pages/media.rs:642
+msgid "No photos in your Pictures folder. Use “Select files”."
+msgstr "Geen foto's in uw afbeeldingenmap. Gebruik 'Bestanden selecteren'."
+
+#: crates/nd-gui/src/app.rs:889 crates/nd-gui/src/pages/home.rs:718
 msgid "No receivers found"
 msgstr "Geen ontvangers gevonden"
 
-#: crates/nd-gui/src/app.rs:65
+#: crates/nd-gui/src/pages/media.rs:643
+msgid "No videos in your Videos folder. Use “Select files”."
+msgstr "Geen video's in uw videomap. Gebruik 'Bestanden selecteren'."
+
+#: crates/nd-gui/src/pages/media.rs:650
+msgid "Nothing selected"
+msgstr "Niets geselecteerd"
+
+#: crates/nd-gui/src/pages/media.rs:404
+msgid "Now playing"
+msgstr "Wordt nu afgespeeld"
+
+#: crates/nd-gui/src/pages/mod.rs:169
 msgid "Opening the firewall port…"
 msgstr "Firewall-poort wordt geopend…"
 
-#: crates/nd-gui/src/app.rs:67
+#: crates/nd-gui/src/pages/media.rs:453
+msgid "Photos"
+msgstr "Foto's"
+
+#: crates/nd-gui/src/app.rs:494
+msgid "Pick a device for the extra screen"
+msgstr "Kies een apparaat voor het extra scherm"
+
+#: crates/nd-gui/src/app.rs:493
+msgid "Pick a device to share a window with"
+msgstr "Kies een apparaat om een venster mee te delen"
+
+#: crates/nd-gui/src/app.rs:492
+msgid "Pick a device to share your screen with"
+msgstr "Kies een apparaat om uw scherm mee te delen"
+
+#: crates/nd-gui/src/pages/media.rs:255
+msgid "Pick files and choose where to play them."
+msgstr "Selecteer bestanden en kies waar u ze wilt afspelen."
+
+#: crates/nd-gui/src/pages/settings.rs:90
+msgid "Preferred protocol"
+msgstr "Voorkeursprotocol"
+
+#: crates/nd-gui/src/pages/mod.rs:171
 msgid "Preparing the video…"
 msgstr "Video wordt voorbereid…"
 
-#: crates/nd-gui/src/app.rs:329
+#: crates/nd-gui/src/pages/devices.rs:259
+msgid "Protocol"
+msgstr "Protocol"
+
+#: crates/nd-gui/src/pages/devices.rs:423
+msgid "Ready"
+msgstr "Gereed"
+
+#: crates/nd-gui/src/pages/home.rs:191
+msgid "Ready to share"
+msgstr "Klaar om te delen"
+
+#: crates/nd-gui/src/pages/devices.rs:120
+msgid "Refresh"
+msgstr "Vernieuwen"
+
+#: crates/nd-gui/src/pages/settings.rs:265
+msgid "Restore defaults"
+msgstr "Standaardwaarden herstellen"
+
+#: crates/nd-gui/src/pages/settings.rs:248
+msgid "Saved as you change them"
+msgstr "Opgeslagen terwijl u ze wijzigt"
+
+#: crates/nd-gui/src/app.rs:330 crates/nd-gui/src/pages/devices.rs:115
 msgid "Scan again"
 msgstr "Opnieuw scannen"
 
-#: crates/nd-gui/src/app.rs:449 crates/nd-gui/src/app.rs:510
-#: crates/nd-gui/src/app.rs:674
+#: crates/nd-gui/src/app.rs:420 crates/nd-gui/src/app.rs:503
+#: crates/nd-gui/src/app.rs:887
 msgid "Searching…"
 msgstr "Zoeken…"
 
-#: crates/nd-gui/src/app.rs:336
+#: crates/nd-gui/src/pages/media.rs:281
+msgid "Select files"
+msgstr "Bestanden selecteren"
+
+#: crates/nd-gui/src/pages/media.rs:288
+msgid "Send a folder"
+msgstr "Een map verzenden"
+
+#: crates/nd-gui/src/pages/devices.rs:248
+msgid "Send media"
+msgstr "Media verzenden"
+
+#: crates/nd-gui/src/pages/home.rs:439
+msgid "Send photos, videos and music"
+msgstr "Foto's, video's en muziek verzenden"
+
+#: crates/nd-gui/src/pages/media.rs:351
+msgid "Send to"
+msgstr "Verzenden naar"
+
+#: crates/nd-gui/src/pages/media.rs:376
+msgid "Send to device"
+msgstr "Verzenden naar apparaat"
+
+#: crates/nd-gui/src/pages/settings.rs:159
+msgid "Send whatever this computer is playing"
+msgstr "Verzenden wat deze computer afspeelt"
+
+#: crates/nd-gui/src/app.rs:695 crates/nd-gui/src/app.rs:989
+msgid "Sending files…"
+msgstr "Bezig met verzenden…"
+
+#: crates/nd-gui/src/pages/mod.rs:49 crates/nd-gui/src/pages/settings.rs:73
+msgid "Settings"
+msgstr "Instellingen"
+
+#: crates/nd-gui/src/pages/settings.rs:379
+msgid "Settings cannot be saved on this system."
+msgstr "Instellingen kunnen op dit systeem niet worden opgeslagen."
+
+#: crates/nd-gui/src/pages/home.rs:418
+msgid "Share everything on your screen"
+msgstr "Alles op uw scherm delen"
+
+#: crates/nd-gui/src/pages/media.rs:250
+msgid "Share media"
+msgstr "Media delen"
+
+#: crates/nd-gui/src/app.rs:230
+msgid "Share your screen wirelessly"
+msgstr "Deel uw scherm draadloos"
+
+#: crates/nd-gui/src/app.rs:1206
+msgid "Share your screen with a TV, projector or Chromecast."
+msgstr "Deel uw scherm met een tv, projector of Chromecast."
+
+#: crates/nd-gui/src/app.rs:320
+msgid "Show the sidebar"
+msgstr "Toon de zijbalk"
+
+#: crates/nd-gui/src/pages/home.rs:640
+msgid ""
+"Sound goes to the receiver and to this computer. Mute this computer if you "
+"hear an echo."
+msgstr ""
+"Het geluid gaat naar de ontvanger en naar deze computer. Demp deze computer "
+"als u een echo hoort."
+
+#: crates/nd-gui/src/pages/devices.rs:275
+msgid "Status"
+msgstr "Status"
+
+#: crates/nd-gui/src/app.rs:337
 msgid "Stop"
 msgstr "Stoppen"
 
-#: crates/nd-gui/src/app.rs:739
+#: crates/nd-gui/src/pages/media.rs:419
+msgid "Stop sending"
+msgstr "Verzenden stoppen"
+
+#: crates/nd-gui/src/app.rs:983
+msgid "Stop sharing your screen before sending files"
+msgstr "Stop met het delen van uw scherm voordat u bestanden verzendt"
+
+#: crates/nd-gui/src/app.rs:920
 msgid "Stopping…"
 msgstr "Stoppen…"
 
-#: crates/nd-gui/src/app.rs:68
+#: crates/nd-gui/src/pages/mod.rs:172 crates/nd-gui/src/pages/settings.rs:85
 msgid "Streaming"
 msgstr "Streamen"
 
-#: crates/nd-gui/src/app.rs:48
+#: crates/nd-gui/src/pages/devices.rs:280
+msgid "Streaming at"
+msgstr "Streamen op"
+
+#: crates/nd-gui/src/pages/settings.rs:108
+msgid "Streaming quality"
+msgstr "Streamingkwaliteit"
+
+#: crates/nd-gui/src/pages/mod.rs:152
 msgid "Test"
 msgstr "Test"
 
-#: crates/nd-gui/src/app.rs:630
+#: crates/nd-gui/src/app.rs:976 crates/nd-gui/src/app.rs:993
+msgid "That device is no longer available"
+msgstr "Dat apparaat is niet langer beschikbaar"
+
+#: crates/nd-gui/src/pages/mod.rs:226
+msgid "The receiver is not answering"
+msgstr "De ontvanger reageert niet"
+
+#: crates/nd-gui/src/pages/home.rs:253
+msgid "Then pick a device"
+msgstr "Kies dan een apparaat"
+
+#: crates/nd-gui/src/pages/settings.rs:78
+msgid "These apply to your next session."
+msgstr "Deze zijn van toepassing op uw volgende sessie."
+
+#: crates/nd-gui/src/pages/settings.rs:211
+msgid "This computer's name"
+msgstr "Naam van deze computer"
+
+#: crates/nd-gui/src/pages/home.rs:541
 msgid ""
 "This desktop cannot create an extra screen (it needs GNOME running natively)"
 msgstr ""
+"Dit bureaublad kan geen extra scherm maken (hiervoor moet GNOME natief "
+"draaien)"
 
-#: crates/nd-gui/src/app.rs:66
+#: crates/nd-gui/src/pages/home.rs:375
+msgid "Tips"
+msgstr "Tips"
+
+#: crates/nd-gui/src/pages/media.rs:453
+msgid "Videos"
+msgstr "Video's"
+
+#: crates/nd-gui/src/pages/mod.rs:170
 msgid "Waiting for the receiver…"
 msgstr "Wachten op de ontvanger…"
 
-#: crates/nd-gui/src/app.rs:375
+#: crates/nd-gui/src/pages/mod.rs:225
+msgid "Weak signal"
+msgstr "Zwak signaal"
+
+#: crates/nd-gui/src/pages/home.rs:220
 msgid "What to share"
 msgstr "Wat te delen"
 
-#: crates/nd-gui/src/app.rs:472
+#: crates/nd-gui/src/pages/settings.rs:91
+msgid "Which kind of receiver to look for"
+msgstr "Naar welk type ontvanger moet worden gezocht"
+
+#: crates/nd-gui/src/pages/home.rs:417
 msgid "Whole screen"
 msgstr "Heel scherm"
 
-#: crates/nd-gui/src/app.rs:220
-msgid "discovery only"
-msgstr "alleen detectie"
+#: crates/nd-gui/src/pages/home.rs:241
+msgid ""
+"Your desktop will ask which window. Only visible windows can be shared, and "
+"closing the window ends the session."
+msgstr ""
+"Uw bureaublad vraagt welk venster. Alleen zichtbare vensters kunnen worden "
+"gedeeld; het sluiten van het venster beëindigt de sessie."
 
-#: crates/nd-gui/src/app.rs:798
+#: crates/nd-gui/src/pages/devices.rs:438
+msgid "devices found"
+msgstr "apparaten gevonden"
+
+#: crates/nd-gui/src/pages/media.rs:652
+msgid "files selected"
+msgstr "bestanden geselecteerd"
+
+#: crates/nd-gui/src/pages/mod.rs:184
 msgid "instant response"
 msgstr "onmiddellijke reactie"
 
-#: crates/nd-gui/src/app.rs:802
+#: crates/nd-gui/src/pages/media.rs:677
+msgid "item"
+msgstr "item"
+
+#: crates/nd-gui/src/pages/mod.rs:229
+msgid "ms round trip"
+msgstr "ms retourtijd"
+
+#: crates/nd-gui/src/pages/devices.rs:268
+msgid "not published yet"
+msgstr "nog niet gepubliceerd"
+
+#: crates/nd-gui/src/pages/mod.rs:185
 msgid "quick response"
 msgstr "snelle reactie"
 
-#: crates/nd-gui/src/app.rs:681
+#: crates/nd-gui/src/app.rs:894
 msgid "receivers found"
 msgstr "ontvangers gevonden"
 
-#: crates/nd-gui/src/app.rs:761
+#: crates/nd-gui/src/app.rs:942
 msgid "shows up in discovery only"
 msgstr "wordt alleen weergegeven tijdens het zoeken"
-
-#~ msgid ""
-#~ "Chromecasts and TVs show up on their own. For Miracast, put the TV or the "
-#~ "projector into “Screen Mirroring” mode."
-#~ msgstr ""
-#~ "Chromecasts en tv's verschijnen vanzelf. Zet voor Miracast de tv of "
-#~ "projector in de modus \"Screen Mirroring\"."

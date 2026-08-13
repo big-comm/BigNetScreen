@@ -1,10 +1,10 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: bignetscreen\n"
+"Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-08-09 15:42-0300\n"
-"PO-Revision-Date: 2026-08-08 18:08\n"
+"POT-Creation-Date: 2026-08-08 23:29-0300\n"
+"PO-Revision-Date: 2026-08-13 14:40-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Greek <el@li.org>\n"
 "Language: el\n"
@@ -12,69 +12,286 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/app.rs:679
+#: crates/nd-gui/src/pages/settings.rs:220
+msgid ""
+"0 lets the system choose. Set one only if you opened a port on your firewall"
+" by hand."
+msgstr ""
+"Το 0 αφήνει το σύστημα να επιλέξει. Ορίστε μόνο αν ανοίξατε κάποια θύρα στο "
+"τείχος προστασίας χειροκίνητα."
+
+#: crates/nd-gui/src/pages/devices.rs:437
+msgid "1 device found"
+msgstr "Βρέθηκε 1 συσκευή"
+
+#: crates/nd-gui/src/pages/media.rs:651
+msgid "1 file selected"
+msgstr "1 αρχείο επιλέχθηκε"
+
+#: crates/nd-gui/src/app.rs:892
 msgid "1 receiver found"
 msgstr "Βρέθηκε 1 δέκτης"
 
-#: crates/nd-gui/src/app.rs:475
-#, fuzzy
-msgid "A new screen"
-msgstr "Ολόκληρη οθόνη"
+#: crates/nd-gui/src/pages/settings.rs:130
+msgid "30 FPS"
+msgstr "30 FPS"
 
-#: crates/nd-gui/src/app.rs:750
+#: crates/nd-gui/src/pages/settings.rs:130
+msgid "60 FPS"
+msgstr "60 FPS"
+
+#: crates/nd-gui/src/pages/settings.rs:128
+msgid "60 is smoother and costs about half as much again in bandwidth"
+msgstr "Το 60 είναι πιο ομαλό και κοστίζει περίπου το μισό σε εύρος ζώνης"
+
+#: crates/nd-gui/src/pages/settings.rs:109
+msgid "A ceiling: a smaller screen is sent as it is"
+msgstr "Ανώτατο όριο: μια μικρότερη οθόνη στέλνεται ως έχει"
+
+#: crates/nd-gui/src/pages/home.rs:431
+msgid "A new screen"
+msgstr "Μια νέα οθόνη"
+
+#: crates/nd-gui/src/app.rs:931
 msgid "A stream is already running"
 msgstr "Μια ροή εκτελείται ήδη"
 
-#: crates/nd-gui/src/app.rs:473
+#: crates/nd-gui/src/pages/home.rs:424
 msgid "A window"
 msgstr "Ένα παράθυρο"
 
-#: crates/nd-gui/src/app.rs:46
+#: crates/nd-gui/src/app.rs:299
+msgid "About BigNetScreen"
+msgstr "Σχετικά με το BigNetScreen"
+
+#: crates/nd-gui/src/pages/devices.rs:264
+msgid "Address"
+msgstr "Διεύθυνση"
+
+#: crates/nd-gui/src/pages/mod.rs:150
 msgid "AirPlay"
 msgstr "AirPlay"
 
-#: crates/nd-gui/src/app.rs:45
+#: crates/nd-gui/src/pages/devices.rs:321
+msgid "All protocols"
+msgstr "Όλα τα πρωτόκολλα"
+
+#: crates/nd-gui/src/pages/settings.rs:153
+msgid "Audio"
+msgstr "Ήχος"
+
+#: crates/nd-gui/src/pages/settings.rs:93
+msgid "Automatic"
+msgstr "Αυτόματο"
+
+#: crates/nd-gui/src/pages/devices.rs:168
+#: crates/nd-gui/src/pages/settings.rs:202
+msgid "Automatic discovery"
+msgstr "Αυτόματη ανακάλυψη"
+
+#: crates/nd-gui/src/app.rs:422 crates/nd-gui/src/app.rs:881
+msgid "Automatic discovery is off"
+msgstr "Η αυτόματη ανακάλυψη είναι απενεργοποιημένη"
+
+#: crates/nd-gui/src/pages/mod.rs:128
+msgid "Available"
+msgstr "Διαθέσιμο"
+
+#: crates/nd-gui/src/pages/settings.rs:142
+msgid ""
+"Buffers the picture so video plays smoothly. Everything arrives later, the "
+"pointer included — best when you are only watching."
+msgstr ""
+"Προσωρινά αποθηκεύει την εικόνα ώστε το βίντεο να αναπαράγεται ομαλά. Όλα "
+"φτάνουν αργότερα, συμπεριλαμβανομένου του δείκτη — καλύτερο όταν απλώς "
+"παρακολουθείτε."
+
+#: crates/nd-gui/src/pages/media.rs:548
+msgid "Choose a device…"
+msgstr "Επιλέξτε μια συσκευή…"
+
+#: crates/nd-gui/src/pages/media.rs:731
+msgid "Choose a folder"
+msgstr "Επιλογή φακέλου"
+
+#: crates/nd-gui/src/pages/media.rs:733
+msgid "Choose files"
+msgstr "Επιλογή αρχείων"
+
+#: crates/nd-gui/src/pages/home.rs:425
+msgid "Choose one window to share"
+msgstr "Επιλογή ενός παραθύρου για κοινή χρήση"
+
+#: crates/nd-gui/src/pages/home.rs:196
+msgid "Choose what to share, then pick a device to send it to."
+msgstr ""
+"Επιλέξτε τι θέλετε να μοιραστείτε και έπειτα επιλέξτε μια συσκευή για να της"
+" το στείλετε."
+
+#: crates/nd-gui/src/pages/media.rs:573
+msgid "Choose which device to send to."
+msgstr "Επιλέξτε σε ποια συσκευή θέλετε να στείλετε."
+
+#: crates/nd-gui/src/pages/mod.rs:149
 msgid "Chromecast"
 msgstr "Chromecast"
 
-#: crates/nd-gui/src/app.rs:964
-msgid ""
-"Chromecasts show up on their own. A TV or projector only appears while it is "
-"in screen mirroring mode — on Fire TV, under Settings › Display & Sounds › "
-"Display Mirroring."
-msgstr ""
+#: crates/nd-gui/src/pages/devices.rs:322
+msgid "Chromecast / AirPlay"
+msgstr "Chromecast / AirPlay"
 
-#: crates/nd-gui/src/app.rs:64 crates/nd-gui/src/app.rs:767
+#: crates/nd-gui/src/pages/settings.rs:95
+msgid "Chromecast / AirPlay only"
+msgstr "Μόνο Chromecast / AirPlay"
+
+#: crates/nd-gui/src/pages/home.rs:646 crates/nd-gui/src/pages/home.rs:723
+msgid ""
+"Chromecasts show up on their own. A TV or projector only appears while it is"
+" in screen mirroring mode — on Fire TV, under Settings › Display and Sounds "
+"› Display Mirroring."
+msgstr ""
+"Τα Chromecast εμφανίζονται από μόνα τους. Μια τηλεόραση ή ένας προβολέας "
+"εμφανίζεται μόνο όσο βρίσκεται σε λειτουργία καθρεφτίσματος οθόνης — στο "
+"Fire TV, στη διαδρομή Ρυθμίσεις › Οθόνη και ήχοι › Καθρεφτισμός οθόνης."
+
+#: crates/nd-gui/src/pages/mod.rs:125
+msgid "Connected"
+msgstr "Συνδεδεμένο"
+
+#: crates/nd-gui/src/app.rs:264
+msgid "Connected to"
+msgstr "Συνδεδεμένο με"
+
+#: crates/nd-gui/src/app.rs:948 crates/nd-gui/src/pages/mod.rs:168
 msgid "Connecting…"
 msgstr "Σύνδεση…"
 
-#: crates/nd-gui/src/app.rs:476
-msgid ""
-"Creates an extra desktop on the receiver instead of duplicating this one"
-msgstr ""
+#: crates/nd-gui/src/pages/home.rs:340
+msgid "Connection"
+msgstr "Σύνδεση"
 
-#: crates/nd-gui/src/app.rs:69
+#: crates/nd-gui/src/pages/home.rs:338
+msgid "Connection quality"
+msgstr "Ποιότητα σύνδεσης"
+
+#: crates/nd-gui/src/pages/home.rs:432
+msgid "Create an extra screen just for sharing"
+msgstr "Δημιουργία επιπλέον οθόνης μόνο για κοινή χρήση"
+
+#: crates/nd-gui/src/pages/devices.rs:102 crates/nd-gui/src/pages/mod.rs:47
+msgid "Devices"
+msgstr "Συσκευές"
+
+#: crates/nd-gui/src/pages/devices.rs:234 crates/nd-gui/src/pages/home.rs:314
+msgid "Disconnect"
+msgstr "Αποσύνδεση"
+
+#: crates/nd-gui/src/pages/settings.rs:197
+msgid "Discovery and devices"
+msgstr "Ανακάλυψη και συσκευές"
+
+#: crates/nd-gui/src/pages/devices.rs:424 crates/nd-gui/src/pages/mod.rs:129
+#: crates/nd-gui/src/pages/mod.rs:299
+msgid "Discovery only"
+msgstr "Μόνο ανακάλυψη"
+
+#: crates/nd-gui/src/pages/mod.rs:223
+msgid "Excellent"
+msgstr "Εξαιρετικό"
+
+#: crates/nd-gui/src/pages/mod.rs:126 crates/nd-gui/src/pages/mod.rs:173
 msgid "Failed"
 msgstr "Αποτυχία"
+
+#: crates/nd-gui/src/pages/settings.rs:140
+msgid "Film mode"
+msgstr "Λειτουργία ταινίας"
+
+#: crates/nd-gui/src/pages/devices.rs:107
+msgid "Find and connect to nearby wireless receivers."
+msgstr "Βρείτε και συνδεθείτε με κοντινούς ασύρματους δέκτες."
+
+#: crates/nd-gui/src/pages/media.rs:672
+msgid "Finished"
+msgstr "Ολοκληρώθηκε"
+
+#: crates/nd-gui/src/pages/settings.rs:218
+msgid "Fixed port"
+msgstr "Σταθερή θύρα"
+
+#: crates/nd-gui/src/pages/settings.rs:126
+msgid "Frame rate"
+msgstr "Ρυθμός καρέ"
+
+#: crates/nd-gui/src/pages/mod.rs:224
+msgid "Good"
+msgstr "Καλή"
 
 #: crates/nd-gui/src/app.rs:355
 msgid "Got it"
 msgstr "Κατάλαβα"
 
-#: crates/nd-gui/src/app.rs:863
+#: crates/nd-gui/src/pages/settings.rs:111
+msgid "High (1080p)"
+msgstr "Υψηλή (1080p)"
+
+#: crates/nd-gui/src/pages/mod.rs:46
+msgid "Home"
+msgstr "Αρχική"
+
+#: crates/nd-gui/src/pages/settings.rs:158
+msgid "Include system audio"
+msgstr "Συμπερίληψη ήχου συστήματος"
+
+#: crates/nd-gui/src/pages/settings.rs:167
+msgid "Include the microphone"
+msgstr "Συμπερίληψη μικροφώνου"
+
+#: crates/nd-gui/src/pages/home.rs:651
+msgid "Keep every device on the same Wi-Fi network for the best results."
+msgstr ""
+"Διατηρήστε όλες τις συσκευές στο ίδιο δίκτυο Wi-Fi για καλύτερα "
+"αποτελέσματα."
+
+#: crates/nd-gui/src/app.rs:1127
 msgid "Local network discovery unavailable"
 msgstr "Η ανακάλυψη τοπικού δικτύου δεν είναι διαθέσιμη"
 
-#: crates/nd-gui/src/app.rs:960
+#: crates/nd-gui/src/pages/settings.rs:203
+msgid "Look for receivers as soon as the app starts"
+msgstr "Αναζήτηση δεκτών μόλις ξεκινήσει η εφαρμογή"
+
+#: crates/nd-gui/src/pages/home.rs:709
 msgid "Looking for receivers…"
 msgstr "Αναζήτηση συσκευών λήψης…"
 
-#: crates/nd-gui/src/app.rs:47
+#: crates/nd-gui/src/pages/settings.rs:113
+msgid "Low (480p)"
+msgstr "Χαμηλή (480p)"
+
+#: crates/nd-gui/src/pages/mod.rs:220
+msgid "Measuring…"
+msgstr "Μέτρηση…"
+
+#: crates/nd-gui/src/pages/home.rs:438 crates/nd-gui/src/pages/mod.rs:48
+msgid "Media"
+msgstr "Πολυμέσα"
+
+#: crates/nd-gui/src/pages/settings.rs:112
+msgid "Medium (720p)"
+msgstr "Μεσαία (720p)"
+
+#: crates/nd-gui/src/pages/settings.rs:175
+msgid "Microphone volume"
+msgstr "Ένταση μικροφώνου"
+
+#: crates/nd-gui/src/pages/devices.rs:323 crates/nd-gui/src/pages/mod.rs:151
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:944
+#: crates/nd-gui/src/app.rs:1187
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
@@ -82,93 +299,335 @@ msgstr ""
 "Το Miracast δεν λειτουργεί στην έκδοση Flatpak (απαιτείται ο διαχειριστής "
 "δικτύου του συστήματος)"
 
-#: crates/nd-gui/src/app.rs:951
+#: crates/nd-gui/src/pages/settings.rs:94
+msgid "Miracast only"
+msgstr "Μόνο Miracast"
+
+#: crates/nd-gui/src/app.rs:1193
 msgid "Miracast unavailable"
 msgstr "Το Miracast δεν είναι διαθέσιμο"
 
-#: crates/nd-gui/src/app.rs:949
+#: crates/nd-gui/src/app.rs:1191
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr ""
-"Το Miracast δεν είναι διαθέσιμο: αυτή η κάρτα Wi-Fi δεν υποστηρίζει το Wi-Fi "
-"Direct"
+"Το Miracast δεν είναι διαθέσιμο: αυτή η κάρτα Wi-Fi δεν υποστηρίζει το Wi-Fi"
+" Direct"
 
-#: crates/nd-gui/src/app.rs:676
+#: crates/nd-gui/src/pages/devices.rs:223
+msgid "Mirror screen"
+msgstr "Κατοπτρισμός οθόνης"
+
+#: crates/nd-gui/src/pages/settings.rs:168
+msgid "Mix your voice into what is sent"
+msgstr "Ανάμειξη της φωνής σας σε ό,τι αποστέλλεται"
+
+#: crates/nd-gui/src/pages/media.rs:453
+msgid "Music"
+msgstr "Μουσική"
+
+#: crates/nd-gui/src/pages/media.rs:570
+msgid "No device found yet. Turn your TV, projector or Chromecast on."
+msgstr ""
+"Δεν βρέθηκε ακόμη συσκευή. Ενεργοποιήστε την τηλεόραση, τον προβολέα ή το "
+"Chromecast."
+
+#: crates/nd-gui/src/pages/devices.rs:436
+msgid "No devices found"
+msgstr "Δεν βρέθηκαν συσκευές"
+
+#: crates/nd-gui/src/pages/media.rs:644
+msgid "No music in your Music folder. Use “Select files”."
+msgstr ""
+"Δεν υπάρχει μουσική στον φάκελο Μουσική. Χρησιμοποιήστε «Επιλογή αρχείων»."
+
+#: crates/nd-gui/src/pages/media.rs:642
+msgid "No photos in your Pictures folder. Use “Select files”."
+msgstr ""
+"Δεν υπάρχουν φωτογραφίες στον φάκελο Εικόνες. Χρησιμοποιήστε «Επιλογή "
+"αρχείων»."
+
+#: crates/nd-gui/src/app.rs:889 crates/nd-gui/src/pages/home.rs:718
 msgid "No receivers found"
 msgstr "Δεν βρέθηκαν δέκτες"
 
-#: crates/nd-gui/src/app.rs:65
+#: crates/nd-gui/src/pages/media.rs:643
+msgid "No videos in your Videos folder. Use “Select files”."
+msgstr ""
+"Δεν υπάρχουν βίντεο στον φάκελο Βίντεο. Χρησιμοποιήστε «Επιλογή αρχείων»."
+
+#: crates/nd-gui/src/pages/media.rs:650
+msgid "Nothing selected"
+msgstr "Δεν επιλέχθηκε τίποτα"
+
+#: crates/nd-gui/src/pages/media.rs:404
+msgid "Now playing"
+msgstr "Αναπαραγωγή τώρα"
+
+#: crates/nd-gui/src/pages/mod.rs:169
 msgid "Opening the firewall port…"
 msgstr "Άνοιγμα της θύρας τείχους προστασίας…"
 
-#: crates/nd-gui/src/app.rs:67
+#: crates/nd-gui/src/pages/media.rs:453
+msgid "Photos"
+msgstr "Φωτογραφίες"
+
+#: crates/nd-gui/src/app.rs:494
+msgid "Pick a device for the extra screen"
+msgstr "Επιλέξτε συσκευή για την επιπλέον οθόνη"
+
+#: crates/nd-gui/src/app.rs:493
+msgid "Pick a device to share a window with"
+msgstr "Επιλέξτε συσκευή για κοινή χρήση παραθύρου"
+
+#: crates/nd-gui/src/app.rs:492
+msgid "Pick a device to share your screen with"
+msgstr "Επιλέξτε συσκευή για κοινή χρήση της οθόνης σας"
+
+#: crates/nd-gui/src/pages/media.rs:255
+msgid "Pick files and choose where to play them."
+msgstr "Επιλέξτε αρχεία και αποφασίστε πού θα αναπαραχθούν."
+
+#: crates/nd-gui/src/pages/settings.rs:90
+msgid "Preferred protocol"
+msgstr "Προτιμώμενο πρωτόκολλο"
+
+#: crates/nd-gui/src/pages/mod.rs:171
 msgid "Preparing the video…"
 msgstr "Προετοιμασία του βίντεο…"
 
-#: crates/nd-gui/src/app.rs:329
+#: crates/nd-gui/src/pages/devices.rs:259
+msgid "Protocol"
+msgstr "Πρωτόκολλο"
+
+#: crates/nd-gui/src/pages/devices.rs:423
+msgid "Ready"
+msgstr "Έτοιμο"
+
+#: crates/nd-gui/src/pages/home.rs:191
+msgid "Ready to share"
+msgstr "Έτοιμο για κοινή χρήση"
+
+#: crates/nd-gui/src/pages/devices.rs:120
+msgid "Refresh"
+msgstr "Ανανέωση"
+
+#: crates/nd-gui/src/pages/settings.rs:265
+msgid "Restore defaults"
+msgstr "Επαναφορά προεπιλογών"
+
+#: crates/nd-gui/src/pages/settings.rs:248
+msgid "Saved as you change them"
+msgstr "Αποθηκεύονται καθώς τις αλλάζετε"
+
+#: crates/nd-gui/src/app.rs:330 crates/nd-gui/src/pages/devices.rs:115
 msgid "Scan again"
 msgstr "Νέα σάρωση"
 
-#: crates/nd-gui/src/app.rs:449 crates/nd-gui/src/app.rs:510
-#: crates/nd-gui/src/app.rs:674
+#: crates/nd-gui/src/app.rs:420 crates/nd-gui/src/app.rs:503
+#: crates/nd-gui/src/app.rs:887
 msgid "Searching…"
 msgstr "Αναζήτηση…"
 
-#: crates/nd-gui/src/app.rs:336
+#: crates/nd-gui/src/pages/media.rs:281
+msgid "Select files"
+msgstr "Επιλογή αρχείων"
+
+#: crates/nd-gui/src/pages/media.rs:288
+msgid "Send a folder"
+msgstr "Αποστολή φακέλου"
+
+#: crates/nd-gui/src/pages/devices.rs:248
+msgid "Send media"
+msgstr "Αποστολή πολυμέσων"
+
+#: crates/nd-gui/src/pages/home.rs:439
+msgid "Send photos, videos and music"
+msgstr "Αποστολή φωτογραφιών, βίντεο και μουσικής"
+
+#: crates/nd-gui/src/pages/media.rs:351
+msgid "Send to"
+msgstr "Αποστολή σε"
+
+#: crates/nd-gui/src/pages/media.rs:376
+msgid "Send to device"
+msgstr "Αποστολή στη συσκευή"
+
+#: crates/nd-gui/src/pages/settings.rs:159
+msgid "Send whatever this computer is playing"
+msgstr "Αποστολή ό,τι παίζει αυτός ο υπολογιστής"
+
+#: crates/nd-gui/src/app.rs:695 crates/nd-gui/src/app.rs:989
+msgid "Sending files…"
+msgstr "Αποστολή αρχείων…"
+
+#: crates/nd-gui/src/pages/mod.rs:49 crates/nd-gui/src/pages/settings.rs:73
+msgid "Settings"
+msgstr "Ρυθμίσεις"
+
+#: crates/nd-gui/src/pages/settings.rs:379
+msgid "Settings cannot be saved on this system."
+msgstr "Οι ρυθμίσεις δεν μπορούν να αποθηκευτούν σε αυτό το σύστημα."
+
+#: crates/nd-gui/src/pages/home.rs:418
+msgid "Share everything on your screen"
+msgstr "Κοινή χρήση όλων όσων εμφανίζονται στην οθόνη σας"
+
+#: crates/nd-gui/src/pages/media.rs:250
+msgid "Share media"
+msgstr "Κοινή χρήση πολυμέσων"
+
+#: crates/nd-gui/src/app.rs:230
+msgid "Share your screen wirelessly"
+msgstr "Μοιραστείτε την οθόνη σας ασύρματα"
+
+#: crates/nd-gui/src/app.rs:1206
+msgid "Share your screen with a TV, projector or Chromecast."
+msgstr "Μοιραστείτε την οθόνη σας με μια τηλεόραση, προβολέα ή Chromecast."
+
+#: crates/nd-gui/src/app.rs:320
+msgid "Show the sidebar"
+msgstr "Εμφάνιση της πλευρικής γραμμής"
+
+#: crates/nd-gui/src/pages/home.rs:640
+msgid ""
+"Sound goes to the receiver and to this computer. Mute this computer if you "
+"hear an echo."
+msgstr ""
+"Ο ήχος πηγαίνει στον δέκτη και σε αυτόν τον υπολογιστή. Κάντε σίγαση αυτού "
+"του υπολογιστή αν ακούτε ηχώ."
+
+#: crates/nd-gui/src/pages/devices.rs:275
+msgid "Status"
+msgstr "Κατάσταση"
+
+#: crates/nd-gui/src/app.rs:337
 msgid "Stop"
 msgstr "Διακοπή"
 
-#: crates/nd-gui/src/app.rs:739
+#: crates/nd-gui/src/pages/media.rs:419
+msgid "Stop sending"
+msgstr "Διακοπή αποστολής"
+
+#: crates/nd-gui/src/app.rs:983
+msgid "Stop sharing your screen before sending files"
+msgstr "Σταματήστε να μοιράζεστε την οθόνη πριν στείλετε αρχεία"
+
+#: crates/nd-gui/src/app.rs:920
 msgid "Stopping…"
 msgstr "Διακοπή…"
 
-#: crates/nd-gui/src/app.rs:68
+#: crates/nd-gui/src/pages/mod.rs:172 crates/nd-gui/src/pages/settings.rs:85
 msgid "Streaming"
 msgstr "Μετάδοση ροής"
 
-#: crates/nd-gui/src/app.rs:48
+#: crates/nd-gui/src/pages/devices.rs:280
+msgid "Streaming at"
+msgstr "Μετάδοση σε"
+
+#: crates/nd-gui/src/pages/settings.rs:108
+msgid "Streaming quality"
+msgstr "Ποιότητα μετάδοσης"
+
+#: crates/nd-gui/src/pages/mod.rs:152
 msgid "Test"
 msgstr "Δοκιμή"
 
-#: crates/nd-gui/src/app.rs:630
+#: crates/nd-gui/src/app.rs:976 crates/nd-gui/src/app.rs:993
+msgid "That device is no longer available"
+msgstr "Αυτή η συσκευή δεν είναι πλέον διαθέσιμη"
+
+#: crates/nd-gui/src/pages/mod.rs:226
+msgid "The receiver is not answering"
+msgstr "Ο δέκτης δεν αποκρίνεται"
+
+#: crates/nd-gui/src/pages/home.rs:253
+msgid "Then pick a device"
+msgstr "Στη συνέχεια, επιλέξτε μια συσκευή"
+
+#: crates/nd-gui/src/pages/settings.rs:78
+msgid "These apply to your next session."
+msgstr "Αυτά ισχύουν για την επόμενη συνεδρία σας."
+
+#: crates/nd-gui/src/pages/settings.rs:211
+msgid "This computer's name"
+msgstr "Όνομα αυτού του υπολογιστή"
+
+#: crates/nd-gui/src/pages/home.rs:541
 msgid ""
 "This desktop cannot create an extra screen (it needs GNOME running natively)"
 msgstr ""
+"Αυτή η επιφάνεια εργασίας δεν μπορεί να δημιουργήσει επιπλέον οθόνη "
+"(απαιτείται εκτελούμενο GNOME σε εγγενή λειτουργία)"
 
-#: crates/nd-gui/src/app.rs:66
+#: crates/nd-gui/src/pages/home.rs:375
+msgid "Tips"
+msgstr "Συμβουλές"
+
+#: crates/nd-gui/src/pages/media.rs:453
+msgid "Videos"
+msgstr "Βίντεο"
+
+#: crates/nd-gui/src/pages/mod.rs:170
 msgid "Waiting for the receiver…"
 msgstr "Αναμονή για τον δέκτη…"
 
-#: crates/nd-gui/src/app.rs:375
+#: crates/nd-gui/src/pages/mod.rs:225
+msgid "Weak signal"
+msgstr "Ασθενές σήμα"
+
+#: crates/nd-gui/src/pages/home.rs:220
 msgid "What to share"
 msgstr "Τι να μοιραστείτε"
 
-#: crates/nd-gui/src/app.rs:472
+#: crates/nd-gui/src/pages/settings.rs:91
+msgid "Which kind of receiver to look for"
+msgstr "Ποιο είδος δέκτη να αναζητηθεί"
+
+#: crates/nd-gui/src/pages/home.rs:417
 msgid "Whole screen"
 msgstr "Ολόκληρη οθόνη"
 
-#: crates/nd-gui/src/app.rs:220
-msgid "discovery only"
-msgstr "μόνο εντοπισμός"
+#: crates/nd-gui/src/pages/home.rs:241
+msgid ""
+"Your desktop will ask which window. Only visible windows can be shared, and "
+"closing the window ends the session."
+msgstr ""
+"Η επιφάνεια εργασίας σας θα ρωτήσει ποιο παράθυρο. Μόνο ορατά παράθυρα "
+"μπορούν να κοινοποιηθούν και το κλείσιμο του παραθύρου τερματίζει τη "
+"συνεδρία."
 
-#: crates/nd-gui/src/app.rs:798
+#: crates/nd-gui/src/pages/devices.rs:438
+msgid "devices found"
+msgstr "συσκευές βρέθηκαν"
+
+#: crates/nd-gui/src/pages/media.rs:652
+msgid "files selected"
+msgstr "επιλεγμένα αρχεία"
+
+#: crates/nd-gui/src/pages/mod.rs:184
 msgid "instant response"
 msgstr "άμεση απόκριση"
 
-#: crates/nd-gui/src/app.rs:802
+#: crates/nd-gui/src/pages/media.rs:677
+msgid "item"
+msgstr "στοιχείο"
+
+#: crates/nd-gui/src/pages/mod.rs:229
+msgid "ms round trip"
+msgstr "ms μετ' επιστροφής"
+
+#: crates/nd-gui/src/pages/devices.rs:268
+msgid "not published yet"
+msgstr "δεν έχει δημοσιευτεί ακόμη"
+
+#: crates/nd-gui/src/pages/mod.rs:185
 msgid "quick response"
 msgstr "γρήγορη απόκριση"
 
-#: crates/nd-gui/src/app.rs:681
+#: crates/nd-gui/src/app.rs:894
 msgid "receivers found"
 msgstr "δέκτες βρέθηκαν"
 
-#: crates/nd-gui/src/app.rs:761
+#: crates/nd-gui/src/app.rs:942
 msgid "shows up in discovery only"
 msgstr "εμφανίζεται μόνο στην ανακάλυψη"
-
-#~ msgid ""
-#~ "Chromecasts and TVs show up on their own. For Miracast, put the TV or the "
-#~ "projector into “Screen Mirroring” mode."
-#~ msgstr ""
-#~ "Τα Chromecast και οι τηλεοράσεις εμφανίζονται μόνα τους. Για Miracast, "
-#~ "θέστε την τηλεόραση ή τον προβολέα σε λειτουργία «Screen Mirroring»."

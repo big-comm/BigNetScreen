@@ -41,7 +41,9 @@ use tokio_rustls::TlsConnector;
 
 use nd_core::{NdError, Result};
 
-const PORT: u16 = 8009;
+/// The control port. Public because it is also the address the interface
+/// measures the link against.
+pub const PORT: u16 = 8009;
 const SOURCE_ID: &str = "sender-0";
 const PLATFORM_DEST: &str = "receiver-0";
 const NS_CONNECTION: &str = "urn:x-cast:com.google.cast.tp.connection";
@@ -390,6 +392,61 @@ impl CastChannel {
             }),
         )
         .await
+    }
+
+    /// Tells the receiver app to play a **file** from this computer.
+    ///
+    /// Deliberately not [`Self::load_media`], which describes the mirroring
+    /// stream. Two differences decide whether the file plays properly:
+    ///
+    /// - `streamType: BUFFERED`. A file has a beginning and an end, so the
+    ///   receiver may buffer ahead and offer a position bar. Declared `LIVE`,
+    ///   as mirroring is, the receiver refuses to seek and shows no duration;
+    /// - **metadata**. Without it the receiver shows a bare URL — the token and
+    ///   an index — which tells the room nothing. `metadataType` 0 is the
+    ///   generic one, understood by every receiver.
+    pub async fn load_file(
+        &self,
+        app: &LaunchedApp,
+        url: &str,
+        file: &crate::file_server::MediaFile,
+        sender_name: &str,
+    ) -> Result<Value> {
+        let response = self
+            .request(
+                NS_MEDIA,
+                &app.transport_id,
+                json!({
+                    "type": "LOAD",
+                    "sessionId": app.session_id,
+                    "autoplay": true,
+                    "currentTime": 0,
+                    "media": {
+                        "contentId": url,
+                        "contentType": file.content_type,
+                        "streamType": "BUFFERED",
+                        "metadata": {
+                            "metadataType": 0,
+                            "title": file.title(),
+                            "subtitle": sender_name,
+                        },
+                    },
+                }),
+            )
+            .await?;
+
+        // A refusal comes back as a message, not as a transport error: without
+        // this check the queue would move on believing the item was playing.
+        if response.get("type").and_then(Value::as_str) == Some("LOAD_FAILED") {
+            let reason = response
+                .get("detailedErrorCode")
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "no reason given".to_string());
+            return Err(NdError::Unsupported(format!(
+                "the receiver could not play this file (error {reason})"
+            )));
+        }
+        Ok(response)
     }
 
     /// Shuts down the app running on the receiver.

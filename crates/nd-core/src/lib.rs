@@ -13,13 +13,17 @@
 //!
 //! Nothing here depends on GTK: everything is testable in isolation.
 
+pub mod audio_state;
 pub mod capture;
 pub mod dummy;
 pub mod error;
+pub mod latency;
+pub mod media;
 pub mod meta;
 pub mod pipeline;
 pub mod provider;
 pub mod radio;
+pub mod settings;
 pub mod sink;
 
 pub use error::{NdError, Result};

@@ -29,6 +29,22 @@ pub enum NdError {
     #[error("unsupported: {0}")]
     Unsupported(String),
 
+    /// The receiver joined (or was paired with) and then never opened the
+    /// connection back.
+    ///
+    /// Its own variant because it is the one failure worth **retrying**: a
+    /// Miracast receiver that pairs and goes quiet almost always accepts a
+    /// freshly formed group. It carries the capture back so that retrying does
+    /// not put a second permission dialog in front of someone who already
+    /// agreed to the first.
+    // The field is `capture`, not `source`: `thiserror` reads a field called
+    // `source` as the underlying error and demands it implement `Error`.
+    #[error("protocol: {reason}")]
+    SinkNeverConnected {
+        capture: Box<crate::capture::CaptureSource>,
+        reason: String,
+    },
+
     /// Operation cancelled (e.g. the user disconnected mid-negotiation).
     #[error("cancelled")]
     Cancelled,

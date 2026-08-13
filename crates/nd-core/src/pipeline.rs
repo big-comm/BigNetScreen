@@ -262,8 +262,21 @@ pub const PIPELINE_LATENCY_MS: u64 = PIPELINE_LATENCY_AUTO;
 /// changes; it alone justifies fixed headroom (the reference C project's
 /// value).
 pub const OPENH264_PIPELINE_LATENCY_MS: u64 = 500;
-/// The RTP jitter buffer's latency (`rtpbin`).
+/// The RTP jitter buffer's latency (`rtpbin`), when responding quickly.
 pub const RTP_LATENCY_MS: u64 = 20;
+
+/// The RTP jitter buffer to use, given the latency profile.
+///
+/// This is the buffer that actually absorbs network variance on the Miracast
+/// path: frames arriving unevenly are held here and released on schedule. It
+/// costs exactly its own size in delay, pointer included.
+pub fn rtp_latency_ms() -> u64 {
+    if crate::latency::is_film() {
+        crate::latency::FILM_RTP_LATENCY_MS
+    } else {
+        RTP_LATENCY_MS
+    }
+}
 /// The video queue before the encoder: few buffers, ~1 frame.
 pub const VIDEO_QUEUE_BUFFERS: u32 = 3;
 /// Idem, em milissegundos.
@@ -698,7 +711,9 @@ pub fn best_encoder(driver: GpuDriver) -> Result<H264Encoder> {
 // ------------------------------------------------------------------------
 
 /// Where the video frames come from.
-#[derive(Clone, Copy, Debug)]
+// Not `Copy`: a media file carries its path. Cloning a source is rare (once
+// per session) and cheap next to what the session then does.
+#[derive(Clone, Debug)]
 pub enum VideoSource {
     /// The PipeWire stream handed over by the portal/Mutter.
     ///
@@ -722,6 +737,24 @@ pub enum VideoSource {
         /// `None` for a real monitor: its resolution is its own.
         size: Option<(u32, u32)>,
     },
+    /// A media file played **to** the receiver.
+    ///
+    /// Miracast has no notion of "play this file": the receiver is a screen and
+    /// nothing else. So the file is decoded here and takes the place of the
+    /// screen capture — full screen on the receiver, without the desktop
+    /// showing. It costs a re-encode, which is the price of a protocol that
+    /// only knows how to be a display.
+    ///
+    /// The element is named `filedec` because [`AudioSource::MediaFile`] takes
+    /// the sound from the **same** decoder: decoding a film twice to split its
+    /// two tracks would double the cost of the thing that is already the most
+    /// expensive part.
+    MediaFile {
+        path: std::path::PathBuf,
+        kind: crate::media::MediaKind,
+        /// What to write across a file that has no picture of its own.
+        title: String,
+    },
     /// A test pattern (diagnostic, needing no capture session).
     Test,
     /// An **animated** pattern with a clock overlaid.
@@ -734,6 +767,14 @@ pub enum VideoSource {
 }
 
 impl VideoSource {
+    /// Is this a file being played, rather than something being captured?
+    ///
+    /// The distinction decides pacing: a capture arrives at the pace of the
+    /// thing it captures, and a file arrives as fast as it can be read.
+    pub fn is_file(&self) -> bool {
+        matches!(self, VideoSource::MediaFile { .. })
+    }
+
     /// The GStreamer fragment that produces this source's frames.
     ///
     /// Public so diagnostics can build a pipeline of their own — the
@@ -774,12 +815,38 @@ impl VideoSource {
                  timeoverlay halignment=center valignment=center font-desc=\"Sans 48\" \
                  time-mode=running-time"
                 .to_string(),
+            VideoSource::MediaFile { path, kind, title } => {
+                let location = escape_location(path);
+                match kind {
+                    // A photo is one frame. Sent once, a receiver expecting a
+                    // video stream shows nothing at all, so `imagefreeze`
+                    // repeats it for as long as the session lasts.
+                    crate::media::MediaKind::Photo => format!(
+                        "filesrc location={location} ! decodebin name=filedec \
+                         filedec. ! queue ! imagefreeze ! videoconvert"
+                    ),
+                    crate::media::MediaKind::Video => format!(
+                        "filesrc location={location} ! decodebin name=filedec \
+                         filedec. ! queue ! videoconvert"
+                    ),
+                    // A song has no picture. The decoder is still declared —
+                    // the audio branch takes its sound from it — and the screen
+                    // gets the one thing worth showing: what is playing.
+                    crate::media::MediaKind::Music => format!(
+                        "filesrc location={location} ! decodebin name=filedec \
+                         videotestsrc is-live=true pattern=black \
+                         ! textoverlay text={title} halignment=center valignment=center \
+                           font-desc=\"Sans 32\" ! videoconvert",
+                        title = escape_location(std::path::Path::new(title)),
+                    ),
+                }
+            }
         }
     }
 }
 
 /// Where the streamed programme's audio comes from.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AudioSource {
     /// Synthesised silence.
     ///
@@ -789,6 +856,16 @@ pub enum AudioSource {
     /// System audio: the default output's *monitor*, that is, whatever is
     /// playing on the computer.
     System,
+    /// The microphone alone, at the given gain (`1.0` = as captured).
+    ///
+    /// For narrating over what is on screen without sending the computer's own
+    /// sound back through the receiver's speakers.
+    Mic { volume: f64 },
+    /// The computer's sound and the microphone, mixed.
+    SystemAndMic { volume: f64 },
+    /// The sound of the media file being played, from the same decoder that
+    /// produces its picture.
+    MediaFile,
 }
 
 impl AudioSource {
@@ -798,14 +875,35 @@ impl AudioSource {
     /// audio branch is **not optional** on WFD (the sink discards a video-only
     /// programme), so sending silence beats sending nothing.
     pub fn detect() -> Self {
-        if init().is_err() {
+        Self::for_settings(&crate::settings::current())
+    }
+
+    /// The source the person asked for, or the closest thing this machine can
+    /// actually produce.
+    ///
+    /// Turning both off is a legitimate choice — sharing a screen in a meeting
+    /// where the sound would echo — and it still yields silence rather than no
+    /// audio branch at all.
+    pub fn for_settings(settings: &crate::settings::Settings) -> Self {
+        if init().is_err() || gst::ElementFactory::find("pulsesrc").is_none() {
+            tracing::info!("no `pulsesrc`; the cast will go without audio");
             return AudioSource::Silence;
         }
-        if gst::ElementFactory::find("pulsesrc").is_some() {
-            AudioSource::System
-        } else {
-            tracing::info!("no `pulsesrc`; the cast will go without system audio");
-            AudioSource::Silence
+        let volume = settings.mic_volume as f64 / 100.0;
+        // Mixing needs an element that may not be installed (`audiomixer` is in
+        // gst-plugins-base, but a minimal image can still lack it). Without it
+        // the honest answer is the system audio, not a pipeline that fails to
+        // build at the moment the person hits cast.
+        let can_mix = gst::ElementFactory::find("audiomixer").is_some();
+        match (settings.system_audio, settings.microphone) {
+            (true, true) if can_mix => AudioSource::SystemAndMic { volume },
+            (true, true) => {
+                tracing::warn!("no `audiomixer`; sending system audio without the microphone");
+                AudioSource::System
+            }
+            (true, false) => AudioSource::System,
+            (false, true) => AudioSource::Mic { volume },
+            (false, false) => AudioSource::Silence,
         }
     }
 }
@@ -830,8 +928,60 @@ impl AudioSource {
                 "pulsesrc device=@DEFAULT_MONITOR@ provide-clock=false do-timestamp=true"
                     .to_string()
             }
+            // `@DEFAULT_SOURCE@`, the counterpart of `@DEFAULT_MONITOR@`: the
+            // input the person selected in their sound settings, following
+            // them when they plug a headset in mid-session.
+            AudioSource::Mic { volume } => format!(
+                "pulsesrc device=@DEFAULT_SOURCE@ provide-clock=false do-timestamp=true \
+                 ! audioconvert ! audioresample ! volume volume={volume:.2}"
+            ),
+            // Two live sources into one branch. What matters here:
+            //
+            // - `audiomixer` (not the deprecated `audiomixer`-less `adder`)
+            //   resamples and aligns by timestamp, so the two sources need not
+            //   agree on format or arrive in step;
+            // - both are converted to a common rate **before** the mixer, or it
+            //   refuses to link;
+            // - `latency=20000000` (20 ms) is how long the mixer waits for a
+            //   late source before outputting without it. The default, 0, makes
+            //   a microphone that hiccups drop the system audio with it.
+            AudioSource::SystemAndMic { volume } => format!(
+                "audiomixer name=micmix latency=20000000 \
+                 pulsesrc device=@DEFAULT_MONITOR@ provide-clock=false do-timestamp=true \
+                 ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! micmix. \
+                 pulsesrc device=@DEFAULT_SOURCE@ provide-clock=false do-timestamp=true \
+                 ! audioconvert ! audioresample ! volume volume={volume:.2} \
+                 ! audio/x-raw,rate=48000,channels=2 ! micmix. \
+                 micmix."
+            ),
+            // Mixed with silence, and that is not belt and braces: a film with
+            // no audio track, and every photo, leaves this branch with nothing
+            // linked to it. The muxer would then wait for a track that never
+            // comes and the picture would never leave the machine. The mixer
+            // always has the silence to fall back on.
+            AudioSource::MediaFile => "audiomixer name=filemix latency=20000000 \
+                 audiotestsrc is-live=true wave=silence samplesperbuffer=480 \
+                 ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! filemix. \
+                 filedec. ! queue ! audioconvert ! audioresample \
+                 ! audio/x-raw,rate=48000,channels=2 ! filemix. \
+                 filemix."
+                .to_string(),
         }
     }
+}
+
+/// Quotes a path for `gst_parse_launch`.
+///
+/// A file called `My Holiday - Côte d'Azur.mp4` would otherwise end the
+/// property at the first space and take the rest as elements. Backslashes and
+/// quotes are escaped first, so a name containing one cannot close the string
+/// and start writing pipeline of its own.
+fn escape_location(path: &std::path::Path) -> String {
+    let text = path
+        .to_string_lossy()
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"");
+    format!("\"{text}\"")
 }
 
 // ------------------------------------------------------------------------
@@ -918,6 +1068,24 @@ impl StreamConfig {
         (fit_w.max(2) & !1, fit_h.max(2) & !1)
     }
 
+    /// The receiver's limit and the person's preference, whichever is lower.
+    ///
+    /// Both are ceilings and they compose in only one direction: choosing
+    /// "medium quality" must be able to send *less* than the receiver can take,
+    /// and must never talk a receiver into a size it did not offer.
+    pub fn capped_by_preference(receiver_max: (u32, u32)) -> (u32, u32) {
+        let (pw, ph) = crate::settings::current().quality.resolution();
+        (receiver_max.0.min(pw), receiver_max.1.min(ph))
+    }
+
+    /// The frame rate to use, given what the link negotiated.
+    ///
+    /// The same rule: a preference of 60 cannot raise a link that agreed on 30,
+    /// because the other end would be sent frames it never asked for.
+    pub fn capped_fps(negotiated: u32) -> u32 {
+        negotiated.min(crate::settings::current().fps).max(1)
+    }
+
     /// The maximum distance between keyframes.
     ///
     /// One second (not two): over an unstable Wi-Fi Direct link the GOP sets
@@ -942,7 +1110,14 @@ impl StreamConfig {
                 return ms;
             }
         }
-        self.encoder.pipeline_latency_ms()
+        let encoder_latency = self.encoder.pipeline_latency_ms();
+        if crate::latency::is_film() {
+            // Never *below* what the encoder needs: buffering is added on top,
+            // and going under the pipeline's own minimum makes sinks drop late
+            // buffers instead of playing them.
+            return encoder_latency.max(crate::latency::FILM_PIPELINE_LATENCY_MS);
+        }
+        encoder_latency
     }
 
     /// The `rate → scale → convert` fragment, tuned per encoder.
@@ -1111,13 +1286,18 @@ pub fn wfd_pipeline_description(
          rtpbin.send_rtcp_src_0 ! \
          udpsink host={ip} port={rtcp_port} bind-port={local_rtcp} sync=false async=false \
          {audio}",
-        rtp_latency = RTP_LATENCY_MS,
+        rtp_latency = rtp_latency_ms(),
         src = source.description(),
         convert = cfg.convert_scale(),
         vqueue = cfg.video_queue(),
         enc = cfg.encoder.encoder_description(cfg),
         video_pid = WFD_VIDEO_PID,
-        sync = if rtp_sink_syncs_to_clock() {
+        // A screen produces frames at the pace of the screen, so waiting on
+        // the clock before sending is pure delay. **A file does not**: with
+        // `sync=false` a decoder reads a film as fast as the disc allows and
+        // the receiver is sent an hour of video in a few seconds. So the file
+        // is the one case that has to be paced.
+        sync = if rtp_sink_syncs_to_clock() || source.is_file() {
             "true"
         } else {
             "false"
@@ -1619,6 +1799,40 @@ mod tests {
         let cfg = StreamConfig::default();
         assert!(cfg.audio_queue().contains("leaky=downstream"));
         assert!(!cfg.mirror_audio_queue().contains("leaky"));
+    }
+
+    #[test]
+    fn film_mode_buffers_without_going_under_the_encoder_minimum() {
+        // Buffering is added *on top of* what the encoder needs. Setting a
+        // latency below the pipeline's own minimum is what made sinks drop
+        // late buffers and show a black screen, so the film profile must never
+        // reduce it.
+        let spiky = StreamConfig {
+            encoder: H264Encoder::OpenH264,
+            ..Default::default()
+        };
+        let quick = StreamConfig::default();
+
+        crate::latency::set(crate::latency::Profile::Responsive);
+        let quick_responsive = quick.latency_ms();
+        let spiky_responsive = spiky.latency_ms();
+
+        crate::latency::set(crate::latency::Profile::Film);
+        assert!(
+            quick.latency_ms() > quick_responsive,
+            "film mode has to add buffering"
+        );
+        assert!(
+            spiky.latency_ms() >= spiky_responsive,
+            "and never take away what an encoder already needs"
+        );
+
+        // The RTP jitter buffer follows the same profile: it is where uneven
+        // arrival is actually absorbed on the Miracast path.
+        assert!(rtp_latency_ms() > RTP_LATENCY_MS);
+
+        crate::latency::set(crate::latency::Profile::Responsive);
+        assert_eq!(rtp_latency_ms(), RTP_LATENCY_MS);
     }
 
     #[test]

@@ -59,7 +59,7 @@ fn net_err<E: std::fmt::Display>(e: E) -> NdError {
 ///
 /// Reads from `/dev/urandom` so as not to drag in another dependency for the
 /// sake of 16 bytes.
-fn random_token() -> Result<String> {
+pub(crate) fn random_token() -> Result<String> {
     let mut bytes = [0u8; 16];
     std::fs::File::open("/dev/urandom")
         .and_then(|mut f| f.read_exact(&mut bytes))

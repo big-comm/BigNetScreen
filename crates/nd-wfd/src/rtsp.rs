@@ -38,6 +38,7 @@ use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::TcpStream;
 
 use nd_core::pipeline::{self, StreamConfig, VideoSource, WfdTransport};
+use nd_core::sink::{SinkStatus, StreamLink};
 use nd_core::{NdError, Result};
 
 /// The WFD RTSP server's port.
@@ -613,8 +614,14 @@ pub struct WfdCastConfig {
     pub our_ip: IpAddr,
     /// IP do sink (destino do RTP).
     pub sink_ip: IpAddr,
-    /// The video source (a real capture or a test pattern).
+    /// The video source (a real capture, a media file, or a test pattern).
     pub video: VideoSource,
+    /// Where the sound comes from.
+    ///
+    /// Carried with the configuration rather than decided when the pipeline is
+    /// built: a file brings its own sound, and mixing the computer's system
+    /// audio over a film is not what anybody meant.
+    pub audio: nd_core::pipeline::AudioSource,
     /// The encoder chosen from the registry/driver.
     pub encoder: nd_core::pipeline::H264Encoder,
     /// The captured screen's resolution (it sets the target aspect ratio).
@@ -634,10 +641,17 @@ impl WfdCastConfig {
             our_ip,
             sink_ip,
             video,
+            audio: nd_core::pipeline::AudioSource::detect(),
             encoder,
             source_size: (1920, 1080),
             max_resolution: (1920, 1080),
         }
+    }
+
+    /// Takes the sound from somewhere other than this computer's output.
+    pub fn with_audio(mut self, audio: nd_core::pipeline::AudioSource) -> Self {
+        self.audio = audio;
+        self
     }
 
     /// Supplies the capture's real resolution, so the mode choice respects the
@@ -650,7 +664,17 @@ impl WfdCastConfig {
 
 /// Drives the entire WFD session (M1–M7) and, on PLAY, starts the MPEG-TS/RTP
 /// streaming to the sink. Returns when the session ends.
-pub async fn cast_to_sink(stream: TcpStream, cfg: WfdCastConfig) -> Result<()> {
+/// Runs the whole RTSP session.
+///
+/// `status` is here for one reason: the resolution and frame rate are settled
+/// *inside* this negotiation, and the interface has nothing truthful to show
+/// about a session until they are. Reporting them from the caller would mean
+/// reporting what was asked for.
+pub async fn cast_to_sink(
+    stream: TcpStream,
+    cfg: WfdCastConfig,
+    status: &SinkStatus,
+) -> Result<()> {
     let _ = stream.set_nodelay(true);
     let (read_half, mut writer) = stream.into_split();
     let mut reader = BufReader::new(read_half);
@@ -677,6 +701,25 @@ pub async fn cast_to_sink(stream: TcpStream, cfg: WfdCastConfig) -> Result<()> {
     keepalive.tick().await; // consome o tick imediato
 
     let result = loop {
+        // Anything the pipeline has to say, before waiting on the network.
+        //
+        // A screen capture never ends, so this used to be read only after the
+        // session was over. A media file *does* end, and without noticing the
+        // end here the session would sit sending nothing until the receiver
+        // gave up on it.
+        if let Some(events) = pipeline_events.as_mut() {
+            match events.try_recv() {
+                Ok(nd_core::pipeline::PipelineEvent::Eos) => {
+                    tracing::info!("the media file reached its end");
+                    break Ok(());
+                }
+                Ok(nd_core::pipeline::PipelineEvent::Error { message, .. }) => {
+                    break Err(NdError::Gst(message));
+                }
+                _ => {}
+            }
+        }
+
         let msg = tokio::select! {
             // The M16 keepalive: it is the *source* that has to send it.
             // Without it the sink drops the session after the timeout we
@@ -853,7 +896,7 @@ pub async fn cast_to_sink(stream: TcpStream, cfg: WfdCastConfig) -> Result<()> {
                 })?;
 
                 tracing::info!(sink = %cfg.sink_ip, port = sink_rtp_port, "PLAY — starting the stream");
-                let monitored = start_pipeline(&cfg, &mode, sink_rtp_port).await?;
+                let monitored = start_pipeline(&cfg, &mode, sink_rtp_port, status).await?;
                 // A guard rather than a bare value: ending through an error,
                 // a TEARDOWN or the Stop button all have to pass through
                 // `NULL` just the same.
@@ -922,6 +965,7 @@ async fn start_pipeline(
     cfg: &WfdCastConfig,
     mode: &WfdMode,
     sink_rtp_port: u16,
+    status: &SinkStatus,
 ) -> Result<pipeline::MonitoredPipeline> {
     let transport = WfdTransport::new(cfg.sink_ip, sink_rtp_port);
     let driver = nd_net::detect_gpu_driver();
@@ -941,14 +985,37 @@ async fn start_pipeline(
     // that produces no frames is discarded, with no reliance on a driver
     // blacklist (which ages and never covers every machine in the world).
     for (index, encoder) in candidates.into_iter().enumerate() {
+        // The sink's negotiated mode is the ceiling; the person's preference
+        // can only lower it. `fit_within` keeps the aspect ratio of what the
+        // sink agreed to, so a "medium" preference does not letterbox twice.
+        let (width, height) = StreamConfig::fit_within(
+            (mode.width, mode.height),
+            StreamConfig::capped_by_preference((mode.width, mode.height)),
+        );
         let stream_cfg = StreamConfig {
-            width: mode.width,
-            height: mode.height,
-            fps: mode.fps,
+            width,
+            height,
+            fps: StreamConfig::capped_fps(mode.fps),
             encoder,
-            audio: nd_core::pipeline::AudioSource::detect(),
+            audio: cfg.audio,
             ..Default::default()
         };
+        // What the two ends actually agreed on, for the interface to show.
+        // Recorded here rather than from `mode`, because the preference may
+        // have lowered it further.
+        status.set_link(StreamLink {
+            width: stream_cfg.width,
+            height: stream_cfg.height,
+            fps: stream_cfg.fps,
+            // No endpoint: in Miracast **we** are the RTSP server and the
+            // receiver is the one that connects to us. It listens on nothing
+            // we may rely on, so there is no address here to measure a round
+            // trip against — and reporting the sink's IP on our own port made
+            // the interface say "the receiver is not answering" all through a
+            // perfectly healthy session.
+            endpoint: None,
+        });
+
         let desc = pipeline::wfd_pipeline_description(&stream_cfg, &cfg.video, &transport);
 
         // `BIGNETSCREEN_PIPELINE_LATENCY_MS` overrides it, for field measurement.

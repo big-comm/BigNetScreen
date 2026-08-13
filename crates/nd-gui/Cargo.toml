@@ -28,3 +28,8 @@ relm4 = { version = "0.11", features = ["libadwaita"] }
 # Habilita a API da libadwaita ≥ 1.5 (AdwToolbarView, AdwBreakpoint, …).
 # The system has 1.9.1; the 0.7 bindings expose up to v1_5.
 adw = { package = "libadwaita", version = "0.9", features = ["v1_7"] }
+# The GTK version the bindings expose. The system has 4.22; `v4_10` is what
+# `GtkFileDialog` and `GtkPicture::content-fit` need, and holding the floor
+# there keeps the build working on distributions that are a few releases
+# behind.
+gtk = { package = "gtk4", version = "0.11", features = ["v4_10"] }

@@ -11,6 +11,9 @@ LOCALEDIR   := $(DATADIR)/locale
 APPID       := br.com.biglinux.BigNetScreen
 CARGO       ?= cargo
 CARGO_FLAGS ?= --release --locked
+# The version the binary reports. The packaging sets this; a plain `make` falls
+# back to the version in Cargo.toml.
+APP_VERSION ?=
 
 LANGS := $(shell cat po/LINGUAS 2>/dev/null)
 MOFILES := $(patsubst %,build/locale/%/LC_MESSAGES/bignetscreen.mo,$(LANGS))
@@ -20,7 +23,7 @@ MOFILES := $(patsubst %,build/locale/%/LC_MESSAGES/bignetscreen.mo,$(LANGS))
 all: build locale
 
 build:
-	$(CARGO) build $(CARGO_FLAGS)
+	APP_VERSION="$(APP_VERSION)" $(CARGO) build $(CARGO_FLAGS)
 
 locale: $(MOFILES)
 

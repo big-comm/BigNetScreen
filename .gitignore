@@ -16,6 +16,16 @@
 .claude/
 .cache/
 
+# ===== Translation tooling scratch =====
+# The catalogues live in `po/` — that is what the Makefile compiles and what
+# every gettext tool expects. Some translation tools scaffold a `locale/`
+# directory of their own; it is output, never source, and translating into it
+# means the work never reaches the package.
+/locale/
+
+# A copy of the BigCommunity packaging template, kept locally for reference.
+/pkgbuild/
+
 # ===== Local build output (make) =====
 /build
 # Compiled .mo catalogues: produced by `make locale` and by translation

@@ -453,7 +453,10 @@ pub async fn run(
     // 2. Negotiation: the receiver returns the UDP port and accepts (or not)
     //    each offered stream.
     status.set(SinkState::WaitSocket);
-    let (width, height) = StreamConfig::fit_within(size, pipeline::CHROMECAST_MAX_RESOLUTION);
+    let (width, height) = StreamConfig::fit_within(
+        size,
+        StreamConfig::capped_by_preference(pipeline::CHROMECAST_MAX_RESOLUTION),
+    );
     let driver = crate::session::detect_gpu_driver();
     let encoder = *pipeline::encoder_candidates(driver)
         .first()
@@ -462,6 +465,10 @@ pub async fn run(
     let cfg = StreamConfig {
         width,
         height,
+        // The Cast paths have no frame rate to negotiate against, so the
+        // preference is the whole answer, capped at what H.264 mirroring
+        // receivers accept.
+        fps: StreamConfig::capped_fps(60),
         encoder,
         audio: pipeline::AudioSource::detect(),
         ..Default::default()
@@ -476,6 +483,15 @@ pub async fn run(
     };
 
     let session = mirror::negotiate(&channel, &app, receiver_ip, &mirror_cfg).await?;
+
+    // After the negotiation, not before: what goes on the wall is what the
+    // receiver agreed to.
+    status.set_link(nd_core::sink::StreamLink {
+        width: cfg.width,
+        height: cfg.height,
+        fps: cfg.fps,
+        endpoint: Some(std::net::SocketAddr::new(receiver_ip, crate::cast::PORT)),
+    });
     let result = stream(&cfg, &video, &session, status, &mut cancel).await;
 
     let _ = channel.stop_app(&app).await;

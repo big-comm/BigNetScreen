@@ -689,6 +689,13 @@ impl P2pDevice {
         Ok(None)
     }
 
+    /// How long to let NetworkManager finish removing an activation.
+    ///
+    /// Measured against the failure it prevents: the object is gone from the
+    /// bus within a second, and a new activation started before that inherits
+    /// the removal.
+    const TEARDOWN_SETTLE: Duration = Duration::from_secs(2);
+
     /// Forms the group and waits until there is a usable local IP.
     ///
     /// It gathers in one place the retry that used to be copy-pasted across
@@ -726,9 +733,34 @@ impl P2pDevice {
                 }
                 tokio::time::sleep(Duration::from_millis(500)).await;
 
-                match self.active_state(&active).await? {
+                // A vanished activation is **this attempt failing**, not a
+                // fatal error. NetworkManager removes the object as soon as it
+                // tears an activation down, and asking about it then answers
+                // `UnknownMethod`. Propagating that with `?` abandoned the
+                // remaining attempts over the very condition they exist for.
+                let state = match self.active_state(&active).await {
+                    Ok(state) => state,
+                    Err(err) => {
+                        last = NdError::Network(format!(
+                            "the Wi-Fi Direct group disappeared while it was being formed: {err}"
+                        ));
+                        break;
+                    }
+                };
+
+                match state {
                     ActiveState::Activated => {
-                        if let Some(ip) = self.addresses(&active).await?.into_iter().next() {
+                        let addresses = match self.addresses(&active).await {
+                            Ok(addresses) => addresses,
+                            Err(err) => {
+                                last = NdError::Network(format!(
+                                    "the Wi-Fi Direct group disappeared before it had an \
+                                     address: {err}"
+                                ));
+                                break;
+                            }
+                        };
+                        if let Some(ip) = addresses.into_iter().next() {
                             tracing::info!(%ip, "grupo P2P formado");
                             return Ok((active, ip));
                         }
@@ -748,6 +780,10 @@ impl P2pDevice {
 
             tracing::warn!(attempt, err = %last, "the Wi-Fi Direct group attempt failed");
             let _ = self.disconnect(&active).await;
+            // Let the teardown finish. Asking for a new group while the old
+            // activation is still being removed is how an attempt ends up
+            // watching an object that is on its way out.
+            tokio::time::sleep(Self::TEARDOWN_SETTLE).await;
         }
 
         Err(last)
@@ -878,5 +914,86 @@ mod tests {
     fn username_resolution_has_a_fallback() {
         // It must not panic even without $USER.
         let _ = current_username();
+    }
+}
+
+/// Which peers took an address on this link, according to the kernel.
+///
+/// Used to tell two very different failures apart when the receiver never
+/// opens the RTSP connection:
+///
+/// - **nothing here**: the receiver completed the pairing and then never
+///   joined the group. Re-forming the group is worth a try; telling the person
+///   to check their mirroring menu is not, because the receiver never got far
+///   enough for that to matter.
+/// - **something here**: it joined, took an address, and then went quiet —
+///   which usually means the mirroring screen was closed on the device.
+///
+/// The limit is worth stating: an entry appears once there has been traffic
+/// with that peer, so an empty result is evidence, not proof.
+pub fn peers_on_link(interface: &str) -> Vec<String> {
+    match std::fs::read_to_string("/proc/net/arp") {
+        Ok(table) => parse_arp(&table, interface),
+        Err(err) => {
+            tracing::debug!(%err, "could not read the neighbour table");
+            Vec::new()
+        }
+    }
+}
+
+/// Parses `/proc/net/arp`, keeping the peers on one interface.
+///
+/// Columns: address, HW type, flags, HW address, mask, device. A flags value
+/// of `0x0` is an *incomplete* entry — an address the kernel asked about and
+/// never got an answer for — so it is not a peer that is there.
+fn parse_arp(table: &str, interface: &str) -> Vec<String> {
+    table
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let address = fields.next()?;
+            let _hw_type = fields.next()?;
+            let flags = fields.next()?;
+            let _hw_address = fields.next()?;
+            let _mask = fields.next()?;
+            let device = fields.next()?;
+            (device == interface && flags != "0x0").then(|| address.to_string())
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod arp_tests {
+    use super::parse_arp;
+
+    const TABLE: &str =
+        "IP address       HW type     Flags       HW address            Mask     Device\n\
+192.168.68.115   0x1         0x2         dc:a3:a2:08:73:2f     *        wlp2s0\n\
+10.42.0.215      0x1         0x2         56:44:a3:49:c2:ae     *        p2p-wlp2s0-0\n\
+10.42.0.99       0x1         0x0         00:00:00:00:00:00     *        p2p-wlp2s0-0\n";
+
+    #[test]
+    fn only_peers_on_the_asked_for_link_are_returned() {
+        // The machine is on its home network at the same time; a receiver
+        // there is not a peer of the Wi-Fi Direct group.
+        assert_eq!(super::parse_arp(TABLE, "p2p-wlp2s0-0"), vec!["10.42.0.215"]);
+        assert_eq!(parse_arp(TABLE, "wlp2s0"), vec!["192.168.68.115"]);
+    }
+
+    #[test]
+    fn an_unanswered_entry_is_not_a_peer() {
+        // Flags `0x0` is an address the kernel asked about and never heard
+        // back from. Counting it would report a receiver that joined when
+        // nothing did, and turn a useful retry into a misleading message.
+        assert!(!parse_arp(TABLE, "p2p-wlp2s0-0").contains(&"10.42.0.99".to_string()));
+    }
+
+    #[test]
+    fn a_link_with_nobody_on_it_is_empty() {
+        assert!(parse_arp(TABLE, "p2p-wlp2s0-9").is_empty());
+        assert!(parse_arp("", "p2p-wlp2s0-0").is_empty());
+        // A truncated line must not panic.
+        assert!(parse_arp("IP address\n10.42.0.1 0x1\n", "p2p-wlp2s0-0").is_empty());
     }
 }

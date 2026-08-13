@@ -38,22 +38,45 @@ fn cap_err<E: std::fmt::Display>(e: E) -> NdError {
 }
 
 /// Path of the portal session's restore token.
-fn restore_token_path() -> Option<PathBuf> {
+/// Does a selection of this kind keep its authorisation between casts?
+///
+/// Sharing "the whole screen" means the same screen every time, so asking again
+/// on each cast is noise. Sharing "a window" is a choice, and it is usually a
+/// different one: restoring it skipped the picker and silently cast the window
+/// from the previous run.
+pub fn restores_selection(source_type: SourceType) -> bool {
+    source_type != SourceType::Window
+}
+
+/// Where the restore token for a given source kind lives.
+///
+/// The kind is part of the file name on purpose. A token belongs to the
+/// selection that produced it, and handing a window's token to a screen
+/// request would restore that window instead.
+fn restore_token_path(source_type: SourceType) -> Option<PathBuf> {
     let base = std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))?;
-    Some(base.join("bignetscreen").join("restore-token"))
+    let kind = match source_type {
+        SourceType::Monitor => "monitor",
+        SourceType::Virtual => "virtual",
+        SourceType::Window => "window",
+    };
+    Some(
+        base.join("bignetscreen")
+            .join(format!("restore-token-{kind}")),
+    )
 }
 
-fn load_restore_token() -> Option<String> {
-    let path = restore_token_path()?;
+fn load_restore_token(source_type: SourceType) -> Option<String> {
+    let path = restore_token_path(source_type)?;
     let token = std::fs::read_to_string(path).ok()?;
     let token = token.trim().to_string();
     (!token.is_empty()).then_some(token)
 }
 
-fn store_restore_token(token: &str) {
-    let Some(path) = restore_token_path() else {
+fn store_restore_token(source_type: SourceType, token: &str) {
+    let Some(path) = restore_token_path(source_type) else {
         return;
     };
     if let Some(dir) = path.parent() {
@@ -77,8 +100,8 @@ fn store_restore_token(token: &str) {
 }
 
 /// Discards the token (the portal rejected it, or the user revoked permission).
-fn clear_restore_token() {
-    if let Some(path) = restore_token_path() {
+fn clear_restore_token(source_type: SourceType) {
+    if let Some(path) = restore_token_path(source_type) {
         let _ = std::fs::remove_file(path);
     }
 }
@@ -202,14 +225,29 @@ impl CaptureBackend for PortalBackend {
             _ => CursorMode::Hidden,
         };
 
-        let stored_token = load_restore_token();
+        // Restoring is right for a screen and wrong for a window.
+        //
+        // Whoever shares "the whole screen" means the same screen every time,
+        // and being asked again on each cast is noise. Whoever picks "a window"
+        // is making a choice, and that choice is usually a different one — the
+        // restored session skipped the picker entirely and silently cast the
+        // window from last time, which is not what "choose a window" means.
+        let restorable = restores_selection(source_type);
+        let stored_token = restorable
+            .then(|| load_restore_token(source_type))
+            .flatten();
+
         let mut options = SelectSourcesOptions::default()
             .set_cursor_mode(cursor_mode)
             .set_sources(enumflags2::BitFlags::from(portal_type))
             .set_multiple(false)
-            // Authorise once, reuse afterwards: this removes the dialog that
-            // came up on every cast.
-            .set_persist_mode(PersistMode::ExplicitlyRevoked);
+            .set_persist_mode(if restorable {
+                // Authorise once, reuse afterwards: this removes the dialog
+                // that used to come up on every cast.
+                PersistMode::ExplicitlyRevoked
+            } else {
+                PersistMode::DoNot
+            });
         if let Some(token) = stored_token.as_deref() {
             options = options.set_restore_token(token);
         }
@@ -235,14 +273,18 @@ impl CaptureBackend for PortalBackend {
                 // permission again instead of failing forever.
                 if stored_token.is_some() {
                     tracing::info!("restore token rejected; discarding it");
-                    clear_restore_token();
+                    clear_restore_token(source_type);
                 }
                 return Err(cap_err(err));
             }
         };
 
-        if let Some(token) = streams.restore_token() {
-            store_restore_token(token);
+        // Only keep a token for sources worth restoring. A window token would
+        // be handed back on the next cast and skip the picker.
+        if restorable {
+            if let Some(token) = streams.restore_token() {
+                store_restore_token(source_type, token);
+            }
         }
 
         let stream = streams
@@ -266,6 +308,8 @@ impl CaptureBackend for PortalBackend {
             node_id,
             source_type,
             size,
+            // A real capture, not a file being played.
+            media: None,
         })
     }
 
@@ -429,10 +473,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn only_a_screen_is_worth_restoring() {
+        assert!(restores_selection(SourceType::Monitor));
+        assert!(restores_selection(SourceType::Virtual));
+        assert!(!restores_selection(SourceType::Window));
+    }
+
+    #[test]
+    fn a_token_is_never_offered_to_a_different_kind_of_source() {
+        // The bug this pins down: one token file for every source kind. A
+        // window session stored its token, and the next screen cast handed that
+        // token back to the portal, which restored the window.
+        let paths: Vec<_> = [SourceType::Monitor, SourceType::Virtual, SourceType::Window]
+            .into_iter()
+            .filter_map(restore_token_path)
+            .collect();
+        assert_eq!(paths.len(), 3, "every source kind needs somewhere to store");
+        let unique: std::collections::HashSet<_> = paths.iter().collect();
+        assert_eq!(unique.len(), paths.len(), "the paths must not collide");
+    }
+
+    #[test]
     fn restore_token_path_follows_xdg() {
         // Writes nothing; it only checks the path's shape.
-        if let Some(path) = restore_token_path() {
-            assert!(path.ends_with("bignetscreen/restore-token"), "{path:?}");
+        if let Some(path) = restore_token_path(SourceType::Monitor) {
+            assert!(
+                path.ends_with("bignetscreen/restore-token-monitor"),
+                "{path:?}"
+            );
         }
     }
 

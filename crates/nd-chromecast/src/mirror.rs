@@ -57,6 +57,19 @@ const ANSWER_TIMEOUT: Duration = Duration::from_secs(15);
 /// the sweet spot depends on the network.
 pub const DEFAULT_TARGET_DELAY_MS: u32 = 150;
 
+/// The playout delay to request, given the latency profile.
+///
+/// This is the Cast equivalent of the Miracast jitter buffer: the receiver
+/// holds frames for this long before showing them, which is what smooths out
+/// uneven arrival — and what delays the pointer by the same amount.
+pub fn target_delay_ms() -> u32 {
+    if nd_core::latency::is_film() {
+        nd_core::latency::FILM_PLAYOUT_DELAY_MS
+    } else {
+        DEFAULT_TARGET_DELAY_MS
+    }
+}
+
 /// A stream's keys (the receiver decrypts with what we sent in the OFFER).
 #[derive(Clone)]
 pub struct StreamKeys {
@@ -121,7 +134,7 @@ impl Default for MirrorConfig {
             height: 1080,
             fps: 30,
             max_bitrate: 10_000_000,
-            target_delay_ms: DEFAULT_TARGET_DELAY_MS,
+            target_delay_ms: target_delay_ms(),
             with_audio: true,
         }
     }
