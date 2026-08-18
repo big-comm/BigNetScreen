@@ -3,8 +3,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-08-08 23:29-0300\n"
-"PO-Revision-Date: 2026-08-13 14:51-0300\n"
+"POT-Creation-Date: 2026-08-18 12:19-0300\n"
+"PO-Revision-Date: 2026-08-17 22:27-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Swedish <sv@li.org>\n"
 "Language: sv\n"
@@ -14,10 +14,10 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/pages/settings.rs:220
+#: crates/nd-gui/src/pages/settings.rs:226
 msgid ""
-"0 lets the system choose. Set one only if you opened a port on your firewall"
-" by hand."
+"0 lets the system choose. Set one only if you opened a port on your firewall "
+"by hand."
 msgstr ""
 "0 låter systemet välja. Ange endast ett värde om du har öppnat en port i "
 "brandväggen manuellt."
@@ -30,39 +30,43 @@ msgstr "1 enhet hittades"
 msgid "1 file selected"
 msgstr "1 fil vald"
 
-#: crates/nd-gui/src/app.rs:892
+#: crates/nd-gui/src/app.rs:889
 msgid "1 receiver found"
 msgstr "1 mottagare hittades"
 
-#: crates/nd-gui/src/pages/settings.rs:130
+#: crates/nd-gui/src/pages/settings.rs:137
 msgid "30 FPS"
 msgstr "30 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:130
+#: crates/nd-gui/src/pages/settings.rs:137
 msgid "60 FPS"
 msgstr "60 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:128
+#: crates/nd-gui/src/pages/settings.rs:134
 msgid "60 is smoother and costs about half as much again in bandwidth"
 msgstr "60 är jämnare och kostar ungefär hälften så mycket mer i bandbredd"
 
 #: crates/nd-gui/src/pages/settings.rs:109
-msgid "A ceiling: a smaller screen is sent as it is"
-msgstr "En övre gräns: en mindre skärm skickas som den är"
+msgid ""
+"A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver "
+"will accept it."
+msgstr ""
+"En gräns: en mindre skärm skickas som den är. Över 1080p kommer inte alla "
+"mottagare att acceptera den."
 
-#: crates/nd-gui/src/pages/home.rs:431
+#: crates/nd-gui/src/pages/home.rs:446
 msgid "A new screen"
 msgstr "En ny skärm"
 
-#: crates/nd-gui/src/app.rs:931
+#: crates/nd-gui/src/app.rs:928
 msgid "A stream is already running"
 msgstr "En strömning pågår redan"
 
-#: crates/nd-gui/src/pages/home.rs:424
+#: crates/nd-gui/src/pages/home.rs:439
 msgid "A window"
 msgstr "Ett fönster"
 
-#: crates/nd-gui/src/app.rs:299
+#: crates/nd-gui/src/app.rs:300
 msgid "About BigNetScreen"
 msgstr "Om BigNetScreen"
 
@@ -78,7 +82,11 @@ msgstr "AirPlay"
 msgid "All protocols"
 msgstr "Alla protokoll"
 
-#: crates/nd-gui/src/pages/settings.rs:153
+#: crates/nd-gui/src/pages/home.rs:447
+msgid "An extra desktop, just for this"
+msgstr "Ett extra skrivbord, bara för detta"
+
+#: crates/nd-gui/src/pages/settings.rs:160
 msgid "Audio"
 msgstr "Ljud"
 
@@ -87,11 +95,11 @@ msgid "Automatic"
 msgstr "Automatiskt"
 
 #: crates/nd-gui/src/pages/devices.rs:168
-#: crates/nd-gui/src/pages/settings.rs:202
+#: crates/nd-gui/src/pages/settings.rs:209
 msgid "Automatic discovery"
 msgstr "Automatisk upptäckt"
 
-#: crates/nd-gui/src/app.rs:422 crates/nd-gui/src/app.rs:881
+#: crates/nd-gui/src/app.rs:424 crates/nd-gui/src/app.rs:878
 msgid "Automatic discovery is off"
 msgstr "Automatisk upptäckt är avstängd"
 
@@ -99,13 +107,19 @@ msgstr "Automatisk upptäckt är avstängd"
 msgid "Available"
 msgstr "Tillgänglig"
 
-#: crates/nd-gui/src/pages/settings.rs:142
+#: crates/nd-gui/src/pages/home.rs:255
+msgid "Back"
+msgstr "Tillbaka"
+
+#: crates/nd-gui/src/pages/settings.rs:148
 msgid ""
-"Buffers the picture so video plays smoothly. Everything arrives later, the "
-"pointer included — best when you are only watching."
+"Buffers the picture so video plays smoothly, at the cost of delay. On "
+"Miracast it is applied here; on Chromecast it is a request the receiver may "
+"ignore."
 msgstr ""
-"Buffrar bilden så att video spelas smidigt. Allt anländer senare, även "
-"markören – bäst när du bara tittar."
+"Buffrar bilden så att video spelas smidigt, på bekostnad av fördröjning. På "
+"Miracast tillämpas det här; på Chromecast är det en begäran som mottagaren "
+"kan ignorera."
 
 #: crates/nd-gui/src/pages/media.rs:548
 msgid "Choose a device…"
@@ -119,13 +133,9 @@ msgstr "Välj en mapp"
 msgid "Choose files"
 msgstr "Välj filer"
 
-#: crates/nd-gui/src/pages/home.rs:425
-msgid "Choose one window to share"
-msgstr "Välj ett fönster att dela"
-
-#: crates/nd-gui/src/pages/home.rs:196
-msgid "Choose what to share, then pick a device to send it to."
-msgstr "Välj vad du vill dela, välj sedan en enhet att skicka det till."
+#: crates/nd-gui/src/pages/home.rs:587
+msgid "Choose the device to send to."
+msgstr "Välj enheten att skicka till."
 
 #: crates/nd-gui/src/pages/media.rs:573
 msgid "Choose which device to send to."
@@ -143,56 +153,56 @@ msgstr "Chromecast / AirPlay"
 msgid "Chromecast / AirPlay only"
 msgstr "Endast Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/home.rs:646 crates/nd-gui/src/pages/home.rs:723
+#: crates/nd-gui/src/pages/home.rs:648 crates/nd-gui/src/pages/home.rs:760
 msgid ""
-"Chromecasts show up on their own. A TV or projector only appears while it is"
-" in screen mirroring mode — on Fire TV, under Settings › Display and Sounds "
-"› Display Mirroring."
+"Chromecasts show up on their own. A TV or projector only appears while it is "
+"in screen mirroring mode — on Fire TV, under Settings › Display and Sounds › "
+"Display Mirroring."
 msgstr ""
-"Chromecasts visas automatiskt. En TV eller projektor visas bara medan den är"
-" i skärmspeglingsläge – på Fire TV, under Inställningar › Display och ljud ›"
-" Skärmspegling."
+"Chromecasts visas automatiskt. En TV eller projektor visas bara medan den är "
+"i skärmspeglingsläge – på Fire TV, under Inställningar › Display och ljud › "
+"Skärmspegling."
 
 #: crates/nd-gui/src/pages/mod.rs:125
 msgid "Connected"
 msgstr "Ansluten"
 
-#: crates/nd-gui/src/app.rs:264
+#: crates/nd-gui/src/app.rs:265
 msgid "Connected to"
 msgstr "Ansluten till"
 
-#: crates/nd-gui/src/app.rs:948 crates/nd-gui/src/pages/mod.rs:168
+#: crates/nd-gui/src/app.rs:945 crates/nd-gui/src/pages/mod.rs:168
 msgid "Connecting…"
 msgstr "Ansluter…"
 
-#: crates/nd-gui/src/pages/home.rs:340
+#: crates/nd-gui/src/pages/home.rs:361
 msgid "Connection"
 msgstr "Anslutning"
 
-#: crates/nd-gui/src/pages/home.rs:338
+#: crates/nd-gui/src/pages/home.rs:359
 msgid "Connection quality"
 msgstr "Anslutningskvalitet"
 
-#: crates/nd-gui/src/pages/home.rs:432
-msgid "Create an extra screen just for sharing"
-msgstr "Skapa en extra skärm enbart för delning"
-
-#: crates/nd-gui/src/pages/devices.rs:102 crates/nd-gui/src/pages/mod.rs:47
+#: crates/nd-gui/src/pages/mod.rs:47 crates/nd-gui/src/pages/devices.rs:102
 msgid "Devices"
 msgstr "Enheter"
 
-#: crates/nd-gui/src/pages/devices.rs:234 crates/nd-gui/src/pages/home.rs:314
+#: crates/nd-gui/src/pages/home.rs:338 crates/nd-gui/src/pages/devices.rs:234
 msgid "Disconnect"
 msgstr "Koppla från"
 
-#: crates/nd-gui/src/pages/settings.rs:197
+#: crates/nd-gui/src/pages/settings.rs:204
 msgid "Discovery and devices"
 msgstr "Upptäckt och enheter"
 
-#: crates/nd-gui/src/pages/devices.rs:424 crates/nd-gui/src/pages/mod.rs:129
-#: crates/nd-gui/src/pages/mod.rs:299
+#: crates/nd-gui/src/pages/mod.rs:129 crates/nd-gui/src/pages/mod.rs:299
+#: crates/nd-gui/src/pages/devices.rs:424
 msgid "Discovery only"
 msgstr "Endast upptäckt"
+
+#: crates/nd-gui/src/pages/home.rs:433
+msgid "Everything on your screen"
+msgstr "Allt på din skärm"
 
 #: crates/nd-gui/src/pages/mod.rs:223
 msgid "Excellent"
@@ -202,7 +212,7 @@ msgstr "Utmärkt"
 msgid "Failed"
 msgstr "Misslyckades"
 
-#: crates/nd-gui/src/pages/settings.rs:140
+#: crates/nd-gui/src/pages/settings.rs:147
 msgid "Film mode"
 msgstr "Filmläge"
 
@@ -214,11 +224,11 @@ msgstr "Hitta och anslut till närliggande trådlösa mottagare."
 msgid "Finished"
 msgstr "Klar"
 
-#: crates/nd-gui/src/pages/settings.rs:218
+#: crates/nd-gui/src/pages/settings.rs:225
 msgid "Fixed port"
 msgstr "Fast port"
 
-#: crates/nd-gui/src/pages/settings.rs:126
+#: crates/nd-gui/src/pages/settings.rs:133
 msgid "Frame rate"
 msgstr "Bildfrekvens"
 
@@ -226,11 +236,11 @@ msgstr "Bildfrekvens"
 msgid "Good"
 msgstr "Bra"
 
-#: crates/nd-gui/src/app.rs:355
+#: crates/nd-gui/src/app.rs:356
 msgid "Got it"
 msgstr "Uppfattat"
 
-#: crates/nd-gui/src/pages/settings.rs:111
+#: crates/nd-gui/src/pages/settings.rs:116
 msgid "High (1080p)"
 msgstr "Hög (1080p)"
 
@@ -238,55 +248,59 @@ msgstr "Hög (1080p)"
 msgid "Home"
 msgstr "Hem"
 
-#: crates/nd-gui/src/pages/settings.rs:158
+#: crates/nd-gui/src/pages/settings.rs:165
 msgid "Include system audio"
 msgstr "Inkludera systemljud"
 
-#: crates/nd-gui/src/pages/settings.rs:167
+#: crates/nd-gui/src/pages/settings.rs:174
 msgid "Include the microphone"
 msgstr "Inkludera mikrofonen"
 
-#: crates/nd-gui/src/pages/home.rs:651
+#: crates/nd-gui/src/pages/home.rs:654
 msgid "Keep every device on the same Wi-Fi network for the best results."
 msgstr "Håll alla enheter på samma Wi-Fi-nätverk för bästa resultat."
 
-#: crates/nd-gui/src/app.rs:1127
+#: crates/nd-gui/src/app.rs:1124
 msgid "Local network discovery unavailable"
 msgstr "Lokal nätverksupptäckt är inte tillgänglig"
 
-#: crates/nd-gui/src/pages/settings.rs:203
+#: crates/nd-gui/src/pages/settings.rs:210
 msgid "Look for receivers as soon as the app starts"
 msgstr "Sök efter mottagare så snart appen startar"
 
-#: crates/nd-gui/src/pages/home.rs:709
+#: crates/nd-gui/src/pages/home.rs:747
 msgid "Looking for receivers…"
 msgstr "Söker efter mottagare…"
 
-#: crates/nd-gui/src/pages/settings.rs:113
+#: crates/nd-gui/src/pages/settings.rs:118
 msgid "Low (480p)"
 msgstr "Låg (480p)"
+
+#: crates/nd-gui/src/pages/settings.rs:114
+msgid "Maximum (2160p)"
+msgstr "Maximum (2160p)"
 
 #: crates/nd-gui/src/pages/mod.rs:220
 msgid "Measuring…"
 msgstr "Mäter…"
 
-#: crates/nd-gui/src/pages/home.rs:438 crates/nd-gui/src/pages/mod.rs:48
+#: crates/nd-gui/src/pages/mod.rs:48
 msgid "Media"
 msgstr "Media"
 
-#: crates/nd-gui/src/pages/settings.rs:112
+#: crates/nd-gui/src/pages/settings.rs:117
 msgid "Medium (720p)"
 msgstr "Medel (720p)"
 
-#: crates/nd-gui/src/pages/settings.rs:175
+#: crates/nd-gui/src/pages/settings.rs:182
 msgid "Microphone volume"
 msgstr "Mikrofonvolym"
 
-#: crates/nd-gui/src/pages/devices.rs:323 crates/nd-gui/src/pages/mod.rs:151
+#: crates/nd-gui/src/pages/mod.rs:151 crates/nd-gui/src/pages/devices.rs:323
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1187
+#: crates/nd-gui/src/app.rs:1183
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
@@ -294,15 +308,23 @@ msgstr ""
 "Miracast fungerar inte i Flatpak-versionen (den kräver systemets "
 "NetworkManager)"
 
+#: crates/nd-gui/src/app.rs:1191
+msgid ""
+"Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
+"network still works."
+msgstr ""
+"Miracast kräver en Wi-Fi-adapter, och den här datorn har ingen. Gjutning "
+"över nätverket fungerar fortfarande."
+
 #: crates/nd-gui/src/pages/settings.rs:94
 msgid "Miracast only"
 msgstr "Endast Miracast"
 
-#: crates/nd-gui/src/app.rs:1193
+#: crates/nd-gui/src/app.rs:1199
 msgid "Miracast unavailable"
 msgstr "Miracast är inte tillgängligt"
 
-#: crates/nd-gui/src/app.rs:1191
+#: crates/nd-gui/src/app.rs:1197
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr ""
 "Miracast är inte tillgängligt: detta Wi-Fi-kort stöder inte Wi-Fi Direct"
@@ -311,7 +333,7 @@ msgstr ""
 msgid "Mirror screen"
 msgstr "Spegla skärmen"
 
-#: crates/nd-gui/src/pages/settings.rs:168
+#: crates/nd-gui/src/pages/settings.rs:175
 msgid "Mix your voice into what is sent"
 msgstr "Blanda din röst i det som skickas"
 
@@ -335,7 +357,7 @@ msgstr "Ingen musik i din musikmapp. Använd ”Välj filer”."
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "Inga foton i din bildmapp. Använd ”Välj filer”."
 
-#: crates/nd-gui/src/app.rs:889 crates/nd-gui/src/pages/home.rs:718
+#: crates/nd-gui/src/app.rs:886 crates/nd-gui/src/pages/home.rs:756
 msgid "No receivers found"
 msgstr "Inga mottagare hittades"
 
@@ -351,6 +373,10 @@ msgstr "Inget valt"
 msgid "Now playing"
 msgstr "Spelar nu"
 
+#: crates/nd-gui/src/pages/home.rs:440
+msgid "One window only"
+msgstr "Endast ett fönster"
+
 #: crates/nd-gui/src/pages/mod.rs:169
 msgid "Opening the firewall port…"
 msgstr "Öppnar brandväggsporten…"
@@ -359,17 +385,9 @@ msgstr "Öppnar brandväggsporten…"
 msgid "Photos"
 msgstr "Foton"
 
-#: crates/nd-gui/src/app.rs:494
-msgid "Pick a device for the extra screen"
-msgstr "Välj en enhet för den extra skärmen"
-
-#: crates/nd-gui/src/app.rs:493
-msgid "Pick a device to share a window with"
-msgstr "Välj en enhet att dela ett fönster med"
-
-#: crates/nd-gui/src/app.rs:492
-msgid "Pick a device to share your screen with"
-msgstr "Välj en enhet att dela din skärm med"
+#: crates/nd-gui/src/pages/home.rs:454
+msgid "Photos, videos and music"
+msgstr "Foton, videor och musik"
 
 #: crates/nd-gui/src/pages/media.rs:255
 msgid "Pick files and choose where to play them."
@@ -391,7 +409,7 @@ msgstr "Protokoll"
 msgid "Ready"
 msgstr "Redo"
 
-#: crates/nd-gui/src/pages/home.rs:191
+#: crates/nd-gui/src/pages/home.rs:580
 msgid "Ready to share"
 msgstr "Redo att dela"
 
@@ -399,20 +417,20 @@ msgstr "Redo att dela"
 msgid "Refresh"
 msgstr "Uppdatera"
 
-#: crates/nd-gui/src/pages/settings.rs:265
+#: crates/nd-gui/src/pages/settings.rs:272
 msgid "Restore defaults"
 msgstr "Återställ standardvärden"
 
-#: crates/nd-gui/src/pages/settings.rs:248
+#: crates/nd-gui/src/pages/settings.rs:255
 msgid "Saved as you change them"
 msgstr "Sparas när du ändrar dem"
 
-#: crates/nd-gui/src/app.rs:330 crates/nd-gui/src/pages/devices.rs:115
+#: crates/nd-gui/src/app.rs:331 crates/nd-gui/src/pages/devices.rs:115
 msgid "Scan again"
 msgstr "Skanna igen"
 
-#: crates/nd-gui/src/app.rs:420 crates/nd-gui/src/app.rs:503
-#: crates/nd-gui/src/app.rs:887
+#: crates/nd-gui/src/app.rs:422 crates/nd-gui/src/app.rs:501
+#: crates/nd-gui/src/app.rs:884
 msgid "Searching…"
 msgstr "Söker…"
 
@@ -424,13 +442,9 @@ msgstr "Välj filer"
 msgid "Send a folder"
 msgstr "Skicka en mapp"
 
-#: crates/nd-gui/src/pages/devices.rs:248
+#: crates/nd-gui/src/pages/home.rs:453 crates/nd-gui/src/pages/devices.rs:248
 msgid "Send media"
 msgstr "Skicka media"
-
-#: crates/nd-gui/src/pages/home.rs:439
-msgid "Send photos, videos and music"
-msgstr "Skicka foton, videor och musik"
 
 #: crates/nd-gui/src/pages/media.rs:351
 msgid "Send to"
@@ -440,11 +454,11 @@ msgstr "Skicka till"
 msgid "Send to device"
 msgstr "Skicka till enhet"
 
-#: crates/nd-gui/src/pages/settings.rs:159
+#: crates/nd-gui/src/pages/settings.rs:166
 msgid "Send whatever this computer is playing"
 msgstr "Skicka det som spelas på den här datorn"
 
-#: crates/nd-gui/src/app.rs:695 crates/nd-gui/src/app.rs:989
+#: crates/nd-gui/src/app.rs:693 crates/nd-gui/src/app.rs:986
 msgid "Sending files…"
 msgstr "Skickar filer…"
 
@@ -452,31 +466,35 @@ msgstr "Skickar filer…"
 msgid "Settings"
 msgstr "Inställningar"
 
-#: crates/nd-gui/src/pages/settings.rs:379
+#: crates/nd-gui/src/pages/settings.rs:388
 msgid "Settings cannot be saved on this system."
 msgstr "Inställningar kan inte sparas på det här systemet."
-
-#: crates/nd-gui/src/pages/home.rs:418
-msgid "Share everything on your screen"
-msgstr "Dela allt på skärmen"
 
 #: crates/nd-gui/src/pages/media.rs:250
 msgid "Share media"
 msgstr "Dela media"
 
-#: crates/nd-gui/src/app.rs:230
+#: crates/nd-gui/src/app.rs:231
 msgid "Share your screen wirelessly"
 msgstr "Dela din skärm trådlöst"
 
-#: crates/nd-gui/src/app.rs:1206
+#: crates/nd-gui/src/app.rs:1212
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "Dela din skärm med en TV, projektor eller Chromecast."
 
-#: crates/nd-gui/src/app.rs:320
+#: crates/nd-gui/src/pages/home.rs:280
+msgid ""
+"Sharing a window opens your desktop’s own picker. Only visible windows can "
+"be shared."
+msgstr ""
+"Att dela ett fönster öppnar skrivbordets egen väljare. Endast synliga "
+"fönster kan delas."
+
+#: crates/nd-gui/src/app.rs:321
 msgid "Show the sidebar"
 msgstr "Visa sidofältet"
 
-#: crates/nd-gui/src/pages/home.rs:640
+#: crates/nd-gui/src/pages/home.rs:642
 msgid ""
 "Sound goes to the receiver and to this computer. Mute this computer if you "
 "hear an echo."
@@ -488,7 +506,7 @@ msgstr ""
 msgid "Status"
 msgstr "Status"
 
-#: crates/nd-gui/src/app.rs:337
+#: crates/nd-gui/src/app.rs:338
 msgid "Stop"
 msgstr "Stopp"
 
@@ -496,11 +514,11 @@ msgstr "Stopp"
 msgid "Stop sending"
 msgstr "Sluta skicka"
 
-#: crates/nd-gui/src/app.rs:983
+#: crates/nd-gui/src/app.rs:980
 msgid "Stop sharing your screen before sending files"
 msgstr "Sluta dela din skärm innan du skickar filer"
 
-#: crates/nd-gui/src/app.rs:920
+#: crates/nd-gui/src/app.rs:917
 msgid "Stopping…"
 msgstr "Stoppar…"
 
@@ -520,7 +538,7 @@ msgstr "Strömningskvalitet"
 msgid "Test"
 msgstr "Test"
 
-#: crates/nd-gui/src/app.rs:976 crates/nd-gui/src/app.rs:993
+#: crates/nd-gui/src/app.rs:973 crates/nd-gui/src/app.rs:990
 msgid "That device is no longer available"
 msgstr "Den enheten är inte längre tillgänglig"
 
@@ -528,28 +546,28 @@ msgstr "Den enheten är inte längre tillgänglig"
 msgid "The receiver is not answering"
 msgstr "Mottagaren svarar inte"
 
-#: crates/nd-gui/src/pages/home.rs:253
-msgid "Then pick a device"
-msgstr "Välj sedan en enhet"
-
 #: crates/nd-gui/src/pages/settings.rs:78
 msgid "These apply to your next session."
 msgstr "Dessa gäller för din nästa session."
 
-#: crates/nd-gui/src/pages/settings.rs:211
+#: crates/nd-gui/src/pages/settings.rs:218
 msgid "This computer's name"
 msgstr "Den här datorns namn"
 
-#: crates/nd-gui/src/pages/home.rs:541
+#: crates/nd-gui/src/pages/home.rs:529
 msgid ""
 "This desktop cannot create an extra screen (it needs GNOME running natively)"
 msgstr ""
 "Den här datorn kan inte skapa en extra skärm (den kräver GNOME som körs "
 "inbyggt)"
 
-#: crates/nd-gui/src/pages/home.rs:375
+#: crates/nd-gui/src/pages/home.rs:393
 msgid "Tips"
 msgstr "Tips"
+
+#: crates/nd-gui/src/pages/settings.rs:115
+msgid "Very high (1440p)"
+msgstr "Mycket hög (1440p)"
 
 #: crates/nd-gui/src/pages/media.rs:453
 msgid "Videos"
@@ -563,25 +581,17 @@ msgstr "Väntar på mottagaren…"
 msgid "Weak signal"
 msgstr "Svag signal"
 
-#: crates/nd-gui/src/pages/home.rs:220
-msgid "What to share"
-msgstr "Vad du vill dela"
+#: crates/nd-gui/src/pages/home.rs:581
+msgid "What do you want to share?"
+msgstr "Vad vill du dela?"
 
 #: crates/nd-gui/src/pages/settings.rs:91
 msgid "Which kind of receiver to look for"
 msgstr "Vilken typ av mottagare som ska sökas efter"
 
-#: crates/nd-gui/src/pages/home.rs:417
+#: crates/nd-gui/src/pages/home.rs:432
 msgid "Whole screen"
 msgstr "Hela skärmen"
-
-#: crates/nd-gui/src/pages/home.rs:241
-msgid ""
-"Your desktop will ask which window. Only visible windows can be shared, and "
-"closing the window ends the session."
-msgstr ""
-"Skrivbordet frågar vilket fönster. Endast synliga fönster kan delas, och när"
-" du stänger fönstret avslutas sessionen."
 
 #: crates/nd-gui/src/pages/devices.rs:438
 msgid "devices found"
@@ -611,10 +621,10 @@ msgstr "ännu inte publicerad"
 msgid "quick response"
 msgstr "snabbt svar"
 
-#: crates/nd-gui/src/app.rs:894
+#: crates/nd-gui/src/app.rs:891
 msgid "receivers found"
 msgstr "mottagare hittades"
 
-#: crates/nd-gui/src/app.rs:942
+#: crates/nd-gui/src/app.rs:939
 msgid "shows up in discovery only"
 msgstr "visas endast i upptäckt"

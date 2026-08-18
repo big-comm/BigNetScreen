@@ -160,6 +160,21 @@
   background: linear-gradient(135deg, #d97706, #b45309);
 }
 
+/* A thing that can be sent, as a button: the coloured mark, a name and a line
+ * saying what it means. Sized so two sit side by side without the text
+ * wrapping at the width the window opens at. */
+.action-tile {
+  border-radius: 14px;
+  padding: 14px;
+  min-height: 68px;
+  background-color: alpha(currentColor, 0.05);
+  border: 1px solid alpha(currentColor, 0.08);
+}
+
+.action-tile:hover {
+  background-color: alpha(currentColor, 0.09);
+}
+
 /* Media tiles. */
 .media-tile {
   border-radius: 12px;

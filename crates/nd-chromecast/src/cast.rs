@@ -152,9 +152,28 @@ impl Drop for CastChannel {
 impl CastChannel {
     /// Connects (TCP+TLS) to the receiver and sends the initial platform CONNECT.
     pub async fn connect(ip: IpAddr) -> Result<Self> {
-        let tcp = tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect((ip, PORT)))
+        Self::connect_to(ip, PORT).await
+    }
+
+    /// Connects on the port the receiver **announced**.
+    ///
+    /// Nearly every Cast device answers on 8009, and hard-coding it worked
+    /// until it did not: the port is part of the mDNS record precisely because
+    /// a receiver may choose another one, and such a device would be listed by
+    /// discovery and then be unreachable, with no clue as to why.
+    pub async fn connect_to(ip: IpAddr, port: u16) -> Result<Self> {
+        let tcp = tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect((ip, port)))
             .await
-            .map_err(|_| NdError::Network(format!("tempo esgotado ao conectar em {ip}:{PORT}")))?
+            // The two failures below are different situations and the wording
+            // separates them: nothing answered at all (asleep, or the receiver
+            // app is not running), against a refusal from something that is
+            // listening.
+            .map_err(|_| {
+                NdError::Network(format!(
+                    "{ip}:{port} did not answer — the receiver may be asleep, or its \
+                     casting service switched off"
+                ))
+            })?
             .map_err(net_err)?;
         // No Nagle delay: control messages are small and their latency shows
         // up directly in the time until the picture appears.
@@ -172,7 +191,7 @@ impl CastChannel {
         let server_name = ServerName::IpAddress(ip.into());
         let stream = tokio::time::timeout(CONNECT_TIMEOUT, connector.connect(server_name, tcp))
             .await
-            .map_err(|_| NdError::Network("tempo esgotado no handshake TLS".into()))?
+            .map_err(|_| NdError::Network("the TLS handshake timed out".into()))?
             .map_err(net_err)?;
 
         let (read_half, write_half) = tokio::io::split(stream);
@@ -451,13 +470,41 @@ impl CastChannel {
 
     /// Shuts down the app running on the receiver.
     pub async fn stop_app(&self, app: &LaunchedApp) -> Result<()> {
-        self.request(
-            NS_RECEIVER,
-            PLATFORM_DEST,
-            json!({"type": "STOP", "sessionId": app.session_id}),
-        )
-        .await
-        .map(|_| ())
+        let stopped = self
+            .request(
+                NS_RECEIVER,
+                PLATFORM_DEST,
+                json!({"type": "STOP", "sessionId": app.session_id}),
+            )
+            .await
+            .map(|_| ());
+
+        // Closing the **virtual connection** to the app, and not only stopping
+        // the app, is what the protocol asks for. Every CONNECT opens a
+        // connection the receiver tracks by itself, and dropping the socket
+        // does not end it: the device goes on holding a sender that is no
+        // longer there, and refuses the next one. Reported from the field as
+        // "after disconnecting, the stick will not accept a new connection".
+        self.close_to(&app.transport_id).await;
+        stopped
+    }
+
+    /// Ends the session politely: closes the virtual connections it opened.
+    ///
+    /// Best effort by design. It runs while a session is being torn down —
+    /// often *because* something already went wrong — and a receiver that will
+    /// not take the goodbye must not turn a finished cast into an error.
+    pub async fn close(&self) {
+        self.close_to(PLATFORM_DEST).await;
+    }
+
+    async fn close_to(&self, destination: &str) {
+        if let Err(err) = self
+            .send(NS_CONNECTION, destination, r#"{"type":"CLOSE"}"#)
+            .await
+        {
+            tracing::debug!(%destination, %err, "the receiver did not take the CLOSE");
+        }
     }
 
     /// The receiver's next spontaneous message (status, media, …).

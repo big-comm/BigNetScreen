@@ -12,7 +12,7 @@ use relm4::factory::{DynamicIndex, FactoryComponent, FactorySender, FactoryVecDe
 use relm4::gtk;
 use relm4::prelude::*;
 
-use super::{latency_hint, DeviceEntry, Page, SessionInfo};
+use super::{latency_hint, DeviceEntry, SessionInfo};
 use crate::tr;
 
 // ----------------------------------------------------------------------------
@@ -120,21 +120,30 @@ impl DeviceRow {
 // The page
 // ----------------------------------------------------------------------------
 
+/// Which half of the decision the page is showing.
+///
+/// Two steps rather than one screen with everything on it. Choosing a receiver
+/// and choosing what to send are not the same kind of decision — the first is
+/// about the room, the second about this computer — and putting both in front
+/// of someone at once made the page a form to fill in rather than a thing to
+/// use.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Step {
+    /// Pick who receives.
+    #[default]
+    Device,
+    /// Pick what to send to the receiver already chosen.
+    Action,
+}
+
 pub struct HomePage {
     devices: FactoryVecDeque<DeviceRow>,
-    /// The list of "what to share" options.
-    share_list: gtk::ListBox,
-    /// The switch in front of each capture mode, so the selection can be shown
-    /// and — since only one mode can be in force — the others turned off.
-    mode_switches: Vec<(SourceType, gtk::Switch)>,
-    /// The one row whose availability depends on the desktop.
-    virtual_row: adw::ActionRow,
-    /// What is selected right now.
-    source: SourceType,
-    /// Set while the switches are being brought in line with `source`, so that
-    /// writing to a switch does not read back as the person flipping it.
-    settling: bool,
+    step: Step,
+    /// The receiver picked in the first step.
+    chosen: Option<DeviceEntry>,
     session: Option<SessionInfo>,
+    /// The "extra screen" button, whose availability depends on the desktop.
+    virtual_button: gtk::Button,
     /// Is there any receiver at all in the list?
     empty: bool,
     /// Still worth saying "searching"?
@@ -150,25 +159,27 @@ pub enum HomeMsg {
     Session(Option<SessionInfo>),
     Searching(bool),
     VirtualAvailable(bool),
-    /// The capture mode in force, as the root component sees it.
-    Source(SourceType),
-    /// Put the switches back in line with the selection.
-    RefreshModes,
-    /// A row was clicked.
-    Activated(String),
-    Share(SourceType),
-    OpenMedia,
+    /// A receiver was picked: move on to what to send it.
+    Selected(String),
+    /// Back to the list of receivers.
+    Back,
+    /// Send this to the receiver already chosen.
+    Act(SourceType),
+    /// Go to the media page with the chosen receiver.
+    SendMedia,
     Stop,
 }
 
 #[derive(Debug)]
 pub enum HomeOutput {
-    /// Start streaming to this receiver.
-    Cast(String),
-    /// Change what will be captured.
-    Source(SourceType),
+    /// Start streaming this to this receiver.
+    Cast {
+        id: String,
+        source: SourceType,
+    },
+    /// Open the media page with this receiver already selected.
+    SendMedia(String),
     Stop,
-    Navigate(Page),
 }
 
 #[relm4::component(pub)]
@@ -188,21 +199,20 @@ impl Component for HomePage {
                 set_spacing: 6,
 
                 gtk::Label {
-                    set_label: &tr!("Ready to share"),
+                    #[watch]
+                    set_label: &model.title(),
                     set_xalign: 0.0,
                     add_css_class: "page-title",
                 },
                 gtk::Label {
-                    set_label: &tr!("Choose what to share, then pick a device to send it to."),
+                    #[watch]
+                    set_label: &model.subtitle(),
                     set_xalign: 0.0,
                     set_margin_bottom: 18,
+                    set_wrap: true,
                     add_css_class: "page-subtitle",
                 },
 
-                // Two columns on a wide window, stacked on a narrow one. The
-                // right-hand column is about a running session, so on a narrow
-                // window it belongs *above* the lists: it is the thing the
-                // person came back to the window to look at.
                 gtk::Box {
                     set_spacing: 18,
                     set_orientation: gtk::Orientation::Horizontal,
@@ -212,59 +222,73 @@ impl Component for HomePage {
                         set_spacing: 8,
                         set_hexpand: true,
 
-                        // What to share comes first, and the device second,
-                        // because that is the order of the decision: *what* is
-                        // being sent is a property of the person's own screen,
-                        // and it holds whichever receiver they end up choosing.
-                        gtk::Label {
-                            set_label: &tr!("What to share"),
-                            set_xalign: 0.0,
-                            add_css_class: "section-heading",
-                        },
-
-                        #[local_ref]
-                        share_list -> gtk::ListBox {
-                            set_selection_mode: gtk::SelectionMode::None,
-                            set_valign: gtk::Align::Start,
-                            add_css_class: "boxed-list",
-                            // The rows are built in `init`: each carries a
-                            // message of its own, which the view macro cannot
-                            // express as cleanly as a loop can.
-                        },
-
-                        // Said here, not on a page of its own: this only
-                        // matters at the moment someone picks "a window", and
-                        // a fact kept somewhere else is a fact nobody reads.
-                        gtk::Label {
+                        // Step one: who receives.
+                        gtk::Box {
+                            set_orientation: gtk::Orientation::Vertical,
+                            set_spacing: 8,
                             #[watch]
-                            set_label: &tr!(
-                                "Your desktop will ask which window. Only visible windows can \
-                                 be shared, and closing the window ends the session."
-                            ),
+                            set_visible: model.step == Step::Device,
+
+                            #[local_ref]
+                            device_list -> gtk::ListBox {
+                                set_selection_mode: gtk::SelectionMode::None,
+                                set_valign: gtk::Align::Start,
+                                add_css_class: "boxed-list",
+                            },
+                        },
+
+                        // Step two: what to send there.
+                        gtk::Box {
+                            set_orientation: gtk::Orientation::Vertical,
+                            set_spacing: 12,
                             #[watch]
-                            set_visible: model.source == SourceType::Window,
-                            set_xalign: 0.0,
-                            set_wrap: true,
-                            set_margin_top: 8,
-                            add_css_class: "dim-label",
-                        },
+                            set_visible: model.step == Step::Action,
 
-                        gtk::Label {
-                            set_label: &tr!("Then pick a device"),
-                            set_xalign: 0.0,
-                            set_margin_top: 18,
-                            add_css_class: "section-heading",
-                        },
+                            gtk::Box {
+                                set_spacing: 8,
 
-                        #[local_ref]
-                        device_list -> gtk::ListBox {
-                            set_selection_mode: gtk::SelectionMode::None,
-                            set_valign: gtk::Align::Start,
-                            add_css_class: "boxed-list",
+                                gtk::Button {
+                                    set_valign: gtk::Align::Center,
+                                    connect_clicked => HomeMsg::Back,
+                                    adw::ButtonContent {
+                                        set_icon_name: "go-previous-symbolic",
+                                        set_label: &tr!("Back"),
+                                    },
+                                },
+                                gtk::Label {
+                                    #[watch]
+                                    set_label: &model.chosen_name(),
+                                    set_xalign: 0.0,
+                                    set_hexpand: true,
+                                    set_ellipsize: gtk::pango::EllipsizeMode::End,
+                                    add_css_class: "title-2",
+                                },
+                            },
+
+                            #[local_ref]
+                            action_grid -> gtk::FlowBox {
+                                set_selection_mode: gtk::SelectionMode::None,
+                                set_max_children_per_line: 2,
+                                set_min_children_per_line: 1,
+                                set_column_spacing: 12,
+                                set_row_spacing: 12,
+                                set_homogeneous: true,
+                            },
+
+                            gtk::Label {
+                                #[watch]
+                                set_label: &tr!(
+                                    "Sharing a window opens your desktop’s own picker. Only \
+                                     visible windows can be shared."
+                                ),
+                                set_xalign: 0.0,
+                                set_wrap: true,
+                                add_css_class: "dim-label",
+                            },
                         },
                     },
 
-                    // The right-hand column.
+                    // The right-hand column: what is running, and advice.
                     gtk::Box {
                         set_orientation: gtk::Orientation::Vertical,
                         set_spacing: 14,
@@ -319,9 +343,6 @@ impl Component for HomePage {
                             },
                         },
 
-                        // Only shown while a session is running: "excellent
-                        // quality" next to nothing at all would be a claim
-                        // about a link that has not been used yet.
                         gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,
                             set_spacing: 4,
@@ -348,9 +369,6 @@ impl Component for HomePage {
                                     set_label: &super::quality_bars(
                                         model.session.as_ref().and_then(|s| s.quality)
                                     ),
-                                    // Hidden where nothing can be measured:
-                                    // four empty bars would read as "no
-                                    // signal" rather than "not measured".
                                     #[watch]
                                     set_visible: model.measurable(),
                                     #[watch]
@@ -399,100 +417,59 @@ impl Component for HomePage {
             FactoryVecDeque::builder()
                 .launch_default()
                 .forward(sender.input_sender(), |output| match output {
-                    DeviceRowOutput::Activated(id) => HomeMsg::Activated(id),
+                    DeviceRowOutput::Activated(id) => HomeMsg::Selected(id),
                 });
 
-        // The four ways to share. Built here rather than in the view macro:
-        // each row carries a different message, and a loop says that once.
-        //
-        // The three capture modes carry a switch; "Media" does not, because it
-        // is not a mode — it opens another page.
-        let share_list = gtk::ListBox::new();
-        let mut mode_switches = Vec::new();
-        let mut virtual_row = None;
-        for (icon, colour, title, subtitle, mode) in [
+        // The four things that can be sent, as buttons. Built here rather than
+        // in the view macro because each carries a different message, and a
+        // loop says that once.
+        let action_grid = gtk::FlowBox::new();
+        let mut virtual_button = None;
+        for (icon, colour, title, subtitle, message) in [
             (
                 "video-display-symbolic",
                 "screen",
                 tr!("Whole screen"),
-                tr!("Share everything on your screen"),
-                Some(SourceType::Monitor),
+                tr!("Everything on your screen"),
+                HomeMsg::Act(SourceType::Monitor),
             ),
             (
                 "window-new-symbolic",
                 "window",
                 tr!("A window"),
-                tr!("Choose one window to share"),
-                Some(SourceType::Window),
+                tr!("One window only"),
+                HomeMsg::Act(SourceType::Window),
             ),
             (
                 "video-joined-displays-symbolic",
                 "virtual",
                 tr!("A new screen"),
-                tr!("Create an extra screen just for sharing"),
-                Some(SourceType::Virtual),
+                tr!("An extra desktop, just for this"),
+                HomeMsg::Act(SourceType::Virtual),
             ),
             (
                 "folder-videos-symbolic",
                 "media",
-                tr!("Media"),
-                tr!("Send photos, videos and music"),
-                None,
+                tr!("Send media"),
+                tr!("Photos, videos and music"),
+                HomeMsg::SendMedia,
             ),
         ] {
-            let row = adw::ActionRow::builder()
-                .title(&title)
-                .subtitle(&subtitle)
-                .activatable(true)
-                .build();
-
-            match mode {
-                Some(mode) => {
-                    let toggle = gtk::Switch::builder()
-                        .valign(gtk::Align::Center)
-                        .active(mode == SourceType::Monitor)
-                        .build();
-                    let input = sender.input_sender().clone();
-                    // Only switching *on* carries a decision. Switching a mode
-                    // off would leave nothing selected, so that is answered by
-                    // putting the switches back as they were.
-                    toggle.connect_state_set(move |_, on| {
-                        input.emit(if on {
-                            HomeMsg::Share(mode)
-                        } else {
-                            HomeMsg::RefreshModes
-                        });
-                        gtk::glib::Propagation::Proceed
-                    });
-                    // In front of the icon, so the row says "this one is on"
-                    // before it says what it is.
-                    row.add_prefix(&toggle);
-                    // The whole row selects the mode as well: aiming at a
-                    // switch is fussy when the label beside it means the same.
-                    let input = sender.input_sender().clone();
-                    row.connect_activated(move |_| input.emit(HomeMsg::Share(mode)));
-                    mode_switches.push((mode, toggle));
-                    if colour == "virtual" {
-                        virtual_row = Some(row.clone());
-                    }
-                }
-                None => {
-                    row.add_suffix(&gtk::Image::builder().icon_name("go-next-symbolic").build());
-                    let input = sender.input_sender().clone();
-                    row.connect_activated(move |_| input.emit(HomeMsg::OpenMedia));
-                }
+            let button = action_button(icon, colour, &title, &subtitle);
+            let input = sender.input_sender().clone();
+            let message = message.clone();
+            button.connect_clicked(move |_| input.emit(message.clone()));
+            if colour == "virtual" {
+                virtual_button = Some(button.clone());
             }
-            row.add_prefix(&mode_icon(icon, colour));
-            share_list.append(&row);
+            action_grid.append(&button);
         }
 
         let model = HomePage {
             devices,
-            share_list: share_list.clone(),
-            mode_switches,
-            virtual_row: virtual_row.expect("the virtual screen row is always built"),
-            source: SourceType::Monitor,
-            settling: false,
+            virtual_button: virtual_button.expect("the extra-screen button is always built"),
+            step: Step::Device,
+            chosen: None,
             session: None,
             empty: true,
             searching: true,
@@ -504,7 +481,7 @@ impl Component for HomePage {
             .set_placeholder(Some(&searching_placeholder()));
 
         let device_list = model.devices.widget();
-        let share_list = &model.share_list;
+        let action_grid = &action_grid;
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
@@ -519,6 +496,19 @@ impl Component for HomePage {
         match message {
             HomeMsg::Devices(entries) => {
                 self.empty = entries.is_empty();
+                // The receiver being acted on may change state, or leave.
+                if let Some(chosen) = &self.chosen {
+                    match entries.iter().find(|e| e.id == chosen.id) {
+                        Some(fresh) => self.chosen = Some(fresh.clone()),
+                        None => {
+                            // Gone from the network: there is nothing to act on
+                            // any more, so the page goes back rather than
+                            // offering buttons that would fail.
+                            self.chosen = None;
+                            self.step = Step::Device;
+                        }
+                    }
+                }
                 sync_rows(&mut self.devices, entries);
             }
             HomeMsg::Session(session) => self.session = session,
@@ -532,39 +522,48 @@ impl Component for HomePage {
             }
             HomeMsg::VirtualAvailable(available) => {
                 self.virtual_available = available;
-                // Kept in place but insensitive, with the reason in a tooltip.
-                // Hiding it would leave the person wondering whether the
-                // feature exists at all.
-                self.virtual_row.set_sensitive(available);
+                // Left in place but insensitive: hiding it would leave the
+                // person wondering whether the feature exists at all.
+                self.virtual_button.set_sensitive(available);
                 if !available {
-                    self.virtual_row.set_tooltip_text(Some(&tr!(
-                        "This desktop cannot create an extra screen (it needs GNOME running natively)"
+                    self.virtual_button.set_tooltip_text(Some(&tr!(
+                        "This desktop cannot create an extra screen (it needs GNOME running \
+                         natively)"
                     )));
                 }
             }
-            HomeMsg::Activated(id) => {
-                sender.output(HomeOutput::Cast(id)).ok();
-            }
-            HomeMsg::Share(source) => {
-                // Echoes of the switches being written to are not decisions.
-                if self.settling {
-                    return;
-                }
-                self.source = source;
-                self.show_selection();
-                sender.output(HomeOutput::Source(source)).ok();
-            }
-            HomeMsg::Source(source) => {
-                self.source = source;
-                self.show_selection();
-            }
-            HomeMsg::RefreshModes => {
-                if !self.settling {
-                    self.show_selection();
+            HomeMsg::Selected(id) => {
+                self.chosen = self
+                    .devices
+                    .iter()
+                    .find(|row| row.entry.id == id)
+                    .map(|row| row.entry.clone());
+                if self.chosen.is_some() {
+                    self.step = Step::Action;
                 }
             }
-            HomeMsg::OpenMedia => {
-                sender.output(HomeOutput::Navigate(Page::Media)).ok();
+            HomeMsg::Back => {
+                self.step = Step::Device;
+                self.chosen = None;
+            }
+            HomeMsg::Act(source) => {
+                if let Some(chosen) = &self.chosen {
+                    sender
+                        .output(HomeOutput::Cast {
+                            id: chosen.id.clone(),
+                            source,
+                        })
+                        .ok();
+                    // Back to the list: what happens next is a running session,
+                    // and that is shown beside it.
+                    self.step = Step::Device;
+                }
+            }
+            HomeMsg::SendMedia => {
+                if let Some(chosen) = &self.chosen {
+                    sender.output(HomeOutput::SendMedia(chosen.id.clone())).ok();
+                    self.step = Step::Device;
+                }
             }
             HomeMsg::Stop => {
                 sender.output(HomeOutput::Stop).ok();
@@ -575,33 +574,42 @@ impl Component for HomePage {
 }
 
 impl HomePage {
-    /// Puts exactly one switch on: the mode in force.
-    ///
-    /// Written from the model rather than left to the widgets, because a switch
-    /// the person turned off has to come back on if it was the selected one —
-    /// there is no state in which nothing is selected.
-    fn show_selection(&mut self) {
-        self.settling = true;
-        for (mode, toggle) in &self.mode_switches {
-            let wanted = *mode == self.source;
-            if toggle.is_active() != wanted {
-                toggle.set_active(wanted);
-            }
+    /// The heading, which follows the step.
+    fn title(&self) -> String {
+        match self.step {
+            Step::Device => tr!("Ready to share"),
+            Step::Action => tr!("What do you want to share?"),
         }
-        self.settling = false;
+    }
+
+    fn subtitle(&self) -> String {
+        match self.step {
+            Step::Device => tr!("Choose the device to send to."),
+            Step::Action => self
+                .chosen
+                .as_ref()
+                .map(|d| format!("{} · {}", d.name, d.subtitle()))
+                .unwrap_or_default(),
+        }
+    }
+
+    fn chosen_name(&self) -> String {
+        self.chosen
+            .as_ref()
+            .map(|d| d.name.clone())
+            .unwrap_or_default()
     }
 
     fn session_field<F: Fn(&SessionInfo) -> String>(&self, f: F) -> String {
         self.session.as_ref().map(f).unwrap_or_default()
     }
 
+    /// Is there a measurement to show for this session’s protocol?
+    fn measurable(&self) -> bool {
+        self.session.as_ref().map(|s| s.measurable).unwrap_or(false)
+    }
+
     /// What is known about the link, measured rather than assumed.
-    ///
-    /// The round trip is a real measurement — the time to open a connection to
-    /// the port the receiver is already listening on — so the word beside it
-    /// ("Excellent", "Weak") stands for a number a person could check, not for
-    /// a mood. What it deliberately does not claim is bandwidth: a link can
-    /// answer in 8 ms and still not carry the picture.
     fn connection_line(&self) -> String {
         let Some(session) = &self.session else {
             return String::new();
@@ -618,11 +626,6 @@ impl HomePage {
             parts.push(hint);
         }
         parts.join(" · ")
-    }
-
-    /// Is there a measurement to show for this session's protocol?
-    fn measurable(&self) -> bool {
-        self.session.as_ref().map(|s| s.measurable).unwrap_or(false)
     }
 
     /// The colour of the bars: green while the link is fine, amber when not.
@@ -653,10 +656,6 @@ impl HomePage {
 }
 
 /// Recovers the protocol from its label, for the latency hint.
-///
-/// Round-tripping a translated string is not something to be proud of, but the
-/// alternative — carrying the `SinkKind` into every page — spreads the sink
-/// type through the interface for one line of text.
 fn sink_kind_of(protocol: &str) -> nd_core::sink::SinkKind {
     use nd_core::sink::SinkKind;
     if protocol == super::protocol_label(SinkKind::WfdP2p) {
@@ -666,6 +665,45 @@ fn sink_kind_of(protocol: &str) -> nd_core::sink::SinkKind {
     } else {
         SinkKind::AirPlay
     }
+}
+
+/// One thing that can be sent, as a button rather than a row.
+///
+/// A row with a switch asked the person to set a mode and then go looking for
+/// what applies it. A button is the verb itself: pressing it starts that.
+fn action_button(icon: &str, colour: &str, title: &str, subtitle: &str) -> gtk::Button {
+    let image = gtk::Image::builder()
+        .icon_name(icon)
+        .pixel_size(24)
+        .css_classes(["share-icon", colour])
+        .build();
+
+    let text = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .valign(gtk::Align::Center)
+        .build();
+    let name = gtk::Label::builder()
+        .label(title)
+        .xalign(0.0)
+        .css_classes(["heading"])
+        .build();
+    let detail = gtk::Label::builder()
+        .label(subtitle)
+        .xalign(0.0)
+        .wrap(true)
+        .css_classes(["dim-label", "caption"])
+        .build();
+    text.append(&name);
+    text.append(&detail);
+
+    let content = gtk::Box::builder().spacing(12).build();
+    content.append(&image);
+    content.append(&text);
+
+    gtk::Button::builder()
+        .child(&content)
+        .css_classes(["action-tile"])
+        .build()
 }
 
 /// Brings the factory in line with `entries`, in place.
@@ -727,13 +765,4 @@ fn nothing_found_placeholder() -> adw::StatusPage {
         .build();
     page.add_css_class("compact");
     page
-}
-
-/// The coloured square in front of a "what to share" row.
-fn mode_icon(icon: &str, colour: &str) -> gtk::Image {
-    gtk::Image::builder()
-        .icon_name(icon)
-        .pixel_size(24)
-        .css_classes(["share-icon", colour])
-        .build()
 }

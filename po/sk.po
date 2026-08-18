@@ -3,8 +3,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-08-08 23:29-0300\n"
-"PO-Revision-Date: 2026-08-13 14:50-0300\n"
+"POT-Creation-Date: 2026-08-18 12:19-0300\n"
+"PO-Revision-Date: 2026-08-17 22:27-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Slovak <sk@li.org>\n"
 "Language: sk\n"
@@ -14,10 +14,10 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2;\n"
 "X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/pages/settings.rs:220
+#: crates/nd-gui/src/pages/settings.rs:226
 msgid ""
-"0 lets the system choose. Set one only if you opened a port on your firewall"
-" by hand."
+"0 lets the system choose. Set one only if you opened a port on your firewall "
+"by hand."
 msgstr ""
 "0 ponechá výber na systéme. Nastavte ho len vtedy, ak ste manuálne otvorili "
 "port v bráne firewall."
@@ -30,39 +30,43 @@ msgstr "Našlo sa 1 zariadenie"
 msgid "1 file selected"
 msgstr "Vybratý 1 súbor"
 
-#: crates/nd-gui/src/app.rs:892
+#: crates/nd-gui/src/app.rs:889
 msgid "1 receiver found"
 msgstr "Našiel sa 1 prijímač"
 
-#: crates/nd-gui/src/pages/settings.rs:130
+#: crates/nd-gui/src/pages/settings.rs:137
 msgid "30 FPS"
 msgstr "30 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:130
+#: crates/nd-gui/src/pages/settings.rs:137
 msgid "60 FPS"
 msgstr "60 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:128
+#: crates/nd-gui/src/pages/settings.rs:134
 msgid "60 is smoother and costs about half as much again in bandwidth"
 msgstr "60 je plynulejší a stojí približne o polovicu väčšiu šírku pásma"
 
 #: crates/nd-gui/src/pages/settings.rs:109
-msgid "A ceiling: a smaller screen is sent as it is"
-msgstr "Strop: menšia obrazovka sa odosiela taká, aká je"
+msgid ""
+"A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver "
+"will accept it."
+msgstr ""
+"Strop: menšia obrazovka sa odosiela tak, ako je. Nad 1080p ju nemusí každý "
+"prijímač akceptovať."
 
-#: crates/nd-gui/src/pages/home.rs:431
+#: crates/nd-gui/src/pages/home.rs:446
 msgid "A new screen"
 msgstr "Nová obrazovka"
 
-#: crates/nd-gui/src/app.rs:931
+#: crates/nd-gui/src/app.rs:928
 msgid "A stream is already running"
 msgstr "Stream už beží"
 
-#: crates/nd-gui/src/pages/home.rs:424
+#: crates/nd-gui/src/pages/home.rs:439
 msgid "A window"
 msgstr "Okno"
 
-#: crates/nd-gui/src/app.rs:299
+#: crates/nd-gui/src/app.rs:300
 msgid "About BigNetScreen"
 msgstr "O aplikácii BigNetScreen"
 
@@ -78,7 +82,11 @@ msgstr "AirPlay"
 msgid "All protocols"
 msgstr "Všetky protokoly"
 
-#: crates/nd-gui/src/pages/settings.rs:153
+#: crates/nd-gui/src/pages/home.rs:447
+msgid "An extra desktop, just for this"
+msgstr "Extra pracovná plocha len pre toto"
+
+#: crates/nd-gui/src/pages/settings.rs:160
 msgid "Audio"
 msgstr "Zvuk"
 
@@ -87,11 +95,11 @@ msgid "Automatic"
 msgstr "Automaticky"
 
 #: crates/nd-gui/src/pages/devices.rs:168
-#: crates/nd-gui/src/pages/settings.rs:202
+#: crates/nd-gui/src/pages/settings.rs:209
 msgid "Automatic discovery"
 msgstr "Automatické zisťovanie"
 
-#: crates/nd-gui/src/app.rs:422 crates/nd-gui/src/app.rs:881
+#: crates/nd-gui/src/app.rs:424 crates/nd-gui/src/app.rs:878
 msgid "Automatic discovery is off"
 msgstr "Automatické zisťovanie je vypnuté"
 
@@ -99,13 +107,19 @@ msgstr "Automatické zisťovanie je vypnuté"
 msgid "Available"
 msgstr "Dostupné"
 
-#: crates/nd-gui/src/pages/settings.rs:142
+#: crates/nd-gui/src/pages/home.rs:255
+msgid "Back"
+msgstr "Späť"
+
+#: crates/nd-gui/src/pages/settings.rs:148
 msgid ""
-"Buffers the picture so video plays smoothly. Everything arrives later, the "
-"pointer included — best when you are only watching."
+"Buffers the picture so video plays smoothly, at the cost of delay. On "
+"Miracast it is applied here; on Chromecast it is a request the receiver may "
+"ignore."
 msgstr ""
-"Ukladá obraz do vyrovnávacej pamäte, aby sa video prehrávalo plynulo. Všetko"
-" prichádza neskôr, vrátane kurzora — najlepšie, keď sa iba pozeráte."
+"Ukladá obraz do vyrovnávacej pamäte, aby video prehrávalo plynulo, na úkor "
+"oneskorenia. Pri Miracaste sa použije tu; pri Chromecaste ide o požiadavku, "
+"ktorú môže prijímač ignorovať."
 
 #: crates/nd-gui/src/pages/media.rs:548
 msgid "Choose a device…"
@@ -119,14 +133,9 @@ msgstr "Vybrať priečinok"
 msgid "Choose files"
 msgstr "Vybrať súbory"
 
-#: crates/nd-gui/src/pages/home.rs:425
-msgid "Choose one window to share"
-msgstr "Vyberte jedno okno na zdieľanie"
-
-#: crates/nd-gui/src/pages/home.rs:196
-msgid "Choose what to share, then pick a device to send it to."
-msgstr ""
-"Vyberte, čo zdieľať, a potom vyberte zariadenie, na ktoré to chcete odoslať."
+#: crates/nd-gui/src/pages/home.rs:587
+msgid "Choose the device to send to."
+msgstr "Vyberte zariadenie, na ktoré chcete odosielať."
 
 #: crates/nd-gui/src/pages/media.rs:573
 msgid "Choose which device to send to."
@@ -144,56 +153,56 @@ msgstr "Chromecast / AirPlay"
 msgid "Chromecast / AirPlay only"
 msgstr "Iba Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/home.rs:646 crates/nd-gui/src/pages/home.rs:723
+#: crates/nd-gui/src/pages/home.rs:648 crates/nd-gui/src/pages/home.rs:760
 msgid ""
-"Chromecasts show up on their own. A TV or projector only appears while it is"
-" in screen mirroring mode — on Fire TV, under Settings › Display and Sounds "
-"› Display Mirroring."
+"Chromecasts show up on their own. A TV or projector only appears while it is "
+"in screen mirroring mode — on Fire TV, under Settings › Display and Sounds › "
+"Display Mirroring."
 msgstr ""
 "Chromecasty sa zobrazia samé. Televízor alebo projektor sa zobrazí len v "
-"režime zrkadlenia obrazovky — na Fire TV v časti Nastavenia › Displej a zvuk"
-" › Zrkadlenie displeja."
+"režime zrkadlenia obrazovky — na Fire TV v časti Nastavenia › Displej a "
+"zvuk › Zrkadlenie displeja."
 
 #: crates/nd-gui/src/pages/mod.rs:125
 msgid "Connected"
 msgstr "Pripojené"
 
-#: crates/nd-gui/src/app.rs:264
+#: crates/nd-gui/src/app.rs:265
 msgid "Connected to"
 msgstr "Pripojené k"
 
-#: crates/nd-gui/src/app.rs:948 crates/nd-gui/src/pages/mod.rs:168
+#: crates/nd-gui/src/app.rs:945 crates/nd-gui/src/pages/mod.rs:168
 msgid "Connecting…"
 msgstr "Pripájanie…"
 
-#: crates/nd-gui/src/pages/home.rs:340
+#: crates/nd-gui/src/pages/home.rs:361
 msgid "Connection"
 msgstr "Pripojenie"
 
-#: crates/nd-gui/src/pages/home.rs:338
+#: crates/nd-gui/src/pages/home.rs:359
 msgid "Connection quality"
 msgstr "Kvalita pripojenia"
 
-#: crates/nd-gui/src/pages/home.rs:432
-msgid "Create an extra screen just for sharing"
-msgstr "Vytvoriť extra obrazovku určenú na zdieľanie"
-
-#: crates/nd-gui/src/pages/devices.rs:102 crates/nd-gui/src/pages/mod.rs:47
+#: crates/nd-gui/src/pages/mod.rs:47 crates/nd-gui/src/pages/devices.rs:102
 msgid "Devices"
 msgstr "Zariadenia"
 
-#: crates/nd-gui/src/pages/devices.rs:234 crates/nd-gui/src/pages/home.rs:314
+#: crates/nd-gui/src/pages/home.rs:338 crates/nd-gui/src/pages/devices.rs:234
 msgid "Disconnect"
 msgstr "Odpojiť"
 
-#: crates/nd-gui/src/pages/settings.rs:197
+#: crates/nd-gui/src/pages/settings.rs:204
 msgid "Discovery and devices"
 msgstr "Zisťovanie a zariadenia"
 
-#: crates/nd-gui/src/pages/devices.rs:424 crates/nd-gui/src/pages/mod.rs:129
-#: crates/nd-gui/src/pages/mod.rs:299
+#: crates/nd-gui/src/pages/mod.rs:129 crates/nd-gui/src/pages/mod.rs:299
+#: crates/nd-gui/src/pages/devices.rs:424
 msgid "Discovery only"
 msgstr "Len zisťovanie"
+
+#: crates/nd-gui/src/pages/home.rs:433
+msgid "Everything on your screen"
+msgstr "Všetko na vašej obrazovke"
 
 #: crates/nd-gui/src/pages/mod.rs:223
 msgid "Excellent"
@@ -203,7 +212,7 @@ msgstr "Výborné"
 msgid "Failed"
 msgstr "Zlyhanie"
 
-#: crates/nd-gui/src/pages/settings.rs:140
+#: crates/nd-gui/src/pages/settings.rs:147
 msgid "Film mode"
 msgstr "Filmový režim"
 
@@ -215,11 +224,11 @@ msgstr "Nájsť a pripojiť sa k blízkym bezdrôtovým prijímačom."
 msgid "Finished"
 msgstr "Dokončené"
 
-#: crates/nd-gui/src/pages/settings.rs:218
+#: crates/nd-gui/src/pages/settings.rs:225
 msgid "Fixed port"
 msgstr "Pevný port"
 
-#: crates/nd-gui/src/pages/settings.rs:126
+#: crates/nd-gui/src/pages/settings.rs:133
 msgid "Frame rate"
 msgstr "Snímková frekvencia"
 
@@ -227,11 +236,11 @@ msgstr "Snímková frekvencia"
 msgid "Good"
 msgstr "Dobrá"
 
-#: crates/nd-gui/src/app.rs:355
+#: crates/nd-gui/src/app.rs:356
 msgid "Got it"
 msgstr "Rozumiem"
 
-#: crates/nd-gui/src/pages/settings.rs:111
+#: crates/nd-gui/src/pages/settings.rs:116
 msgid "High (1080p)"
 msgstr "Vysoká (1080p)"
 
@@ -239,71 +248,83 @@ msgstr "Vysoká (1080p)"
 msgid "Home"
 msgstr "Domov"
 
-#: crates/nd-gui/src/pages/settings.rs:158
+#: crates/nd-gui/src/pages/settings.rs:165
 msgid "Include system audio"
 msgstr "Zahrnúť systémový zvuk"
 
-#: crates/nd-gui/src/pages/settings.rs:167
+#: crates/nd-gui/src/pages/settings.rs:174
 msgid "Include the microphone"
 msgstr "Zahrnúť mikrofón"
 
-#: crates/nd-gui/src/pages/home.rs:651
+#: crates/nd-gui/src/pages/home.rs:654
 msgid "Keep every device on the same Wi-Fi network for the best results."
 msgstr ""
 "Pre najlepšie výsledky udržujte všetky zariadenia v rovnakej Wi-Fi sieti."
 
-#: crates/nd-gui/src/app.rs:1127
+#: crates/nd-gui/src/app.rs:1124
 msgid "Local network discovery unavailable"
 msgstr "Zisťovanie v lokálnej sieti nie je dostupné"
 
-#: crates/nd-gui/src/pages/settings.rs:203
+#: crates/nd-gui/src/pages/settings.rs:210
 msgid "Look for receivers as soon as the app starts"
 msgstr "Hľadať prijímače hneď po spustení aplikácie"
 
-#: crates/nd-gui/src/pages/home.rs:709
+#: crates/nd-gui/src/pages/home.rs:747
 msgid "Looking for receivers…"
 msgstr "Hľadajú sa prijímače…"
 
-#: crates/nd-gui/src/pages/settings.rs:113
+#: crates/nd-gui/src/pages/settings.rs:118
 msgid "Low (480p)"
 msgstr "Nízka (480p)"
+
+#: crates/nd-gui/src/pages/settings.rs:114
+msgid "Maximum (2160p)"
+msgstr "Maximálne (2160p)"
 
 #: crates/nd-gui/src/pages/mod.rs:220
 msgid "Measuring…"
 msgstr "Meriam…"
 
-#: crates/nd-gui/src/pages/home.rs:438 crates/nd-gui/src/pages/mod.rs:48
+#: crates/nd-gui/src/pages/mod.rs:48
 msgid "Media"
 msgstr "Médiá"
 
-#: crates/nd-gui/src/pages/settings.rs:112
+#: crates/nd-gui/src/pages/settings.rs:117
 msgid "Medium (720p)"
 msgstr "Stredná (720p)"
 
-#: crates/nd-gui/src/pages/settings.rs:175
+#: crates/nd-gui/src/pages/settings.rs:182
 msgid "Microphone volume"
 msgstr "Hlasitosť mikrofónu"
 
-#: crates/nd-gui/src/pages/devices.rs:323 crates/nd-gui/src/pages/mod.rs:151
+#: crates/nd-gui/src/pages/mod.rs:151 crates/nd-gui/src/pages/devices.rs:323
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1187
+#: crates/nd-gui/src/app.rs:1183
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
 msgstr ""
 "Miracast nefunguje v zostave Flatpak (vyžaduje systémový NetworkManager)"
 
+#: crates/nd-gui/src/app.rs:1191
+msgid ""
+"Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
+"network still works."
+msgstr ""
+"Miracast vyžaduje Wi-Fi adaptér, ale tento počítač žiadny nemá. Streamovanie "
+"cez sieť stále funguje."
+
 #: crates/nd-gui/src/pages/settings.rs:94
 msgid "Miracast only"
 msgstr "Iba Miracast"
 
-#: crates/nd-gui/src/app.rs:1193
+#: crates/nd-gui/src/app.rs:1199
 msgid "Miracast unavailable"
 msgstr "Miracast nie je dostupný"
 
-#: crates/nd-gui/src/app.rs:1191
+#: crates/nd-gui/src/app.rs:1197
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast nie je dostupný: táto Wi-Fi karta nepodporuje Wi-Fi Direct"
 
@@ -311,7 +332,7 @@ msgstr "Miracast nie je dostupný: táto Wi-Fi karta nepodporuje Wi-Fi Direct"
 msgid "Mirror screen"
 msgstr "Zrkadliť obrazovku"
 
-#: crates/nd-gui/src/pages/settings.rs:168
+#: crates/nd-gui/src/pages/settings.rs:175
 msgid "Mix your voice into what is sent"
 msgstr "Primiešať váš hlas do vysielaného obsahu"
 
@@ -337,7 +358,7 @@ msgstr "V priečinku Hudba nie je žiadna hudba. Použite „Vybrať súbory“.
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "V priečinku Obrázky nie sú žiadne fotky. Použite „Vybrať súbory“."
 
-#: crates/nd-gui/src/app.rs:889 crates/nd-gui/src/pages/home.rs:718
+#: crates/nd-gui/src/app.rs:886 crates/nd-gui/src/pages/home.rs:756
 msgid "No receivers found"
 msgstr "Nenašli sa žiadne prijímače"
 
@@ -353,6 +374,10 @@ msgstr "Nič nie je vybraté"
 msgid "Now playing"
 msgstr "Práve prehrávané"
 
+#: crates/nd-gui/src/pages/home.rs:440
+msgid "One window only"
+msgstr "Len jedno okno"
+
 #: crates/nd-gui/src/pages/mod.rs:169
 msgid "Opening the firewall port…"
 msgstr "Otváram port firewallu…"
@@ -361,17 +386,9 @@ msgstr "Otváram port firewallu…"
 msgid "Photos"
 msgstr "Fotky"
 
-#: crates/nd-gui/src/app.rs:494
-msgid "Pick a device for the extra screen"
-msgstr "Vyberte zariadenie pre prídavnú obrazovku"
-
-#: crates/nd-gui/src/app.rs:493
-msgid "Pick a device to share a window with"
-msgstr "Vyberte zariadenie na zdieľanie okna"
-
-#: crates/nd-gui/src/app.rs:492
-msgid "Pick a device to share your screen with"
-msgstr "Vyberte zariadenie na zdieľanie obrazovky"
+#: crates/nd-gui/src/pages/home.rs:454
+msgid "Photos, videos and music"
+msgstr "Fotografie, videá a hudba"
 
 #: crates/nd-gui/src/pages/media.rs:255
 msgid "Pick files and choose where to play them."
@@ -393,7 +410,7 @@ msgstr "Protokol"
 msgid "Ready"
 msgstr "Pripravené"
 
-#: crates/nd-gui/src/pages/home.rs:191
+#: crates/nd-gui/src/pages/home.rs:580
 msgid "Ready to share"
 msgstr "Pripravené na zdieľanie"
 
@@ -401,20 +418,20 @@ msgstr "Pripravené na zdieľanie"
 msgid "Refresh"
 msgstr "Obnoviť"
 
-#: crates/nd-gui/src/pages/settings.rs:265
+#: crates/nd-gui/src/pages/settings.rs:272
 msgid "Restore defaults"
 msgstr "Obnoviť predvolené"
 
-#: crates/nd-gui/src/pages/settings.rs:248
+#: crates/nd-gui/src/pages/settings.rs:255
 msgid "Saved as you change them"
 msgstr "Ukladá sa pri zmene"
 
-#: crates/nd-gui/src/app.rs:330 crates/nd-gui/src/pages/devices.rs:115
+#: crates/nd-gui/src/app.rs:331 crates/nd-gui/src/pages/devices.rs:115
 msgid "Scan again"
 msgstr "Skenovať znova"
 
-#: crates/nd-gui/src/app.rs:420 crates/nd-gui/src/app.rs:503
-#: crates/nd-gui/src/app.rs:887
+#: crates/nd-gui/src/app.rs:422 crates/nd-gui/src/app.rs:501
+#: crates/nd-gui/src/app.rs:884
 msgid "Searching…"
 msgstr "Vyhľadávanie…"
 
@@ -426,13 +443,9 @@ msgstr "Vybrať súbory"
 msgid "Send a folder"
 msgstr "Odoslať priečinok"
 
-#: crates/nd-gui/src/pages/devices.rs:248
+#: crates/nd-gui/src/pages/home.rs:453 crates/nd-gui/src/pages/devices.rs:248
 msgid "Send media"
 msgstr "Odoslať médiá"
-
-#: crates/nd-gui/src/pages/home.rs:439
-msgid "Send photos, videos and music"
-msgstr "Odoslať fotografie, videá a hudbu"
 
 #: crates/nd-gui/src/pages/media.rs:351
 msgid "Send to"
@@ -442,11 +455,11 @@ msgstr "Odoslať do"
 msgid "Send to device"
 msgstr "Odoslať do zariadenia"
 
-#: crates/nd-gui/src/pages/settings.rs:159
+#: crates/nd-gui/src/pages/settings.rs:166
 msgid "Send whatever this computer is playing"
 msgstr "Odoslať to, čo tento počítač prehráva"
 
-#: crates/nd-gui/src/app.rs:695 crates/nd-gui/src/app.rs:989
+#: crates/nd-gui/src/app.rs:693 crates/nd-gui/src/app.rs:986
 msgid "Sending files…"
 msgstr "Odosielanie súborov…"
 
@@ -454,32 +467,36 @@ msgstr "Odosielanie súborov…"
 msgid "Settings"
 msgstr "Nastavenia"
 
-#: crates/nd-gui/src/pages/settings.rs:379
+#: crates/nd-gui/src/pages/settings.rs:388
 msgid "Settings cannot be saved on this system."
 msgstr "Nastavenia sa na tomto systéme nedajú uložiť."
-
-#: crates/nd-gui/src/pages/home.rs:418
-msgid "Share everything on your screen"
-msgstr "Zdieľať všetko z obrazovky"
 
 #: crates/nd-gui/src/pages/media.rs:250
 msgid "Share media"
 msgstr "Zdieľať médiá"
 
-#: crates/nd-gui/src/app.rs:230
+#: crates/nd-gui/src/app.rs:231
 msgid "Share your screen wirelessly"
 msgstr "Zdieľajte svoju obrazovku bezdrôtovo"
 
-#: crates/nd-gui/src/app.rs:1206
+#: crates/nd-gui/src/app.rs:1212
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr ""
 "Zdieľajte svoju obrazovku s televízorom, projektorom alebo Chromecastom."
 
-#: crates/nd-gui/src/app.rs:320
+#: crates/nd-gui/src/pages/home.rs:280
+msgid ""
+"Sharing a window opens your desktop’s own picker. Only visible windows can "
+"be shared."
+msgstr ""
+"Zdieľanie okna otvorí vlastný výber vašej pracovnej plochy. Zdieľať možno "
+"len viditeľné okná."
+
+#: crates/nd-gui/src/app.rs:321
 msgid "Show the sidebar"
 msgstr "Zobraziť bočný panel"
 
-#: crates/nd-gui/src/pages/home.rs:640
+#: crates/nd-gui/src/pages/home.rs:642
 msgid ""
 "Sound goes to the receiver and to this computer. Mute this computer if you "
 "hear an echo."
@@ -491,7 +508,7 @@ msgstr ""
 msgid "Status"
 msgstr "Stav"
 
-#: crates/nd-gui/src/app.rs:337
+#: crates/nd-gui/src/app.rs:338
 msgid "Stop"
 msgstr "Zastaviť"
 
@@ -499,11 +516,11 @@ msgstr "Zastaviť"
 msgid "Stop sending"
 msgstr "Zastaviť odosielanie"
 
-#: crates/nd-gui/src/app.rs:983
+#: crates/nd-gui/src/app.rs:980
 msgid "Stop sharing your screen before sending files"
 msgstr "Pred odosielaním súborov zastavte zdieľanie obrazovky"
 
-#: crates/nd-gui/src/app.rs:920
+#: crates/nd-gui/src/app.rs:917
 msgid "Stopping…"
 msgstr "Zastavovanie…"
 
@@ -523,7 +540,7 @@ msgstr "Kvalita streamovania"
 msgid "Test"
 msgstr "Test"
 
-#: crates/nd-gui/src/app.rs:976 crates/nd-gui/src/app.rs:993
+#: crates/nd-gui/src/app.rs:973 crates/nd-gui/src/app.rs:990
 msgid "That device is no longer available"
 msgstr "Toto zariadenie už nie je k dispozícii"
 
@@ -531,28 +548,28 @@ msgstr "Toto zariadenie už nie je k dispozícii"
 msgid "The receiver is not answering"
 msgstr "Prijímač neodpovedá"
 
-#: crates/nd-gui/src/pages/home.rs:253
-msgid "Then pick a device"
-msgstr "Potom vyberte zariadenie"
-
 #: crates/nd-gui/src/pages/settings.rs:78
 msgid "These apply to your next session."
 msgstr "Tieto sa vzťahujú na vašu ďalšiu reláciu."
 
-#: crates/nd-gui/src/pages/settings.rs:211
+#: crates/nd-gui/src/pages/settings.rs:218
 msgid "This computer's name"
 msgstr "Názov tohto počítača"
 
-#: crates/nd-gui/src/pages/home.rs:541
+#: crates/nd-gui/src/pages/home.rs:529
 msgid ""
 "This desktop cannot create an extra screen (it needs GNOME running natively)"
 msgstr ""
 "Táto pracovná plocha nemôže vytvoriť ďalšiu obrazovku (vyžaduje natívne "
 "spustené prostredie GNOME)"
 
-#: crates/nd-gui/src/pages/home.rs:375
+#: crates/nd-gui/src/pages/home.rs:393
 msgid "Tips"
 msgstr "Tipy"
+
+#: crates/nd-gui/src/pages/settings.rs:115
+msgid "Very high (1440p)"
+msgstr "Veľmi vysoké (1440p)"
 
 #: crates/nd-gui/src/pages/media.rs:453
 msgid "Videos"
@@ -566,25 +583,17 @@ msgstr "Čakám na prijímač…"
 msgid "Weak signal"
 msgstr "Slabý signál"
 
-#: crates/nd-gui/src/pages/home.rs:220
-msgid "What to share"
-msgstr "Čo zdieľať"
+#: crates/nd-gui/src/pages/home.rs:581
+msgid "What do you want to share?"
+msgstr "Čo chcete zdieľať?"
 
 #: crates/nd-gui/src/pages/settings.rs:91
 msgid "Which kind of receiver to look for"
 msgstr "Aký druh prijímača hľadať"
 
-#: crates/nd-gui/src/pages/home.rs:417
+#: crates/nd-gui/src/pages/home.rs:432
 msgid "Whole screen"
 msgstr "Celá obrazovka"
-
-#: crates/nd-gui/src/pages/home.rs:241
-msgid ""
-"Your desktop will ask which window. Only visible windows can be shared, and "
-"closing the window ends the session."
-msgstr ""
-"Vaša pracovná plocha sa opýta, ktoré okno. Zdieľať možno len viditeľné okná "
-"a zatvorenie okna ukončí reláciu."
 
 #: crates/nd-gui/src/pages/devices.rs:438
 msgid "devices found"
@@ -614,10 +623,10 @@ msgstr "zatiaľ nezverejnené"
 msgid "quick response"
 msgstr "rýchla odozva"
 
-#: crates/nd-gui/src/app.rs:894
+#: crates/nd-gui/src/app.rs:891
 msgid "receivers found"
 msgstr "našlo sa prijímačov"
 
-#: crates/nd-gui/src/app.rs:942
+#: crates/nd-gui/src/app.rs:939
 msgid "shows up in discovery only"
 msgstr "zobrazuje sa iba pri zisťovaní"

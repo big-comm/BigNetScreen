@@ -301,13 +301,15 @@ impl SessionHandle {
 /// for the whole session.
 pub async fn run(
     receiver_ip: IpAddr,
+    // The control port the receiver announced over mDNS.
+    receiver_port: u16,
     source: CaptureSource,
     status: &SinkStatus,
     cancel: tokio::sync::watch::Receiver<bool>,
 ) -> Result<()> {
     let video = source.video_source();
     let size = source.size_or((1920, 1080));
-    let result = run_with_video(receiver_ip, video, size, status, cancel).await;
+    let result = run_with_video(receiver_ip, receiver_port, video, size, status, cancel).await;
     drop(source);
     result
 }
@@ -318,6 +320,7 @@ pub async fn run(
 /// testing without opening the screen capture dialog.
 pub async fn run_with_video(
     receiver_ip: IpAddr,
+    receiver_port: u16,
     video: pipeline::VideoSource,
     size: (u32, u32),
     status: &SinkStatus,
@@ -356,7 +359,7 @@ pub async fn run_with_video(
     // panel (which would rescale) and avoids stretching the picture.
     let (width, height) = StreamConfig::fit_within(
         size,
-        StreamConfig::capped_by_preference(pipeline::CHROMECAST_MAX_RESOLUTION),
+        StreamConfig::preferred_or(pipeline::CHROMECAST_MAX_RESOLUTION),
     );
     if (width, height) != size {
         tracing::info!(
@@ -383,7 +386,7 @@ pub async fn run_with_video(
         width: cfg.width,
         height: cfg.height,
         fps: cfg.fps,
-        endpoint: Some(std::net::SocketAddr::new(receiver_ip, crate::cast::PORT)),
+        endpoint: Some(std::net::SocketAddr::new(receiver_ip, receiver_port)),
     });
 
     let desc = pipeline::chromecast_pipeline_description(&cfg, &video);
@@ -409,7 +412,7 @@ pub async fn run_with_video(
 
     // 3. Control channel: start the receiver app and tell it to fetch the URL.
     status.set(SinkState::WaitSocket);
-    let channel = CastChannel::connect(receiver_ip).await?;
+    let channel = CastChannel::connect_to(receiver_ip, receiver_port).await?;
     let app = channel.launch(DEFAULT_MEDIA_RECEIVER).await?;
     channel.load_media(&app, &url, CONTENT_TYPE).await?;
     tracing::info!(%url, "LOAD sent; waiting for the receiver to fetch the stream");
@@ -615,6 +618,9 @@ pub async fn run_with_video(
     // Teardown: stop the app on the TV before taking the pipeline down, so the
     // receiver is not left showing a media error.
     let _ = channel.stop_app(&app).await;
+    // And the platform connection, so the receiver is free for the next sender
+    // rather than holding this one.
+    channel.close().await;
     drop(guard);
 
     outcome

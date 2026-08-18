@@ -134,6 +134,8 @@ struct StreamSender {
     /// carries; the instant is used to expire by age (see
     /// [`RETRANSMIT_HISTORY`]).
     history: History,
+    /// How many packets the receiver has asked to have sent again.
+    nacks_seen: u64,
     stats: SenderStats,
     /// Outgoing-flow diagnostics: discontinuity in the frames' timestamps (a
     /// hole born before the network) and the largest wall-clock gap between
@@ -170,6 +172,7 @@ impl StreamSender {
             frame_id: 0,
             label,
             history: std::collections::VecDeque::new(),
+            nacks_seen: 0,
             stats: SenderStats::default(),
             flow: FlowWatch::default(),
             last_rtp_timestamp: 0,
@@ -274,6 +277,17 @@ impl StreamSender {
     /// This is what prevents the freeze: without retransmission, one lost
     /// datagram leaves the frame incomplete and the receiver stops advancing.
     fn retransmit(&mut self, nacks: &[Nack]) -> Retransmission {
+        // How much the receiver is asking for again. A picture that stutters
+        // while the encoder holds its frame rate is explained here or nowhere:
+        // either the packets are being lost, or they never left.
+        if !nacks.is_empty() {
+            self.nacks_seen += nacks.len() as u64;
+            tracing::debug!(
+                requested = nacks.len(),
+                total = self.nacks_seen,
+                "the receiver asked for packets again"
+            );
+        }
         let mut sent = 0;
         let mut expired = 0;
         for nack in nacks {
@@ -434,6 +448,8 @@ pub fn is_unsupported(err: &NdError) -> bool {
 /// Runs a mirroring session until cancellation or end of stream.
 pub async fn run(
     receiver_ip: IpAddr,
+    // The control port the receiver announced over mDNS.
+    receiver_port: u16,
     video: pipeline::VideoSource,
     size: (u32, u32),
     status: &SinkStatus,
@@ -447,7 +463,7 @@ pub async fn run(
     let _radio = nd_core::radio::quiet();
 
     // 1. Canal de controle e app de espelhamento.
-    let channel = CastChannel::connect(receiver_ip).await?;
+    let channel = CastChannel::connect_to(receiver_ip, receiver_port).await?;
     let app = channel.launch(MIRRORING_APP_ID).await?;
 
     // 2. Negotiation: the receiver returns the UDP port and accepts (or not)
@@ -455,7 +471,7 @@ pub async fn run(
     status.set(SinkState::WaitSocket);
     let (width, height) = StreamConfig::fit_within(
         size,
-        StreamConfig::capped_by_preference(pipeline::CHROMECAST_MAX_RESOLUTION),
+        StreamConfig::preferred_or(pipeline::CHROMECAST_MAX_RESOLUTION),
     );
     let driver = crate::session::detect_gpu_driver();
     let encoder = *pipeline::encoder_candidates(driver)
@@ -490,11 +506,14 @@ pub async fn run(
         width: cfg.width,
         height: cfg.height,
         fps: cfg.fps,
-        endpoint: Some(std::net::SocketAddr::new(receiver_ip, crate::cast::PORT)),
+        endpoint: Some(std::net::SocketAddr::new(receiver_ip, receiver_port)),
     });
     let result = stream(&cfg, &video, &session, status, &mut cancel).await;
 
     let _ = channel.stop_app(&app).await;
+    // And the platform connection, so the receiver is free for the next sender
+    // rather than holding this one.
+    channel.close().await;
     result
 }
 
@@ -527,7 +546,7 @@ async fn stream(
         .map_err(|e| NdError::Network(e.to_string()))?;
     tracing::debug!(
         origem = ?socket.local_addr().ok(),
-        destino = %target,
+        target = %target,
         "mirroring session socket"
     );
 
@@ -622,7 +641,7 @@ async fn stream(
         .map_err(|e| NdError::Gst(e.to_string()))?;
 
     tracing::info!(
-        destino = %target,
+        target = %target,
         streams = senders.len(),
         "starting Cast mirroring"
     );

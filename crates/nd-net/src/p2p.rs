@@ -51,6 +51,8 @@ pub const FIND_TIMEOUT: Duration = Duration::from_secs(30);
 pub const FIND_RENEW_INTERVAL: Duration = Duration::from_secs(20);
 
 /// `NM_DEVICE_TYPE_WIFI_P2P`.
+/// NetworkManager's device type for an ordinary Wi-Fi station.
+const DEVICE_TYPE_WIFI: u32 = 2;
 const DEVICE_TYPE_WIFI_P2P: u32 = 30;
 
 // ---------------------------------------------------------------------------
@@ -292,6 +294,11 @@ impl P2pDevice {
             .await
             .map_err(|e| classify(e, "GetAllDevices"))?;
 
+        // Noted while walking the list: telling "no wireless hardware" apart
+        // from "wireless that cannot do Wi-Fi Direct" needs to know whether an
+        // ordinary Wi-Fi device exists at all.
+        let mut has_wifi = false;
+
         for dev in devices {
             let device = DeviceProxy::builder(&conn)
                 .path(dev.clone())
@@ -300,7 +307,11 @@ impl P2pDevice {
                 .build()
                 .await
                 .map_err(err)?;
-            if device.device_type().await.unwrap_or(0) == DEVICE_TYPE_WIFI_P2P {
+            let kind = device.device_type().await.unwrap_or(0);
+            if kind == DEVICE_TYPE_WIFI {
+                has_wifi = true;
+            }
+            if kind == DEVICE_TYPE_WIFI_P2P {
                 let p2p = WifiP2pProxy::builder(&conn)
                     .path(dev.clone())
                     .map_err(err)?
@@ -327,6 +338,20 @@ impl P2pDevice {
         // very different actions, so all three are named. Reporting only "the
         // card does not support it" sent people shopping for a Wi-Fi adapter
         // they did not need.
+        // A machine with no wireless hardware at all is the one case where the
+        // usual advice is actively wrong: there is no card to blame, no driver
+        // to update and no backend to switch. Tested on a desktop wired by
+        // Ethernet, where the message sent the person looking for a Wi-Fi
+        // setting that does not exist.
+        if !has_wifi {
+            return Err(NdError::Unsupported(
+                "no Wi-Fi adapter on this computer. Miracast is a direct radio link \
+                 between the two devices, so it needs one — casting over the network \
+                 (Chromecast) works without it"
+                    .into(),
+            ));
+        }
+
         Err(NdError::Unsupported(
             "no Wi-Fi P2P device in NetworkManager. Either this Wi-Fi card does not \
              support Wi-Fi Direct, or the driver does not expose it, or NetworkManager \

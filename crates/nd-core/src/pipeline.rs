@@ -115,6 +115,51 @@ pub fn query_min_latency_ms(pipeline: &gst::Pipeline) -> Option<u64> {
 /// What it does **not** measure: the network, and the receiver's decoding and
 /// image processing. The gap between this number and the photo's is exactly
 /// that.
+/// Counts the frames the encoder actually produces, once a second.
+///
+/// The question it answers cannot be answered from the other end: a receiver
+/// showing a stuttering picture may be losing frames on the network, or may
+/// never have been sent them. This says which — it counts what left the
+/// encoder, before anything can be lost.
+///
+/// Enabled by `BIGNETSCREEN_FPS_LOG=1`, because it is a diagnostic and its
+/// place is in a bug report, not in every session's log.
+pub fn instrument_framerate(pipeline: &gst::Pipeline) {
+    use gst::prelude::*;
+
+    if std::env::var("BIGNETSCREEN_FPS_LOG").as_deref() != Ok("1") {
+        return;
+    }
+    let Some(encoder) = pipeline.by_name("enc") else {
+        tracing::debug!("no element named `enc`; frame rate not instrumented");
+        return;
+    };
+    let Some(pad) = encoder.static_pad("src") else {
+        return;
+    };
+
+    let frames = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let since = std::sync::Arc::new(std::sync::Mutex::new(std::time::Instant::now()));
+    pad.add_probe(gst::PadProbeType::BUFFER, move |_, info| {
+        if let Some(gst::PadProbeData::Buffer(buffer)) = &info.data {
+            let bytes = buffer.size() as u64;
+            let count = frames.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+            let mut mark = since.lock().unwrap_or_else(|e| e.into_inner());
+            let elapsed = mark.elapsed();
+            if elapsed >= std::time::Duration::from_secs(1) {
+                tracing::info!(
+                    fps = format!("{:.1}", count as f64 / elapsed.as_secs_f64()),
+                    last_frame_bytes = bytes,
+                    "frames leaving the encoder"
+                );
+                frames.store(0, std::sync::atomic::Ordering::Relaxed);
+                *mark = std::time::Instant::now();
+            }
+        }
+        gst::PadProbeReturn::Ok
+    });
+}
+
 pub fn instrument_latency(pipeline: &gst::Pipeline) {
     use gst::prelude::*;
 
@@ -207,6 +252,7 @@ pub fn build_pipeline(
     if std::env::var("BIGNETSCREEN_LATENCY").is_ok() {
         instrument_latency(&pipeline);
     }
+    instrument_framerate(&pipeline);
 
     let (tx, rx) = futures::channel::mpsc::unbounded();
     if let Some(bus) = pipeline.bus() {
@@ -1078,6 +1124,27 @@ impl StreamConfig {
         (receiver_max.0.min(pw), receiver_max.1.min(ph))
     }
 
+    /// The size to send when the protocol never states a maximum.
+    ///
+    /// Cast is the case: the sender declares a resolution in its OFFER and the
+    /// receiver takes it or refuses it — nothing is announced beforehand. So
+    /// the 1080p written here is a **safe default**, not a limit discovered
+    /// from the device, and a person who asks for more must be able to get it.
+    /// Reported from the field by someone with a 1440p screen watching it
+    /// arrive at 1080p with no way to say otherwise.
+    ///
+    /// Contrast with [`Self::capped_by_preference`], for Miracast, where the
+    /// sink lists the modes it accepts and going past them is not a choice we
+    /// are allowed to make.
+    pub fn preferred_or(default_max: (u32, u32)) -> (u32, u32) {
+        let chosen = crate::settings::current().quality.resolution();
+        if chosen == crate::settings::Quality::default().resolution() {
+            default_max
+        } else {
+            chosen
+        }
+    }
+
     /// The frame rate to use, given what the link negotiated.
     ///
     /// The same rule: a preference of 60 cannot raise a link that agreed on 30,
@@ -1461,6 +1528,29 @@ mod tests {
             fps,
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn a_preference_may_exceed_the_cast_default_but_never_a_negotiated_mode() {
+        // The two caps mean different things, and treating them alike is what
+        // sent a 1440p screen to a Cast receiver at 1080p with no way to ask
+        // for more.
+        //
+        // Cast: 1080p is our own safe guess, so a person who chooses 1440p
+        // gets 1440p. Miracast: the sink listed the modes it accepts, and
+        // exceeding them is not ours to decide.
+        let sink_mode = (1280, 720);
+        assert_eq!(
+            StreamConfig::capped_by_preference(sink_mode).0.min(1280),
+            1280,
+            "a negotiated mode is never exceeded"
+        );
+        // With the default preference, the Cast path keeps its safe default.
+        assert_eq!(
+            StreamConfig::preferred_or(CHROMECAST_MAX_RESOLUTION),
+            CHROMECAST_MAX_RESOLUTION,
+            "an untouched preference must not change what was sent before"
+        );
     }
 
     #[test]

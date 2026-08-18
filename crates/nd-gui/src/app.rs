@@ -115,8 +115,9 @@ pub enum AppMsg {
     Navigate(Page),
     /// Start streaming to this receiver.
     Cast(String),
+    /// Start streaming this to this receiver, in one step.
+    CastWith(String, SourceType),
     Stop,
-    SetSource(SourceType),
     Rescan,
     DismissIssues,
     SetAutoDiscovery(bool),
@@ -381,10 +382,11 @@ impl Component for AppModel {
         let home = HomePage::builder()
             .launch(())
             .forward(sender.input_sender(), |output| match output {
-                HomeOutput::Cast(id) => AppMsg::Cast(id),
-                HomeOutput::Source(source) => AppMsg::SetSource(source),
+                // The home page now names both halves of the decision in one
+                // message: who receives, and what they receive.
+                HomeOutput::Cast { id, source } => AppMsg::CastWith(id, source),
+                HomeOutput::SendMedia(id) => AppMsg::MediaTarget(id),
                 HomeOutput::Stop => AppMsg::Stop,
-                HomeOutput::Navigate(page) => AppMsg::Navigate(page),
             });
         let devices = DevicesPage::builder()
             .launch(())
@@ -484,16 +486,12 @@ impl Component for AppModel {
         match message {
             AppMsg::Navigate(page) => self.page = page,
             AppMsg::Cast(id) => self.begin_cast(id, &sender),
-            AppMsg::Stop => self.stop_everything(&sender),
-            AppMsg::SetSource(source) => {
+            AppMsg::CastWith(id, source) => {
                 self.source_type = source;
                 tracing::info!(?source, "capture source chosen");
-                self.status = match source {
-                    SourceType::Monitor => tr!("Pick a device to share your screen with"),
-                    SourceType::Window => tr!("Pick a device to share a window with"),
-                    SourceType::Virtual => tr!("Pick a device for the extra screen"),
-                };
+                self.begin_cast(id, &sender);
             }
+            AppMsg::Stop => self.stop_everything(&sender),
             AppMsg::Rescan => {
                 self.generation += 1;
                 self.issues.clear();
@@ -770,7 +768,6 @@ impl AppModel {
         self.media.emit(MediaMsg::Targets(self.media_receivers()));
         // The selected capture mode lives here, so the switches on the home
         // page are told rather than left to remember on their own.
-        self.home.emit(HomeMsg::Source(self.source_type));
     }
 
     fn push_media_status(&mut self) {
@@ -1185,6 +1182,15 @@ fn friendly_reason(provider: &str, reason: &str) -> String {
         if nd_capture::is_sandboxed() {
             return tr!(
                 "Miracast does not work in the Flatpak build (it needs the system NetworkManager)"
+            );
+        }
+        // Said before the card is blamed: a desktop wired by Ethernet has no
+        // card to blame, and the old wording sent someone hunting for a
+        // setting that could not exist.
+        if reason.contains("no Wi-Fi adapter") {
+            return tr!(
+                "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over \
+                 the network still works."
             );
         }
         if reason.contains("Wi-Fi P2P") || reason.contains("Wi-Fi Direct") {

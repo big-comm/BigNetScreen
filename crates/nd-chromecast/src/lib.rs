@@ -302,21 +302,23 @@ impl Sink for MdnsSink {
         let video = source.video_source();
         let size = source.size_or((1920, 1080));
 
-        let result = match mirror_session::run(ip, video, size, &self.status, cancel.clone()).await
-        {
-            Err(err) if mirror_session::is_unsupported(&err) => {
-                tracing::info!(
-                    %err,
-                    "this receiver does not accept mirroring; using the HTTP path"
-                );
-                self.status.reset();
-                session::run(ip, source, &self.status, cancel).await
-            }
-            other => {
-                drop(source);
-                other
-            }
-        };
+        let result =
+            match mirror_session::run(ip, self.port, video, size, &self.status, cancel.clone())
+                .await
+            {
+                Err(err) if mirror_session::is_unsupported(&err) => {
+                    tracing::info!(
+                        %err,
+                        "this receiver does not accept mirroring; using the HTTP path"
+                    );
+                    self.status.reset();
+                    session::run(ip, self.port, source, &self.status, cancel).await
+                }
+                other => {
+                    drop(source);
+                    other
+                }
+            };
 
         *self.session.lock().unwrap_or_else(PoisonError::into_inner) = None;
         match result {

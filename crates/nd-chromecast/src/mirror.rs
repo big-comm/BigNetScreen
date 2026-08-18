@@ -387,9 +387,15 @@ pub async fn negotiate(
             Some("ANSWER") => {
                 let answer = parse_answer(&event.payload, seq_num)?;
                 tracing::info!(
-                    porta = answer.udp_port,
-                    aceitas = ?answer.send_indexes,
-                    "espelhamento negociado"
+                    port = answer.udp_port,
+                    accepted = ?answer.send_indexes,
+                    // The delay asked of the receiver, and the profile that
+                    // chose it. "Film mode changed nothing" is a claim worth
+                    // being able to check rather than argue about: the number
+                    // that left this machine is now in the log.
+                    target_delay_ms = cfg.target_delay_ms,
+                    profile = ?nd_core::latency::current(),
+                    "mirroring negotiated"
                 );
                 return Ok(Negotiated {
                     receiver_ip,

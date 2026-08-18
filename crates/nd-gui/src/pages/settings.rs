@@ -106,16 +106,23 @@ impl Component for SettingsPage {
                         #[name = "quality"]
                         adw::ComboRow {
                             set_title: &tr!("Streaming quality"),
-                            set_subtitle: &tr!("A ceiling: a smaller screen is sent as it is"),
+                            set_subtitle: &tr!(
+                                "A ceiling: a smaller screen is sent as it is. Above 1080p \
+                                 not every receiver will accept it."
+                            ),
                             set_model: Some(&string_list(&[
+                                tr!("Maximum (2160p)"),
+                                tr!("Very high (1440p)"),
                                 tr!("High (1080p)"),
                                 tr!("Medium (720p)"),
                                 tr!("Low (480p)"),
                             ])),
                             connect_selected_notify[sender] => move |row| {
                                 sender.input(SettingsMsg::SetQuality(match row.selected() {
-                                    1 => Quality::Medium,
-                                    2 => Quality::Low,
+                                    0 => Quality::Max,
+                                    1 => Quality::Ultra,
+                                    3 => Quality::Medium,
+                                    4 => Quality::Low,
                                     _ => Quality::High,
                                 }));
                             },
@@ -139,9 +146,9 @@ impl Component for SettingsPage {
                         adw::SwitchRow {
                             set_title: &tr!("Film mode"),
                             set_subtitle: &tr!(
-                                "Buffers the picture so video plays smoothly. Everything \
-                                 arrives later, the pointer included — best when you are \
-                                 only watching."
+                                "Buffers the picture so video plays smoothly, at the cost of \
+                                 delay. On Miracast it is applied here; on Chromecast it is a \
+                                 request the receiver may ignore."
                             ),
                             connect_active_notify[sender] => move |row| {
                                 sender.input(SettingsMsg::SetFilmMode(row.is_active()));
@@ -343,9 +350,11 @@ impl SettingsPage {
             Protocol::Cast => 2,
         });
         widgets.quality.set_selected(match self.settings.quality {
-            Quality::High => 0,
-            Quality::Medium => 1,
-            Quality::Low => 2,
+            Quality::Max => 0,
+            Quality::Ultra => 1,
+            Quality::High => 2,
+            Quality::Medium => 3,
+            Quality::Low => 4,
         });
         widgets
             .fps

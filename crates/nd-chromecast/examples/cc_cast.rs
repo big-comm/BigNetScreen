@@ -89,12 +89,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "capture started (node {}, {:?})",
             source.node_id, source.size
         );
-        let outcome = session::run(ip, source, &status, cancel).await;
+        let outcome = session::run(ip, nd_chromecast::cast::PORT, source, &status, cancel).await;
         let _ = backend.stop().await;
         outcome
     } else {
         eprintln!("streaming a 1280x720 test pattern");
-        session::run_with_video(ip, VideoSource::Test, (1280, 720), &status, cancel).await
+        session::run_with_video(
+            ip,
+            nd_chromecast::cast::PORT,
+            VideoSource::Test,
+            (1280, 720),
+            &status,
+            cancel,
+        )
+        .await
     };
 
     reporter.abort();

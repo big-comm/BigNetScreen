@@ -56,6 +56,14 @@ impl Protocol {
 /// size, and the receiver's own limit still applies on top of this one.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Quality {
+    /// 3840x2160.
+    ///
+    /// Above what a Cast receiver is *known* to take: the protocol never
+    /// declares a maximum, so this is the person saying "send what my screen
+    /// has and let the receiver refuse if it must".
+    Max,
+    /// 2560x1440.
+    Ultra,
     /// 1920x1080.
     #[default]
     High,
@@ -69,6 +77,8 @@ impl Quality {
     /// The resolution cap this quality stands for.
     pub fn resolution(self) -> (u32, u32) {
         match self {
+            Quality::Max => (3840, 2160),
+            Quality::Ultra => (2560, 1440),
             Quality::High => (1920, 1080),
             Quality::Medium => (1280, 720),
             Quality::Low => (854, 480),
@@ -77,6 +87,8 @@ impl Quality {
 
     fn as_key(self) -> &'static str {
         match self {
+            Quality::Max => "max",
+            Quality::Ultra => "ultra",
             Quality::High => "high",
             Quality::Medium => "medium",
             Quality::Low => "low",
@@ -85,6 +97,8 @@ impl Quality {
 
     fn parse(value: &str) -> Option<Self> {
         match value {
+            "max" => Some(Quality::Max),
+            "ultra" => Some(Quality::Ultra),
             "high" => Some(Quality::High),
             "medium" => Some(Quality::Medium),
             "low" => Some(Quality::Low),
@@ -338,14 +352,39 @@ mod tests {
     }
 
     #[test]
-    fn quality_only_ever_caps() {
-        // Every step down is smaller in both axes: a "lower" quality that
-        // enlarged one side would cost bandwidth instead of saving it.
-        let (hw, hh) = Quality::High.resolution();
-        let (mw, mh) = Quality::Medium.resolution();
-        let (lw, lh) = Quality::Low.resolution();
-        assert!(mw < hw && mh < hh);
-        assert!(lw < mw && lh < mh);
+    fn every_step_is_smaller_than_the_one_above_it() {
+        // A "lower" quality that enlarged one side would cost bandwidth
+        // instead of saving it, and a step that repeated the one above would
+        // be a choice with no effect.
+        let ladder = [
+            Quality::Max,
+            Quality::Ultra,
+            Quality::High,
+            Quality::Medium,
+            Quality::Low,
+        ];
+        for pair in ladder.windows(2) {
+            let (aw, ah) = pair[0].resolution();
+            let (bw, bh) = pair[1].resolution();
+            assert!(bw < aw && bh < ah, "{:?} vs {:?}", pair[0], pair[1]);
+        }
+    }
+
+    #[test]
+    fn every_quality_survives_the_file() {
+        for quality in [
+            Quality::Max,
+            Quality::Ultra,
+            Quality::High,
+            Quality::Medium,
+            Quality::Low,
+        ] {
+            let written = Settings {
+                quality,
+                ..Default::default()
+            };
+            assert_eq!(Settings::from_file(&written.to_file()).quality, quality);
+        }
     }
 
     #[test]

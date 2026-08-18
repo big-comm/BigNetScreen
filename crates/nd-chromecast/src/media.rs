@@ -123,6 +123,12 @@ impl MediaSession {
                 shared.finished.store(true, Ordering::SeqCst);
                 // Hand the receiver back to whatever it was showing before.
                 let _ = channel.stop_app(&app).await;
+                // And the platform connection, so the receiver is free for the next sender
+                // rather than holding this one.
+                channel.close().await;
+                // And the platform connection, so the receiver is free for the
+                // next sender rather than holding this one.
+                channel.close().await;
                 // `server` is dropped here: the files stop being reachable the
                 // moment there is nothing left to play.
                 drop(server);

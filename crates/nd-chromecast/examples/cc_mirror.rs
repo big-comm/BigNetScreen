@@ -75,11 +75,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // An animated pattern with a clock: you can tell from across the room
         // whether the picture is live or frozen, and comparing the clock with
         // the local screen measures the delay with no instrumentation at all.
-        None => (VideoSource::Diagnostic, (1280, 720)),
+        // `WxH` on the command line drives the test pattern's size, which is
+        // how a resolution can be exercised without a screen that has it.
+        None => (
+            VideoSource::Diagnostic,
+            rest.iter()
+                .find_map(|a| {
+                    let (w, h) = a.split_once('x')?;
+                    Some((w.parse().ok()?, h.parse().ok()?))
+                })
+                .unwrap_or((1280, 720)),
+        ),
     };
 
     eprintln!("mirroring to {ip} for up to {secs}s…");
-    let result = mirror_session::run(ip, video, size, &status, cancel_rx).await;
+    let result = mirror_session::run(
+        ip,
+        nd_chromecast::cast::PORT,
+        video,
+        size,
+        &status,
+        cancel_rx,
+    )
+    .await;
     reporter.abort();
 
     if let Some((backend, source)) = capture {

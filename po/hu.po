@@ -3,8 +3,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-08-08 23:29-0300\n"
-"PO-Revision-Date: 2026-08-13 14:44-0300\n"
+"POT-Creation-Date: 2026-08-18 12:19-0300\n"
+"PO-Revision-Date: 2026-08-17 22:26-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Hungarian <hu@li.org>\n"
 "Language: hu\n"
@@ -14,10 +14,10 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/pages/settings.rs:220
+#: crates/nd-gui/src/pages/settings.rs:226
 msgid ""
-"0 lets the system choose. Set one only if you opened a port on your firewall"
-" by hand."
+"0 lets the system choose. Set one only if you opened a port on your firewall "
+"by hand."
 msgstr ""
 "A 0 értéknél a rendszer dönt. Csak akkor állítson be értéket, ha a tűzfalon "
 "kézzel nyitott meg egy portot."
@@ -30,41 +30,45 @@ msgstr "1 eszköz található"
 msgid "1 file selected"
 msgstr "1 fájl kijelölve"
 
-#: crates/nd-gui/src/app.rs:892
+#: crates/nd-gui/src/app.rs:889
 msgid "1 receiver found"
 msgstr "1 fogadó eszköz található"
 
-#: crates/nd-gui/src/pages/settings.rs:130
+#: crates/nd-gui/src/pages/settings.rs:137
 msgid "30 FPS"
 msgstr "30 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:130
+#: crates/nd-gui/src/pages/settings.rs:137
 msgid "60 FPS"
 msgstr "60 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:128
+#: crates/nd-gui/src/pages/settings.rs:134
 msgid "60 is smoother and costs about half as much again in bandwidth"
 msgstr ""
 "A 60 képkocka/mp simább, de körülbelül másfélszer nagyobb sávszélességet "
 "igényel"
 
 #: crates/nd-gui/src/pages/settings.rs:109
-msgid "A ceiling: a smaller screen is sent as it is"
-msgstr "Felső határ: a kisebb képernyőt úgy küldi el, ahogy van"
+msgid ""
+"A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver "
+"will accept it."
+msgstr ""
+"Felső határ: a kisebb képernyő úgy kerül elküldésre, ahogy van. 1080p felett "
+"nem minden fogadó fogadja el."
 
-#: crates/nd-gui/src/pages/home.rs:431
+#: crates/nd-gui/src/pages/home.rs:446
 msgid "A new screen"
 msgstr "Új képernyő"
 
-#: crates/nd-gui/src/app.rs:931
+#: crates/nd-gui/src/app.rs:928
 msgid "A stream is already running"
 msgstr "Egy közvetítés már fut"
 
-#: crates/nd-gui/src/pages/home.rs:424
+#: crates/nd-gui/src/pages/home.rs:439
 msgid "A window"
 msgstr "Egy ablak"
 
-#: crates/nd-gui/src/app.rs:299
+#: crates/nd-gui/src/app.rs:300
 msgid "About BigNetScreen"
 msgstr "A BigNetScreen névjegye"
 
@@ -80,7 +84,11 @@ msgstr "AirPlay"
 msgid "All protocols"
 msgstr "Minden protokoll"
 
-#: crates/nd-gui/src/pages/settings.rs:153
+#: crates/nd-gui/src/pages/home.rs:447
+msgid "An extra desktop, just for this"
+msgstr "Egy extra asztal, csak ehhez"
+
+#: crates/nd-gui/src/pages/settings.rs:160
 msgid "Audio"
 msgstr "Hang"
 
@@ -89,11 +97,11 @@ msgid "Automatic"
 msgstr "Automatikus"
 
 #: crates/nd-gui/src/pages/devices.rs:168
-#: crates/nd-gui/src/pages/settings.rs:202
+#: crates/nd-gui/src/pages/settings.rs:209
 msgid "Automatic discovery"
 msgstr "Automatikus felderítés"
 
-#: crates/nd-gui/src/app.rs:422 crates/nd-gui/src/app.rs:881
+#: crates/nd-gui/src/app.rs:424 crates/nd-gui/src/app.rs:878
 msgid "Automatic discovery is off"
 msgstr "Az automatikus felderítés ki van kapcsolva"
 
@@ -101,13 +109,19 @@ msgstr "Az automatikus felderítés ki van kapcsolva"
 msgid "Available"
 msgstr "Elérhető"
 
-#: crates/nd-gui/src/pages/settings.rs:142
+#: crates/nd-gui/src/pages/home.rs:255
+msgid "Back"
+msgstr "Vissza"
+
+#: crates/nd-gui/src/pages/settings.rs:148
 msgid ""
-"Buffers the picture so video plays smoothly. Everything arrives later, the "
-"pointer included — best when you are only watching."
+"Buffers the picture so video plays smoothly, at the cost of delay. On "
+"Miracast it is applied here; on Chromecast it is a request the receiver may "
+"ignore."
 msgstr ""
-"Előtárolja a képet, így a videó gördülékenyen játszódik le. Minden később "
-"érkezik meg, az egérmutató is – akkor a legjobb, ha csak nézi."
+"Puffereli a képet, így a videó simán játszódik le, a késleltetés árán. "
+"Miracast esetén itt kerül alkalmazásra; Chromecast esetén ez egy kérés, "
+"amelyet a fogadó figyelmen kívül hagyhat."
 
 #: crates/nd-gui/src/pages/media.rs:548
 msgid "Choose a device…"
@@ -121,15 +135,9 @@ msgstr "Mappa kiválasztása"
 msgid "Choose files"
 msgstr "Fájlok kiválasztása"
 
-#: crates/nd-gui/src/pages/home.rs:425
-msgid "Choose one window to share"
-msgstr "Válasszon egy ablakot a megosztáshoz"
-
-#: crates/nd-gui/src/pages/home.rs:196
-msgid "Choose what to share, then pick a device to send it to."
-msgstr ""
-"Válassza ki, mit szeretne megosztani, majd válasszon egy eszközt, amelyre "
-"elküldi."
+#: crates/nd-gui/src/pages/home.rs:587
+msgid "Choose the device to send to."
+msgstr "Válassza ki a fogadóeszközt."
 
 #: crates/nd-gui/src/pages/media.rs:573
 msgid "Choose which device to send to."
@@ -147,11 +155,11 @@ msgstr "Chromecast / AirPlay"
 msgid "Chromecast / AirPlay only"
 msgstr "Csak Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/home.rs:646 crates/nd-gui/src/pages/home.rs:723
+#: crates/nd-gui/src/pages/home.rs:648 crates/nd-gui/src/pages/home.rs:760
 msgid ""
-"Chromecasts show up on their own. A TV or projector only appears while it is"
-" in screen mirroring mode — on Fire TV, under Settings › Display and Sounds "
-"› Display Mirroring."
+"Chromecasts show up on their own. A TV or projector only appears while it is "
+"in screen mirroring mode — on Fire TV, under Settings › Display and Sounds › "
+"Display Mirroring."
 msgstr ""
 "A Chromecast eszközök maguktól megjelennek. Egy TV vagy projektor csak "
 "képernyőtükrözés módban jelenik meg – Fire TV-n a Beállítások › Kijelző és "
@@ -161,42 +169,42 @@ msgstr ""
 msgid "Connected"
 msgstr "Csatlakoztatva"
 
-#: crates/nd-gui/src/app.rs:264
+#: crates/nd-gui/src/app.rs:265
 msgid "Connected to"
 msgstr "Csatlakoztatva:"
 
-#: crates/nd-gui/src/app.rs:948 crates/nd-gui/src/pages/mod.rs:168
+#: crates/nd-gui/src/app.rs:945 crates/nd-gui/src/pages/mod.rs:168
 msgid "Connecting…"
 msgstr "Csatlakozás…"
 
-#: crates/nd-gui/src/pages/home.rs:340
+#: crates/nd-gui/src/pages/home.rs:361
 msgid "Connection"
 msgstr "Kapcsolat"
 
-#: crates/nd-gui/src/pages/home.rs:338
+#: crates/nd-gui/src/pages/home.rs:359
 msgid "Connection quality"
 msgstr "Kapcsolat minősége"
 
-#: crates/nd-gui/src/pages/home.rs:432
-msgid "Create an extra screen just for sharing"
-msgstr "Hozzon létre egy extra képernyőt kizárólag megosztáshoz"
-
-#: crates/nd-gui/src/pages/devices.rs:102 crates/nd-gui/src/pages/mod.rs:47
+#: crates/nd-gui/src/pages/mod.rs:47 crates/nd-gui/src/pages/devices.rs:102
 msgid "Devices"
 msgstr "Eszközök"
 
-#: crates/nd-gui/src/pages/devices.rs:234 crates/nd-gui/src/pages/home.rs:314
+#: crates/nd-gui/src/pages/home.rs:338 crates/nd-gui/src/pages/devices.rs:234
 msgid "Disconnect"
 msgstr "Leválasztás"
 
-#: crates/nd-gui/src/pages/settings.rs:197
+#: crates/nd-gui/src/pages/settings.rs:204
 msgid "Discovery and devices"
 msgstr "Felderítés és eszközök"
 
-#: crates/nd-gui/src/pages/devices.rs:424 crates/nd-gui/src/pages/mod.rs:129
-#: crates/nd-gui/src/pages/mod.rs:299
+#: crates/nd-gui/src/pages/mod.rs:129 crates/nd-gui/src/pages/mod.rs:299
+#: crates/nd-gui/src/pages/devices.rs:424
 msgid "Discovery only"
 msgstr "Csak felderítés"
+
+#: crates/nd-gui/src/pages/home.rs:433
+msgid "Everything on your screen"
+msgstr "Mindent a képernyőjéről"
 
 #: crates/nd-gui/src/pages/mod.rs:223
 msgid "Excellent"
@@ -206,7 +214,7 @@ msgstr "Kiváló"
 msgid "Failed"
 msgstr "Sikertelen"
 
-#: crates/nd-gui/src/pages/settings.rs:140
+#: crates/nd-gui/src/pages/settings.rs:147
 msgid "Film mode"
 msgstr "Film mód"
 
@@ -219,11 +227,11 @@ msgstr ""
 msgid "Finished"
 msgstr "Kész"
 
-#: crates/nd-gui/src/pages/settings.rs:218
+#: crates/nd-gui/src/pages/settings.rs:225
 msgid "Fixed port"
 msgstr "Rögzített port"
 
-#: crates/nd-gui/src/pages/settings.rs:126
+#: crates/nd-gui/src/pages/settings.rs:133
 msgid "Frame rate"
 msgstr "Képkockasebesség"
 
@@ -231,11 +239,11 @@ msgstr "Képkockasebesség"
 msgid "Good"
 msgstr "Jó"
 
-#: crates/nd-gui/src/app.rs:355
+#: crates/nd-gui/src/app.rs:356
 msgid "Got it"
 msgstr "Értem"
 
-#: crates/nd-gui/src/pages/settings.rs:111
+#: crates/nd-gui/src/pages/settings.rs:116
 msgid "High (1080p)"
 msgstr "Magas (1080p)"
 
@@ -243,57 +251,61 @@ msgstr "Magas (1080p)"
 msgid "Home"
 msgstr "Kezdőlap"
 
-#: crates/nd-gui/src/pages/settings.rs:158
+#: crates/nd-gui/src/pages/settings.rs:165
 msgid "Include system audio"
 msgstr "Rendszerhang melléklete"
 
-#: crates/nd-gui/src/pages/settings.rs:167
+#: crates/nd-gui/src/pages/settings.rs:174
 msgid "Include the microphone"
 msgstr "Mikrofon melléklete"
 
-#: crates/nd-gui/src/pages/home.rs:651
+#: crates/nd-gui/src/pages/home.rs:654
 msgid "Keep every device on the same Wi-Fi network for the best results."
 msgstr ""
 "A legjobb eredmény érdekében tartsa az összes eszközt ugyanazon a Wi-Fi-"
 "hálózaton."
 
-#: crates/nd-gui/src/app.rs:1127
+#: crates/nd-gui/src/app.rs:1124
 msgid "Local network discovery unavailable"
 msgstr "A helyi hálózati felderítés nem érhető el"
 
-#: crates/nd-gui/src/pages/settings.rs:203
+#: crates/nd-gui/src/pages/settings.rs:210
 msgid "Look for receivers as soon as the app starts"
 msgstr "Fogadóeszközök keresése az alkalmazás indításakor"
 
-#: crates/nd-gui/src/pages/home.rs:709
+#: crates/nd-gui/src/pages/home.rs:747
 msgid "Looking for receivers…"
 msgstr "Fogadó eszközök keresése…"
 
-#: crates/nd-gui/src/pages/settings.rs:113
+#: crates/nd-gui/src/pages/settings.rs:118
 msgid "Low (480p)"
 msgstr "Alacsony (480p)"
+
+#: crates/nd-gui/src/pages/settings.rs:114
+msgid "Maximum (2160p)"
+msgstr "Maximális (2160p)"
 
 #: crates/nd-gui/src/pages/mod.rs:220
 msgid "Measuring…"
 msgstr "Mérés…"
 
-#: crates/nd-gui/src/pages/home.rs:438 crates/nd-gui/src/pages/mod.rs:48
+#: crates/nd-gui/src/pages/mod.rs:48
 msgid "Media"
 msgstr "Média"
 
-#: crates/nd-gui/src/pages/settings.rs:112
+#: crates/nd-gui/src/pages/settings.rs:117
 msgid "Medium (720p)"
 msgstr "Közepes (720p)"
 
-#: crates/nd-gui/src/pages/settings.rs:175
+#: crates/nd-gui/src/pages/settings.rs:182
 msgid "Microphone volume"
 msgstr "Mikrofon hangerő"
 
-#: crates/nd-gui/src/pages/devices.rs:323 crates/nd-gui/src/pages/mod.rs:151
+#: crates/nd-gui/src/pages/mod.rs:151 crates/nd-gui/src/pages/devices.rs:323
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1187
+#: crates/nd-gui/src/app.rs:1183
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
@@ -301,15 +313,23 @@ msgstr ""
 "A Miracast nem működik a Flatpak verzióban (ehhez rendszer szintű "
 "NetworkManager szükséges)"
 
+#: crates/nd-gui/src/app.rs:1191
+msgid ""
+"Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
+"network still works."
+msgstr ""
+"A Miracast Wi-Fi adaptert igényel, és ezen a számítógépen nincs ilyen. A "
+"hálózaton keresztüli sugárzás továbbra is működik."
+
 #: crates/nd-gui/src/pages/settings.rs:94
 msgid "Miracast only"
 msgstr "Csak Miracast"
 
-#: crates/nd-gui/src/app.rs:1193
+#: crates/nd-gui/src/app.rs:1199
 msgid "Miracast unavailable"
 msgstr "A Miracast nem érhető el"
 
-#: crates/nd-gui/src/app.rs:1191
+#: crates/nd-gui/src/app.rs:1197
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr ""
 "A Miracast nem érhető el: ez a Wi-Fi kártya nem támogatja a Wi-Fi Directet"
@@ -318,7 +338,7 @@ msgstr ""
 msgid "Mirror screen"
 msgstr "Képernyő tükrözése"
 
-#: crates/nd-gui/src/pages/settings.rs:168
+#: crates/nd-gui/src/pages/settings.rs:175
 msgid "Mix your voice into what is sent"
 msgstr "Saját hang bekeverése a küldött tartalomba"
 
@@ -346,15 +366,14 @@ msgstr ""
 "Nincs fénykép a Képek mappában. Használja a „Fájlok kiválasztása” "
 "lehetőséget."
 
-#: crates/nd-gui/src/app.rs:889 crates/nd-gui/src/pages/home.rs:718
+#: crates/nd-gui/src/app.rs:886 crates/nd-gui/src/pages/home.rs:756
 msgid "No receivers found"
 msgstr "Nem található fogadó eszköz"
 
 #: crates/nd-gui/src/pages/media.rs:643
 msgid "No videos in your Videos folder. Use “Select files”."
 msgstr ""
-"Nincs videó a Videók mappában. Használja a „Fájlok kiválasztása” "
-"lehetőséget."
+"Nincs videó a Videók mappában. Használja a „Fájlok kiválasztása” lehetőséget."
 
 #: crates/nd-gui/src/pages/media.rs:650
 msgid "Nothing selected"
@@ -364,6 +383,10 @@ msgstr "Nincs kijelölve"
 msgid "Now playing"
 msgstr "Most játszik"
 
+#: crates/nd-gui/src/pages/home.rs:440
+msgid "One window only"
+msgstr "Csak egy ablak"
+
 #: crates/nd-gui/src/pages/mod.rs:169
 msgid "Opening the firewall port…"
 msgstr "Tűzfal port megnyitása…"
@@ -372,17 +395,9 @@ msgstr "Tűzfal port megnyitása…"
 msgid "Photos"
 msgstr "Fényképek"
 
-#: crates/nd-gui/src/app.rs:494
-msgid "Pick a device for the extra screen"
-msgstr "Válasszon eszközt a kiegészítő képernyőhöz"
-
-#: crates/nd-gui/src/app.rs:493
-msgid "Pick a device to share a window with"
-msgstr "Válasszon eszközt, amellyel megoszthat egy ablakot"
-
-#: crates/nd-gui/src/app.rs:492
-msgid "Pick a device to share your screen with"
-msgstr "Válasszon eszközt, amellyel megoszthatja a képernyőjét"
+#: crates/nd-gui/src/pages/home.rs:454
+msgid "Photos, videos and music"
+msgstr "Fotók, videók és zene"
 
 #: crates/nd-gui/src/pages/media.rs:255
 msgid "Pick files and choose where to play them."
@@ -404,7 +419,7 @@ msgstr "Protokoll"
 msgid "Ready"
 msgstr "Kész"
 
-#: crates/nd-gui/src/pages/home.rs:191
+#: crates/nd-gui/src/pages/home.rs:580
 msgid "Ready to share"
 msgstr "Készen áll a megosztásra"
 
@@ -412,20 +427,20 @@ msgstr "Készen áll a megosztásra"
 msgid "Refresh"
 msgstr "Frissítés"
 
-#: crates/nd-gui/src/pages/settings.rs:265
+#: crates/nd-gui/src/pages/settings.rs:272
 msgid "Restore defaults"
 msgstr "Alapértékek visszaállítása"
 
-#: crates/nd-gui/src/pages/settings.rs:248
+#: crates/nd-gui/src/pages/settings.rs:255
 msgid "Saved as you change them"
 msgstr "Mentés a módosításokkal együtt"
 
-#: crates/nd-gui/src/app.rs:330 crates/nd-gui/src/pages/devices.rs:115
+#: crates/nd-gui/src/app.rs:331 crates/nd-gui/src/pages/devices.rs:115
 msgid "Scan again"
 msgstr "Újra vizsgálat"
 
-#: crates/nd-gui/src/app.rs:420 crates/nd-gui/src/app.rs:503
-#: crates/nd-gui/src/app.rs:887
+#: crates/nd-gui/src/app.rs:422 crates/nd-gui/src/app.rs:501
+#: crates/nd-gui/src/app.rs:884
 msgid "Searching…"
 msgstr "Keresés…"
 
@@ -437,13 +452,9 @@ msgstr "Fájlok kiválasztása"
 msgid "Send a folder"
 msgstr "Mappa küldése"
 
-#: crates/nd-gui/src/pages/devices.rs:248
+#: crates/nd-gui/src/pages/home.rs:453 crates/nd-gui/src/pages/devices.rs:248
 msgid "Send media"
 msgstr "Média küldése"
-
-#: crates/nd-gui/src/pages/home.rs:439
-msgid "Send photos, videos and music"
-msgstr "Fotók, videók és zenék küldése"
 
 #: crates/nd-gui/src/pages/media.rs:351
 msgid "Send to"
@@ -453,11 +464,11 @@ msgstr "Küldés ide:"
 msgid "Send to device"
 msgstr "Küldés eszközre"
 
-#: crates/nd-gui/src/pages/settings.rs:159
+#: crates/nd-gui/src/pages/settings.rs:166
 msgid "Send whatever this computer is playing"
 msgstr "A számítógépen éppen lejátszott tartalom küldése"
 
-#: crates/nd-gui/src/app.rs:695 crates/nd-gui/src/app.rs:989
+#: crates/nd-gui/src/app.rs:693 crates/nd-gui/src/app.rs:986
 msgid "Sending files…"
 msgstr "Fájlok küldése…"
 
@@ -465,31 +476,35 @@ msgstr "Fájlok küldése…"
 msgid "Settings"
 msgstr "Beállítások"
 
-#: crates/nd-gui/src/pages/settings.rs:379
+#: crates/nd-gui/src/pages/settings.rs:388
 msgid "Settings cannot be saved on this system."
 msgstr "A beállítások nem menthetők ezen a rendszeren."
-
-#: crates/nd-gui/src/pages/home.rs:418
-msgid "Share everything on your screen"
-msgstr "Mindent megosztás a képernyőn"
 
 #: crates/nd-gui/src/pages/media.rs:250
 msgid "Share media"
 msgstr "Média megosztása"
 
-#: crates/nd-gui/src/app.rs:230
+#: crates/nd-gui/src/app.rs:231
 msgid "Share your screen wirelessly"
 msgstr "Oszd meg a képernyődet vezeték nélkül"
 
-#: crates/nd-gui/src/app.rs:1206
+#: crates/nd-gui/src/app.rs:1212
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "Oszd meg a képernyődet TV-vel, projektorral vagy Chromecasttal."
 
-#: crates/nd-gui/src/app.rs:320
+#: crates/nd-gui/src/pages/home.rs:280
+msgid ""
+"Sharing a window opens your desktop’s own picker. Only visible windows can "
+"be shared."
+msgstr ""
+"Az ablak megosztása megnyitja asztala saját választóját. Csak látható "
+"ablakok oszthatók meg."
+
+#: crates/nd-gui/src/app.rs:321
 msgid "Show the sidebar"
 msgstr "Oldalsáv megjelenítése"
 
-#: crates/nd-gui/src/pages/home.rs:640
+#: crates/nd-gui/src/pages/home.rs:642
 msgid ""
 "Sound goes to the receiver and to this computer. Mute this computer if you "
 "hear an echo."
@@ -501,7 +516,7 @@ msgstr ""
 msgid "Status"
 msgstr "Állapot"
 
-#: crates/nd-gui/src/app.rs:337
+#: crates/nd-gui/src/app.rs:338
 msgid "Stop"
 msgstr "Leállítás"
 
@@ -509,11 +524,11 @@ msgstr "Leállítás"
 msgid "Stop sending"
 msgstr "Küldés leállítása"
 
-#: crates/nd-gui/src/app.rs:983
+#: crates/nd-gui/src/app.rs:980
 msgid "Stop sharing your screen before sending files"
 msgstr "Állítsd le a képernyőmegosztást a fájlok küldése előtt"
 
-#: crates/nd-gui/src/app.rs:920
+#: crates/nd-gui/src/app.rs:917
 msgid "Stopping…"
 msgstr "Leállítás…"
 
@@ -533,7 +548,7 @@ msgstr "Közvetítés minősége"
 msgid "Test"
 msgstr "Teszt"
 
-#: crates/nd-gui/src/app.rs:976 crates/nd-gui/src/app.rs:993
+#: crates/nd-gui/src/app.rs:973 crates/nd-gui/src/app.rs:990
 msgid "That device is no longer available"
 msgstr "Az az eszköz már nem érhető el"
 
@@ -541,28 +556,28 @@ msgstr "Az az eszköz már nem érhető el"
 msgid "The receiver is not answering"
 msgstr "A fogadóeszköz nem válaszol"
 
-#: crates/nd-gui/src/pages/home.rs:253
-msgid "Then pick a device"
-msgstr "Ezután válassz egy eszközt"
-
 #: crates/nd-gui/src/pages/settings.rs:78
 msgid "These apply to your next session."
 msgstr "Ezek a következő munkamenetedre vonatkoznak."
 
-#: crates/nd-gui/src/pages/settings.rs:211
+#: crates/nd-gui/src/pages/settings.rs:218
 msgid "This computer's name"
 msgstr "Ennek a számítógépnek a neve"
 
-#: crates/nd-gui/src/pages/home.rs:541
+#: crates/nd-gui/src/pages/home.rs:529
 msgid ""
 "This desktop cannot create an extra screen (it needs GNOME running natively)"
 msgstr ""
 "Ez a munkamenet nem tud extra képernyőt létrehozni (ehhez a GNOME natív "
 "futtatása szükséges)"
 
-#: crates/nd-gui/src/pages/home.rs:375
+#: crates/nd-gui/src/pages/home.rs:393
 msgid "Tips"
 msgstr "Tippek"
+
+#: crates/nd-gui/src/pages/settings.rs:115
+msgid "Very high (1440p)"
+msgstr "Nagyon magas (1440p)"
 
 #: crates/nd-gui/src/pages/media.rs:453
 msgid "Videos"
@@ -576,25 +591,17 @@ msgstr "Várakozás a fogadóra…"
 msgid "Weak signal"
 msgstr "Gyenge jel"
 
-#: crates/nd-gui/src/pages/home.rs:220
-msgid "What to share"
-msgstr "Mit oszthatsz meg"
+#: crates/nd-gui/src/pages/home.rs:581
+msgid "What do you want to share?"
+msgstr "Mit szeretne megosztani?"
 
 #: crates/nd-gui/src/pages/settings.rs:91
 msgid "Which kind of receiver to look for"
 msgstr "Milyen fogadót keresünk"
 
-#: crates/nd-gui/src/pages/home.rs:417
+#: crates/nd-gui/src/pages/home.rs:432
 msgid "Whole screen"
 msgstr "Teljes képernyő"
-
-#: crates/nd-gui/src/pages/home.rs:241
-msgid ""
-"Your desktop will ask which window. Only visible windows can be shared, and "
-"closing the window ends the session."
-msgstr ""
-"Az asztal megkérdezi, melyik ablakot szeretné. Csak látható ablakok "
-"oszthatók meg, és az ablak bezárása véget vet a munkamenetnek."
 
 #: crates/nd-gui/src/pages/devices.rs:438
 msgid "devices found"
@@ -624,10 +631,10 @@ msgstr "még nincs közzétéve"
 msgid "quick response"
 msgstr "gyors válasz"
 
-#: crates/nd-gui/src/app.rs:894
+#: crates/nd-gui/src/app.rs:891
 msgid "receivers found"
 msgstr "fogadó eszköz található"
 
-#: crates/nd-gui/src/app.rs:942
+#: crates/nd-gui/src/app.rs:939
 msgid "shows up in discovery only"
 msgstr "csak felderítésben jelenik meg"

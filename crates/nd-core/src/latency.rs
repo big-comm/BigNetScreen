@@ -25,6 +25,15 @@
 //! latency and RTP jitter buffer on Miracast, the negotiated `targetDelay` on
 //! Cast mirroring, and leaving the receiver's own buffer alone on the Cast HTTP
 //! path.
+//!
+//! Those knobs are not equally strong, and the difference is worth knowing
+//! before promising anything. On Miracast the buffering happens here and the
+//! delay is ours to set. On Cast the packets leave as soon as they are
+//! encoded, so the only lever is `targetDelay` — **a request**. The receiver
+//! runs its own buffer and may clamp or ignore what was asked, which is why
+//! someone can turn film mode on against a Chromecast and see nothing change.
+//! The negotiation logs the number that was asked for, so this can be checked
+//! rather than argued about.
 
 use std::sync::atomic::{AtomicU8, Ordering};
 
