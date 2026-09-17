@@ -41,11 +41,8 @@ const RTP_HEADER_SIZE: usize = 12;
 /// The Cast header without optional fields.
 const CAST_HEADER_SIZE: usize = 6;
 
-/// Maximum size of an RTP packet over IPv4/UDP on Ethernet.
-///
-/// 1500 (MTU) − 20 (IPv4) − 8 (UDP). Going past it fragments at the IP layer,
-/// and one lost fragment takes the whole packet down.
-pub const MAX_PACKET_SIZE: usize = 1500 - 20 - 8;
+/// Conservative UDP payload size, including IPv6/tunnel headroom.
+pub const MAX_PACKET_SIZE: usize = 1200;
 
 type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
 

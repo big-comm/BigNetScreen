@@ -1,0 +1,14 @@
+[package]
+name = "nd-ndi"
+description = "Optional NDI publishing through the GStreamer runtime plugin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+nd-core.workspace = true
+gstreamer.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+tokio.workspace = true

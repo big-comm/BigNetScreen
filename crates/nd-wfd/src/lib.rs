@@ -51,22 +51,32 @@ impl Provider for WfdP2pProvider {
         // support (Flatpak, a card without Wi-Fi Direct), the error surfaces
         // right away and MetaProvider turns it into a message for the user.
         let device = P2pDevice::open().await?;
-        device.start_find().await?;
-
         let (tx, rx) = futures::channel::mpsc::unbounded::<DiscoveryEvent>();
 
         tokio::spawn(async move {
+            static DISCOVERY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+            let _serial = DISCOVERY_LOCK.lock().await;
+            if tx.is_closed() {
+                return;
+            }
             let mut device = device;
             let mut backoff = RETRY_BASE;
             let mut known: HashSet<String> = HashSet::new();
 
             loop {
-                match run_discovery(&device, &tx, &mut known).await {
+                if tx.is_closed() {
+                    let _ = device.stop_find().await;
+                    return;
+                }
+                let outcome = async {
+                    device.start_find().await?;
+                    run_discovery(&device, &tx, &mut known).await
+                }
+                .await;
+                let _ = device.stop_find().await;
+                match outcome {
                     // The consumer went away: shut down for good.
-                    Ok(()) => {
-                        let _ = device.stop_find().await;
-                        return;
-                    }
+                    Ok(()) => return,
                     Err(err) => {
                         // A fixed regression: a single D-Bus failure used to
                         // end discovery silently, leaving the user on
@@ -90,7 +100,13 @@ impl Provider for WfdP2pProvider {
                             }
                         }
 
-                        tokio::time::sleep(backoff).await;
+                        let until = tokio::time::Instant::now() + backoff;
+                        while tokio::time::Instant::now() < until {
+                            if tx.is_closed() {
+                                return;
+                            }
+                            tokio::time::sleep(Duration::from_millis(200)).await;
+                        }
                         backoff = (backoff * 2).min(RETRY_MAX);
 
                         match P2pDevice::open().await {
@@ -135,7 +151,11 @@ async fn run_discovery(
     let mut renew = Box::pin(device.keep_finding().fuse());
 
     loop {
+        if tx.is_closed() {
+            return Ok(());
+        }
         let event = futures::select! {
+            _ = tokio::time::sleep(Duration::from_millis(200)).fuse() => continue,
             event = events.next().fuse() => event,
             () = renew => unreachable!("keep_finding runs forever"),
         };
@@ -336,17 +356,33 @@ pub mod cast {
         sink: &WfdSink,
         source: CaptureSource,
         status: &SinkStatus,
-        cancel: tokio::sync::watch::Receiver<bool>,
+        mut cancel: tokio::sync::watch::Receiver<bool>,
     ) -> Result<()> {
         let device = P2pDevice::open().await?;
         let mut source = source;
         let mut last: Option<NdError> = None;
 
         for attempt in 1..=SESSION_ATTEMPTS {
+            if *cancel.borrow() {
+                return Ok(());
+            }
             status.set(SinkState::Connecting);
-            let (active, our_ip) = device
-                .connect_and_wait(sink.peer_path(), CONNECT_ATTEMPTS, CONNECT_TIMEOUT)
-                .await?;
+            let connected = device
+                .connect_and_wait_cancelled(
+                    sink.peer_path(),
+                    CONNECT_ATTEMPTS,
+                    CONNECT_TIMEOUT,
+                    &mut cancel,
+                )
+                .await;
+            let (active, our_ip) = match connected {
+                Err(_) if *cancel.borrow() => return Ok(()),
+                result => result?,
+            };
+            if *cancel.borrow() {
+                let _ = device.disconnect(&active).await;
+                return Ok(());
+            }
 
             // Radio silence **only once the group is formed**: forming it
             // depends on the radio being in a searching state, and silencing it
@@ -374,7 +410,7 @@ pub mod cast {
                     // a moment to finish removing the activation, and the
                     // receiver needs to notice the group has gone before it
                     // will accept a new one.
-                    tokio::time::sleep(RETRY_SETTLE).await;
+                    tokio::select! { _ = tokio::time::sleep(RETRY_SETTLE) => {}, _ = cancel.changed() => return Ok(()) }
                     // The capture is handed back so the next attempt can use
                     // it: asking the portal again would put a permission
                     // dialog in front of someone who already agreed.
@@ -421,6 +457,9 @@ pub mod cast {
         status: &SinkStatus,
         mut cancel: tokio::sync::watch::Receiver<bool>,
     ) -> Result<()> {
+        if *cancel.borrow() {
+            return Ok(());
+        }
         status.set(SinkState::WaitSocket);
         // Listen **only** on the P2P link's IP: this does not expose the RTSP
         // port to the rest of the network.

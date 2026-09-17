@@ -9,6 +9,7 @@ members = [
     "crates/nd-chromecast",
     "crates/nd-wfd",
     "crates/nd-gui",
+    "crates/nd-ndi",
 ]
 
 [workspace.package]
@@ -17,7 +18,7 @@ edition = "2021"
 license = "GPL-3.0-or-later"
 authors = ["Tales A. Mendonça", "BigCommunity"]
 repository = "https://github.com/big-comm/BigNetScreen"
-rust-version = "1.80"
+rust-version = "1.93"
 
 [workspace.dependencies]
 # crates internos
@@ -26,6 +27,7 @@ nd-capture = { path = "crates/nd-capture" }
 nd-net = { path = "crates/nd-net" }
 nd-chromecast = { path = "crates/nd-chromecast" }
 nd-wfd = { path = "crates/nd-wfd" }
+nd-ndi = { path = "crates/nd-ndi" }
 
 # comuns
 thiserror = "2"
@@ -34,7 +36,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures = "0.3"
 gstreamer = "0.25"
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "io-util", "time", "sync", "macros"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "io-util", "time", "sync", "macros", "process"] }
 
 [profile.release]
 opt-level = 3

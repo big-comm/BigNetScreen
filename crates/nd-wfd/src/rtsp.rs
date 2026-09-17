@@ -217,6 +217,19 @@ pub struct SinkCaps {
 }
 
 impl SinkCaps {
+    pub fn preferred_mode(
+        &self,
+        source: (u32, u32),
+        limit: (u32, u32),
+        fps: u32,
+    ) -> Option<WfdMode> {
+        let mut compatible = self.clone();
+        compatible
+            .modes
+            .retain(|mode| mode.fps <= fps && mode.width <= limit.0 && mode.height <= limit.1);
+        compatible.best_mode_for(source, limit)
+    }
+
     /// Picks the best common mode: largest area, then highest frame rate.
     ///
     /// Interlaced modes are discarded — the pipeline produces progressive, and
@@ -412,46 +425,75 @@ impl RtspMessage {
     }
 }
 
+async fn bounded_line<R: AsyncBufReadExt + Unpin>(
+    reader: &mut R,
+    budget: &mut usize,
+) -> Result<String> {
+    let mut line = Vec::new();
+    loop {
+        let bytes = reader.fill_buf().await.map_err(proto_err)?;
+        if bytes.is_empty() {
+            return Err(NdError::Protocol(
+                "RTSP connection closed during headers".into(),
+            ));
+        }
+        let count = bytes
+            .iter()
+            .position(|b| *b == b'\n')
+            .map_or(bytes.len(), |n| n + 1);
+        if count > *budget || line.len() + count > 4096 {
+            return Err(NdError::Protocol("RTSP headers too large".into()));
+        }
+        line.extend_from_slice(&bytes[..count]);
+        *budget -= count;
+        reader.consume(count);
+        if line.last() == Some(&b'\n') {
+            return String::from_utf8(line).map_err(proto_err);
+        }
+    }
+}
+
 async fn read_message<R>(reader: &mut R) -> Result<RtspMessage>
 where
     R: AsyncBufReadExt + Unpin,
 {
-    let mut start_line = String::new();
-    if reader.read_line(&mut start_line).await.map_err(proto_err)? == 0 {
-        return Err(NdError::Protocol(
-            "RTSP connection closed by the sink".into(),
-        ));
+    let mut budget = 16 * 1024;
+    let start_line = bounded_line(reader, &mut budget)
+        .await?
+        .trim_end()
+        .to_string();
+    if start_line.is_empty() {
+        return Err(NdError::Protocol("empty RTSP start line".into()));
     }
-    let start_line = start_line.trim_end().to_string();
-
     let mut headers = HashMap::new();
     loop {
-        let mut line = String::new();
-        if reader.read_line(&mut line).await.map_err(proto_err)? == 0 {
-            break;
-        }
+        let line = bounded_line(reader, &mut budget).await?;
         let line = line.trim_end();
         if line.is_empty() {
             break;
         }
-        if let Some((key, value)) = line.split_once(':') {
-            headers.insert(key.trim().to_ascii_lowercase(), value.trim().to_string());
+        if headers.len() >= 64 {
+            return Err(NdError::Protocol("too many RTSP headers".into()));
+        }
+        let (key, value) = line
+            .split_once(':')
+            .ok_or_else(|| NdError::Protocol("malformed RTSP header".into()))?;
+        if headers
+            .insert(key.trim().to_ascii_lowercase(), value.trim().to_string())
+            .is_some()
+        {
+            return Err(NdError::Protocol("duplicate RTSP header".into()));
         }
     }
-
     let mut body = String::new();
-    if let Some(len) = headers
-        .get("content-length")
-        .and_then(|v| v.parse::<usize>().ok())
-    {
+    if let Some(value) = headers.get("content-length") {
+        let len = value.parse::<usize>().map_err(proto_err)?;
         if len > MAX_BODY_BYTES {
-            return Err(NdError::Protocol(format!(
-                "corpo RTSP de {len} bytes excede o limite de {MAX_BODY_BYTES}"
-            )));
+            return Err(NdError::Protocol("RTSP body too large".into()));
         }
         let mut buf = vec![0u8; len];
         reader.read_exact(&mut buf).await.map_err(proto_err)?;
-        body = String::from_utf8_lossy(&buf).to_string();
+        body = String::from_utf8(buf).map_err(proto_err)?;
     }
 
     let msg = RtspMessage {
@@ -700,54 +742,41 @@ pub async fn cast_to_sink(
     keepalive.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     keepalive.tick().await; // consome o tick imediato
 
-    let result = loop {
-        // Anything the pipeline has to say, before waiting on the network.
-        //
-        // A screen capture never ends, so this used to be read only after the
-        // session was over. A media file *does* end, and without noticing the
-        // end here the session would sit sending nothing until the receiver
-        // gave up on it.
-        if let Some(events) = pipeline_events.as_mut() {
-            match events.try_recv() {
-                Ok(nd_core::pipeline::PipelineEvent::Eos) => {
-                    tracing::info!("the media file reached its end");
-                    break Ok(());
-                }
-                Ok(nd_core::pipeline::PipelineEvent::Error { message, .. }) => {
-                    break Err(NdError::Gst(message));
-                }
-                _ => {}
-            }
-        }
-
-        let msg = tokio::select! {
-            // The M16 keepalive: it is the *source* that has to send it.
-            // Without it the sink drops the session after the timeout we
-            // announced in SETUP.
-            _ = keepalive.tick(), if playing.is_some() => {
-                cseq += 1;
-                let request = format!(
-                    "GET_PARAMETER {WFD_URL} RTSP/1.0\r\nCSeq: {cseq}\r\nSession: 1\r\n\r\n"
-                );
-                if let Err(err) = send(&mut writer, &request).await {
-                    break Err(err);
-                }
-                pending.insert(cseq, Awaiting::Keepalive);
-                tracing::debug!(cseq, "keepalive M16 enviado");
-                continue;
-            }
-            incoming = tokio::time::timeout(IDLE_TIMEOUT, read_message(&mut reader)) => {
-                match incoming {
-                    Ok(Ok(msg)) => msg,
-                    Ok(Err(err)) => {
-                        tracing::info!(%err, "RTSP connection closed");
-                        break Ok(());
+    let negotiation_deadline = tokio::time::Instant::now() + NEGOTIATION_TIMEOUT;
+    let result = 'session: loop {
+        // Keep the same read future and deadline across keepalive ticks.
+        let msg = {
+            let incoming = tokio::time::timeout(IDLE_TIMEOUT, read_message(&mut reader));
+            tokio::pin!(incoming);
+            loop {
+                tokio::select! {
+                    incoming = &mut incoming => match incoming {
+                        Ok(Ok(msg)) => break msg,
+                        Ok(Err(err)) => break 'session Err(err),
+                        Err(_) => break 'session Err(NdError::Protocol("RTSP receiver timed out".into())),
+                    },
+                    event = async {
+                        match pipeline_events.as_mut() {
+                            Some(events) => futures::StreamExt::next(events).await,
+                            None => std::future::pending().await,
+                        }
+                    } => match event {
+                        Some(pipeline::PipelineEvent::Eos) => break 'session Ok(()),
+                        Some(pipeline::PipelineEvent::Error { message, .. }) => break 'session Err(NdError::Gst(message)),
+                        None => pipeline_events = None,
+                        _ => {},
+                    },
+                    _ = tokio::time::sleep_until(negotiation_deadline), if playing.is_none() => {
+                        break 'session Err(NdError::Protocol("RTSP negotiation timed out".into()));
                     }
-                    Err(_) => {
-                        break Err(NdError::Protocol(format!(
-                            "o sink parou de responder por {}s",
-                            IDLE_TIMEOUT.as_secs()
-                        )));
+                    _ = keepalive.tick(), if playing.is_some() => {
+                        if pending.values().any(|request| matches!(request, Awaiting::Keepalive)) {
+                            break 'session Err(NdError::Protocol("RTSP keepalive was not acknowledged".into()));
+                        }
+                        cseq += 1;
+                        let request = format!("GET_PARAMETER {WFD_URL} RTSP/1.0\r\nCSeq: {cseq}\r\nSession: 1\r\n\r\n");
+                        if let Err(err) = send(&mut writer, &request).await { break 'session Err(err); }
+                        pending.insert(cseq, Awaiting::Keepalive);
                     }
                 }
             }
@@ -782,13 +811,32 @@ pub async fn cast_to_sink(
                     }
 
                     // Choose the mode from what the sink actually accepts.
+                    let preferences = nd_core::settings::current();
+                    let limit = StreamConfig::capped_by_preference(cfg.max_resolution);
+                    let aac = caps
+                        .audio_codecs
+                        .as_deref()
+                        .unwrap_or("")
+                        .split(',')
+                        .any(|codec| {
+                            let mut fields = codec.split_whitespace();
+                            fields.next() == Some("AAC")
+                                && fields
+                                    .next()
+                                    .and_then(|v| u32::from_str_radix(v, 16).ok())
+                                    .is_some_and(|bits| bits & 1 != 0)
+                        });
+                    if !aac {
+                        return Err(NdError::Unsupported(
+                            "receiver does not support AAC stereo at 48 kHz".into(),
+                        ));
+                    }
                     let mode = caps
-                        .best_mode_for(cfg.source_size, cfg.max_resolution)
+                        .preferred_mode(cfg.source_size, limit, preferences.fps)
                         .ok_or_else(|| {
                             NdError::Protocol(format!(
-                                "the sink advertised no usable video mode \
-                                 (wfd_video_formats: {:?})",
-                                caps.video_formats
+                                "receiver has no compatible video mode within {}x{} at {} FPS; choose a larger resolution or frame rate limit",
+                                limit.0, limit.1, preferences.fps
                             ))
                         })?;
                     tracing::info!(
@@ -854,7 +902,7 @@ pub async fn cast_to_sink(
                 {
                     sink_rtp_port = port;
                 }
-                if sink_rtp_port == 0 {
+                if sink_rtp_port == 0 || sink_rtp_port == u16::MAX {
                     break Err(NdError::Protocol(
                         "the sink reported no RTP port, neither in M3 nor in SETUP".into(),
                     ));
@@ -886,7 +934,7 @@ pub async fn cast_to_sink(
 
                 // Validate before bringing the pipeline up: `udpsink port=0`
                 // was accepted silently and the cast simply never appeared.
-                if sink_rtp_port == 0 {
+                if sink_rtp_port == 0 || sink_rtp_port == u16::MAX {
                     break Err(NdError::Protocol(
                         "PLAY received with no negotiated RTP port".into(),
                     ));
@@ -948,7 +996,7 @@ pub fn parse_client_port(transport: &str) -> Option<u16> {
         .find_map(|p| p.trim().strip_prefix("client_port="))
         .and_then(|range| range.split('-').next())
         .and_then(|p| p.parse::<u16>().ok())
-        .filter(|port| *port != 0)
+        .filter(|port| *port != 0 && *port != u16::MAX)
 }
 
 /// Brings the streaming pipeline up, choosing the encoder from evidence.
@@ -978,31 +1026,22 @@ async fn start_pipeline(
                 .into(),
         ));
     }
-    let last = candidates.len() - 1;
     let mut failure = None;
 
     // Try hardware first and fall back to software **on evidence**: an encoder
     // that produces no frames is discarded, with no reliance on a driver
     // blacklist (which ages and never covers every machine in the world).
-    for (index, encoder) in candidates.into_iter().enumerate() {
-        // The sink's negotiated mode is the ceiling; the person's preference
-        // can only lower it. `fit_within` keeps the aspect ratio of what the
-        // sink agreed to, so a "medium" preference does not letterbox twice.
-        let (width, height) = StreamConfig::fit_within(
-            (mode.width, mode.height),
-            StreamConfig::capped_by_preference((mode.width, mode.height)),
-        );
+    for encoder in candidates {
+        // Encoding must match the mode already advertised in M4.
+        let (width, height) = (mode.width, mode.height);
         let stream_cfg = StreamConfig {
             width,
             height,
-            fps: StreamConfig::capped_fps(mode.fps),
+            fps: mode.fps,
             encoder,
             audio: cfg.audio,
             ..Default::default()
         };
-        // What the two ends actually agreed on, for the interface to show.
-        // Recorded here rather than from `mode`, because the preference may
-        // have lowered it further.
         status.set_link(StreamLink {
             width: stream_cfg.width,
             height: stream_cfg.height,
@@ -1036,6 +1075,7 @@ async fn start_pipeline(
             }
         };
 
+        let startup_guard = pipeline::PipelineGuard::new(monitored.pipeline.clone());
         if let Err(err) = monitored.pipeline.set_state(gst::State::Playing) {
             tracing::warn!(?encoder, %err, "the encoder refused to start running");
             failure = Some(NdError::Gst(err.to_string()));
@@ -1043,20 +1083,12 @@ async fn start_pipeline(
             continue;
         }
 
-        // The last candidate is accepted without proof: there is nowhere left
-        // to fall back to, and spending the verification time would only delay
-        // the picture.
-        if index == last {
-            tracing::info!(?encoder, "encoder in use");
-            let _ = pipeline::query_min_latency_ms(&monitored.pipeline);
-            return Ok(monitored);
-        }
-
         tokio::time::sleep(ENCODER_PROBE).await;
         let frames = monitored.frames_encoded();
         if frames > 0 {
             tracing::info!(?encoder, frames, "encoder in use");
             let _ = pipeline::query_min_latency_ms(&monitored.pipeline);
+            startup_guard.disarm();
             return Ok(monitored);
         }
 
@@ -1288,6 +1320,54 @@ mod tests {
         read_message(&mut reader).await
     }
 
+    #[test]
+    fn preferences_choose_an_advertised_mode_before_m4() {
+        let caps =
+            parse_video_formats("40 00 01 02 000001e0 00000000 00000000 00 0000 0000 00 none none");
+        let mode = caps.preferred_mode((1920, 1080), (1920, 1080), 30).unwrap();
+        assert_eq!((mode.width, mode.height, mode.fps), (1920, 1080, 30));
+        assert!(caps.modes.contains(&mode));
+        let mode = caps.preferred_mode((1920, 1080), (1280, 720), 30).unwrap();
+        assert_eq!((mode.width, mode.height, mode.fps), (1280, 720, 30));
+        assert!(caps.preferred_mode((1920, 1080), (854, 480), 30).is_none());
+    }
+
+    #[tokio::test]
+    async fn read_survives_an_unrelated_timer() {
+        let (mut writer, reader) = tokio::io::duplex(4096);
+        let mut reader = tokio::io::BufReader::new(reader);
+        writer
+            .write_all(b"RTSP/1.0 200 OK\r\nCSeq: 42\r\n")
+            .await
+            .unwrap();
+        let read = read_message(&mut reader);
+        tokio::pin!(read);
+        tokio::select! {
+            result = &mut read => panic!("premature read: {result:?}"),
+            _ = tokio::time::sleep(Duration::from_millis(10)) => {},
+        }
+        writer.write_all(b"\r\n").await.unwrap();
+        let message = read.await.unwrap();
+        assert_eq!(message.cseq(), 42);
+        assert_eq!(message.status(), Some(200));
+    }
+
+    #[tokio::test]
+    async fn oversized_headers_and_truncated_messages_are_rejected() {
+        let large = format!(
+            "OPTIONS * RTSP/1.0\r\nX: {}\r\n\r\n",
+            "x".repeat(1024 * 1024)
+        );
+        assert!(parse(&large).await.is_err());
+        assert!(parse("OPTIONS * RTSP/1.0\r\nCSeq: 1\r\n").await.is_err());
+        assert!(
+            parse("OPTIONS * RTSP/1.0\r\nContent-Length: invalid\r\n\r\n")
+                .await
+                .is_err()
+        );
+        assert_eq!(parse_client_port("RTP/AVP;client_port=65535"), None);
+    }
+
     #[tokio::test]
     async fn reads_a_request_with_body() {
         let msg = parse(
@@ -1320,7 +1400,7 @@ mod tests {
         // A security regression: Content-Length came off the network uncapped.
         let raw = "PLAY x RTSP/1.0\r\nCSeq: 1\r\nContent-Length: 999999999\r\n\r\n";
         let err = parse(raw).await.unwrap_err();
-        assert!(err.to_string().contains("excede o limite"), "{err}");
+        assert!(err.to_string().contains("too large"), "{err}");
     }
 
     #[tokio::test]

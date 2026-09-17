@@ -31,6 +31,8 @@ pub enum SettingsMsg {
     SetProtocol(Protocol),
     SetQuality(Quality),
     SetFps(u32),
+    SetWidth(u32),
+    SetHeight(u32),
     SetSystemAudio(bool),
     SetMicrophone(bool),
     SetMicVolume(f64),
@@ -100,12 +102,12 @@ impl Component for SettingsPage {
                                     2 => Protocol::Cast,
                                     _ => Protocol::Auto,
                                 }));
-                            },
+                            } @protocol_handler,
                         },
 
                         #[name = "quality"]
                         adw::ComboRow {
-                            set_title: &tr!("Streaming quality"),
+                            set_title: &tr!("Resolution limit"),
                             set_subtitle: &tr!(
                                 "A ceiling: a smaller screen is sent as it is. Above 1080p \
                                  not every receiver will accept it."
@@ -116,6 +118,12 @@ impl Component for SettingsPage {
                                 tr!("High (1080p)"),
                                 tr!("Medium (720p)"),
                                 tr!("Low (480p)"),
+                                "1600 × 900".into(),
+                                "1280 × 800".into(),
+                                "1920 × 1200".into(),
+                                "2560 × 1600".into(),
+                                "3440 × 1440".into(),
+                                tr!("Custom resolution"),
                             ])),
                             connect_selected_notify[sender] => move |row| {
                                 sender.input(SettingsMsg::SetQuality(match row.selected() {
@@ -123,8 +131,40 @@ impl Component for SettingsPage {
                                     1 => Quality::Ultra,
                                     3 => Quality::Medium,
                                     4 => Quality::Low,
+                                    5 => Quality::HdPlus,
+                                    6 => Quality::Wxga,
+                                    7 => Quality::Wuxga,
+                                    8 => Quality::Wqxga,
+                                    9 => Quality::Ultrawide,
+                                    10 => Quality::Custom,
                                     _ => Quality::High,
                                 }));
+                            } @quality_handler,
+                        },
+
+                        adw::ActionRow {
+                            set_title: &tr!("Width (pixels)"),
+                            #[watch]
+                            set_visible: model.settings.quality == Quality::Custom,
+                            #[name = "custom_width"]
+                            add_suffix = &gtk::SpinButton {
+                                set_valign: gtk::Align::Center,
+                                set_adjustment: &gtk::Adjustment::new(1920.0, 160.0, 7680.0, 2.0, 16.0, 0.0),
+                                set_numeric: true,
+                                connect_value_changed[sender] => move |spin| { sender.input(SettingsMsg::SetWidth(spin.value() as u32)); } @custom_width_handler,
+                            },
+                        },
+                        adw::ActionRow {
+                            set_title: &tr!("Height (pixels)"),
+                            set_subtitle: &tr!("Aspect ratio is preserved. Miracast uses a supported mode within these limits."),
+                            #[watch]
+                            set_visible: model.settings.quality == Quality::Custom,
+                            #[name = "custom_height"]
+                            add_suffix = &gtk::SpinButton {
+                                set_valign: gtk::Align::Center,
+                                set_adjustment: &gtk::Adjustment::new(1080.0, 160.0, 7680.0, 2.0, 16.0, 0.0),
+                                set_numeric: true,
+                                connect_value_changed[sender] => move |spin| { sender.input(SettingsMsg::SetHeight(spin.value() as u32)); } @custom_height_handler,
                             },
                         },
 
@@ -134,12 +174,12 @@ impl Component for SettingsPage {
                             set_subtitle: &tr!(
                                 "60 is smoother and costs about half as much again in bandwidth"
                             ),
-                            set_model: Some(&string_list(&[tr!("30 FPS"), tr!("60 FPS")])),
+                            set_model: Some(&string_list(&[tr!("24 FPS"), tr!("25 FPS"), tr!("30 FPS"), tr!("50 FPS"), tr!("60 FPS")])),
                             connect_selected_notify[sender] => move |row| {
                                 sender.input(SettingsMsg::SetFps(
-                                    if row.selected() == 1 { 60 } else { 30 },
+                                    [24, 25, 30, 50, 60].get(row.selected() as usize).copied().unwrap_or(30),
                                 ));
-                            },
+                            } @fps_handler,
                         },
 
                         #[name = "film_mode"]
@@ -152,7 +192,7 @@ impl Component for SettingsPage {
                             ),
                             connect_active_notify[sender] => move |row| {
                                 sender.input(SettingsMsg::SetFilmMode(row.is_active()));
-                            },
+                            } @film_mode_handler,
                         },
                     },
 
@@ -166,7 +206,7 @@ impl Component for SettingsPage {
                             set_subtitle: &tr!("Send whatever this computer is playing"),
                             connect_active_notify[sender] => move |row| {
                                 sender.input(SettingsMsg::SetSystemAudio(row.is_active()));
-                            },
+                            } @system_audio_handler,
                         },
 
                         #[name = "microphone"]
@@ -175,7 +215,7 @@ impl Component for SettingsPage {
                             set_subtitle: &tr!("Mix your voice into what is sent"),
                             connect_active_notify[sender] => move |row| {
                                 sender.input(SettingsMsg::SetMicrophone(row.is_active()));
-                            },
+                            } @microphone_handler,
                         },
 
                         adw::ActionRow {
@@ -195,7 +235,7 @@ impl Component for SettingsPage {
                                 set_digits: 0,
                                 connect_value_changed[sender] => move |scale| {
                                     sender.input(SettingsMsg::SetMicVolume(scale.value()));
-                                },
+                                } @mic_volume_handler,
                             },
                         },
                     },
@@ -210,7 +250,7 @@ impl Component for SettingsPage {
                             set_subtitle: &tr!("Look for receivers as soon as the app starts"),
                             connect_active_notify[sender] => move |row| {
                                 sender.input(SettingsMsg::SetAutoDiscovery(row.is_active()));
-                            },
+                            } @auto_discovery_handler,
                         },
 
                         #[name = "device_name"]
@@ -218,7 +258,7 @@ impl Component for SettingsPage {
                             set_title: &tr!("This computer's name"),
                             connect_changed[sender] => move |row| {
                                 sender.input(SettingsMsg::SetDeviceName(row.text().to_string()));
-                            },
+                            } @device_name_handler,
                         },
 
                         adw::ActionRow {
@@ -237,7 +277,7 @@ impl Component for SettingsPage {
                                 set_numeric: true,
                                 connect_value_changed[sender] => move |spin| {
                                     sender.input(SettingsMsg::SetPort(spin.value() as u16));
-                                },
+                                } @port_handler,
                             },
                         },
                     },
@@ -311,6 +351,12 @@ impl Component for SettingsPage {
             SettingsMsg::SetProtocol(protocol) => self.settings.protocol = protocol,
             SettingsMsg::SetQuality(quality) => self.settings.quality = quality,
             SettingsMsg::SetFps(fps) => self.settings.fps = fps,
+            SettingsMsg::SetWidth(width) => {
+                self.settings.custom_width = settings::valid_dimension(width)
+            }
+            SettingsMsg::SetHeight(height) => {
+                self.settings.custom_height = settings::valid_dimension(height)
+            }
             SettingsMsg::SetSystemAudio(on) => self.settings.system_audio = on,
             SettingsMsg::SetMicrophone(on) => self.settings.microphone = on,
             SettingsMsg::SetMicVolume(volume) => self.settings.mic_volume = volume as u8,
@@ -344,6 +390,29 @@ impl SettingsPage {
     /// change.
     fn show(&mut self, widgets: &SettingsPageWidgets) {
         self.loading = true;
+        widgets.protocol.block_signal(&widgets.protocol_handler);
+        widgets.quality.block_signal(&widgets.quality_handler);
+        widgets
+            .custom_width
+            .block_signal(&widgets.custom_width_handler);
+        widgets
+            .custom_height
+            .block_signal(&widgets.custom_height_handler);
+        widgets.fps.block_signal(&widgets.fps_handler);
+        widgets.film_mode.block_signal(&widgets.film_mode_handler);
+        widgets
+            .system_audio
+            .block_signal(&widgets.system_audio_handler);
+        widgets.microphone.block_signal(&widgets.microphone_handler);
+        widgets.mic_volume.block_signal(&widgets.mic_volume_handler);
+        widgets
+            .auto_discovery
+            .block_signal(&widgets.auto_discovery_handler);
+        widgets
+            .device_name
+            .block_signal(&widgets.device_name_handler);
+        widgets.port.block_signal(&widgets.port_handler);
+
         widgets.protocol.set_selected(match self.settings.protocol {
             Protocol::Auto => 0,
             Protocol::Miracast => 1,
@@ -355,10 +424,19 @@ impl SettingsPage {
             Quality::High => 2,
             Quality::Medium => 3,
             Quality::Low => 4,
+            Quality::HdPlus => 5,
+            Quality::Wxga => 6,
+            Quality::Wuxga => 7,
+            Quality::Wqxga => 8,
+            Quality::Ultrawide => 9,
+            Quality::Custom => 10,
         });
-        widgets
-            .fps
-            .set_selected(if self.settings.fps > 30 { 1 } else { 0 });
+        widgets.fps.set_selected(
+            [24, 25, 30, 50, 60]
+                .iter()
+                .position(|fps| *fps == self.settings.fps)
+                .unwrap_or(2) as u32,
+        );
         widgets.film_mode.set_active(self.settings.film_mode);
         widgets.system_audio.set_active(self.settings.system_audio);
         widgets.microphone.set_active(self.settings.microphone);
@@ -370,6 +448,38 @@ impl SettingsPage {
             .set_active(self.settings.auto_discovery);
         widgets.device_name.set_text(&self.settings.device_name);
         widgets.port.set_value(self.settings.port as f64);
+        widgets
+            .custom_width
+            .set_value(self.settings.custom_width as f64);
+        widgets
+            .custom_height
+            .set_value(self.settings.custom_height as f64);
+        widgets.protocol.unblock_signal(&widgets.protocol_handler);
+        widgets.quality.unblock_signal(&widgets.quality_handler);
+        widgets
+            .custom_width
+            .unblock_signal(&widgets.custom_width_handler);
+        widgets
+            .custom_height
+            .unblock_signal(&widgets.custom_height_handler);
+        widgets.fps.unblock_signal(&widgets.fps_handler);
+        widgets.film_mode.unblock_signal(&widgets.film_mode_handler);
+        widgets
+            .system_audio
+            .unblock_signal(&widgets.system_audio_handler);
+        widgets
+            .microphone
+            .unblock_signal(&widgets.microphone_handler);
+        widgets
+            .mic_volume
+            .unblock_signal(&widgets.mic_volume_handler);
+        widgets
+            .auto_discovery
+            .unblock_signal(&widgets.auto_discovery_handler);
+        widgets
+            .device_name
+            .unblock_signal(&widgets.device_name_handler);
+        widgets.port.unblock_signal(&widgets.port_handler);
         self.loading = false;
     }
 }

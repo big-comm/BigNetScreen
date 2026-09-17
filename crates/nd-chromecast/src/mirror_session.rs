@@ -141,7 +141,7 @@ struct StreamSender {
     /// hole born before the network) and the largest wall-clock gap between
     /// two sends (a late sender thread).
     flow: FlowWatch,
-    last_rtp_timestamp: u32,
+    clock_origin: std::time::SystemTime,
     last_report: std::time::Instant,
     rtcp_enabled: bool,
 }
@@ -175,7 +175,7 @@ impl StreamSender {
             nacks_seen: 0,
             stats: SenderStats::default(),
             flow: FlowWatch::default(),
-            last_rtp_timestamp: 0,
+            clock_origin: std::time::SystemTime::UNIX_EPOCH,
             last_report: std::time::Instant::now(),
             rtcp_enabled: rtcp_enabled(),
         })
@@ -226,7 +226,7 @@ impl StreamSender {
                 // asks for whatever is missing to be resent.
                 tracing::debug!(stream = self.label, %err, "failed to send a packet");
             } else {
-                self.stats.record(packet.len());
+                self.stats.record(packet.len().saturating_sub(12));
             }
         }
         // Keep it for a possible retransmission before moving on.
@@ -243,7 +243,6 @@ impl StreamSender {
         };
         self.flow.record(pts.nseconds(), esperado);
 
-        self.last_rtp_timestamp = rtp_timestamp;
         self.send_report_if_due();
 
         tracing::trace!(
@@ -328,10 +327,13 @@ impl StreamSender {
             return;
         }
         self.last_report = std::time::Instant::now();
+        let now = std::time::SystemTime::now();
+        let elapsed = now.duration_since(self.clock_origin).unwrap_or_default();
+        let timestamp = ((elapsed.as_nanos() * self.time_base as u128) / 1_000_000_000) as u32;
         let report = build_sender_report(
             self.packetizer.ssrc(),
-            ntp_timestamp(std::time::SystemTime::now()),
-            self.last_rtp_timestamp,
+            ntp_timestamp(now),
+            timestamp,
             self.stats,
         );
         if let Err(err) = self.socket.send(&report) {
@@ -465,56 +467,89 @@ pub async fn run(
     // 1. Canal de controle e app de espelhamento.
     let channel = CastChannel::connect_to(receiver_ip, receiver_port).await?;
     let app = channel.launch(MIRRORING_APP_ID).await?;
+    let result = async {
 
-    // 2. Negotiation: the receiver returns the UDP port and accepts (or not)
-    //    each offered stream.
-    status.set(SinkState::WaitSocket);
-    let (width, height) = StreamConfig::fit_within(
-        size,
-        StreamConfig::preferred_or(pipeline::CHROMECAST_MAX_RESOLUTION),
-    );
-    let driver = crate::session::detect_gpu_driver();
-    let encoder = *pipeline::encoder_candidates(driver)
-        .first()
-        .ok_or_else(|| NdError::Unsupported("no H.264 encoder available".into()))?;
+        // 2. Negotiation: the receiver returns the UDP port and accepts (or not)
+        //    each offered stream.
+        status.set(SinkState::WaitSocket);
+        let (width, height) = StreamConfig::fit_within(
+            size,
+            StreamConfig::preferred_or(pipeline::CHROMECAST_MAX_RESOLUTION),
+        );
+        let driver = crate::session::detect_gpu_driver();
+        let encoder =
+            pipeline::working_encoder(driver, (width, height), StreamConfig::capped_fps(60)).await?;
 
-    let cfg = StreamConfig {
-        width,
-        height,
-        // The Cast paths have no frame rate to negotiate against, so the
-        // preference is the whole answer, capped at what H.264 mirroring
-        // receivers accept.
-        fps: StreamConfig::capped_fps(60),
-        encoder,
-        audio: pipeline::AudioSource::detect(),
-        ..Default::default()
-    };
-    let mirror_cfg = MirrorConfig {
-        width,
-        height,
-        fps: cfg.fps,
-        max_bitrate: cfg.scaled_bitrate_kbps() * 1000,
-        with_audio: true,
-        ..Default::default()
-    };
+        let cfg = StreamConfig {
+            width,
+            height,
+            // The Cast paths have no frame rate to negotiate against, so the
+            // preference is the whole answer, capped at what H.264 mirroring
+            // receivers accept.
+            fps: StreamConfig::capped_fps(60),
+            encoder,
+            audio: pipeline::AudioSource::detect(),
+            ..Default::default()
+        };
+        let mirror_cfg = MirrorConfig {
+            width,
+            height,
+            fps: cfg.fps,
+            max_bitrate: cfg.scaled_bitrate_kbps() * 1000,
+            with_audio: true,
+            ..Default::default()
+        };
 
-    let session = mirror::negotiate(&channel, &app, receiver_ip, &mirror_cfg).await?;
+        let session = mirror::negotiate(&channel, &app, receiver_ip, &mirror_cfg).await?;
 
-    // After the negotiation, not before: what goes on the wall is what the
-    // receiver agreed to.
-    status.set_link(nd_core::sink::StreamLink {
-        width: cfg.width,
-        height: cfg.height,
-        fps: cfg.fps,
-        endpoint: Some(std::net::SocketAddr::new(receiver_ip, receiver_port)),
-    });
-    let result = stream(&cfg, &video, &session, status, &mut cancel).await;
+        // After the negotiation, not before: what goes on the wall is what the
+        // receiver agreed to.
+        status.set_link(nd_core::sink::StreamLink {
+            width: cfg.width,
+            height: cfg.height,
+            fps: cfg.fps,
+            endpoint: Some(std::net::SocketAddr::new(receiver_ip, receiver_port)),
+        });
+        let result = {
+            let streaming = stream(&cfg, &video, &session, status, &mut cancel);
+            tokio::pin!(streaming);
+            loop {
+                tokio::select! {
+                    result = &mut streaming => break result,
+                    event = channel.next_event() => match event {
+                        None => break Err(NdError::Protocol("Cast control channel closed".into())),
+                        Some(event) if event.payload.get("type").and_then(serde_json::Value::as_str) == Some("CLOSE") => break Ok(()),
+                        _ => {},
+                    }
+                }
+            }
+        };
+
+        result
+    }.await;
 
     let _ = channel.stop_app(&app).await;
     // And the platform connection, so the receiver is free for the next sender
     // rather than holding this one.
     channel.close().await;
     result
+}
+
+/// Stops the pipeline before joining workers, including failed startup.
+struct StreamWorkers {
+    pipeline: gst::Pipeline,
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    threads: Vec<std::thread::JoinHandle<()>>,
+}
+
+impl Drop for StreamWorkers {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Release);
+        let _ = self.pipeline.set_state(gst::State::Null);
+        for thread in self.threads.drain(..) {
+            let _ = thread.join();
+        }
+    }
 }
 
 async fn stream(
@@ -528,6 +563,11 @@ async fn stream(
 
     let desc = pipeline::mirror_pipeline_description(cfg, video);
     let (gst_pipeline, mut events) = pipeline::build_pipeline(&desc, cfg.latency_ms())?;
+    let mut workers = StreamWorkers {
+        pipeline: gst_pipeline.clone(),
+        stop: Default::default(),
+        threads: Vec::new(),
+    };
 
     let (ip, port) = session.target();
     let target = SocketAddr::new(ip, port);
@@ -577,6 +617,18 @@ async fn stream(
             Err(err) => tracing::warn!(%err, "no audio track in this session"),
         }
     }
+    for (name, accepted) in [
+        (MIRROR_VIDEO_SINK, session.video().is_some()),
+        (MIRROR_AUDIO_SINK, session.audio().is_some()),
+    ] {
+        if !accepted {
+            if let Some(element) = gst_pipeline.by_name(name) {
+                element.set_property("drop", true);
+                element.set_property("max-buffers", 1u32);
+                element.set_property("wait-on-eos", false);
+            }
+        }
+    }
     if senders.is_empty() {
         return Err(NdError::Unsupported(
             "the receiver accepted no usable stream".into(),
@@ -589,11 +641,11 @@ async fn stream(
     //
     // The requests arrive identified by the stream's SSRC, so each one gets its
     // own inbox.
-    let mut nack_inboxes: std::collections::HashMap<u32, std::sync::mpsc::Sender<Vec<Nack>>> =
+    let mut nack_inboxes: std::collections::HashMap<u32, std::sync::mpsc::SyncSender<Vec<Nack>>> =
         Default::default();
     let mut nack_receivers = Vec::new();
     for sender in &senders {
-        let (tx, rx) = std::sync::mpsc::channel::<Vec<Nack>>();
+        let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<Nack>>(64);
         nack_inboxes.insert(sender.ssrc(), tx);
         nack_receivers.push(rx);
     }
@@ -606,12 +658,13 @@ async fn stream(
     // end (see `RECEIVER_SILENCE_TIMEOUT`).
     let receiver_alive = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
     let alive_counter = receiver_alive.clone();
-    std::thread::Builder::new()
+    let stopped = workers.stop.clone();
+    let receiver_thread = std::thread::Builder::new()
         .name("cast-rtcp-rx".into())
         .spawn(move || {
             let _ = listener.set_read_timeout(Some(Duration::from_millis(500)));
             let mut buf = [0u8; 2048];
-            loop {
+            while !stopped.load(std::sync::atomic::Ordering::Acquire) {
                 let Ok(size) = listener.recv(&mut buf) else {
                     continue;
                 };
@@ -631,7 +684,10 @@ async fn stream(
                         continue;
                     }
                     if let Some(inbox) = nack_inboxes.get(&feedback.sender_ssrc) {
-                        if inbox.send(feedback.nacks).is_err() {
+                        if matches!(
+                            inbox.try_send(feedback.nacks),
+                            Err(std::sync::mpsc::TrySendError::Disconnected(_))
+                        ) {
                             break;
                         }
                     }
@@ -639,6 +695,7 @@ async fn stream(
             }
         })
         .map_err(|e| NdError::Gst(e.to_string()))?;
+    workers.threads.push(receiver_thread);
 
     tracing::info!(
         target = %target,
@@ -650,6 +707,16 @@ async fn stream(
         .set_state(gst::State::Playing)
         .map_err(|e| NdError::Gst(e.to_string()))?;
     status.set(SinkState::Streaming);
+    let now = std::time::SystemTime::now();
+    let running = gst_pipeline
+        .current_running_time()
+        .unwrap_or(gst::ClockTime::ZERO);
+    let clock_origin = now
+        .checked_sub(Duration::from_nanos(running.nseconds()))
+        .unwrap_or(now);
+    for sender in &mut senders {
+        sender.clock_origin = clock_origin;
+    }
 
     // **One thread per stream.** Alternating between video and audio on a
     // single thread tied the audio to the video's cadence: with 10 ms frames,
@@ -658,15 +725,17 @@ async fn stream(
     let video_element = gst_pipeline.by_name(MIRROR_VIDEO_SINK);
     let (done_tx, mut done_rx) = tokio::sync::oneshot::channel();
     let done_tx = std::sync::Arc::new(std::sync::Mutex::new(Some(done_tx)));
-    let mut threads = Vec::new();
 
+    let remaining = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(senders.len()));
     for (sender, nack_rx) in senders.into_iter().zip(nack_receivers) {
+        let remaining = remaining.clone();
         let label = sender.label();
         let is_video = sender.is_video();
         let key_flag = want_key_frame.clone();
         let video_element = video_element.clone();
         let done_tx = done_tx.clone();
         let receiver_alive = receiver_alive.clone();
+        let stopped = workers.stop.clone();
 
         let handle = std::thread::Builder::new()
             .name(format!("cast-{label}"))
@@ -676,11 +745,24 @@ async fn stream(
                 let mut packets_resent = 0u64;
                 let mut nacks_expired = 0u64;
                 let mut last_stats = std::time::Instant::now();
+                let started_at = std::time::Instant::now();
                 // State of the receiver's sign of life.
                 let mut last_seen = receiver_alive.load(std::sync::atomic::Ordering::Relaxed);
                 let mut last_seen_at = std::time::Instant::now();
 
-                loop {
+                while !stopped.load(std::sync::atomic::Ordering::Acquire) {
+                    if sender.frame_id == 0 && started_at.elapsed() > Duration::from_secs(10) {
+                        if let Some(tx) = done_tx
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .take()
+                        {
+                            let _ = tx.send(Err(NdError::Gst(
+                                "no encoded frames arrived within 10 seconds".into(),
+                            )));
+                        }
+                        return;
+                    }
                     // Serve this stream's retransmissions.
                     let mut pending: Vec<Nack> = Vec::new();
                     while let Ok(nacks) = nack_rx.try_recv() {
@@ -710,7 +792,7 @@ async fn stream(
                     if seen != last_seen {
                         last_seen = seen;
                         last_seen_at = std::time::Instant::now();
-                    } else if seen > 0 && last_seen_at.elapsed() > RECEIVER_SILENCE_TIMEOUT {
+                    } else if last_seen_at.elapsed() > RECEIVER_SILENCE_TIMEOUT {
                         if let Ok(mut slot) = done_tx.lock() {
                             if let Some(tx) = slot.take() {
                                 let _ = tx.send(Err(NdError::Protocol(
@@ -725,9 +807,11 @@ async fn stream(
                     if is_video && key_flag.swap(false, std::sync::atomic::Ordering::Relaxed) {
                         if let Some(element) = &video_element {
                             tracing::info!("the receiver asked for a key frame");
-                            let event = gst::event::CustomDownstream::new(
+                            let event = gst::event::CustomUpstream::new(
                                 gst::Structure::builder("GstForceKeyUnit")
                                     .field("all-headers", true)
+                                    .field("running-time", gst::ClockTime::NONE)
+                                    .field("count", 0u32)
                                     .build(),
                             );
                             let _ = element.send_event(event);
@@ -768,14 +852,16 @@ async fn stream(
                     }
                 }
 
-                if let Ok(mut slot) = done_tx.lock() {
-                    if let Some(tx) = slot.take() {
-                        let _ = tx.send(Ok(()));
+                if remaining.fetch_sub(1, std::sync::atomic::Ordering::AcqRel) == 1 {
+                    if let Ok(mut slot) = done_tx.lock() {
+                        if let Some(tx) = slot.take() {
+                            let _ = tx.send(Ok(()));
+                        }
                     }
                 }
             })
             .map_err(|e| NdError::Gst(e.to_string()))?;
-        threads.push(handle);
+        workers.threads.push(handle);
     }
 
     let outcome = tokio::select! {
@@ -790,11 +876,7 @@ async fn stream(
         _ = cancel.changed() => Ok(()),
     };
 
-    let _ = gst_pipeline.set_state(gst::State::Null);
-    // The threads exit on their own as soon as the appsink reports end of stream.
-    for handle in threads {
-        let _ = handle.join();
-    }
+    drop(workers);
 
     outcome
 }
@@ -908,5 +990,70 @@ mod tests {
         let a_day_ns: u128 = 24 * 3600 * 1_000_000_000u128;
         let ticks = (a_day_ns * mirror::VIDEO_TIME_BASE as u128) / 1_000_000_000u128;
         assert_eq!(ticks, 24 * 3600 * 90_000, "a conta em 128 bits fica exata");
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod lifecycle_tests {
+    use super::*;
+    fn rx_threads() -> usize {
+        std::fs::read_dir("/proc/self/task")
+            .unwrap()
+            .filter_map(std::result::Result::ok)
+            .filter(|e| {
+                std::fs::read_to_string(e.path().join("comm"))
+                    .unwrap_or_default()
+                    .trim()
+                    == "cast-rtcp-rx"
+            })
+            .count()
+    }
+    #[tokio::test(flavor = "multi_thread")]
+    async fn rtcp_thread_is_joined_on_stop() {
+        let peer = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let cfg = StreamConfig {
+            width: 320,
+            height: 240,
+            fps: 30,
+            encoder: pipeline::H264Encoder::X264,
+            audio: pipeline::AudioSource::Silence,
+            ..Default::default()
+        };
+        let (_, offer) = mirror::build_offer(
+            &MirrorConfig {
+                width: 320,
+                height: 240,
+                ..Default::default()
+            },
+            1,
+        )
+        .unwrap();
+        let negotiated = Negotiated {
+            receiver_ip: peer.local_addr().unwrap().ip(),
+            answer: mirror::Answer {
+                udp_port: peer.local_addr().unwrap().port(),
+                send_indexes: vec![0, 1],
+                ssrcs: vec![100002, 100004],
+            },
+            offer,
+        };
+        let before = rx_threads();
+        let (tx, mut rx) = tokio::sync::watch::channel(false);
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            tx.send(true).unwrap();
+        });
+        stream(
+            &cfg,
+            &pipeline::VideoSource::Test,
+            &negotiated,
+            &SinkStatus::new(),
+            &mut rx,
+        )
+        .await
+        .unwrap();
+        tokio::time::sleep(Duration::from_millis(1200)).await;
+        let after = rx_threads();
+        assert_eq!(after, before);
     }
 }

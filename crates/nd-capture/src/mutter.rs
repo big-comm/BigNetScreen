@@ -135,6 +135,7 @@ struct ActiveSession {
     /// is reading it, so a `fakesink` holds it open while the real pipeline
     /// reads the monitor stream.
     keep_alive: Option<gstreamer::Pipeline>,
+    virtual_connector: Option<String>,
 }
 
 /// Backend baseado em `org.gnome.Mutter.ScreenCast`.
@@ -375,6 +376,14 @@ impl CaptureBackend for MutterBackend {
                 ))
             })?;
 
+        *self.active.lock().await = Some(ActiveSession {
+            _conn: conn.clone(),
+            session: session_path.clone(),
+            conn_for_stop: conn.clone(),
+            virtual_session: None,
+            keep_alive: None,
+            virtual_connector: None,
+        });
         let session = ScreenCastSessionProxy::builder(&conn)
             .path(session_path.clone())
             .map_err(cap_err)?
@@ -495,7 +504,11 @@ impl CaptureBackend for MutterBackend {
         // consumed, because the screen lives only while someone reads it, so a
         // `fakesink` holds it open.
         if source_type == SourceType::Virtual {
+            *self.layout.lock().await = layout_before.clone();
             let keep_alive = self.keep_virtual_stream_alive(node_id).await?;
+            if let Some(active) = self.active.lock().await.as_mut() {
+                active.keep_alive = Some(keep_alive.clone());
+            }
 
             let connector = crate::display_config::wait_for_virtual_connector(
                 &conn,
@@ -552,6 +565,7 @@ impl CaptureBackend for MutterBackend {
                 conn_for_stop: conn,
                 virtual_session: Some(session_path),
                 keep_alive: Some(keep_alive),
+                virtual_connector: Some(connector.clone()),
             });
 
             tracing::info!(
@@ -575,6 +589,7 @@ impl CaptureBackend for MutterBackend {
             conn_for_stop: conn,
             virtual_session: None,
             keep_alive: None,
+            virtual_connector: None,
         });
 
         tracing::info!(node_id, "Mutter capture started");
@@ -594,14 +609,19 @@ impl CaptureBackend for MutterBackend {
         let Some(active) = self.active.lock().await.take() else {
             return Ok(());
         };
-        let session = ScreenCastSessionProxy::builder(&active.conn_for_stop)
-            .path(active.session)
-            .map_err(cap_err)?
-            .build()
-            .await
-            .map_err(cap_err)?;
-        if let Err(err) = session.stop().await {
-            tracing::debug!(%err, "the Mutter session was already closed");
+        if let Some(connector) = &active.virtual_connector {
+            if let Some(current) =
+                crate::display_config::LayoutSnapshot::capture(&active.conn_for_stop).await
+            {
+                *self.layout.lock().await = current.without(connector);
+            }
+        }
+        if let Ok(builder) =
+            ScreenCastSessionProxy::builder(&active.conn_for_stop).path(active.session)
+        {
+            if let Ok(session) = builder.build().await {
+                let _ = session.stop().await;
+            }
         }
 
         // The keep-alive pipeline and the virtual session go last: dropping

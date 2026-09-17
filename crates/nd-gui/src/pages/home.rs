@@ -165,6 +165,7 @@ pub enum HomeMsg {
     Back,
     /// Send this to the receiver already chosen.
     Act(SourceType),
+    PublishNdi(SourceType),
     /// Go to the media page with the chosen receiver.
     SendMedia,
     Stop,
@@ -172,6 +173,7 @@ pub enum HomeMsg {
 
 #[derive(Debug)]
 pub enum HomeOutput {
+    PublishNdi(SourceType),
     /// Start streaming this to this receiver.
     Cast {
         id: String,
@@ -234,6 +236,30 @@ impl Component for HomePage {
                                 set_selection_mode: gtk::SelectionMode::None,
                                 set_valign: gtk::Align::Start,
                                 add_css_class: "boxed-list",
+                            },
+                        },
+
+                        adw::PreferencesGroup {
+                            set_title: &tr!("Publish with NDI"),
+                            set_description: Some(&tr!("Choose this computer in OBS or another NDI receiver. Uses the name and audio options in Settings.")),
+                            #[watch]
+                            set_visible: model.step == Step::Device,
+                            gtk::Box {
+                                set_spacing: 8,
+                                gtk::Button {
+                                    set_label: &tr!("Screen"),
+                                    connect_clicked => HomeMsg::PublishNdi(SourceType::Monitor),
+                                },
+                                gtk::Button {
+                                    set_label: &tr!("Window"),
+                                    connect_clicked => HomeMsg::PublishNdi(SourceType::Window),
+                                },
+                                gtk::Button {
+                                    set_label: &tr!("Extra screen"),
+                                    #[watch]
+                                    set_sensitive: model.virtual_available,
+                                    connect_clicked => HomeMsg::PublishNdi(SourceType::Virtual),
+                                },
                             },
                         },
 
@@ -545,6 +571,9 @@ impl Component for HomePage {
             HomeMsg::Back => {
                 self.step = Step::Device;
                 self.chosen = None;
+            }
+            HomeMsg::PublishNdi(source) => {
+                sender.output(HomeOutput::PublishNdi(source)).ok();
             }
             HomeMsg::Act(source) => {
                 if let Some(chosen) = &self.chosen {

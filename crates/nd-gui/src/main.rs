@@ -8,6 +8,8 @@ use app::AppModel;
 use relm4::RelmApp;
 
 const APP_ID: &str = "br.com.biglinux.BigNetScreen";
+static STARTED: std::sync::LazyLock<std::time::Instant> =
+    std::sync::LazyLock::new(std::time::Instant::now);
 
 /// The application's version.
 ///
@@ -21,6 +23,7 @@ const APP_ID: &str = "br.com.biglinux.BigNetScreen";
 pub const APP_VERSION: &str = "0.1.4";
 
 fn main() {
+    std::sync::LazyLock::force(&STARTED);
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()

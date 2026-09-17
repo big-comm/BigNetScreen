@@ -259,6 +259,10 @@ impl MdnsSink {
 
 #[async_trait]
 impl Sink for MdnsSink {
+    fn control_endpoint(&self) -> Option<std::net::SocketAddr> {
+        self.address
+            .map(|ip| std::net::SocketAddr::new(ip, self.port))
+    }
     fn info(&self) -> SinkInfo {
         self.info.clone()
     }

@@ -18,12 +18,13 @@ nd-core.workspace = true
 nd-capture.workspace = true
 nd-chromecast.workspace = true
 nd-wfd.workspace = true
+nd-ndi.workspace = true
 nd-net.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 futures.workspace = true
 tokio.workspace = true
-gettext-rs = { version = "0.7", features = ["gettext-system"] }
+gettext-rs = { version = "0.8", features = ["gettext-system"] }
 relm4 = { version = "0.11", features = ["libadwaita"] }
 # Habilita a API da libadwaita ≥ 1.5 (AdwToolbarView, AdwBreakpoint, …).
 # The system has 1.9.1; the 0.7 bindings expose up to v1_5.
@@ -33,3 +34,6 @@ adw = { package = "libadwaita", version = "0.9", features = ["v1_7"] }
 # there keeps the build working on distributions that are a few releases
 # behind.
 gtk = { package = "gtk4", version = "0.11", features = ["v4_10"] }
+
+[dev-dependencies]
+async-trait.workspace = true

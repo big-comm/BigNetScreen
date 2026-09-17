@@ -135,7 +135,7 @@ type Writer = Arc<tokio::sync::Mutex<WriteHalf<TlsStream<TcpStream>>>>;
 /// A control connection to a Cast receiver.
 pub struct CastChannel {
     writer: Writer,
-    events: tokio::sync::Mutex<mpsc::UnboundedReceiver<CastEvent>>,
+    events: tokio::sync::Mutex<mpsc::Receiver<CastEvent>>,
     pending: Pending,
     request_id: AtomicI32,
     reader_task: tokio::task::JoinHandle<()>,
@@ -146,6 +146,19 @@ impl Drop for CastChannel {
     fn drop(&mut self) {
         self.reader_task.abort();
         self.ping_task.abort();
+    }
+}
+
+struct PendingRequest {
+    pending: Pending,
+    id: i32,
+}
+impl Drop for PendingRequest {
+    fn drop(&mut self) {
+        self.pending
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&self.id);
     }
 }
 
@@ -197,7 +210,7 @@ impl CastChannel {
         let (read_half, write_half) = tokio::io::split(stream);
         let writer: Writer = Arc::new(tokio::sync::Mutex::new(write_half));
         let pending: Pending = Arc::new(Mutex::new(HashMap::new()));
-        let (event_tx, event_rx) = mpsc::unbounded_channel();
+        let (event_tx, event_rx) = mpsc::channel(128);
 
         let reader_task = tokio::spawn(reader_loop(
             read_half,
@@ -295,6 +308,10 @@ impl CastChannel {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(id, tx);
+        let _request = PendingRequest {
+            pending: self.pending.clone(),
+            id,
+        };
 
         self.send(namespace, destination, &payload.to_string())
             .await?;
@@ -465,6 +482,11 @@ impl CastChannel {
                 "the receiver could not play this file (error {reason})"
             )));
         }
+        if response.get("type").and_then(Value::as_str) != Some("MEDIA_STATUS") {
+            return Err(NdError::Protocol(
+                "receiver did not acknowledge the media LOAD".into(),
+            ));
+        }
         Ok(response)
     }
 
@@ -539,7 +561,7 @@ async fn send_raw(
         payload_utf8: Some(payload.to_string()),
         payload_binary: None,
     };
-    tracing::trace!(%namespace, %destination, %payload, ">>> Cast enviado");
+    tracing::trace!(%namespace, %destination, bytes = payload.len(), ">>> Cast sent");
     let buf = msg.encode_to_vec();
     if buf.len() > MAX_MESSAGE_BYTES {
         return Err(NdError::Protocol("Cast message too large".into()));
@@ -575,7 +597,7 @@ async fn read_message(reader: &mut ReadHalf<TlsStream<TcpStream>>) -> Result<(St
     // receiver: enable it with `RUST_LOG=nd_chromecast=trace`.
     tracing::trace!(
         namespace = %msg.namespace,
-        payload = msg.payload_utf8.as_deref().unwrap_or(""),
+        bytes = msg.payload_utf8.as_ref().map_or(0, String::len),
         "<<< Cast received"
     );
     let payload = msg
@@ -592,7 +614,7 @@ async fn reader_loop(
     mut reader: ReadHalf<TlsStream<TcpStream>>,
     writer: Writer,
     pending: Pending,
-    events: mpsc::UnboundedSender<CastEvent>,
+    events: mpsc::Sender<CastEvent>,
 ) {
     loop {
         let (namespace, payload) = match read_message(&mut reader).await {
@@ -626,7 +648,10 @@ async fn reader_loop(
             }
         }
 
-        if events.send(CastEvent { namespace, payload }).is_err() {
+        if matches!(
+            events.try_send(CastEvent { namespace, payload }),
+            Err(mpsc::error::TrySendError::Closed(_))
+        ) {
             break;
         }
     }

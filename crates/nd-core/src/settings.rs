@@ -71,6 +71,12 @@ pub enum Quality {
     Medium,
     /// 854x480.
     Low,
+    HdPlus,
+    Wxga,
+    Wuxga,
+    Wqxga,
+    Ultrawide,
+    Custom,
 }
 
 impl Quality {
@@ -82,6 +88,12 @@ impl Quality {
             Quality::High => (1920, 1080),
             Quality::Medium => (1280, 720),
             Quality::Low => (854, 480),
+            Quality::HdPlus => (1600, 900),
+            Quality::Wxga => (1280, 800),
+            Quality::Wuxga => (1920, 1200),
+            Quality::Wqxga => (2560, 1600),
+            Quality::Ultrawide => (3440, 1440),
+            Quality::Custom => (1920, 1080),
         }
     }
 
@@ -92,6 +104,12 @@ impl Quality {
             Quality::High => "high",
             Quality::Medium => "medium",
             Quality::Low => "low",
+            Quality::HdPlus => "900p",
+            Quality::Wxga => "800p",
+            Quality::Wuxga => "1200p",
+            Quality::Wqxga => "1600p",
+            Quality::Ultrawide => "ultrawide",
+            Quality::Custom => "custom",
         }
     }
 
@@ -102,6 +120,12 @@ impl Quality {
             "high" => Some(Quality::High),
             "medium" => Some(Quality::Medium),
             "low" => Some(Quality::Low),
+            "900p" => Some(Quality::HdPlus),
+            "800p" => Some(Quality::Wxga),
+            "1200p" => Some(Quality::Wuxga),
+            "1600p" => Some(Quality::Wqxga),
+            "ultrawide" => Some(Quality::Ultrawide),
+            "custom" => Some(Quality::Custom),
             _ => None,
         }
     }
@@ -112,6 +136,8 @@ impl Quality {
 pub struct Settings {
     pub protocol: Protocol,
     pub quality: Quality,
+    pub custom_width: u32,
+    pub custom_height: u32,
     /// Frames per second asked of the encoder. Clamped to 1..=60 on load.
     pub fps: u32,
     /// Send what the computer is playing.
@@ -136,6 +162,8 @@ impl Default for Settings {
         Self {
             protocol: Protocol::Auto,
             quality: Quality::High,
+            custom_width: 1920,
+            custom_height: 1080,
             fps: 30,
             system_audio: true,
             microphone: false,
@@ -149,6 +177,17 @@ impl Default for Settings {
 }
 
 impl Settings {
+    pub fn resolution_limit(&self) -> (u32, u32) {
+        if self.quality == Quality::Custom {
+            (
+                valid_dimension(self.custom_width),
+                valid_dimension(self.custom_height),
+            )
+        } else {
+            self.quality.resolution()
+        }
+    }
+
     /// The name to show on the receiver: what was configured, or the host name.
     pub fn display_name(&self) -> String {
         let configured = self.device_name.trim();
@@ -167,6 +206,8 @@ impl Settings {
             "# BigNetScreen settings. Edited by the application; safe to edit by hand.\n\
              protocol = {}\n\
              quality = {}\n\
+             custom_width = {}\n\
+             custom_height = {}\n\
              fps = {}\n\
              system_audio = {}\n\
              microphone = {}\n\
@@ -177,13 +218,15 @@ impl Settings {
              port = {}\n",
             self.protocol.as_key(),
             self.quality.as_key(),
+            valid_dimension(self.custom_width),
+            valid_dimension(self.custom_height),
             self.fps,
             self.system_audio,
             self.microphone,
             self.mic_volume,
             self.auto_discovery,
             self.film_mode,
-            self.device_name,
+            self.device_name.replace(['\n', '\r'], " "),
             self.port,
         )
     }
@@ -207,6 +250,16 @@ impl Settings {
             match key {
                 "protocol" => settings.protocol = Protocol::parse(value).unwrap_or_default(),
                 "quality" => settings.quality = Quality::parse(value).unwrap_or_default(),
+                "custom_width" => {
+                    if let Ok(n) = value.parse() {
+                        settings.custom_width = valid_dimension(n);
+                    }
+                }
+                "custom_height" => {
+                    if let Ok(n) = value.parse() {
+                        settings.custom_height = valid_dimension(n);
+                    }
+                }
                 "fps" => {
                     if let Ok(fps) = value.parse::<u32>() {
                         settings.fps = fps.clamp(1, 60);
@@ -236,6 +289,10 @@ impl Settings {
         }
         settings
     }
+}
+
+pub fn valid_dimension(value: u32) -> u32 {
+    value.clamp(160, 7680) & !1
 }
 
 static CURRENT: RwLock<Option<Settings>> = RwLock::new(None);
@@ -294,7 +351,7 @@ pub fn set(settings: Settings) {
             return;
         }
     }
-    if let Err(err) = std::fs::write(&path, settings.to_file()) {
+    if let Err(err) = crate::persistence::write_private(&path, settings.to_file().as_bytes()) {
         tracing::warn!(%err, path = %path.display(), "could not save the settings");
     }
 }
@@ -309,6 +366,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn custom_resolution_round_trips_and_is_bounded() {
+        let settings = Settings::from_file("quality=custom\ncustom_width=3441\ncustom_height=1441");
+        assert_eq!(settings.resolution_limit(), (3440, 1440));
+        assert_eq!(Settings::from_file(&settings.to_file()), settings);
+        assert_eq!(
+            Settings::from_file("quality=custom\ncustom_width=0\ncustom_height=99999")
+                .resolution_limit(),
+            (160, 7680)
+        );
+        assert_eq!(
+            Settings::from_file("quality=1200p").resolution_limit(),
+            (1920, 1200)
+        );
+        assert_eq!(
+            Settings::from_file("quality=high").resolution_limit(),
+            (1920, 1080)
+        );
+    }
+
+    #[test]
     fn what_is_written_is_what_is_read() {
         let settings = Settings {
             protocol: Protocol::Miracast,
@@ -321,6 +398,8 @@ mod tests {
             film_mode: true,
             device_name: "Tales' laptop".to_string(),
             port: 31789,
+            custom_width: 1920,
+            custom_height: 1080,
         };
         assert_eq!(Settings::from_file(&settings.to_file()), settings);
     }

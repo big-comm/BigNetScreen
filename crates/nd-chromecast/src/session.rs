@@ -334,26 +334,19 @@ pub async fn run_with_video(
     // 1. The stream server, on the IP that reaches this receiver.
     let server = StreamServer::bind(receiver_ip).await?;
     let url = server.url();
-    tracing::debug!(%url, "URL do stream pronta");
+    tracing::debug!("stream URL ready");
 
-    // 2. The pipeline assembled (in `Ready`) with the encoder this machine
-    //    supports.
-    //
-    // Unlike WFD, here the pipeline only produces frames after the receiver
-    // opens the connection, so the encoder cannot be proven beforehand. We use
-    // the first candidate (hardware before software) and let the bus error
-    // report the failure; the evidence-based fallback lives on the WFD path,
-    // where the source runs from the start.
+    // Prove encoder startup at the requested mode before opening capture flow.
     let driver = detect_gpu_driver();
-    let encoder = *pipeline::encoder_candidates(driver)
-        .first()
-        .ok_or_else(|| {
-            NdError::Unsupported(
-                "no H.264 encoder available — install gst-plugins-ugly (x264) \
-             ou gst-plugins-bad (openh264/va)"
-                    .into(),
-            )
-        })?;
+    let encoder = pipeline::working_encoder(
+        driver,
+        StreamConfig::fit_within(
+            size,
+            StreamConfig::preferred_or(pipeline::CHROMECAST_MAX_RESOLUTION),
+        ),
+        StreamConfig::capped_fps(60),
+    )
+    .await?;
     // The user's screen rarely has the receiver's aspect ratio. Shrinking to
     // fit while preserving that ratio avoids sending 1920x1200 to a 1080p
     // panel (which would rescale) and avoids stretching the picture.
@@ -414,216 +407,220 @@ pub async fn run_with_video(
     status.set(SinkState::WaitSocket);
     let channel = CastChannel::connect_to(receiver_ip, receiver_port).await?;
     let app = channel.launch(DEFAULT_MEDIA_RECEIVER).await?;
-    channel.load_media(&app, &url, CONTENT_TYPE).await?;
-    tracing::info!(%url, "LOAD sent; waiting for the receiver to fetch the stream");
+    let result = async {
+        channel.load_media(&app, &url, CONTENT_TYPE).await?;
+        tracing::info!("LOAD sent; waiting for the receiver to fetch the stream");
 
-    // 4. Serve the receiver, and only then hit play.
-    status.set(SinkState::WaitStreaming);
-    let started = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    // Records *when* the stream started, so the receiver's delay can be measured.
-    let started_at: std::sync::Arc<std::sync::Mutex<Option<std::time::Instant>>> =
-        std::sync::Arc::new(std::sync::Mutex::new(None));
+        // 4. Serve the receiver, and only then hit play.
+        status.set(SinkState::WaitStreaming);
+        let started = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        // Records *when* the stream started, so the receiver's delay can be measured.
+        let started_at: std::sync::Arc<std::sync::Mutex<Option<std::time::Instant>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(None));
 
-    let serve = {
-        let pipeline_for_play = gst_pipeline.clone();
-        let started = started.clone();
-        let started_at = started_at.clone();
-        let cancel = cancel.clone();
-        async move {
-            server
-                .serve(
-                    sink,
-                    move || {
-                        started.store(true, std::sync::atomic::Ordering::SeqCst);
-                        *started_at
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                            Some(std::time::Instant::now());
-                        pipeline_for_play
-                            .set_state(gst::State::Playing)
-                            .map(|_| ())
-                            .map_err(|e| NdError::Gst(e.to_string()))
-                    },
-                    cancel,
-                )
-                .await
-        }
-    };
-    tokio::pin!(serve);
-
-    // A deadline for the *first* client only: after that the session lasts as
-    // long as it lasts. Without it, a receiver that ignores the LOAD would
-    // leave everything hanging.
-    let first_client = tokio::time::sleep(FIRST_CLIENT_TIMEOUT);
-    tokio::pin!(first_client);
-
-    let mut cancel = cancel;
-    // The delay stopwatch resets when the receiver opens the connection (that
-    // is where the stream starts, from its point of view).
-    let mut lag = LagMeter::new();
-
-    // The receiver only sends `MEDIA_STATUS` on a state change; following the
-    // delay continuously means asking.
-    let mut probe = tokio::time::interval(LAG_PROBE_INTERVAL);
-    probe.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    probe.tick().await;
-
-    // The receiver advertises `PLAYBACK_RATE` among its supported commands;
-    // if it refuses in practice, draining is switched off and we carry on
-    // without it.
-    let mut drain = DrainController::new();
-    let mut playback_rate = 1.0_f64;
-
-    let outcome = loop {
-        tokio::select! {
-            result = &mut serve => break result,
-
-            // The condition is checked **inside** the branch, not as a
-            // `select!` guard: a guard is only re-evaluated when `select!` is
-            // re-entered, and `serve` stays pending for the whole session. The
-            // receiver would connect, the deadline would fire anyway, and the
-            // session died over an error that did not exist.
-            _ = &mut first_client => {
-                if !started.load(std::sync::atomic::Ordering::SeqCst) {
-                    break Err(NdError::Protocol(format!(
-                        "the receiver did not fetch the stream within {}s — the receiver app \
-                         ter sido fechado na TV",
-                        FIRST_CLIENT_TIMEOUT.as_secs()
-                    )));
-                }
-                // It has started: disarm the deadline by pushing it far out.
-                first_client
-                    .as_mut()
-                    .reset(tokio::time::Instant::now() + Duration::from_secs(86_400));
-            }
-
-            event = futures::StreamExt::next(&mut events) => {
-                match event {
-                    Some(pipeline::PipelineEvent::Error { message, debug: details }) => {
-                        tracing::error!(%message, %details, "the Chromecast pipeline failed");
-                        break Err(NdError::Gst(message));
-                    }
-                    Some(pipeline::PipelineEvent::Eos) => break Ok(()),
-                    // Warnings do not kill the session.
-                    Some(_) => continue,
-                    None => continue,
-                }
-            }
-
-            // Spontaneous messages from the receiver. Without reading these, a
-            // `LOAD_FAILED` (media refused) went unnoticed and the session sat
-            // there "streaming" to a device parked on its home screen.
-            event = channel.next_event() => {
-                match event {
-                    Some(event) => {
-                        if event.payload.get("type").and_then(Value::as_str) == Some("MEDIA_STATUS")
-                        {
-                            lag.observe(&event.payload);
-                        }
-                        if let Some(err) = media_error(&event) {
-                            break Err(NdError::Protocol(err));
-                        }
-                    }
-                    None => break Err(NdError::Protocol(
-                        "the receiver closed the control channel".into(),
-                    )),
-                }
-            }
-
-            _ = probe.tick(), if started.load(std::sync::atomic::Ordering::SeqCst) => {
-                if let Some(at) = *started_at
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                {
-                    lag.start(at);
-                }
-                let status = match channel
-                    .request(NS_MEDIA, &app.transport_id, json!({"type": "GET_STATUS"}))
+        let serve = {
+            let pipeline_for_play = gst_pipeline.clone();
+            let started = started.clone();
+            let started_at = started_at.clone();
+            let cancel = cancel.clone();
+            async move {
+                server
+                    .serve(
+                        sink,
+                        move || {
+                            started.store(true, std::sync::atomic::Ordering::SeqCst);
+                            *started_at
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                                Some(std::time::Instant::now());
+                            pipeline_for_play
+                                .set_state(gst::State::Playing)
+                                .map(|_| ())
+                                .map_err(|e| NdError::Gst(e.to_string()))
+                        },
+                        cancel,
+                    )
                     .await
-                {
-                    Ok(status) => status,
-                    Err(err) => {
-                        tracing::debug!(%err, "media status query failed");
-                        continue;
-                    }
-                };
-                lag.observe(&status);
+            }
+        };
+        tokio::pin!(serve);
 
-                // The receiver pre-buffers a few seconds before starting and
-                // keeps that slack forever, because it receives at the same
-                // rate it plays. Playing back slightly faster consumes the
-                // slack and brings the picture closer to real time; once close,
-                // it returns to normal speed so the buffer is not emptied
-                // (which would make the receiver stall and start over).
-                if lag.stalled {
-                    drain.on_stall();
-                } else {
-                    drain.on_stable();
+        // A deadline for the *first* client only: after that the session lasts as
+        // long as it lasts. Without it, a receiver that ignores the LOAD would
+        // leave everything hanging.
+        let first_client = tokio::time::sleep(FIRST_CLIENT_TIMEOUT);
+        tokio::pin!(first_client);
+
+        let mut cancel = cancel;
+        // The delay stopwatch resets when the receiver opens the connection (that
+        // is where the stream starts, from its point of view).
+        let mut lag = LagMeter::new();
+
+        // The receiver only sends `MEDIA_STATUS` on a state change; following the
+        // delay continuously means asking.
+        let mut probe = tokio::time::interval(LAG_PROBE_INTERVAL);
+        probe.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        probe.tick().await;
+
+        // The receiver advertises `PLAYBACK_RATE` among its supported commands;
+        // if it refuses in practice, draining is switched off and we carry on
+        // without it.
+        let mut drain = DrainController::new();
+        let mut playback_rate = 1.0_f64;
+
+        let outcome = loop {
+            tokio::select! {
+                result = &mut serve => break result,
+
+                // The condition is checked **inside** the branch, not as a
+                // `select!` guard: a guard is only re-evaluated when `select!` is
+                // re-entered, and `serve` stays pending for the whole session. The
+                // receiver would connect, the deadline would fire anyway, and the
+                // session died over an error that did not exist.
+                _ = &mut first_client => {
+                    if !started.load(std::sync::atomic::Ordering::SeqCst) {
+                        break Err(NdError::Protocol(format!(
+                            "the receiver did not fetch the stream within {}s — the receiver app \
+                             ter sido fechado na TV",
+                            FIRST_CLIENT_TIMEOUT.as_secs()
+                        )));
+                    }
+                    // It has started: disarm the deadline by pushing it far out.
+                    first_client
+                        .as_mut()
+                        .reset(tokio::time::Instant::now() + Duration::from_secs(86_400));
                 }
 
-                if let (Some(current), Some(session_id)) =
-                    (lag.last(), media_session_id(&status))
-                {
+                event = futures::StreamExt::next(&mut events) => {
+                    match event {
+                        Some(pipeline::PipelineEvent::Error { message, debug: details }) => {
+                            tracing::error!(%message, %details, "the Chromecast pipeline failed");
+                            break Err(NdError::Gst(message));
+                        }
+                        Some(pipeline::PipelineEvent::Eos) => break Ok(()),
+                        // Warnings do not kill the session.
+                        Some(_) => continue,
+                        None => continue,
+                    }
+                }
+
+                // Spontaneous messages from the receiver. Without reading these, a
+                // `LOAD_FAILED` (media refused) went unnoticed and the session sat
+                // there "streaming" to a device parked on its home screen.
+                event = channel.next_event() => {
+                    match event {
+                        Some(event) => {
+                            if event.payload.get("type").and_then(Value::as_str) == Some("MEDIA_STATUS")
+                            {
+                                lag.observe(&event.payload);
+                            }
+                            if let Some(err) = media_error(&event) {
+                                break Err(NdError::Protocol(err));
+                            }
+                        }
+                        None => break Err(NdError::Protocol(
+                            "the receiver closed the control channel".into(),
+                        )),
+                    }
+                }
+
+                _ = probe.tick(), if started.load(std::sync::atomic::Ordering::SeqCst) => {
+                    if let Some(at) = *started_at
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
                     {
-                        let wanted = drain.wanted_rate(current);
-                        if let Some(rate) = wanted {
-                            if (rate - playback_rate).abs() > f64::EPSILON {
-                                match channel
-                                    .request(
-                                        NS_MEDIA,
-                                        &app.transport_id,
-                                        json!({
-                                            "type": "SET_PLAYBACK_RATE",
-                                            "mediaSessionId": session_id,
-                                            "playbackRate": rate,
-                                        }),
-                                    )
-                                    .await
-                                {
-                                    Ok(_) => {
-                                        playback_rate = rate;
-                                        tracing::info!(
-                                            rate,
-                                            atraso_s = format!("{current:.2}"),
-                                            "playback rate adjusted"
-                                        );
-                                    }
-                                    Err(err) => {
-                                        tracing::warn!(%err, "the receiver refused to change the rate");
-                                        drain.enabled = false;
+                        lag.start(at);
+                    }
+                    let status = match channel
+                        .request(NS_MEDIA, &app.transport_id, json!({"type": "GET_STATUS"}))
+                        .await
+                    {
+                        Ok(status) => status,
+                        Err(err) => {
+                            tracing::debug!(%err, "media status query failed");
+                            continue;
+                        }
+                    };
+                    lag.observe(&status);
+
+                    // The receiver pre-buffers a few seconds before starting and
+                    // keeps that slack forever, because it receives at the same
+                    // rate it plays. Playing back slightly faster consumes the
+                    // slack and brings the picture closer to real time; once close,
+                    // it returns to normal speed so the buffer is not emptied
+                    // (which would make the receiver stall and start over).
+                    if lag.stalled {
+                        drain.on_stall();
+                    } else {
+                        drain.on_stable();
+                    }
+
+                    if let (Some(current), Some(session_id)) =
+                        (lag.last(), media_session_id(&status))
+                    {
+                        {
+                            let wanted = drain.wanted_rate(current);
+                            if let Some(rate) = wanted {
+                                if (rate - playback_rate).abs() > f64::EPSILON {
+                                    match channel
+                                        .request(
+                                            NS_MEDIA,
+                                            &app.transport_id,
+                                            json!({
+                                                "type": "SET_PLAYBACK_RATE",
+                                                "mediaSessionId": session_id,
+                                                "playbackRate": rate,
+                                            }),
+                                        )
+                                        .await
+                                    {
+                                        Ok(_) => {
+                                            playback_rate = rate;
+                                            tracing::info!(
+                                                rate,
+                                                atraso_s = format!("{current:.2}"),
+                                                "playback rate adjusted"
+                                            );
+                                        }
+                                        Err(err) => {
+                                            tracing::warn!(%err, "the receiver refused to change the rate");
+                                            drain.enabled = false;
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+
+                _ = cancel.changed() => break Ok(()),
             }
+        };
 
-            _ = cancel.changed() => break Ok(()),
+        if started.load(std::sync::atomic::Ordering::SeqCst) {
+            status.set(SinkState::Streaming);
         }
-    };
 
-    if started.load(std::sync::atomic::Ordering::SeqCst) {
-        status.set(SinkState::Streaming);
-    }
+        if let Some(median) = lag.median() {
+            tracing::info!(
+                atraso_mediano_s = format!("{median:.2}"),
+                amostras = lag.samples.len(),
+                "receiver delay in this session"
+            );
+        }
 
-    if let Some(median) = lag.median() {
-        tracing::info!(
-            atraso_mediano_s = format!("{median:.2}"),
-            amostras = lag.samples.len(),
-            "receiver delay in this session"
-        );
-    }
+        // Teardown: stop the app on the TV before taking the pipeline down, so the
+        // receiver is not left showing a media error.
+        outcome
+    }.await;
 
-    // Teardown: stop the app on the TV before taking the pipeline down, so the
-    // receiver is not left showing a media error.
     let _ = channel.stop_app(&app).await;
     // And the platform connection, so the receiver is free for the next sender
     // rather than holding this one.
     channel.close().await;
     drop(guard);
 
-    outcome
+    result
 }
 
 /// Measures the receiver's real delay from its `MEDIA_STATUS` messages.
@@ -749,7 +746,7 @@ fn media_error(event: &crate::cast::CastEvent) -> Option<String> {
                 .or_else(|| event.payload.get("detailedErrorCode"))
                 .map(|v| v.to_string())
                 .unwrap_or_else(|| "no detail".into());
-            tracing::error!(%kind, %detail, payload = %event.payload, "the receiver refused the media");
+            tracing::error!(%kind, %detail, "the receiver refused the media");
             Some(format!(
                 "the receiver refused the media ({kind}: {detail}) — the container or \
                  the codec is not accepted by this device"
@@ -765,15 +762,15 @@ fn media_error(event: &crate::cast::CastEvent) -> Option<String> {
                 .and_then(Value::as_str)
                 == Some("ERROR");
             if idle_error {
-                tracing::error!(payload = %event.payload, "the receiver stopped with a media error");
+                tracing::error!("the receiver stopped with a media error");
                 Some("the receiver stopped playback with a media error".into())
             } else {
-                tracing::debug!(payload = %event.payload, "media status");
+                tracing::debug!("media status");
                 None
             }
         }
         other => {
-            tracing::debug!(kind = %other, payload = %event.payload, "receiver event");
+            tracing::debug!(kind = %other, "receiver event");
             None
         }
     }

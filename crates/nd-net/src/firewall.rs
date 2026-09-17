@@ -134,11 +134,20 @@ pub async fn ensure_ports_open(interface: Option<&str>) -> Result<FirewallLease>
     let mut applied = Vec::new();
     for (port, proto) in wanted {
         // Already open by the user's configuration? Then it is not ours to close.
-        if zone_proxy
-            .query_port(&zone, &port, &proto)
-            .await
-            .unwrap_or(false)
-        {
+        let already_open = match zone_proxy.query_port(&zone, &port, &proto).await {
+            Ok(open) => open,
+            Err(err) => {
+                release(FirewallLease {
+                    zone: zone.clone(),
+                    ports: applied,
+                })
+                .await;
+                return Err(NdError::Network(format!(
+                    "firewalld queryPort failed: {err}"
+                )));
+            }
+        };
+        if already_open {
             tracing::debug!(%zone, %port, %proto, "port was already open");
             continue;
         }
@@ -148,9 +157,14 @@ pub async fn ensure_ports_open(interface: Option<&str>) -> Result<FirewallLease>
                 applied.push((port, proto));
             }
             Err(err) => {
-                // Missing authorisation (polkit) is the common case: warn and
-                // carry on — the cast may work if the firewall already allows it.
-                tracing::warn!(%zone, %port, %proto, %err, "could not open the port");
+                release(FirewallLease {
+                    zone: zone.clone(),
+                    ports: applied,
+                })
+                .await;
+                return Err(NdError::Network(format!(
+                    "firewalld could not open {port}/{proto}: {err}"
+                )));
             }
         }
     }
@@ -220,10 +234,12 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires explicit host firewall access"]
     async fn absent_firewalld_is_not_an_error() {
         // On a machine without firewalld this has to return Ok (a no-op), not
         // Err: most desktop users do not run firewalld.
         let result = ensure_ports_open(Some("p2p-wlan0-0")).await;
-        assert!(result.is_ok(), "{result:?}");
+        let lease = result.expect("firewall integration");
+        release(lease).await;
     }
 }

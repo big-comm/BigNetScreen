@@ -370,7 +370,7 @@ mod compound_tests {
     fn returns_nothing_for_rtp() {
         let mut rtp = vec![0x80, 101];
         rtp.resize(60, 0);
-        assert!(parse_compound(&rtp).is_empty() || !parse_compound(&rtp).is_empty());
+        assert!(classify_receiver_packet(&rtp).is_none());
     }
 }
 

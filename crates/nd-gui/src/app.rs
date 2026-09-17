@@ -42,7 +42,7 @@ use crate::pages::home::{HomeMsg, HomeOutput, HomePage};
 use crate::pages::media::{MediaMsg, MediaOutput, MediaPage};
 use crate::pages::settings::{SettingsMsg, SettingsOutput, SettingsPage};
 use crate::pages::{DeviceEntry, Page, SessionInfo};
-use crate::tr;
+use crate::{tr, tr_n};
 
 /// After this long with no receiver, the window stops saying "searching".
 const EMPTY_HINT_AFTER: Duration = Duration::from_secs(12);
@@ -88,6 +88,9 @@ pub struct AppModel {
     searching: bool,
     /// The running cast (the receiver's id).
     active_cast: Option<String>,
+    active_sink: Option<Arc<dyn Sink>>,
+    cast_cancel: Option<tokio::sync::watch::Sender<bool>>,
+    discovery: Option<futures::future::AbortHandle>,
     /// Is a virtual monitor available on this desktop?
     virtual_available: bool,
     /// What will be captured when a receiver is picked.
@@ -108,6 +111,7 @@ pub struct AppModel {
     /// to the receiver, and stacking them up would be rude to firmware that
     /// accepts few.
     probing: bool,
+    operation_generation: u64,
 }
 
 #[derive(Debug)]
@@ -115,6 +119,7 @@ pub enum AppMsg {
     Navigate(Page),
     /// Start streaming to this receiver.
     Cast(String),
+    PublishNdi(SourceType),
     /// Start streaming this to this receiver, in one step.
     CastWith(String, SourceType),
     Stop,
@@ -150,30 +155,14 @@ pub enum AppCmd {
     VirtualSupported(bool),
     /// The periodic re-read of the receivers' state.
     PollStates,
+    Refresh,
     /// A cast session ended.
     CastFinished {
         id: String,
         error: Option<String>,
     },
     /// The measured round trip to the receiver, or `None` for no answer.
-    LinkMeasured(Option<Duration>),
-    /// A media session started, or failed to.
-    ///
-    /// Carried in a wrapper because a live session owns a socket and a task,
-    /// neither of which has anything sensible to print.
-    MediaStarted(StartedMedia),
-}
-
-/// The outcome of starting a media session.
-pub struct StartedMedia(pub Result<Box<MediaSession>, String>);
-
-impl std::fmt::Debug for StartedMedia {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.0 {
-            Ok(_) => write!(f, "StartedMedia(running)"),
-            Err(err) => write!(f, "StartedMedia({err})"),
-        }
-    }
+    LinkMeasured(u64, Option<Duration>),
 }
 
 #[relm4::component(pub)]
@@ -384,6 +373,7 @@ impl Component for AppModel {
             .forward(sender.input_sender(), |output| match output {
                 // The home page now names both halves of the decision in one
                 // message: who receives, and what they receive.
+                HomeOutput::PublishNdi(source) => AppMsg::PublishNdi(source),
                 HomeOutput::Cast { id, source } => AppMsg::CastWith(id, source),
                 HomeOutput::SendMedia(id) => AppMsg::MediaTarget(id),
                 HomeOutput::Stop => AppMsg::Stop,
@@ -410,7 +400,7 @@ impl Component for AppModel {
             },
         );
 
-        let model = AppModel {
+        let mut model = AppModel {
             home,
             devices,
             media,
@@ -426,6 +416,9 @@ impl Component for AppModel {
             issues: Vec::new(),
             searching: current.auto_discovery,
             active_cast: None,
+            active_sink: None,
+            cast_cancel: None,
+            discovery: None,
             virtual_available: false,
             source_type: SourceType::Monitor,
             generation: 0,
@@ -433,9 +426,33 @@ impl Component for AppModel {
             media_session: None,
             measured: None,
             probing: false,
+            operation_generation: 0,
         };
 
         let widgets = view_output!();
+
+        let mapped = std::cell::Cell::new(false);
+        root.connect_map(move |window| {
+            if mapped.replace(true) {
+                return;
+            }
+            tracing::info!(
+                elapsed_ms = crate::STARTED.elapsed().as_millis() as u64,
+                renderer = ?window.renderer().map(|renderer| renderer.type_().name()),
+                "main window mapped"
+            );
+            if let Some(clock) = window.frame_clock() {
+                let painted = std::cell::Cell::new(false);
+                clock.connect_after_paint(move |_| {
+                    if !painted.replace(true) {
+                        tracing::info!(
+                            elapsed_ms = crate::STARTED.elapsed().as_millis() as u64,
+                            "first window frame rendered"
+                        );
+                    }
+                });
+            }
+        });
 
         // The sidebar's entries, in the same order as `Page::all()` — the
         // selection handler maps a row index straight onto that array.
@@ -468,7 +485,7 @@ impl Component for AppModel {
         widgets.stack.set_visible_child_name(model.page.id());
 
         if current.auto_discovery {
-            start_discovery(&sender, 0, current.protocol);
+            model.discovery = Some(start_discovery(&sender, 0, current.protocol));
         }
         start_state_poll(&sender);
         probe_virtual_support(&sender);
@@ -486,6 +503,14 @@ impl Component for AppModel {
         match message {
             AppMsg::Navigate(page) => self.page = page,
             AppMsg::Cast(id) => self.begin_cast(id, &sender),
+            AppMsg::PublishNdi(source) => {
+                if !nd_ndi::available() {
+                    self.status = tr!("NDI unavailable: install gst-plugin-ndi and the NDI runtime. See the NDI setup guide.");
+                } else {
+                    self.source_type = source;
+                    self.begin_cast(nd_ndi::ID.into(), &sender);
+                }
+            }
             AppMsg::CastWith(id, source) => {
                 self.source_type = source;
                 tracing::info!(?source, "capture source chosen");
@@ -496,10 +521,19 @@ impl Component for AppModel {
                 self.generation += 1;
                 self.issues.clear();
                 self.searching = true;
-                self.registry.clear();
-                self.order.clear();
+                self.registry
+                    .retain(|id, _| self.active_cast.as_ref() == Some(id));
+                self.order
+                    .retain(|id| self.active_cast.as_ref() == Some(id));
                 self.status = tr!("Searching…");
-                start_discovery(&sender, self.generation, self.settings.protocol);
+                if let Some(previous) = self.discovery.take() {
+                    previous.abort();
+                }
+                self.discovery = Some(start_discovery(
+                    &sender,
+                    self.generation,
+                    self.settings.protocol,
+                ));
             }
             AppMsg::DismissIssues => self.issues.clear(),
             AppMsg::SetAutoDiscovery(on) => {
@@ -508,17 +542,34 @@ impl Component for AppModel {
                 self.settings_page.emit(SettingsMsg::Reload);
                 if on {
                     sender.input(AppMsg::Rescan);
+                } else {
+                    if let Some(task) = self.discovery.take() {
+                        task.abort();
+                    }
+                    self.generation += 1;
+                    self.searching = false;
+                    self.refresh_status();
                 }
             }
             AppMsg::SettingsChanged(new) => {
                 let protocol_changed = new.protocol != self.settings.protocol;
+                let discovery_changed = new.auto_discovery != self.settings.auto_discovery;
                 self.settings = new;
+                self.devices
+                    .emit(DevicesMsg::SyncAutoDiscovery(self.settings.auto_discovery));
                 self.devices.emit(DevicesMsg::Devices(self.entries()));
                 // Changing which protocols to look for is the one setting that
                 // cannot wait for the next session: the list on screen is the
                 // result of the old choice.
-                if protocol_changed {
-                    sender.input(AppMsg::Rescan);
+                if discovery_changed {
+                    sender.input(AppMsg::SetAutoDiscovery(self.settings.auto_discovery));
+                } else if protocol_changed {
+                    if self.settings.auto_discovery {
+                        sender.input(AppMsg::Rescan);
+                    } else if let Some(task) = self.discovery.take() {
+                        task.abort();
+                        self.generation += 1;
+                    }
                 }
             }
             AppMsg::MediaTarget(id) => {
@@ -528,13 +579,7 @@ impl Component for AppModel {
                 self.page = Page::Media;
             }
             AppMsg::SendMedia(files, target) => self.send_media(files, target, &sender),
-            AppMsg::CancelMedia => {
-                // Dropping the session stops playback and takes the file server
-                // down with it.
-                self.media_session = None;
-                self.media.emit(MediaMsg::Status(None));
-                self.refresh_status();
-            }
+            AppMsg::CancelMedia => self.stop_everything(&sender),
             AppMsg::About => show_about(root),
         }
 
@@ -579,25 +624,10 @@ impl Component for AppModel {
                 }
                 let info = handle.0.info();
                 let id = info.id.clone();
-                match self.placement(&info.display_name, info.kind.is_castable()) {
-                    Placement::Skip => {}
-                    Placement::Replace(old_id) => {
-                        self.registry.remove(&old_id);
-                        if let Some(index) = self.order.iter().position(|i| i == &old_id) {
-                            // Keeps the receiver where the person last saw it.
-                            self.order[index] = id.clone();
-                        }
-                        self.registry.insert(id, handle.0);
-                    }
-                    Placement::Add => {
-                        if !self.order.contains(&id) {
-                            self.order.push(id.clone());
-                        }
-                        // `entry`: an mDNS re-resolve must not replace an
-                        // instance that may be mid-session.
-                        self.registry.entry(id).or_insert(handle.0);
-                    }
+                if !self.order.contains(&id) {
+                    self.order.push(id.clone());
                 }
+                self.registry.insert(id, handle.0);
                 self.searching = false;
                 self.refresh_status();
                 self.push_devices();
@@ -607,9 +637,11 @@ impl Component for AppModel {
                     return;
                 }
                 let id = handle.0.info().id;
-                if self.registry.contains_key(&id) {
-                    self.push_devices();
+                if !self.order.contains(&id) {
+                    self.order.push(id.clone());
                 }
+                self.registry.insert(id, handle.0);
+                self.push_devices();
             }
             AppCmd::Removed(id, generation) => {
                 if generation != self.generation {
@@ -659,19 +691,30 @@ impl Component for AppModel {
                     self.home.emit(HomeMsg::Searching(false));
                 }
             }
+            AppCmd::Refresh => {
+                self.push_devices();
+                self.push_media_status();
+            }
             AppCmd::PollStates => {
                 self.push_devices();
                 self.push_media_status();
                 self.measure_link(&sender);
                 start_state_poll(&sender);
             }
-            AppCmd::LinkMeasured(round_trip) => {
+            AppCmd::LinkMeasured(generation, round_trip) => {
+                if generation != self.operation_generation {
+                    return;
+                }
                 self.probing = false;
                 self.measured = Some(round_trip);
             }
             AppCmd::CastFinished { id, error } => {
                 if self.active_cast.as_deref() == Some(id.as_str()) {
                     self.active_cast = None;
+                    self.active_sink = None;
+                    self.cast_cancel = None;
+                } else {
+                    return;
                 }
                 // The measurement belonged to that session.
                 self.measured = None;
@@ -687,16 +730,6 @@ impl Component for AppModel {
                 }
                 self.push_devices();
             }
-            AppCmd::MediaStarted(StartedMedia(result)) => match result {
-                Ok(session) => {
-                    self.media_session = Some(*session);
-                    self.status = tr!("Sending files…");
-                }
-                Err(err) => {
-                    tracing::warn!(%err, "sending media failed");
-                    self.status = err;
-                }
-            },
         }
 
         // Repaint. Everything above only changed the model.
@@ -704,49 +737,17 @@ impl Component for AppModel {
     }
 }
 
-/// What to do with a receiver that has just been discovered.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Placement {
-    Add,
-    /// Ignore it: the same device is already listed, in an equal or better way.
-    Skip,
-    /// Take the place of this receiver, which is the same device discovered
-    /// through a protocol we cannot stream to.
-    Replace(String),
-}
-
 impl AppModel {
-    /// Decides where a newly discovered receiver goes.
-    ///
-    /// One piece of equipment often announces itself over more than one
-    /// protocol — a Samsung projector shows up as AirPlay (which we only
-    /// discover) *and* as Miracast (which we can stream to). Listing both puts
-    /// the same name twice, one of them inert, and the person has to guess.
-    ///
-    /// The rule is deliberately narrow: merge only when the name matches
-    /// exactly **and** one of the two is discovery-only. Two different devices
-    /// sharing a name is unlikely, and even then nothing is lost, because the
-    /// entry that gives way could not stream anyway.
-    fn placement(&self, name: &str, castable: bool) -> Placement {
-        for (id, sink) in &self.registry {
-            let info = sink.info();
-            if info.display_name != name {
-                continue;
-            }
-            return match (info.kind.is_castable(), castable) {
-                (false, true) => Placement::Replace(id.clone()),
-                _ => Placement::Skip,
-            };
-        }
-        Placement::Add
-    }
-
     /// The receivers, in the order they were found.
     fn entries(&self) -> Vec<DeviceEntry> {
         self.order
             .iter()
             .filter_map(|id| {
-                let sink = self.registry.get(id)?;
+                let sink = if self.active_cast.as_ref() == Some(id) {
+                    self.active_sink.as_ref()
+                } else {
+                    self.registry.get(id)
+                }?;
                 Some(DeviceEntry::from_info(
                     &sink.info(),
                     sink.state(),
@@ -775,8 +776,13 @@ impl AppModel {
         // A finished queue clears itself: leaving "playing 3 of 3" on screen
         // after the last file ended would be untrue within a second.
         if let Some(status) = &status {
-            if status.finished && status.error.is_none() {
+            if status.finished {
                 self.media_session = None;
+                if let Some(error) = &status.error {
+                    self.status = error.clone();
+                    self.media.emit(MediaMsg::Status(Some(status.clone())));
+                    return;
+                }
                 self.media.emit(MediaMsg::Status(None));
                 self.refresh_status();
                 return;
@@ -788,7 +794,11 @@ impl AppModel {
     /// What is streaming right now.
     fn session_info(&self) -> Option<SessionInfo> {
         let id = self.active_cast.as_ref()?;
-        let sink = self.registry.get(id)?;
+        let sink = if self.active_cast.as_ref() == Some(id) {
+            self.active_sink.as_ref()
+        } else {
+            self.registry.get(id)
+        }?;
         let info = sink.info();
         let link = sink.link();
         Some(SessionInfo {
@@ -855,21 +865,21 @@ impl AppModel {
             return;
         }
         let Some(endpoint) = self
-            .active_cast
+            .active_sink
             .as_ref()
-            .and_then(|id| self.registry.get(id))
             .and_then(|sink| sink.link())
             .and_then(|link| link.endpoint)
         else {
             return;
         };
         self.probing = true;
+        let generation = self.operation_generation;
         sender.oneshot_command(async move {
             // Spaced out rather than run on every poll: the poll is there to
             // keep the list fresh, and opening a connection to the receiver
             // two and a half times a second would be rude to its firmware.
             tokio::time::sleep(LINK_PROBE_INTERVAL).await;
-            AppCmd::LinkMeasured(nd_net::probe::round_trip(endpoint).await)
+            AppCmd::LinkMeasured(generation, nd_net::probe::round_trip(endpoint).await)
         });
     }
 
@@ -885,10 +895,9 @@ impl AppModel {
             } else {
                 tr!("No receivers found")
             }
-        } else if count == 1 {
-            tr!("1 receiver found")
         } else {
-            format!("{count} {}", tr!("receivers found"))
+            tr_n!("{} receiver found", "{} receivers found", count)
+                .replace("{}", &count.to_string())
         };
     }
 
@@ -902,15 +911,17 @@ impl AppModel {
 
     /// Ends whatever is running: the stream, the file sending, or both.
     fn stop_everything(&mut self, sender: &ComponentSender<Self>) {
-        if self.media_session.is_some() {
-            self.media_session = None;
-            self.media.emit(MediaMsg::Status(None));
+        if let Some(session) = &self.media_session {
+            session.stop();
+        }
+        if let Some(cancel) = &self.cast_cancel {
+            cancel.send_replace(true);
         }
         let Some(id) = self.active_cast.clone() else {
             self.refresh_status();
             return;
         };
-        let Some(sink) = self.registry.get(&id).cloned() else {
+        let Some(sink) = self.active_sink.clone() else {
             return;
         };
         tracing::info!(%id, "stopping the stream at the user's request");
@@ -919,16 +930,21 @@ impl AppModel {
         // its own and emits `CastFinished`.
         sender.oneshot_command(async move {
             let _ = sink.stop_stream().await;
-            AppCmd::PollStates
+            AppCmd::Refresh
         });
     }
 
     fn begin_cast(&mut self, id: String, sender: &ComponentSender<Self>) {
-        if self.active_cast.is_some() {
+        if self.active_cast.is_some() || self.media_session.is_some() {
             self.status = tr!("A stream is already running");
             return;
         }
-        let Some(sink) = self.registry.get(&id).cloned() else {
+        let sink: Arc<dyn Sink> = if id == nd_ndi::ID {
+            Arc::new(nd_ndi::NdiPublisher::new(self.settings.display_name()))
+        } else if let Some(sink) = self.registry.get(&id).cloned() {
+            sink
+        } else {
+            self.status = tr!("That device is no longer available");
             return;
         };
         let info = sink.info();
@@ -943,12 +959,18 @@ impl AppModel {
 
         tracing::info!(name = %info.display_name, "starting the stream");
         self.status = format!("{} · {}", info.display_name, tr!("Connecting…"));
+        self.operation_generation += 1;
+        self.probing = false;
+        self.measured = None;
         self.active_cast = Some(id.clone());
+        self.active_sink = Some(sink.clone());
+        let (cancel, cancelled) = tokio::sync::watch::channel(false);
+        self.cast_cancel = Some(cancel);
         self.page = Page::Home;
 
         let source_type = self.source_type;
         sender.oneshot_command(async move {
-            let error = run_cast(sink, source_type).await.err();
+            let error = run_cast(sink, source_type, cancelled).await.err();
             AppCmd::CastFinished { id, error }
         });
     }
@@ -976,7 +998,7 @@ impl AppModel {
         // Sending files and mirroring the screen are two things the receiver
         // cannot do at once. Saying so beats the picture vanishing with no
         // explanation.
-        if self.active_cast.is_some() {
+        if self.active_cast.is_some() || self.media_session.is_some() {
             self.status = tr!("Stop sharing your screen before sending files");
             return;
         }
@@ -986,31 +1008,51 @@ impl AppModel {
         self.status = format!("{} · {}", info.display_name, tr!("Sending files…"));
 
         if info.kind == SinkKind::Chromecast {
-            let Some(address) = info.address.as_ref().and_then(|a| a.parse::<IpAddr>().ok()) else {
+            let Some(endpoint) = sink.control_endpoint() else {
                 self.status = tr!("That device is no longer available");
                 return;
             };
-            let port = self.settings.port;
-            let sender_name = self.settings.display_name();
-            sender.oneshot_command(async move {
-                let result = MediaSession::start(address, files, port, sender_name)
-                    .await
-                    .map(Box::new)
-                    .map_err(|e| e.to_string());
-                AppCmd::MediaStarted(StartedMedia(result))
-            });
+            match MediaSession::start(
+                endpoint,
+                files,
+                self.settings.port,
+                self.settings.display_name(),
+            ) {
+                Ok(session) => self.media_session = Some(session),
+                Err(err) => self.status = err.to_string(),
+            }
             return;
         }
 
         // The mirroring route. It is a cast session like any other, so the Stop
         // button, the status on the row and the audio guard all apply — the
         // only difference is what is being sent.
+        self.operation_generation += 1;
+        self.probing = false;
+        self.measured = None;
         self.active_cast = Some(target.clone());
+        self.active_sink = Some(sink.clone());
+        let (cancel, cancelled) = tokio::sync::watch::channel(false);
+        self.cast_cancel = Some(cancel);
         self.page = Page::Home;
         sender.oneshot_command(async move {
-            let error = play_files_by_mirroring(sink, files).await.err();
+            let error = play_files_by_mirroring(sink, files, cancelled).await.err();
             AppCmd::CastFinished { id: target, error }
         });
+    }
+}
+
+impl Drop for AppModel {
+    fn drop(&mut self) {
+        if let Some(task) = self.discovery.take() {
+            task.abort();
+        }
+        if let Some(cancel) = &self.cast_cancel {
+            cancel.send_replace(true);
+        }
+        if let Some(session) = &self.media_session {
+            session.stop();
+        }
     }
 }
 
@@ -1023,55 +1065,66 @@ impl AppModel {
 async fn play_files_by_mirroring(
     sink: Arc<dyn Sink>,
     files: Vec<MediaFile>,
+    mut cancel: tokio::sync::watch::Receiver<bool>,
 ) -> std::result::Result<(), String> {
-    let _audio = nd_core::audio_state::AudioGuard::start();
-
     for file in files {
+        if *cancel.borrow() {
+            break;
+        }
         let playback = nd_core::capture::MediaPlayback {
             path: file.path.clone(),
             kind: file.kind,
             title: file.title(),
         };
         let source = nd_core::capture::CaptureSource::media_file(playback, (1920, 1080));
-
-        let playing = sink.start_stream(source);
-        match file.kind {
-            // A photograph has no end to reach: the session would sit on that
-            // one frame until somebody pressed stop.
-            nd_core::media::MediaKind::Photo => {
-                let shown = tokio::time::timeout(
-                    Duration::from_secs(nd_chromecast::media::PHOTO_SECONDS),
-                    playing,
-                )
-                .await;
-                let _ = sink.stop_stream().await;
-                if let Ok(Err(err)) = shown {
-                    return Err(err.to_string());
-                }
-            }
-            // A film or a track ends on its own, and the session ends with it.
-            _ => playing.await.map_err(|e| e.to_string())?,
-        }
+        let photo = (file.kind == nd_core::media::MediaKind::Photo)
+            .then_some(Duration::from_secs(nd_chromecast::media::PHOTO_SECONDS));
+        stream_until_cancelled(&sink, source, &mut cancel, photo).await?;
     }
     Ok(())
 }
 
-/// Runs a cast session: screen capture plus receiver.
-async fn run_cast(sink: Arc<dyn Sink>, source_type: SourceType) -> std::result::Result<(), String> {
-    // Started before anything is captured and dropped after everything is torn
-    // down. Sharing a screen records the default output's monitor, and the
-    // *departure* of that recording makes an effects chain rebuild itself —
-    // which is when the desktop's default output gets rewritten behind the
-    // person's back. The guard puts it back.
-    let _audio = nd_core::audio_state::AudioGuard::start();
+async fn stream_until_cancelled(
+    sink: &Arc<dyn Sink>,
+    source: nd_core::capture::CaptureSource,
+    cancel: &mut tokio::sync::watch::Receiver<bool>,
+    photo: Option<Duration>,
+) -> std::result::Result<(), String> {
+    if *cancel.borrow() {
+        return Ok(());
+    }
+    let playing = sink.start_stream(source);
+    tokio::pin!(playing);
+    tokio::select! {
+        biased;
+        result = &mut playing => return result.map_err(|e| e.to_string()),
+        _ = cancel.changed() => {},
+        _ = async { match photo { Some(delay) => tokio::time::sleep(delay).await, None => std::future::pending().await } } => {},
+    }
+    let _ = sink.stop_stream().await;
+    playing.await.map_err(|e| e.to_string())
+}
 
-    let backend = nd_capture::select_backend_for(source_type).await;
-    let source = backend
-        .start(source_type)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let result = sink.start_stream(source).await.map_err(|e| e.to_string());
+async fn run_cast(
+    sink: Arc<dyn Sink>,
+    source_type: SourceType,
+    mut cancel: tokio::sync::watch::Receiver<bool>,
+) -> std::result::Result<(), String> {
+    if *cancel.borrow() {
+        return Ok(());
+    }
+    let backend = tokio::select! {
+        backend = nd_capture::select_backend_for(source_type) => backend,
+        _ = cancel.changed() => return Ok(()),
+    };
+    let result = async {
+        let source = tokio::select! {
+            result = backend.start(source_type) => result.map_err(|e| e.to_string())?,
+            _ = cancel.changed() => return Ok(()),
+        };
+        stream_until_cancelled(&sink, source, &mut cancel, None).await
+    }
+    .await;
     let _ = backend.stop().await;
     result
 }
@@ -1093,10 +1146,21 @@ fn start_state_poll(sender: &ComponentSender<AppModel>) {
 }
 
 /// Kicks off discovery and the empty-state deadline.
-fn start_discovery(sender: &ComponentSender<AppModel>, generation: u64, protocol: Protocol) {
+fn start_discovery(
+    sender: &ComponentSender<AppModel>,
+    generation: u64,
+    protocol: Protocol,
+) -> futures::future::AbortHandle {
+    let (handle, registration) = futures::future::AbortHandle::new_pair();
     sender.command(move |out, shutdown| {
         shutdown
-            .register(async move { run_discovery(out, generation, protocol).await })
+            .register(async move {
+                let _ = futures::future::Abortable::new(
+                    run_discovery(out, generation, protocol),
+                    registration,
+                )
+                .await;
+            })
             .drop_on_shutdown()
     });
 
@@ -1104,6 +1168,7 @@ fn start_discovery(sender: &ComponentSender<AppModel>, generation: u64, protocol
         tokio::time::sleep(EMPTY_HINT_AFTER).await;
         AppCmd::SearchTimedOut(generation)
     });
+    handle
 }
 
 /// Runs discovery across the chosen providers and emits events to the window.
@@ -1211,12 +1276,117 @@ fn show_about(root: &adw::ApplicationWindow) {
         .license_type(gtk::License::Gpl30)
         .comments(tr!("Share your screen with a TV, projector or Chromecast."))
         .build();
+    dialog.add_link(
+        &tr!("NDI setup"),
+        "https://github.com/big-comm/BigNetScreen/blob/main/docs/ndi.md",
+    );
+    dialog.add_credit_section(
+        Some("NDI"),
+        &["NDI® is a registered trademark of Vizrt NDI AB."],
+    );
     dialog.present(Some(root));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct TestSink {
+        started: std::sync::atomic::AtomicUsize,
+        finished: std::sync::atomic::AtomicUsize,
+        stop: tokio::sync::watch::Sender<bool>,
+        ready: tokio::sync::Notify,
+    }
+    impl TestSink {
+        fn new() -> Self {
+            Self {
+                started: Default::default(),
+                finished: Default::default(),
+                stop: tokio::sync::watch::channel(false).0,
+                ready: Default::default(),
+            }
+        }
+    }
+    #[async_trait::async_trait]
+    impl Sink for TestSink {
+        fn info(&self) -> nd_core::sink::SinkInfo {
+            nd_core::sink::SinkInfo {
+                id: "test".into(),
+                display_name: "Test".into(),
+                kind: SinkKind::WfdP2p,
+                address: None,
+            }
+        }
+        fn state(&self) -> nd_core::sink::SinkState {
+            nd_core::sink::SinkState::Streaming
+        }
+        async fn start_stream(&self, _: nd_core::capture::CaptureSource) -> nd_core::Result<()> {
+            self.started
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let mut stop = self.stop.subscribe();
+            self.ready.notify_one();
+            if !*stop.borrow() {
+                let _ = stop.changed().await;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            self.finished
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+        async fn stop_stream(&self) -> nd_core::Result<()> {
+            self.stop.send_replace(true);
+            Ok(())
+        }
+    }
+    fn test_media() -> MediaFile {
+        MediaFile {
+            path: "/unused/test.mp4".into(),
+            kind: nd_core::media::MediaKind::Video,
+            content_type: "video/mp4",
+            size: 0,
+        }
+    }
+
+    #[tokio::test]
+    async fn stopping_a_playlist_does_not_start_the_next_item() {
+        let sink = Arc::new(TestSink::new());
+        let (cancel, cancelled) = tokio::sync::watch::channel(false);
+        let queue =
+            play_files_by_mirroring(sink.clone(), vec![test_media(), test_media()], cancelled);
+        let stop = async {
+            sink.ready.notified().await;
+            cancel.send_replace(true);
+        };
+        let (result, _) = tokio::join!(queue, stop);
+        result.unwrap();
+        assert_eq!(sink.started.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(sink.finished.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn photo_timeout_waits_for_teardown() {
+        let concrete = Arc::new(TestSink::new());
+        let sink: Arc<dyn Sink> = concrete.clone();
+        let (_cancel, mut cancelled) = tokio::sync::watch::channel(false);
+        let media = nd_core::capture::MediaPlayback {
+            path: "/unused/photo.jpg".into(),
+            kind: nd_core::media::MediaKind::Photo,
+            title: "Test".into(),
+        };
+        let source = nd_core::capture::CaptureSource::media_file(media, (320, 240));
+        stream_until_cancelled(
+            &sink,
+            source,
+            &mut cancelled,
+            Some(Duration::from_millis(10)),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            concrete.finished.load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+    }
 
     #[test]
     fn choosing_one_protocol_stops_the_other_from_scanning() {

@@ -66,7 +66,7 @@ pub enum PipelineEvent {
 }
 
 /// The channel through which bus events reach the caller.
-pub type PipelineEvents = futures::channel::mpsc::UnboundedReceiver<PipelineEvent>;
+pub type PipelineEvents = futures::channel::mpsc::Receiver<PipelineEvent>;
 
 /// Asks the pipeline for the **minimum** latency it can sustain.
 ///
@@ -226,9 +226,67 @@ pub fn instrument_latency(pipeline: &gst::Pipeline) {
     tracing::debug!(sinks = found, "latency probes installed");
 }
 
+/// End synthetic tracks when all finite decoder tracks reach EOS.
+fn finish_file_sources(pipeline: &gst::Pipeline) {
+    let Some(decoder) = pipeline.by_name("filedec") else {
+        return;
+    };
+    if let Some(queue) = pipeline.by_name("file-audio-queue") {
+        let weak = queue.downgrade();
+        decoder.connect_no_more_pads(move |_| {
+            if let Some(queue) = weak.upgrade() {
+                if let Some(pad) = queue.static_pad("sink") {
+                    if !pad.is_linked() {
+                        pad.send_event(gst::event::Eos::new());
+                    }
+                }
+            }
+        });
+    }
+    if pipeline.by_name("file-photo").is_some() {
+        return;
+    }
+    let remaining = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let weak = pipeline.downgrade();
+    decoder.connect_pad_added(move |_, pad| {
+        remaining.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let remaining = remaining.clone();
+        let weak = weak.clone();
+        let ended = std::sync::atomic::AtomicBool::new(false);
+        pad.add_probe(gst::PadProbeType::EVENT_DOWNSTREAM, move |_, info| {
+            if info
+                .event()
+                .is_some_and(|event| event.type_() == gst::EventType::Eos)
+                && !ended.swap(true, std::sync::atomic::Ordering::SeqCst)
+                && remaining.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1
+            {
+                if let Some(pipeline) = weak.upgrade() {
+                    pipeline.call_async(|pipeline| {
+                        for name in ["file-silence", "file-picture"] {
+                            if let Some(source) = pipeline.by_name(name) {
+                                source.send_event(gst::event::Eos::new());
+                            }
+                        }
+                    });
+                }
+            }
+            gst::PadProbeReturn::Ok
+        });
+    });
+}
+
 pub fn build_pipeline(
     description: &str,
     latency_ms: u64,
+) -> Result<(gst::Pipeline, PipelineEvents)> {
+    build_configured_pipeline(description, latency_ms, |_| Ok(()))
+}
+
+/// Set properties before READY can create external resources.
+pub fn build_configured_pipeline(
+    description: &str,
+    latency_ms: u64,
+    configure: impl FnOnce(&gst::Pipeline) -> Result<()>,
 ) -> Result<(gst::Pipeline, PipelineEvents)> {
     init()?;
     tracing::debug!(%description, latency_ms, "building the pipeline");
@@ -237,6 +295,7 @@ pub fn build_pipeline(
     let pipeline = element
         .downcast::<gst::Pipeline>()
         .map_err(|_| NdError::Gst("the description did not produce a Pipeline".into()))?;
+    configure(&pipeline)?;
 
     // `0` = automatic: let GStreamer use the minimum latency the pipeline
     // itself reports. That is the right default — forcing a value **below**
@@ -253,8 +312,10 @@ pub fn build_pipeline(
         instrument_latency(&pipeline);
     }
     instrument_framerate(&pipeline);
+    finish_file_sources(&pipeline);
 
-    let (tx, rx) = futures::channel::mpsc::unbounded();
+    let (tx, rx) = futures::channel::mpsc::channel(32);
+    let tx = std::sync::Mutex::new(tx);
     if let Some(bus) = pipeline.bus() {
         bus.set_sync_handler(move |_, msg| {
             match msg.view() {
@@ -262,18 +323,23 @@ pub fn build_pipeline(
                     let message = err.error().to_string();
                     let details = err.debug().map(|d| d.to_string()).unwrap_or_default();
                     tracing::error!(%message, %details, "pipeline error");
-                    let _ = tx.unbounded_send(PipelineEvent::Error {
-                        message,
-                        debug: details,
-                    });
+                    let _ = tx
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .try_send(PipelineEvent::Error {
+                            message,
+                            debug: details,
+                        });
                 }
                 gst::MessageView::Warning(w) => {
                     let message = w.error().to_string();
                     tracing::warn!(%message, "pipeline warning");
-                    let _ = tx.unbounded_send(PipelineEvent::Warning { message });
                 }
                 gst::MessageView::Eos(_) => {
-                    let _ = tx.unbounded_send(PipelineEvent::Eos);
+                    let _ = tx
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .try_send(PipelineEvent::Eos);
                 }
                 _ => {}
             }
@@ -285,9 +351,12 @@ pub fn build_pipeline(
 
     // See the note in the documentation: leaving `Null` is a prerequisite for
     // sinks to accept clients before `Playing`.
-    pipeline
-        .set_state(gst::State::Ready)
-        .map_err(|e| NdError::Gst(format!("could not prepare the pipeline: {e}")))?;
+    if let Err(err) = pipeline.set_state(gst::State::Ready) {
+        let _ = pipeline.set_state(gst::State::Null);
+        return Err(NdError::Gst(format!(
+            "could not prepare the pipeline: {err}"
+        )));
+    }
 
     Ok((pipeline, rx))
 }
@@ -658,11 +727,20 @@ pub fn encoder_candidates(driver: GpuDriver) -> Vec<H264Encoder> {
 #[derive(Debug)]
 pub struct PipelineGuard {
     pipeline: gst::Pipeline,
+    armed: bool,
 }
 
 impl PipelineGuard {
     pub fn new(pipeline: gst::Pipeline) -> Self {
-        Self { pipeline }
+        Self {
+            pipeline,
+            armed: true,
+        }
+    }
+
+    /// Transfer teardown to an owner that already retains the pipeline.
+    pub fn disarm(mut self) {
+        self.armed = false;
     }
 
     pub fn pipeline(&self) -> &gst::Pipeline {
@@ -672,6 +750,9 @@ impl PipelineGuard {
 
 impl Drop for PipelineGuard {
     fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
         if let Err(err) = self.pipeline.set_state(gst::State::Null) {
             tracing::debug!(%err, "failed to take the pipeline to NULL");
         }
@@ -724,6 +805,45 @@ pub fn build_monitored(
         encoder,
         frames,
     })
+}
+
+/// Select an encoder that produces frames at the requested mode.
+pub async fn working_encoder(driver: GpuDriver, size: (u32, u32), fps: u32) -> Result<H264Encoder> {
+    for encoder in encoder_candidates(driver) {
+        let cfg = StreamConfig {
+            width: size.0,
+            height: size.1,
+            fps,
+            encoder,
+            ..Default::default()
+        };
+        let description = format!(
+            "videotestsrc is-live=true num-buffers=2 ! {} ! {} ! fakesink sync=false",
+            cfg.convert_scale(),
+            encoder.encoder_description(&cfg)
+        );
+        let Ok(monitored) = build_monitored(&description, cfg.latency_ms(), encoder) else {
+            continue;
+        };
+        let _guard = PipelineGuard::new(monitored.pipeline.clone());
+        if monitored.pipeline.set_state(gst::State::Playing).is_err() {
+            continue;
+        }
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(1500);
+        while tokio::time::Instant::now() < deadline {
+            if monitored.frames_encoded() > 0 {
+                return Ok(encoder);
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+        tracing::warn!(
+            ?encoder,
+            "encoder startup probe failed; trying the next candidate"
+        );
+    }
+    Err(NdError::Unsupported(
+        "no working H.264 encoder for the requested resolution".into(),
+    ))
 }
 
 /// Convenience: scans the registry and picks the best encoder for the driver.
@@ -869,18 +989,18 @@ impl VideoSource {
                     // repeats it for as long as the session lasts.
                     crate::media::MediaKind::Photo => format!(
                         "filesrc location={location} ! decodebin name=filedec \
-                         filedec. ! queue ! imagefreeze ! videoconvert"
+                         filedec. ! queue ! imagefreeze name=file-photo ! videoconvert"
                     ),
                     crate::media::MediaKind::Video => format!(
                         "filesrc location={location} ! decodebin name=filedec \
-                         filedec. ! queue ! videoconvert"
+                         filedec. ! queue ! identity sync=true ! videoconvert"
                     ),
                     // A song has no picture. The decoder is still declared —
                     // the audio branch takes its sound from it — and the screen
                     // gets the one thing worth showing: what is playing.
                     crate::media::MediaKind::Music => format!(
                         "filesrc location={location} ! decodebin name=filedec \
-                         videotestsrc is-live=true pattern=black \
+                         videotestsrc name=file-picture is-live=true pattern=black \
                          ! textoverlay text={title} halignment=center valignment=center \
                            font-desc=\"Sans 32\" ! videoconvert",
                         title = escape_location(std::path::Path::new(title)),
@@ -955,7 +1075,7 @@ impl AudioSource {
 }
 
 impl AudioSource {
-    fn description(&self) -> String {
+    pub fn description(&self) -> String {
         match self {
             // `samplesperbuffer=480` = 10 ms at 48 kHz (the default, 1024, is
             // 21 ms). The audio branch is what sets the pipeline's latency
@@ -1005,10 +1125,10 @@ impl AudioSource {
             // linked to it. The muxer would then wait for a track that never
             // comes and the picture would never leave the machine. The mixer
             // always has the silence to fall back on.
-            AudioSource::MediaFile => "audiomixer name=filemix latency=20000000 \
-                 audiotestsrc is-live=true wave=silence samplesperbuffer=480 \
+            AudioSource::MediaFile => "audiomixer name=filemix latency=20000000 ignore-inactive-pads=true \
+                 audiotestsrc name=file-silence is-live=true wave=silence samplesperbuffer=480 \
                  ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! filemix. \
-                 filedec. ! queue ! audioconvert ! audioresample \
+                 filedec. ! queue name=file-audio-queue ! identity sync=true ! audioconvert ! audioresample \
                  ! audio/x-raw,rate=48000,channels=2 ! filemix. \
                  filemix."
                 .to_string(),
@@ -1120,7 +1240,7 @@ impl StreamConfig {
     /// "medium quality" must be able to send *less* than the receiver can take,
     /// and must never talk a receiver into a size it did not offer.
     pub fn capped_by_preference(receiver_max: (u32, u32)) -> (u32, u32) {
-        let (pw, ph) = crate::settings::current().quality.resolution();
+        let (pw, ph) = crate::settings::current().resolution_limit();
         (receiver_max.0.min(pw), receiver_max.1.min(ph))
     }
 
@@ -1137,7 +1257,7 @@ impl StreamConfig {
     /// sink lists the modes it accepts and going past them is not a choice we
     /// are allowed to make.
     pub fn preferred_or(default_max: (u32, u32)) -> (u32, u32) {
-        let chosen = crate::settings::current().quality.resolution();
+        let chosen = crate::settings::current().resolution_limit();
         if chosen == crate::settings::Quality::default().resolution() {
             default_max
         } else {
@@ -1356,7 +1476,11 @@ pub fn wfd_pipeline_description(
         rtp_latency = rtp_latency_ms(),
         src = source.description(),
         convert = cfg.convert_scale(),
-        vqueue = cfg.video_queue(),
+        vqueue = if source.is_file() {
+            cfg.video_queue().replace("leaky=downstream", "leaky=no")
+        } else {
+            cfg.video_queue()
+        },
         enc = cfg.encoder.encoder_description(cfg),
         video_pid = WFD_VIDEO_PID,
         // A screen produces frames at the pace of the screen, so waiting on
@@ -1372,7 +1496,12 @@ pub fn wfd_pipeline_description(
         ip = transport.sink_ip,
         port = transport.rtp_port,
         local = transport.local_rtp_port,
-        audio = cfg.audio_branch(&format!("mux.sink_{}", WFD_AUDIO_PID)),
+        audio = if source.is_file() {
+            cfg.audio_branch(&format!("mux.sink_{}", WFD_AUDIO_PID))
+                .replace("leaky=downstream", "leaky=no")
+        } else {
+            cfg.audio_branch(&format!("mux.sink_{}", WFD_AUDIO_PID))
+        },
     )
 }
 
@@ -1435,7 +1564,11 @@ alignment=au ! \
          max-buffers=1 drop=false{audio}",
         src = source.description(),
         convert = cfg.convert_scale(),
-        vqueue = cfg.video_queue(),
+        vqueue = if source.is_file() {
+            cfg.video_queue().replace("leaky=downstream", "leaky=no")
+        } else {
+            cfg.video_queue()
+        },
         enc = cfg.encoder.encoder_description(cfg),
         video_sink = MIRROR_VIDEO_SINK,
         audio = audio,
@@ -1486,16 +1619,139 @@ pub fn chromecast_pipeline_description(cfg: &StreamConfig, source: &VideoSource)
          {audio}",
         src = source.description(),
         convert = cfg.convert_scale(),
-        vqueue = cfg.video_queue(),
+        vqueue = if source.is_file() {
+            cfg.video_queue().replace("leaky=downstream", "leaky=no")
+        } else {
+            cfg.video_queue()
+        },
         enc = cfg.encoder.encoder_description(cfg),
         sink = CHROMECAST_SINK_NAME,
         sync_method = chromecast_sync_method(),
-        audio = cfg.audio_branch("mux."),
+        audio = if source.is_file() {
+            cfg.audio_branch("mux.")
+                .replace("leaky=downstream", "leaky=no")
+        } else {
+            cfg.audio_branch("mux.")
+        },
     )
 }
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn finite_music_ends_synthetic_tracks() {
+        use futures::StreamExt;
+        init().unwrap();
+        let path = std::env::temp_dir().join(format!("nd-eos-{}.wav", std::process::id()));
+        let make = gst::parse::launch(&format!(
+            "audiotestsrc num-buffers=10 ! wavenc ! filesink location={}",
+            escape_location(&path)
+        ))
+        .unwrap()
+        .downcast::<gst::Pipeline>()
+        .unwrap();
+        let fixture_guard = PipelineGuard::new(make.clone());
+        make.set_state(gst::State::Playing).unwrap();
+        let msg = make
+            .bus()
+            .unwrap()
+            .timed_pop_filtered(
+                gst::ClockTime::from_seconds(3),
+                &[gst::MessageType::Eos, gst::MessageType::Error],
+            )
+            .unwrap();
+        assert_eq!(msg.type_(), gst::MessageType::Eos, "{msg:?}");
+        drop(fixture_guard);
+        let source = VideoSource::MediaFile {
+            path: path.clone(),
+            kind: crate::media::MediaKind::Music,
+            title: "Regression".into(),
+        };
+        // Exercise the finite decoder, silence mixer and synthetic picture without network or encoders.
+        let description = format!("{} ! video/x-raw,width=320,height=240 ! fakesink sync=true {} ! audioconvert ! fakesink sync=true", source.description(), AudioSource::MediaFile.description());
+        let (pipeline, mut events) = build_pipeline(&description, 0).unwrap();
+        let guard = PipelineGuard::new(pipeline.clone());
+        pipeline.set_state(gst::State::Playing).unwrap();
+        let event = tokio::time::timeout(std::time::Duration::from_secs(4), events.next())
+            .await
+            .expect("finite media must finish")
+            .unwrap();
+        assert!(matches!(event, PipelineEvent::Eos), "{event:?}");
+        drop(guard);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn finite_video_with_or_without_audio_keeps_frames_and_ends() {
+        use futures::StreamExt;
+        init().unwrap();
+        for with_audio in [false, true] {
+            let path = std::env::temp_dir().join(format!(
+                "nd-video-eos-{}-{with_audio}.mkv",
+                std::process::id()
+            ));
+            let audio = if with_audio {
+                "audiotestsrc num-buffers=22 ! audio/x-raw,rate=48000 ! vorbisenc ! mux."
+            } else {
+                ""
+            };
+            let description = format!("videotestsrc num-buffers=15 ! video/x-raw,width=320,height=240,framerate=30/1 ! vp8enc deadline=1 ! matroskamux name=mux ! filesink location={} {audio}", escape_location(&path));
+            let make = gst::parse::launch(&description)
+                .unwrap()
+                .downcast::<gst::Pipeline>()
+                .unwrap();
+            let fixture = PipelineGuard::new(make.clone());
+            make.set_state(gst::State::Playing).unwrap();
+            let msg = make
+                .bus()
+                .unwrap()
+                .timed_pop_filtered(
+                    gst::ClockTime::from_seconds(5),
+                    &[gst::MessageType::Eos, gst::MessageType::Error],
+                )
+                .unwrap();
+            assert_eq!(msg.type_(), gst::MessageType::Eos, "{msg:?}");
+            drop(fixture);
+            let video = VideoSource::MediaFile {
+                path: path.clone(),
+                kind: crate::media::MediaKind::Video,
+                title: "Test".into(),
+            };
+            let description = format!(
+                "{} ! fakesink name=video-check sync=true {} ! audioconvert ! fakesink sync=true",
+                video.description(),
+                AudioSource::MediaFile.description()
+            );
+            let (pipeline, mut events) = build_pipeline(&description, 0).unwrap();
+            let guard = PipelineGuard::new(pipeline.clone());
+            let frames = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let count = frames.clone();
+            pipeline
+                .by_name("video-check")
+                .unwrap()
+                .static_pad("sink")
+                .unwrap()
+                .add_probe(gst::PadProbeType::BUFFER, move |_, _| {
+                    count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    gst::PadProbeReturn::Ok
+                });
+            let start = std::time::Instant::now();
+            pipeline.set_state(gst::State::Playing).unwrap();
+            let event = tokio::time::timeout(std::time::Duration::from_secs(5), events.next())
+                .await
+                .expect("video must finish")
+                .unwrap();
+            assert!(
+                matches!(event, PipelineEvent::Eos),
+                "audio={with_audio}: {event:?}"
+            );
+            assert_eq!(frames.load(std::sync::atomic::Ordering::Relaxed), 15);
+            assert!(start.elapsed() >= std::time::Duration::from_millis(400));
+            drop(guard);
+            std::fs::remove_file(path).unwrap();
+        }
+    }
+
     #[test]
     fn a_pipeline_guard_leaves_the_pipeline_in_null() {
         // Descartar um pipeline em PLAYING derrubava o app ao apertar Parar.

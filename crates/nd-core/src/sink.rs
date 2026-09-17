@@ -15,6 +15,8 @@ use crate::Result;
 /// The receiver's protocol.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SinkKind {
+    /// Local source published to NDI receivers.
+    Ndi,
     /// Google Chromecast (mDNS + Cast + HTTP).
     Chromecast,
     /// Apple AirPlay (mDNS). Discovered, but casting is out of scope.
@@ -34,7 +36,7 @@ impl SinkKind {
     /// receivers that are merely discovered still show up, but disabled.
     pub fn is_castable(self) -> bool {
         match self {
-            SinkKind::Chromecast | SinkKind::WfdP2p | SinkKind::WfdMice => true,
+            SinkKind::Ndi | SinkKind::Chromecast | SinkKind::WfdP2p | SinkKind::WfdMice => true,
             // AirPlay requires FairPlay/SAP; streaming is out of scope.
             SinkKind::AirPlay => false,
             SinkKind::Dummy => false,
@@ -45,6 +47,7 @@ impl SinkKind {
     pub fn as_str(self) -> &'static str {
         match self {
             SinkKind::Chromecast => "chromecast",
+            SinkKind::Ndi => "ndi",
             SinkKind::AirPlay => "airplay",
             SinkKind::WfdP2p => "wfd-p2p",
             SinkKind::WfdMice => "wfd-mice",
@@ -243,6 +246,11 @@ pub struct SinkInfo {
 pub trait Sink: Send + Sync {
     /// Stable identification for the UI.
     fn info(&self) -> SinkInfo;
+
+    /// Discovered control endpoint, independent of an active stream.
+    fn control_endpoint(&self) -> Option<SocketAddr> {
+        None
+    }
 
     /// The state machine's current state.
     fn state(&self) -> SinkState;

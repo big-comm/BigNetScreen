@@ -85,16 +85,9 @@ fn store_restore_token(source_type: SourceType, token: &str) {
             return;
         }
     }
-    if let Err(err) = std::fs::write(&path, token) {
+    if let Err(err) = nd_core::persistence::write_private(&path, token.as_bytes()) {
         tracing::warn!(%err, "could not save the restore token");
         return;
-    }
-    // The token authorises dialog-free screen capture: it must not be
-    // readable by other users on the machine.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
     }
     tracing::debug!("restore token saved");
 }
@@ -128,7 +121,7 @@ impl ParentWindow {
 
 /// Backend de captura via xdg-desktop-portal (`ashpd`).
 pub struct PortalBackend {
-    session: Mutex<Option<Session<Screencast>>>,
+    session: Mutex<Option<std::sync::Arc<Session<Screencast>>>>,
     parent: ParentWindow,
 }
 
@@ -215,6 +208,9 @@ impl CaptureBackend for PortalBackend {
             .create_session(Default::default())
             .await
             .map_err(cap_err)?;
+
+        let session = std::sync::Arc::new(session);
+        *self.session.lock().await = Some(session.clone());
 
         // The cursor has to come embedded in the video; if the portal does
         // not support that, carry on without it rather than failing the whole
@@ -380,6 +376,7 @@ impl CaptureBackend for MutterWithPortalFallback {
             match self.mutter.start(source_type).await {
                 Ok(source) => return Ok(source),
                 Err(err) => {
+                    let _ = self.mutter.stop().await;
                     tracing::warn!(
                         %err,
                         "Mutter capture failed; falling back to the portal \
@@ -418,6 +415,8 @@ pub async fn select_backend_for(source_type: SourceType) -> Box<dyn CaptureBacke
         Some("portal") => return Box::new(PortalBackend::new()),
         Some("mutter") => {
             let backend = MutterWithPortalFallback::new();
+            let size = nd_core::settings::current().resolution_limit();
+            backend.mutter.set_virtual_size(size.0, size.1).await;
             if backend.mutter.is_available().await {
                 tracing::info!("capturing through Mutter (forced by BIGNETSCREEN_CAPTURE)");
                 return Box::new(backend);
@@ -435,6 +434,8 @@ pub async fn select_backend_for(source_type: SourceType) -> Box<dyn CaptureBacke
 
     if source_type == SourceType::Virtual {
         let backend = MutterWithPortalFallback::new();
+        let size = nd_core::settings::current().resolution_limit();
+        backend.mutter.set_virtual_size(size.0, size.1).await;
         if backend.mutter.is_available().await {
             tracing::info!("virtual monitor: trying Mutter directly (portal as fallback)");
             return Box::new(backend);

@@ -111,10 +111,9 @@ so in the interface, rather than simply showing nothing.
       Flatpak manifest; CI with fmt/clippy/test/data validation/audit.
 
 ### Outstanding
-- [ ] Merging duplicate devices in the list (the Samsung shows up as AirPlay
-      *and* as Miracast; it is the same piece of equipment).
-- [ ] Wiring the **virtual monitor** into the interface (the backend exists,
-      but this path has never been tested).
+- [ ] Identity-based cross-protocol grouping. Names alone are not identity;
+      separate receivers and protocol alternatives remain visible.
+- [x] Virtual monitor controls; hardware/compositor validation remains separate.
 - [ ] The Cast RTCP sender report (see the debt below).
 
 ## WFD conformance — what separates a picture from a black screen
@@ -192,13 +191,11 @@ receiver:
 | on | one per stream | the receiver closes the app |
 | on | shared | the receiver closes the app |
 
-The freeze comes from the missing *sender report* — without it the receiver
-loses the mapping between the RTP timestamp and the clock. But the plain
-RFC 3550 packet we emit is rejected: Cast uses **compound** RTCP with extended
-reports of its own (`compound_rtcp_builder.cc` in Open Screen). Sending
-something that kills the session is worse than sending nothing, so it stays off
-by default (`BIGNETSCREEN_CAST_RTCP=1` turns it on). Retransmission currently
-covers the freeze in practice.
+Sender reports remain disabled by default (`BIGNETSCREEN_CAST_RTCP=1` enables
+experimental reports). The observed disconnect is not sufficient to attribute
+the failure solely to compound formatting. Clock mapping and compound packets
+need comparison with Open Screen and real receivers. Retransmission does not
+replace clock synchronization.
 
 ## Radio silence while streaming
 

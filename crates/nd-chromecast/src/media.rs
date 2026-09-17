@@ -17,12 +17,12 @@
 //! that is what moves to the next item. A photo has no end to report, so it —
 //! and only it — is given a fixed time on screen.
 
-use std::net::IpAddr;
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use nd_core::{NdError, Result};
 
@@ -35,11 +35,7 @@ use crate::file_server::{FileServer, MediaFile, MediaKind};
 /// not need a remote control to get through.
 pub const PHOTO_SECONDS: u64 = 8;
 
-/// How long to wait for a receiver to say anything about an item before giving
-/// up on it and moving to the next.
-///
-/// This is a stall guard, not a duration limit: it is reset by every status
-/// message, so a three-hour film that reports progress never trips it.
+/// Maximum silence from the active media session before reporting failure.
 const SILENCE_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// What the interface needs to show about the session.
@@ -70,24 +66,20 @@ struct Shared {
 /// are only reachable for as long as the person is actually sending them.
 pub struct MediaSession {
     shared: Arc<Shared>,
-    task: tokio::task::JoinHandle<()>,
+    _task: tokio::task::JoinHandle<()>,
+    cancel: tokio::sync::watch::Sender<bool>,
 }
 
 impl Drop for MediaSession {
     fn drop(&mut self) {
-        self.shared.stopping.store(true, Ordering::SeqCst);
-        self.task.abort();
+        self.stop();
     }
 }
 
 impl MediaSession {
-    /// Starts serving `files` and tells the receiver to play the first one.
-    ///
-    /// Returns as soon as the first item is accepted, so the interface can show
-    /// the session immediately; the rest of the queue is driven in the
-    /// background.
-    pub async fn start(
-        receiver: IpAddr,
+    /// Own startup immediately; playback and cleanup run cooperatively in the task.
+    pub fn start(
+        receiver: SocketAddr,
         files: Vec<MediaFile>,
         port: u16,
         sender_name: String,
@@ -95,47 +87,58 @@ impl MediaSession {
         if files.is_empty() {
             return Err(NdError::Protocol("no files to send".into()));
         }
-        let total = files.len();
-        let server = FileServer::start(receiver, port, files).await?;
-        let channel = CastChannel::connect(receiver).await?;
-        let app = channel.launch(DEFAULT_MEDIA_RECEIVER).await?;
-
         let shared = Arc::new(Shared {
             position: AtomicUsize::new(0),
-            total,
+            total: files.len(),
             title: Mutex::new(String::new()),
             finished: AtomicBool::new(false),
             error: Mutex::new(None),
             stopping: AtomicBool::new(false),
         });
-
+        let (cancel, mut cancelled) = tokio::sync::watch::channel(false);
         let task = tokio::spawn({
             let shared = shared.clone();
             async move {
-                let outcome = play_queue(&channel, &app, &server, &shared, &sender_name).await;
+                let outcome = async {
+                    let server = FileServer::start(receiver.ip(), port, files).await?;
+                    let channel = tokio::select! {
+                        result = CastChannel::connect_to(receiver.ip(), receiver.port()) => result?,
+                        _ = cancelled.changed() => return Ok(()),
+                    };
+                    // Finish LAUNCH so a cancellation can explicitly STOP its result.
+                    let app = channel.launch(DEFAULT_MEDIA_RECEIVER).await?;
+                    let outcome = if shared.stopping.load(Ordering::SeqCst) { Ok(()) } else {
+                        tokio::select! {
+                            result = play_queue(&channel, &app, &server, &shared, &sender_name) => result,
+                            _ = cancelled.changed() => Ok(()),
+                        }
+                    };
+                    drop(server);
+                    let _ = tokio::time::timeout(Duration::from_secs(5), async {
+                        let _ = channel.stop_app(&app).await;
+                        channel.close().await;
+                    }).await;
+                    outcome
+                }.await;
                 if let Err(err) = outcome {
                     if !shared.stopping.load(Ordering::SeqCst) {
-                        tracing::warn!(%err, "sending media ended with an error");
                         *shared.error.lock().unwrap_or_else(|e| e.into_inner()) =
                             Some(err.to_string());
                     }
                 }
                 shared.finished.store(true, Ordering::SeqCst);
-                // Hand the receiver back to whatever it was showing before.
-                let _ = channel.stop_app(&app).await;
-                // And the platform connection, so the receiver is free for the next sender
-                // rather than holding this one.
-                channel.close().await;
-                // And the platform connection, so the receiver is free for the
-                // next sender rather than holding this one.
-                channel.close().await;
-                // `server` is dropped here: the files stop being reachable the
-                // moment there is nothing left to play.
-                drop(server);
             }
         });
+        Ok(Self {
+            shared,
+            _task: task,
+            cancel,
+        })
+    }
 
-        Ok(Self { shared, task })
+    pub fn stop(&self) {
+        self.shared.stopping.store(true, Ordering::SeqCst);
+        self.cancel.send_replace(true);
     }
 
     /// What to show about the session right now.
@@ -181,8 +184,8 @@ async fn play_queue(
         *shared.title.lock().unwrap_or_else(|e| e.into_inner()) = file.title();
 
         let url = server.url(index);
-        tracing::info!(%url, title = %file.title(), "sending an item to the receiver");
-        channel
+        tracing::info!(title = %file.title(), "sending an item to the receiver");
+        let loaded = channel
             .load_file(app, &url, file, sender_name)
             .await
             .map_err(|e| {
@@ -192,39 +195,71 @@ async fn play_queue(
         match file.kind {
             // A photo never ends, so nothing will ever report that it did.
             MediaKind::Photo => tokio::time::sleep(Duration::from_secs(PHOTO_SECONDS)).await,
-            MediaKind::Video | MediaKind::Music => wait_until_finished(channel, shared).await,
+            MediaKind::Video | MediaKind::Music => {
+                let session_id = loaded
+                    .get("status")
+                    .and_then(Value::as_array)
+                    .and_then(|entries| entries.first())
+                    .and_then(|entry| entry.get("mediaSessionId"))
+                    .and_then(Value::as_i64)
+                    .ok_or_else(|| NdError::Protocol("LOAD returned no media session".into()))?;
+                wait_until_finished(channel, app, session_id, &url).await?;
+            }
         }
     }
     Ok(())
 }
 
-/// Waits for the receiver to report that it has reached the end of the item.
-///
-/// Ends early — rather than hanging — if the receiver goes quiet for
-/// [`SILENCE_TIMEOUT`]. A queue that stops advancing with no explanation is
-/// worse than one that moves on.
-async fn wait_until_finished(channel: &CastChannel, shared: &Arc<Shared>) {
+/// Poll the active item; only its confirmed FINISHED status advances the queue.
+async fn wait_until_finished(
+    channel: &CastChannel,
+    app: &LaunchedApp,
+    session_id: i64,
+    url: &str,
+) -> Result<()> {
+    let mut poll = tokio::time::interval(Duration::from_secs(5));
+    let mut last_status = tokio::time::Instant::now();
     loop {
-        if shared.stopping.load(Ordering::SeqCst) {
-            return;
-        }
-        let event = match tokio::time::timeout(SILENCE_TIMEOUT, channel.next_event()).await {
-            Ok(Some(event)) => event,
-            // The channel closed, or the receiver said nothing at all: either
-            // way there is nothing left to wait for.
-            Ok(None) => return,
-            Err(_) => {
-                tracing::info!("the receiver went quiet; moving to the next item");
-                return;
+        let payload = tokio::select! {
+            _ = poll.tick() => channel.request(NS_MEDIA, &app.transport_id,
+                json!({"type": "GET_STATUS", "mediaSessionId": session_id})).await?,
+            event = channel.next_event() => {
+                let event = event.ok_or_else(|| NdError::Protocol("media channel closed".into()))?;
+                if event.namespace != NS_MEDIA { continue; }
+                event.payload
+            },
+            _ = tokio::time::sleep_until(last_status + SILENCE_TIMEOUT) => {
+                return Err(NdError::Protocol("media receiver stopped reporting status".into()));
             }
         };
-        if event.namespace != NS_MEDIA {
+        let Some(entry) = active_status(&payload, session_id, url) else {
             continue;
-        }
-        if item_has_ended(&event.payload) {
-            return;
+        };
+        last_status = tokio::time::Instant::now();
+        let current = json!({"type": "MEDIA_STATUS", "status": [entry]});
+        if item_has_ended(&current) {
+            return if entry.get("idleReason").and_then(Value::as_str) == Some("FINISHED") {
+                Ok(())
+            } else {
+                Err(NdError::Protocol(
+                    "receiver cancelled or failed to play the item".into(),
+                ))
+            };
         }
     }
+}
+
+fn active_status<'a>(payload: &'a Value, session_id: i64, url: &str) -> Option<&'a Value> {
+    if payload.get("type").and_then(Value::as_str) != Some("MEDIA_STATUS") {
+        return None;
+    }
+    payload.get("status")?.as_array()?.iter().find(|entry| {
+        entry.get("mediaSessionId").and_then(Value::as_i64) == Some(session_id)
+            && !entry
+                .pointer("/media/contentId")
+                .and_then(Value::as_str)
+                .is_some_and(|id| id != url)
+    })
 }
 
 /// Does this `MEDIA_STATUS` say the item has ended?
@@ -253,6 +288,15 @@ fn item_has_ended(payload: &Value) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn stale_status_cannot_finish_the_current_item() {
+        let status = json!({"type": "MEDIA_STATUS", "status": [{"mediaSessionId": 5, "media": {"contentId": "file-one"}, "playerState": "IDLE", "idleReason": "FINISHED"}]});
+        assert!(active_status(&status, 6, "file-two").is_none());
+        assert!(active_status(&status, 5, "file-two").is_none());
+        assert!(active_status(&status, 5, "file-one").is_some());
+        assert!(active_status(&json!({"type": "PING"}), 5, "file-one").is_none());
+    }
 
     #[test]
     fn the_end_of_an_item_is_idle_with_a_reason() {

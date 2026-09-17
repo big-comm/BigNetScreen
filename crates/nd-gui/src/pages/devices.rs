@@ -59,6 +59,7 @@ pub enum DevicesMsg {
     Selected(String),
     SetFilter(Filter),
     SetAutoDiscovery(bool),
+    SyncAutoDiscovery(bool),
     Rescan,
     Cast,
     Stop,
@@ -174,7 +175,7 @@ impl Component for DevicesPage {
                                 connect_state_set[sender] => move |_, state| {
                                     sender.input(DevicesMsg::SetAutoDiscovery(state));
                                     gtk::glib::Propagation::Proceed
-                                },
+                                } @auto_discovery_handler,
                             },
                         },
                     },
@@ -327,7 +328,13 @@ impl Component for DevicesPage {
                 .add(adw::Toggle::builder().label(&label).build());
         }
         widgets.filter_group.set_active(0);
+        widgets
+            .auto_switch
+            .block_signal(&widgets.auto_discovery_handler);
         widgets.auto_switch.set_active(model.auto_discovery);
+        widgets
+            .auto_switch
+            .unblock_signal(&widgets.auto_discovery_handler);
 
         ComponentParts { model, widgets }
     }
@@ -359,8 +366,20 @@ impl Component for DevicesPage {
                 self.apply_filter();
             }
             DevicesMsg::SetAutoDiscovery(on) => {
+                if self.auto_discovery != on {
+                    self.auto_discovery = on;
+                    sender.output(DevicesOutput::AutoDiscovery(on)).ok();
+                }
+            }
+            DevicesMsg::SyncAutoDiscovery(on) => {
                 self.auto_discovery = on;
-                sender.output(DevicesOutput::AutoDiscovery(on)).ok();
+                widgets
+                    .auto_switch
+                    .block_signal(&widgets.auto_discovery_handler);
+                widgets.auto_switch.set_active(on);
+                widgets
+                    .auto_switch
+                    .unblock_signal(&widgets.auto_discovery_handler);
             }
             DevicesMsg::Rescan => {
                 sender.output(DevicesOutput::Rescan).ok();
@@ -443,6 +462,47 @@ fn found_summary(count: usize) -> String {
 mod tests {
     use super::*;
     use nd_core::sink::SinkKind;
+
+    #[test]
+    #[ignore = "requires a graphical GTK session"]
+    fn discovery_switch_does_not_echo_initialization_or_settings_reload() {
+        adw::init().expect("GTK session");
+        let outputs = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let received = outputs.clone();
+        let page = DevicesPage::builder()
+            .launch(())
+            .connect_receiver(move |_, output| {
+                if let DevicesOutput::AutoDiscovery(on) = output {
+                    received.borrow_mut().push(on);
+                }
+            });
+        let flush = || {
+            gtk::glib::MainContext::default().block_on(gtk::glib::timeout_future(
+                std::time::Duration::from_millis(50),
+            ));
+        };
+        flush();
+        assert!(
+            outputs.borrow().is_empty(),
+            "initialization restarted discovery"
+        );
+        for on in [false, true] {
+            page.emit(DevicesMsg::SyncAutoDiscovery(on));
+            flush();
+            assert_eq!(page.widgets().auto_switch.is_active(), on);
+            assert!(
+                outputs.borrow().is_empty(),
+                "settings synchronization echoed"
+            );
+        }
+        page.widgets().auto_switch.set_active(false);
+        flush();
+        assert_eq!(
+            *outputs.borrow(),
+            [false],
+            "user change must be emitted once"
+        );
+    }
 
     fn entry(kind: SinkKind) -> DeviceEntry {
         DeviceEntry {

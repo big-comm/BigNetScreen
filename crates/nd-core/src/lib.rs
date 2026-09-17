@@ -20,6 +20,7 @@ pub mod error;
 pub mod latency;
 pub mod media;
 pub mod meta;
+pub mod persistence;
 pub mod pipeline;
 pub mod provider;
 pub mod radio;

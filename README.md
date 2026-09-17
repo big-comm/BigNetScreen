@@ -136,6 +136,7 @@ A Cargo workspace, with everything protocol-related kept out of the GUI:
 | `nd-net` | NetworkManager (Wi-Fi Direct), firewalld and GPU driver detection. |
 | `nd-chromecast` | mDNS discovery, the Cast channel (protobuf over TLS), the mirroring session (RTP/RTCP) and the HTTP stream server. |
 | `nd-wfd` | RTSP server, WFD M1–M7 negotiation and Miracast cast orchestration. |
+| `nd-ndi` | Optional screen/audio publishing through `gst-plugin-ndi`; vendor runtime installed separately. |
 | `nd-gui` | The **relm4 + libadwaita** application (the `bignetscreen` binary). |
 
 Two design decisions worth knowing about:
@@ -147,13 +148,29 @@ deadline, and whatever misses it becomes a hole in the sound. So discovery
 scanning pauses for the duration of a session — see
 [`nd-core::radio`](crates/nd-core/src/radio.rs).
 
-**No proprietary components.** Every dependency is MIT, Apache-2.0, BSD, ISC,
-Zlib or GPL-compatible, and `cargo deny` enforces that in CI (see
-[`deny.toml`](deny.toml)). The Cast protocol was implemented using Google's own
+**No vendor binaries are bundled.** Native dependencies follow
+[`deny.toml`](deny.toml); CI runs the RustSec dependency audit. Optional NDI
+publishing requires a separately installed proprietary runtime; see the
+[NDI setup and distribution notes](docs/ndi.md). The Cast protocol was implemented using Google's own
 open-source [Open Screen](https://chromium.googlesource.com/openscreen/) as a
 specification reference, with none of its code linked in.
 
+## NDI and resolutions
+
+Home offers **Publish with NDI** for a screen, window or supported extra screen.
+Select the published computer name in an NDI receiver such as OBS with DistroAV.
+See [NDI setup](docs/ndi.md). NDI reception and HX encoding are not implemented.
+
+Settings offers resolution presets (including 16:10 and ultrawide) and custom
+width/height from 160 to 7680 pixels, rounded down to even values. These are
+ceilings: the source aspect ratio is preserved and smaller captures are not
+upscaled. Miracast chooses an advertised mode within the resolution/FPS limits;
+it reports an error when no compatible mode exists. Changes apply next session.
+
 ## Development
+
+Rust 1.93 or newer is required.
+
 
 ```sh
 make check                          # fmt + clippy -D warnings + the full test suite

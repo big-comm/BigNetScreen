@@ -216,7 +216,9 @@ impl StreamServer {
         let local_ip = local_ip_towards(receiver)?;
         // Port 0 = the kernel picks. Listening on this IP alone keeps the
         // stream off the other interfaces (VPN, docker0, loopback…).
-        let listener = TcpListener::bind((local_ip, 0)).await.map_err(net_err)?;
+        let listener = TcpListener::bind((local_ip, nd_core::settings::current().port))
+            .await
+            .map_err(net_err)?;
         let local_addr = listener.local_addr().map_err(net_err)?;
         let path = format!("/{}", random_token()?);
 

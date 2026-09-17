@@ -50,6 +50,17 @@ jobs:
       - name: Build de release
         run: cargo build --release --locked
 
+  msrv:
+    name: Minimum Rust 1.93
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: System dependencies
+        run: pacman -Syu --noconfirm --needed base-devel git gtk4 libadwaita gstreamer gst-plugins-base pipewire gettext
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.93.0
+      - run: cargo check --workspace --all-targets --locked
+
   data:
     name: Data files and translations
     runs-on: ubuntu-latest

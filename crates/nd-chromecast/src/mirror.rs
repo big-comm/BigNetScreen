@@ -359,7 +359,7 @@ pub async fn negotiate(
 ) -> Result<Negotiated> {
     let seq_num = 1;
     let (payload, offer) = build_offer(cfg, seq_num)?;
-    tracing::debug!(%payload, "sending the mirroring OFFER");
+    tracing::debug!("sending the mirroring OFFER");
 
     channel
         .send_json(NS_WEBRTC, &app.transport_id, &payload)
@@ -411,7 +411,7 @@ pub async fn negotiate(
                 )));
             }
             other => {
-                tracing::debug!(?other, payload = %event.payload, "mensagem do namespace webrtc");
+                tracing::debug!(?other, "mensagem do namespace webrtc");
             }
         }
     }

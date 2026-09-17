@@ -147,6 +147,7 @@ impl DeviceEntry {
 pub fn protocol_label(kind: SinkKind) -> String {
     match kind {
         SinkKind::Chromecast => tr!("Chromecast"),
+        SinkKind::Ndi => "NDI".into(),
         SinkKind::AirPlay => tr!("AirPlay"),
         SinkKind::WfdP2p | SinkKind::WfdMice => tr!("Miracast"),
         SinkKind::Dummy => tr!("Test"),
@@ -156,6 +157,7 @@ pub fn protocol_label(kind: SinkKind) -> String {
 pub fn icon_for(kind: SinkKind) -> &'static str {
     match kind {
         SinkKind::Chromecast => "tv-symbolic",
+        SinkKind::Ndi => "network-transmit-symbolic",
         SinkKind::AirPlay => "display-projector-symbolic",
         SinkKind::WfdP2p | SinkKind::WfdMice => "video-display-symbolic",
         SinkKind::Dummy => "applications-system-symbolic",

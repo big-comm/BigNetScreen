@@ -397,14 +397,12 @@ impl P2pDevice {
             }
         };
 
-        // Reading first tells "the property does not exist" (no
-        // CONFIG_WIFI_DISPLAY) apart from "the write was refused" (D-Bus
-        // policy). They call for different actions from whoever is debugging.
+        // A failed read can mean either missing support or restricted D-Bus access.
         if let Err(err) = supplicant.wfd_ies().await {
             tracing::info!(
                 %err,
-                "wpa_supplicant has no WFDIEs property (built without CONFIG_WIFI_DISPLAY); \
-                 receivers that only answer WFD sources will not appear"
+                "could not read wpa_supplicant WFDIEs; support could not be checked \
+                 (D-Bus policy may restrict access); pickier receivers may not appear"
             );
             return;
         }
@@ -732,9 +730,24 @@ impl P2pDevice {
         attempts: u32,
         per_attempt: Duration,
     ) -> Result<(OwnedObjectPath, IpAddr)> {
+        let (_tx, mut cancel) = tokio::sync::watch::channel(false);
+        self.connect_and_wait_cancelled(peer_path, attempts, per_attempt, &mut cancel)
+            .await
+    }
+
+    pub async fn connect_and_wait_cancelled(
+        &self,
+        peer_path: &str,
+        attempts: u32,
+        per_attempt: Duration,
+        cancel: &mut tokio::sync::watch::Receiver<bool>,
+    ) -> Result<(OwnedObjectPath, IpAddr)> {
         let mut last = NdError::Network("could not form the P2P group".into());
 
         for attempt in 1..=attempts.max(1) {
+            if *cancel.borrow() {
+                return Err(NdError::Cancelled);
+            }
             tracing::info!(attempt, "forming the Wi-Fi Direct group");
             let active = match self.connect(peer_path).await {
                 Ok(a) => a,
@@ -752,11 +765,18 @@ impl P2pDevice {
 
             let deadline = tokio::time::Instant::now() + per_attempt;
             loop {
+                if *cancel.borrow() {
+                    let _ = self.disconnect(&active).await;
+                    return Err(NdError::Cancelled);
+                }
                 if tokio::time::Instant::now() >= deadline {
                     last = NdError::Network("the Wi-Fi Direct group was not ready in time".into());
                     break;
                 }
-                tokio::time::sleep(Duration::from_millis(500)).await;
+                tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_millis(500)) => {},
+                    _ = cancel.changed() => continue,
+                }
 
                 // A vanished activation is **this attempt failing**, not a
                 // fatal error. NetworkManager removes the object as soon as it

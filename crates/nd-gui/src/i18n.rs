@@ -10,7 +10,8 @@ pub const DOMAIN: &str = "bignetscreen";
 
 /// Sets gettext up. Call once, at the start of `main`.
 pub fn init() {
-    gettextrs::setlocale(gettextrs::LocaleCategory::LcAll, "");
+    // SAFETY: main calls this before starting threads or the runtime.
+    unsafe { gettextrs::setlocale(gettextrs::LocaleCategory::LcAll, "") };
 
     // Under Flatpak or a standard installation the directory is
     // `<prefix>/share/locale`. `BIGNETSCREEN_LOCALEDIR` allows running straight

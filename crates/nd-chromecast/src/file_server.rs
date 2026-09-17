@@ -99,7 +99,11 @@ impl MediaFile {
             other => return Err(format!(".{other} is not a format this receiver plays")),
         };
 
-        let size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+        let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
+        if !metadata.is_file() {
+            return Err("not a regular file".into());
+        }
+        let size = metadata.len();
         Ok(Self {
             path: path.to_path_buf(),
             kind,
@@ -154,8 +158,13 @@ impl FileServer {
             let files = files.clone();
             let token = token.clone();
             async move {
+                let mut clients = tokio::task::JoinSet::new();
                 loop {
-                    let Ok((stream, peer)) = listener.accept().await else {
+                    let accepted = tokio::select! {
+                        result = listener.accept(), if clients.len() < 16 => result,
+                        _ = clients.join_next(), if !clients.is_empty() => continue,
+                    };
+                    let Ok((stream, peer)) = accepted else {
                         break;
                     };
                     // Refuse anyone but the receiver this session opened.
@@ -165,9 +174,14 @@ impl FileServer {
                     }
                     let files = files.clone();
                     let token = token.clone();
-                    tokio::spawn(async move {
-                        if let Err(err) = serve_one(stream, &files, &token).await {
-                            tracing::debug!(%err, "the file request ended");
+                    clients.spawn(async move {
+                        if let Err(err) = tokio::time::timeout(
+                            Duration::from_secs(3600),
+                            serve_one(stream, &files, &token),
+                        )
+                        .await
+                        {
+                            tracing::debug!(%err, "file connection expired");
                         }
                     });
                 }
@@ -221,25 +235,38 @@ async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> R
         return Ok(());
     };
 
-    let range = lines
-        .find_map(|line| {
-            let (name, value) = line.split_once(':')?;
-            name.eq_ignore_ascii_case("range")
-                .then(|| value.trim().to_string())
-        })
-        .and_then(|value| parse_range(&value, file.size));
-
+    if method != "GET" && method != "HEAD" {
+        stream.write_all(b"HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, HEAD\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.map_err(|e| NdError::Network(e.to_string()))?;
+        return Ok(());
+    }
     let mut handle = tokio::fs::File::open(&file.path)
         .await
-        .map_err(|e| NdError::Network(format!("could not open {}: {e}", file.path.display())))?;
-    let total = handle
+        .map_err(|e| NdError::Network(format!("could not open file: {e}")))?;
+    let metadata = handle
         .metadata()
         .await
-        .map(|m| m.len())
-        .unwrap_or(file.size);
-
+        .map_err(|e| NdError::Network(e.to_string()))?;
+    if !metadata.is_file() {
+        return Err(NdError::Network("not a regular file".into()));
+    }
+    let total = metadata.len();
+    let requested = lines
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            name.eq_ignore_ascii_case("range").then_some(value.trim())
+        })
+        .filter(|_| method == "GET");
+    let range = requested.and_then(|value| parse_range(value, total));
+    if requested.is_some() && range.is_none() {
+        let header = format!("HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */{total}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        stream
+            .write_all(header.as_bytes())
+            .await
+            .map_err(|e| NdError::Network(e.to_string()))?;
+        return Ok(());
+    }
     let (start, end) = range.unwrap_or((0, total.saturating_sub(1)));
-    let length = end.saturating_sub(start) + 1;
+    let length = range.map_or(total, |(start, end)| end - start + 1);
 
     let header = if range.is_some() {
         format!(
@@ -308,14 +335,14 @@ async fn read_request(stream: &mut TcpStream) -> Result<String> {
             .await
             .map_err(|e| NdError::Network(e.to_string()))?;
         if read == 0 {
-            break;
+            return Err(NdError::Network("incomplete request headers".into()));
         }
         buffer.extend_from_slice(&chunk[..read]);
-        if buffer.windows(4).any(|w| w == b"\r\n\r\n") {
-            break;
-        }
         if buffer.len() > MAX_REQUEST_BYTES {
             return Err(NdError::Network("request headers too large".into()));
+        }
+        if buffer.windows(4).any(|w| w == b"\r\n\r\n") {
+            break;
         }
     }
     Ok(String::from_utf8_lossy(&buffer).to_string())
@@ -338,15 +365,16 @@ fn parse_target(target: &str, token: &str) -> Option<usize> {
     index.parse().ok()
 }
 
-/// Parses `bytes=start-end`, the only form a receiver sends.
-///
-/// An open end (`bytes=500-`) means "to the end of the file", which is what a
-/// receiver sends when it seeks.
+/// Parse a single explicit, open-ended or suffix byte range.
 fn parse_range(value: &str, size: u64) -> Option<(u64, u64)> {
     let spec = value.trim().strip_prefix("bytes=")?;
     let (start, end) = spec.split_once('-')?;
     if size == 0 {
         return None;
+    }
+    if start.trim().is_empty() {
+        let suffix = end.trim().parse::<u64>().ok()?;
+        return (suffix > 0).then_some((size.saturating_sub(suffix), size - 1));
     }
     let start: u64 = start.trim().parse().ok()?;
     let end = match end.trim() {
@@ -362,6 +390,71 @@ fn parse_range(value: &str, size: u64) -> Option<(u64, u64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn inspect_fixture(path: &Path) -> std::result::Result<MediaFile, String> {
+        let dir = std::env::temp_dir().join(format!("nd-file-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(path.file_name().unwrap());
+        std::fs::write(&path, []).unwrap();
+        let result = MediaFile::inspect(&path);
+        std::fs::remove_file(&path).unwrap();
+        result
+    }
+
+    async fn fixture(bytes: &[u8], label: &str) -> (FileServer, String, String, PathBuf) {
+        let path = std::env::temp_dir().join(format!("nd-http-{}-{label}.mp4", std::process::id()));
+        std::fs::write(&path, bytes).unwrap();
+        let server = FileServer::start(
+            "127.0.0.1".parse().unwrap(),
+            0,
+            vec![MediaFile::inspect(&path).unwrap()],
+        )
+        .await
+        .unwrap();
+        let url = server.url(0);
+        let (authority, target) = url
+            .strip_prefix("http://")
+            .unwrap()
+            .split_once('/')
+            .unwrap();
+        (server, authority.into(), target.into(), path)
+    }
+
+    #[tokio::test]
+    async fn empty_file_has_zero_content_length() {
+        let (_server, authority, target, path) = fixture(b"", "empty").await;
+        let mut client = TcpStream::connect(authority).await.unwrap();
+        client
+            .write_all(format!("GET /{target} HTTP/1.1\r\nHost: localhost\r\n\r\n").as_bytes())
+            .await
+            .unwrap();
+        let mut response = String::new();
+        tokio::time::timeout(Duration::from_secs(2), client.read_to_string(&mut response))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(response.contains("Content-Length: 0\r\n"), "{response}");
+        assert!(response.ends_with("\r\n\r\n"));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn accepted_connections_close_with_server() {
+        let (server, authority, target, path) = fixture(b"PRIVATE", "drop").await;
+        let mut client = TcpStream::connect(authority).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        drop(server);
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let _ = client
+            .write_all(format!("GET /{target} HTTP/1.1\r\nHost: localhost\r\n\r\n").as_bytes())
+            .await;
+        let mut response = String::new();
+        let _ = tokio::time::timeout(Duration::from_secs(2), client.read_to_string(&mut response))
+            .await
+            .expect("connection closes");
+        assert!(!response.contains("PRIVATE"));
+        std::fs::remove_file(path).unwrap();
+    }
 
     #[test]
     fn only_the_right_token_gets_a_file() {
@@ -399,6 +492,9 @@ mod tests {
     fn seeking_asks_for_the_rest_of_the_file() {
         assert_eq!(parse_range("bytes=0-99", 1000), Some((0, 99)));
         assert_eq!(parse_range("bytes=500-", 1000), Some((500, 999)));
+        assert_eq!(parse_range("bytes=-100", 1000), Some((900, 999)));
+        assert_eq!(parse_range("bytes=-2000", 1000), Some((0, 999)));
+        assert_eq!(parse_range("bytes=-0", 1000), None);
         // Beyond the end, backwards, or against an unknown size: no range,
         // which makes the server answer 200 with the whole file rather than
         // a nonsensical 206.
@@ -414,31 +510,27 @@ mod tests {
     #[test]
     fn a_file_is_classified_by_what_the_receiver_can_play() {
         assert_eq!(
-            MediaFile::inspect(Path::new("/tmp/holiday.JPG"))
-                .unwrap()
-                .kind,
+            inspect_fixture(Path::new("/tmp/holiday.JPG")).unwrap().kind,
             MediaKind::Photo,
             "the extension's case must not matter"
         );
         assert_eq!(
-            MediaFile::inspect(Path::new("/tmp/film.mp4")).unwrap().kind,
+            inspect_fixture(Path::new("/tmp/film.mp4")).unwrap().kind,
             MediaKind::Video
         );
         assert_eq!(
-            MediaFile::inspect(Path::new("/tmp/song.flac"))
-                .unwrap()
-                .kind,
+            inspect_fixture(Path::new("/tmp/song.flac")).unwrap().kind,
             MediaKind::Music
         );
         // Refused here so the interface can say why, instead of the receiver
         // going black with no explanation.
-        assert!(MediaFile::inspect(Path::new("/tmp/film.mkv")).is_err());
-        assert!(MediaFile::inspect(Path::new("/tmp/notes")).is_err());
+        assert!(inspect_fixture(Path::new("/tmp/film.mkv")).is_err());
+        assert!(inspect_fixture(Path::new("/tmp/notes")).is_err());
     }
 
     #[test]
     fn the_title_is_the_name_without_the_extension() {
-        let file = MediaFile::inspect(Path::new("/tmp/Sunset at the lake.jpg")).unwrap();
+        let file = inspect_fixture(Path::new("/tmp/Sunset at the lake.jpg")).unwrap();
         assert_eq!(file.title(), "Sunset at the lake");
     }
 }

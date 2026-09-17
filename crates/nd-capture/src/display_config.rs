@@ -115,6 +115,10 @@ pub struct LayoutSnapshot {
     logical: Vec<LogicalMonitorConfig>,
     /// The rightmost edge, in logical pixels: where a new screen goes.
     right_edge: i32,
+    layout_mode: u32,
+    supports_layout_mode: bool,
+    global_scale: Option<f64>,
+    connectors: Vec<String>,
 }
 
 impl LayoutSnapshot {
@@ -125,7 +129,24 @@ impl LayoutSnapshot {
     /// whole layout dance.
     pub async fn capture(conn: &Connection) -> Option<Self> {
         let proxy = DisplayConfigProxy::new(conn).await.ok()?;
-        let (_serial, monitors, logical, _props) = proxy.get_current_state().await.ok()?;
+        let (_serial, monitors, logical, props) = proxy.get_current_state().await.ok()?;
+        let layout_mode = props
+            .get("layout-mode")
+            .and_then(|v| u32::try_from(v).ok())
+            .unwrap_or(1);
+        let supports_layout_mode = props
+            .get("supports-changing-layout-mode")
+            .and_then(|v| bool::try_from(v).ok())
+            .unwrap_or(false);
+        let global_scale = props
+            .get("global-scale-required")
+            .and_then(|v| bool::try_from(v).ok())
+            .unwrap_or(false)
+            .then(|| logical.first().map_or(1.0, |logical| logical.2));
+        let all_connectors = monitors
+            .iter()
+            .map(|((name, ..), ..)| name.clone())
+            .collect();
 
         let mut config = Vec::new();
         let mut right_edge = 0;
@@ -136,13 +157,30 @@ impl LayoutSnapshot {
                 // one: reapplying the preferred mode is the very thing that
                 // moved the user's screen to scale 1.25.
                 if let Some(mode) = current_mode_of(&monitors, connector) {
-                    connectors.push((connector.clone(), mode, HashMap::new()));
+                    let mut properties = HashMap::new();
+                    if let Some((_, _, props)) =
+                        monitors.iter().find(|((name, ..), ..)| name == connector)
+                    {
+                        if let Some(value) = props
+                            .get("is-underscanning")
+                            .and_then(|v| bool::try_from(v).ok())
+                        {
+                            properties.insert("underscanning".into(), Value::from(value));
+                        }
+                        if let Some(value) =
+                            props.get("color-mode").and_then(|v| u32::try_from(v).ok())
+                        {
+                            properties.insert("color-mode".into(), Value::from(value));
+                        }
+                    }
+                    connectors.push((connector.clone(), mode, properties));
                 }
             }
             if connectors.is_empty() {
                 continue;
             }
-            if let Some(width) = logical_width(&monitors, &assigned, scale) {
+            if let Some(width) = logical_width(&monitors, &assigned, scale, transform, layout_mode)
+            {
                 right_edge = right_edge.max(x + width);
             }
             config.push((x, y, scale, transform, primary, connectors));
@@ -151,7 +189,34 @@ impl LayoutSnapshot {
         (!config.is_empty()).then_some(Self {
             logical: config,
             right_edge,
+            layout_mode,
+            supports_layout_mode,
+            global_scale,
+            connectors: all_connectors,
         })
+    }
+
+    fn properties(&self) -> HashMap<&str, Value<'_>> {
+        if self.supports_layout_mode {
+            HashMap::from([("layout-mode", Value::from(self.layout_mode))])
+        } else {
+            HashMap::new()
+        }
+    }
+
+    /// Keep the current physical layout when the user rearranged it during capture.
+    pub fn without(mut self, connector: &str) -> Option<Self> {
+        self.connectors.retain(|name| name != connector);
+        for logical in &mut self.logical {
+            logical.5.retain(|(name, ..)| name != connector);
+        }
+        self.logical.retain(|logical| !logical.5.is_empty());
+        if !self.logical.iter().any(|logical| logical.4) {
+            if let Some(first) = self.logical.first_mut() {
+                first.4 = true;
+            }
+        }
+        (!self.logical.is_empty()).then_some(self)
     }
 
     /// Reapplies the saved arrangement, with `virtual_connector` appended to
@@ -181,7 +246,7 @@ impl LayoutSnapshot {
         logical.push((
             self.right_edge,
             0,
-            1.0,
+            self.global_scale.unwrap_or(1.0),
             0,
             false,
             vec![(
@@ -192,7 +257,7 @@ impl LayoutSnapshot {
         ));
 
         proxy
-            .apply_monitors_config(serial, METHOD_TEMPORARY, &logical, HashMap::new())
+            .apply_monitors_config(serial, METHOD_TEMPORARY, &logical, self.properties())
             .await
             .map_err(|e| NdError::Capture(format!("could not arrange the extra screen: {e}")))
     }
@@ -217,13 +282,29 @@ impl LayoutSnapshot {
         let mut last = String::new();
         for attempt in 1..=RESTORE_ATTEMPTS {
             // Read the serial immediately before using it, every time.
-            let (serial, ..) = proxy
+            let (serial, monitors, ..) = proxy
                 .get_current_state()
                 .await
                 .map_err(|e| NdError::Capture(e.to_string()))?;
 
+            if monitors.len() != self.connectors.len()
+                || monitors
+                    .iter()
+                    .any(|((name, ..), ..)| !self.connectors.contains(name))
+            {
+                // Stop returns before Mutter removes the virtual connector.
+                // Let that transient topology settle before treating it as a
+                // physical hotplug and preserving the compositor's layout.
+                if attempt < RESTORE_ATTEMPTS {
+                    tokio::time::sleep(RESTORE_RETRY_DELAY).await;
+                    continue;
+                }
+                tracing::info!("monitor topology changed; preserving the compositor layout");
+                return Ok(());
+            }
+
             match proxy
-                .apply_monitors_config(serial, METHOD_TEMPORARY, &self.logical, HashMap::new())
+                .apply_monitors_config(serial, METHOD_TEMPORARY, &self.logical, self.properties())
                 .await
             {
                 Ok(()) => return Ok(()),
@@ -256,14 +337,21 @@ fn logical_width(
     monitors: &[MonitorInfo],
     assigned: &[(String, String, String, String)],
     scale: f64,
+    transform: u32,
+    layout_mode: u32,
 ) -> Option<i32> {
     let (connector, ..) = assigned.first()?;
     let monitor = monitors.iter().find(|((c, ..), ..)| c == connector)?;
-    let (_, width, ..) = monitor
+    let (_, width, height, ..) = monitor
         .1
         .iter()
         .find(|(_, _, _, _, _, _, props)| props.contains_key("is-current"))?;
-    Some(((*width as f64) / scale).round() as i32)
+    let extent = if transform % 2 == 1 { *height } else { *width };
+    let scale = if layout_mode == 2 { 1.0 } else { scale };
+    if !scale.is_finite() || scale <= 0.0 {
+        return None;
+    }
+    Some(((extent as f64) / scale).round() as i32)
 }
 
 /// Waits for the virtual monitor to show up and returns its connector name
@@ -373,4 +461,35 @@ pub async fn preferred_mode(conn: &Connection, connector: &str) -> Option<(Strin
         .find(|(_, _, _, _, _, _, props)| props.contains_key("is-preferred"))
         .or_else(|| monitor.1.first())
         .map(|(id, w, h, ..)| (id.clone(), *w, *h))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn portrait_width_and_physical_layout_are_preserved() {
+        let monitors = vec![(
+            (
+                "DP-1".into(),
+                "vendor".into(),
+                "panel".into(),
+                "serial".into(),
+            ),
+            vec![(
+                "mode".into(),
+                1920,
+                1080,
+                60.0,
+                1.0,
+                vec![1.0, 2.0],
+                HashMap::from([("is-current".into(), OwnedValue::from(true))]),
+            )],
+            HashMap::new(),
+        )];
+        let assigned = vec![monitors[0].0.clone()];
+        assert_eq!(logical_width(&monitors, &assigned, 2.0, 1, 1), Some(540));
+        assert_eq!(logical_width(&monitors, &assigned, 2.0, 1, 2), Some(1080));
+        assert_eq!(logical_width(&monitors, &assigned, 2.0, 0, 1), Some(960));
+        assert_eq!(logical_width(&monitors, &assigned, 0.0, 0, 1), None);
+    }
 }

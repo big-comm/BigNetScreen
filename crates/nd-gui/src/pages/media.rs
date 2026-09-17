@@ -24,7 +24,7 @@ use relm4::prelude::*;
 use nd_chromecast::file_server::{MediaFile, MediaKind};
 use nd_chromecast::media::MediaStatus;
 
-use crate::tr;
+use crate::{tr, tr_n};
 
 /// How many files a tab shows.
 ///
@@ -38,6 +38,58 @@ const GRID_LIMIT: usize = 60;
 /// Decoding at this size rather than shrinking afterwards is what keeps a grid
 /// of photos from holding hundreds of megabytes of full-resolution pixels.
 const THUMB: (i32, i32) = (260, 180);
+static THUMBNAIL_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+
+/// Pixel data crosses threads; GTK objects stay on the UI thread.
+#[derive(Debug)]
+pub struct Thumbnail {
+    pixels: glib::Bytes,
+    width: i32,
+    height: i32,
+    stride: i32,
+    alpha: bool,
+}
+
+impl Thumbnail {
+    fn decode(path: &std::path::Path) -> Result<Self, String> {
+        let pixbuf = Pixbuf::from_file_at_scale(path, THUMB.0, THUMB.1, true)
+            .map_err(|err| err.to_string())?;
+        Ok(Self {
+            pixels: pixbuf.read_pixel_bytes(),
+            width: pixbuf.width(),
+            height: pixbuf.height(),
+            stride: pixbuf.rowstride(),
+            alpha: pixbuf.has_alpha(),
+        })
+    }
+
+    fn texture(&self) -> gdk::Texture {
+        let pixbuf = Pixbuf::from_bytes(
+            &self.pixels,
+            gtk::gdk_pixbuf::Colorspace::Rgb,
+            self.alpha,
+            8,
+            self.width,
+            self.height,
+            self.stride,
+        );
+        gdk::Texture::for_pixbuf(&pixbuf)
+    }
+}
+
+async fn load_thumbnail(path: PathBuf) -> Result<Thumbnail, String> {
+    let permit = THUMBNAIL_SLOTS
+        .acquire()
+        .await
+        .map_err(|err| err.to_string())?;
+    tokio::task::spawn_blocking(move || {
+        // Keep the permit until decoding ends, even if the tile is removed.
+        let _permit = permit;
+        Thumbnail::decode(&path)
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
 
 // ----------------------------------------------------------------------------
 // One tile
@@ -65,7 +117,7 @@ impl FactoryComponent for MediaTile {
     type Init = MediaFile;
     type Input = TileMsg;
     type Output = TileOutput;
-    type CommandOutput = ();
+    type CommandOutput = Result<Thumbnail, String>;
     type ParentWidget = gtk::FlowBox;
 
     view! {
@@ -120,35 +172,34 @@ impl FactoryComponent for MediaTile {
     ) -> Self::Widgets {
         let widgets = view_output!();
 
-        // The picture is filled in on an idle callback rather than here.
-        // Decoding sixty photos while building the grid freezes the window for
-        // as long as it takes; one per idle turn keeps it answering the pointer,
-        // and the tiles fill in visibly from the top.
-        let path = self.file.path.clone();
-        let kind = self.file.kind;
-        let picture = widgets.thumb.clone();
-        glib::idle_add_local_once(move || match kind {
+        match self.file.kind {
             MediaKind::Photo => {
-                match Pixbuf::from_file_at_scale(&path, THUMB.0, THUMB.1, true) {
-                    Ok(pixbuf) => picture.set_paintable(Some(&gdk::Texture::for_pixbuf(&pixbuf))),
-                    // A file that cannot be decoded here is one the receiver is
-                    // unlikely to play either, but that is its decision to make:
-                    // the tile falls back to an icon instead of vanishing.
-                    Err(err) => {
-                        tracing::debug!(path = %path.display(), %err, "no thumbnail");
-                        picture.set_paintable(icon_paintable("image-x-generic-symbolic").as_ref());
-                    }
-                }
+                widgets
+                    .thumb
+                    .set_paintable(icon_paintable("image-x-generic-symbolic").as_ref());
+                sender.oneshot_command(load_thumbnail(self.file.path.clone()));
             }
-            MediaKind::Video => {
-                picture.set_paintable(icon_paintable("video-x-generic-symbolic").as_ref())
-            }
-            MediaKind::Music => {
-                picture.set_paintable(icon_paintable("audio-x-generic-symbolic").as_ref())
-            }
-        });
+            MediaKind::Video => widgets
+                .thumb
+                .set_paintable(icon_paintable("video-x-generic-symbolic").as_ref()),
+            MediaKind::Music => widgets
+                .thumb
+                .set_paintable(icon_paintable("audio-x-generic-symbolic").as_ref()),
+        }
 
         widgets
+    }
+
+    fn update_cmd_with_view(
+        &mut self,
+        widgets: &mut Self::Widgets,
+        message: Self::CommandOutput,
+        _sender: FactorySender<Self>,
+    ) {
+        match message {
+            Ok(thumbnail) => widgets.thumb.set_paintable(Some(&thumbnail.texture())),
+            Err(err) => tracing::debug!(%err, "no thumbnail"),
+        }
     }
 
     fn update(&mut self, message: Self::Input, sender: FactorySender<Self>) {
@@ -204,10 +255,13 @@ pub struct MediaPage {
     /// from here.
     chosen_target: Option<String>,
     status: Option<MediaStatus>,
+    scan_generation: u64,
+    scan_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[derive(Debug)]
 pub enum MediaMsg {
+    EnsureLoaded,
     SetKind(MediaKind),
     /// A tile was selected or unselected.
     Selected(PathBuf, bool),
@@ -224,6 +278,8 @@ pub enum MediaMsg {
     /// A destination was picked in the list, by position.
     TargetPicked(usize),
     Status(Option<MediaStatus>),
+    Scanned(u64, Vec<MediaFile>),
+    Inspected(Vec<MediaFile>, Vec<String>),
 }
 
 #[derive(Debug)]
@@ -435,7 +491,7 @@ impl Component for MediaPage {
                     TileOutput::Selected(path, selected) => MediaMsg::Selected(path, selected),
                 });
 
-        let mut model = MediaPage {
+        let model = MediaPage {
             tiles,
             kind: MediaKind::Photo,
             listed: Vec::new(),
@@ -445,6 +501,8 @@ impl Component for MediaPage {
             settling: false,
             chosen_target: None,
             status: None,
+            scan_generation: 0,
+            scan_cancel: Default::default(),
         };
 
         let grid = model.tiles.widget();
@@ -456,7 +514,7 @@ impl Component for MediaPage {
                 .add(adw::Toggle::builder().label(&label).build());
         }
         widgets.kind_group.set_active(0);
-        model.reload();
+        root.connect_map(move |_| sender.input(MediaMsg::EnsureLoaded));
 
         ComponentParts { model, widgets }
     }
@@ -469,10 +527,15 @@ impl Component for MediaPage {
         root: &Self::Root,
     ) {
         match message {
+            MediaMsg::EnsureLoaded => {
+                if self.scan_generation == 0 {
+                    self.reload(&sender);
+                }
+            }
             MediaMsg::SetKind(kind) => {
                 if kind != self.kind {
                     self.kind = kind;
-                    self.reload();
+                    self.reload(&sender);
                 }
             }
             MediaMsg::Selected(path, selected) => {
@@ -486,7 +549,38 @@ impl Component for MediaPage {
                     self.chosen.retain(|f| f.path != path);
                 }
             }
-            MediaMsg::Picked(paths) => self.add_paths(paths),
+            MediaMsg::Picked(paths) => {
+                let out = sender.input_sender().clone();
+                relm4::spawn(async move {
+                    if let Ok((files, refused)) =
+                        tokio::task::spawn_blocking(move || inspect_paths(paths)).await
+                    {
+                        let _ = out.send(MediaMsg::Inspected(files, refused));
+                    }
+                });
+            }
+            MediaMsg::Inspected(files, refused) => {
+                self.refused = refused;
+                for file in files {
+                    if !self.chosen.iter().any(|f| f.path == file.path) {
+                        self.chosen.push(file.clone());
+                    }
+                    if !self.listed.iter().any(|f| f.path == file.path) {
+                        self.listed.push(file.clone());
+                        self.tiles.guard().push_back(file);
+                    }
+                }
+            }
+            MediaMsg::Scanned(generation, files) => {
+                if generation == self.scan_generation {
+                    self.listed = files;
+                    let mut guard = self.tiles.guard();
+                    guard.clear();
+                    for file in &self.listed {
+                        guard.push_back(file.clone());
+                    }
+                }
+            }
             MediaMsg::PickFiles => open_file_dialog(root, sender.input_sender().clone(), false),
             MediaMsg::PickFolder => open_file_dialog(root, sender.input_sender().clone(), true),
             MediaMsg::Send => {
@@ -576,65 +670,22 @@ impl MediaPage {
     }
 
     /// Fills the grid with what is in the folder for the current tab.
-    fn reload(&mut self) {
-        self.listed = scan_library(self.kind);
-        // Selections from another tab stay chosen — a person may well send a
-        // song and a film together — so the grid is rebuilt but `chosen` is not
-        // touched.
-        let mut guard = self.tiles.guard();
-        guard.clear();
-        for file in &self.listed {
-            guard.push_back(file.clone());
-        }
-    }
-
-    /// Adds files picked by hand, refusing what cannot be played.
-    fn add_paths(&mut self, paths: Vec<PathBuf>) {
-        self.refused.clear();
-        for path in paths {
-            // A folder was picked: take the files inside it, one level deep.
-            // Recursing without being asked would queue a whole photo archive
-            // from a single click on its parent.
-            let candidates: Vec<PathBuf> = if path.is_dir() {
-                let mut entries: Vec<PathBuf> = std::fs::read_dir(&path)
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                    .map(|e| e.path())
-                    .filter(|p| p.is_file())
-                    .collect();
-                entries.sort();
-                entries
-            } else {
-                vec![path]
-            };
-
-            for candidate in candidates {
-                match MediaFile::inspect(&candidate) {
-                    Ok(file) => {
-                        if !self.chosen.iter().any(|f| f.path == file.path) {
-                            self.chosen.push(file.clone());
-                        }
-                        if !self.listed.iter().any(|f| f.path == file.path) {
-                            self.listed.push(file.clone());
-                            self.tiles.guard().push_back(file);
-                        }
-                    }
-                    Err(reason) => {
-                        let name = candidate
-                            .file_name()
-                            .map(|n| n.to_string_lossy().to_string())
-                            .unwrap_or_default();
-                        // One line per problem file, not a single "some files
-                        // were skipped": the person needs to know which.
-                        let line = format!("{name}: {reason}");
-                        if !self.refused.contains(&line) {
-                            self.refused.push(line);
-                        }
-                    }
-                }
+    fn reload(&mut self, sender: &ComponentSender<Self>) {
+        self.scan_cancel
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        self.scan_cancel = Default::default();
+        self.scan_generation += 1;
+        let generation = self.scan_generation;
+        let kind = self.kind;
+        let cancel = self.scan_cancel.clone();
+        let out = sender.input_sender().clone();
+        relm4::spawn(async move {
+            if let Ok(files) =
+                tokio::task::spawn_blocking(move || scan_library(kind, &cancel)).await
+            {
+                let _ = out.send(MediaMsg::Scanned(generation, files));
             }
-        }
+        });
     }
 
     fn empty_message(&self) -> String {
@@ -648,8 +699,7 @@ impl MediaPage {
     fn selection_summary(&self) -> String {
         match self.chosen.len() {
             0 => tr!("Nothing selected"),
-            1 => tr!("1 file selected"),
-            n => format!("{n} {}", tr!("files selected")),
+            n => tr_n!("{} file selected", "{} files selected", n).replace("{}", &n.to_string()),
         }
     }
 
@@ -681,8 +731,48 @@ impl MediaPage {
     }
 }
 
+impl Drop for MediaPage {
+    fn drop(&mut self) {
+        self.scan_cancel
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+fn inspect_paths(paths: Vec<PathBuf>) -> (Vec<MediaFile>, Vec<String>) {
+    const MAX_SELECTED: usize = 1000;
+    let mut files = Vec::new();
+    let mut refused = Vec::new();
+    for path in paths {
+        let candidates = if path.is_dir() {
+            let mut paths: Vec<_> = std::fs::read_dir(&path)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.is_file())
+                .take(MAX_SELECTED + 1)
+                .collect();
+            paths.sort();
+            paths
+        } else {
+            vec![path]
+        };
+        for candidate in candidates {
+            if files.len() + refused.len() >= MAX_SELECTED {
+                refused.push(tr!("Select up to 1000 files at a time."));
+                return (files, refused);
+            }
+            match MediaFile::inspect(&candidate) {
+                Ok(file) => files.push(file),
+                Err(reason) => refused.push(format!("{}: {reason}", candidate.display())),
+            }
+        }
+    }
+    (files, refused)
+}
+
 /// Lists the standard folder for this kind of file.
-fn scan_library(kind: MediaKind) -> Vec<MediaFile> {
+fn scan_library(kind: MediaKind, cancel: &std::sync::atomic::AtomicBool) -> Vec<MediaFile> {
     let Some(directory) = user_directory(kind) else {
         return Vec::new();
     };
@@ -690,6 +780,7 @@ fn scan_library(kind: MediaKind) -> Vec<MediaFile> {
         .into_iter()
         .flatten()
         .flatten()
+        .take_while(|_| !cancel.load(std::sync::atomic::Ordering::Relaxed))
         .filter_map(|entry| {
             let path = entry.path();
             if !path.is_file() {
@@ -705,7 +796,12 @@ fn scan_library(kind: MediaKind) -> Vec<MediaFile> {
                 .unwrap_or(std::time::UNIX_EPOCH);
             Some((modified, file))
         })
-        .collect();
+        .fold(Vec::with_capacity(GRID_LIMIT + 1), |mut newest, entry| {
+            newest.push(entry);
+            newest.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
+            newest.truncate(GRID_LIMIT);
+            newest
+        });
 
     // Newest first: the photo taken this afternoon is the one being shown to
     // the room, not the oldest file in the folder.
@@ -787,6 +883,65 @@ fn human_size(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "requires a graphical GTK session and image loader"]
+    fn media_library_is_lazy_and_background_thumbnails_preserve_pixels() {
+        adw::init().expect("GTK session");
+        let context = glib::MainContext::default();
+        let page = MediaPage::builder().launch(()).detach();
+        context.block_on(glib::timeout_future(std::time::Duration::from_millis(50)));
+        assert_eq!(page.model().scan_generation, 0);
+        assert!(page.model().listed.is_empty());
+
+        let path =
+            std::env::temp_dir().join(format!("bignetscreen-thumbnail-{}.png", std::process::id()));
+        let pixbuf = Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, true, 8, 800, 400)
+            .expect("fixture pixels");
+        pixbuf.fill(0x12345680);
+        pixbuf.savev(&path, "png", &[]).expect("fixture PNG");
+        context.block_on(async {
+            let permits = THUMBNAIL_SLOTS
+                .acquire_many(2)
+                .await
+                .expect("thumbnail slots");
+            let job = relm4::spawn(load_thumbnail(path.clone()));
+            glib::timeout_future(std::time::Duration::from_millis(50)).await;
+            assert!(!job.is_finished(), "decoder concurrency must be bounded");
+            drop(permits);
+            let thumbnail = job
+                .await
+                .expect("worker completed")
+                .expect("thumbnail decoded");
+            assert_eq!((thumbnail.width, thumbnail.height), (260, 130));
+            assert!(thumbnail.alpha);
+            assert_eq!(&thumbnail.pixels.as_ref()[..4], &[0x12, 0x34, 0x56, 0x80]);
+            let texture = thumbnail.texture();
+            assert_eq!((texture.width(), texture.height()), (260, 130));
+
+            std::fs::write(&path, b"invalid image").expect("invalid fixture");
+            assert!(relm4::spawn(load_thumbnail(path.clone()))
+                .await
+                .expect("worker completed")
+                .is_err());
+        });
+        std::fs::remove_file(path).expect("remove fixture");
+
+        let window = gtk::Window::new();
+        window.set_child(Some(page.widget()));
+        window.present();
+        context.block_on(glib::timeout_future(std::time::Duration::from_millis(50)));
+        assert_eq!(page.model().scan_generation, 1);
+        window.set_visible(false);
+        window.present();
+        context.block_on(glib::timeout_future(std::time::Duration::from_millis(50)));
+        assert_eq!(
+            page.model().scan_generation,
+            1,
+            "showing the page again must not reload it"
+        );
+        window.close();
+    }
 
     /// The chooser's positions: 0 is the placeholder, devices start at 1.
     fn target_at(targets: &[(String, String)], index: usize) -> Option<String> {
