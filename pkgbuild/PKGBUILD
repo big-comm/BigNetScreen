@@ -1,7 +1,7 @@
 # Maintainer: Tales A. Mendonça <talesam@gmail.com>
 
 pkgname=bignetscreen
-pkgdesc="Mirror your screen to Miracast (Wi-Fi Display) and Chromecast receivers"
+pkgdesc="Share your screen over Miracast, Chromecast and NDI"
 pkgver=$(date +%y.%m.%d)
 pkgrel=$(date +%H%M)
 arch=('x86_64' 'aarch64')
@@ -20,11 +20,9 @@ depends=(
   'gst-plugin-pipewire'  # pipewiresrc
   'pipewire'
   'xdg-desktop-portal'
-  # `pactl`: the application puts the default audio device back after a
-  # session. Not optional — sharing a screen disturbs the sound settings on
-  # desktops with an effects chain, and leaving that unrepaired is a fault the
-  # person has to fix by hand.
-  'libpulse'
+  'libpulse'            # pactl audio diagnostics
+  'libndi'              # vendor runtime; GStreamer NDI plugin is built in
+  'avahi'               # NDI discovery
 )
 optdepends=(
   'networkmanager: Miracast discovery and connection (Wi-Fi Direct)'
@@ -83,4 +81,5 @@ package() {
   make DESTDIR="$pkgdir" PREFIX=/usr install
   install -Dm644 COPYING "$pkgdir/usr/share/licenses/$pkgname/COPYING"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 docs/ndi.md "$pkgdir/usr/share/doc/$pkgname/ndi.md"
 }

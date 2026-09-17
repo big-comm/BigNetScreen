@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-17 00:31-0300\n"
+"POT-Creation-Date: 2026-09-17 19:52-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Hungarian <hu@li.org>\n"
@@ -383,12 +383,8 @@ msgid "NDI setup"
 msgstr "NDI beállítása"
 
 #: crates/nd-gui/src/app.rs:508
-msgid ""
-"NDI unavailable: install gst-plugin-ndi and the NDI runtime. See the NDI "
-"setup guide."
-msgstr ""
-"Az NDI nem érhető el: telepítse a gst-plugin-ndi csomagot és az NDI "
-"futtatókörnyezetet. Lásd az NDI beállítási útmutatóját."
+msgid "NDI unavailable. See the NDI setup guide."
+msgstr "Az NDI nem érhető el. Lásd az NDI beállítási útmutatóját."
 
 #: crates/nd-gui/src/pages/media.rs:664
 msgid "No device found yet. Turn your TV, projector or Chromecast on."

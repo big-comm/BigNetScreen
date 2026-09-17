@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-17 00:31-0300\n"
+"POT-Creation-Date: 2026-09-17 20:05-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: BigCommunity <contato@communitybig.org>\n"
 "Language-Team: BigCommunity <contato@communitybig.org>\n"
@@ -341,7 +341,7 @@ msgid "NDI setup"
 msgstr ""
 
 #: crates/nd-gui/src/app.rs:508
-msgid "NDI unavailable: install gst-plugin-ndi and the NDI runtime. See the NDI setup guide."
+msgid "NDI unavailable. See the NDI setup guide."
 msgstr ""
 
 #: crates/nd-gui/src/pages/media.rs:664

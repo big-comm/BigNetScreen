@@ -505,7 +505,7 @@ impl Component for AppModel {
             AppMsg::Cast(id) => self.begin_cast(id, &sender),
             AppMsg::PublishNdi(source) => {
                 if !nd_ndi::available() {
-                    self.status = tr!("NDI unavailable: install gst-plugin-ndi and the NDI runtime. See the NDI setup guide.");
+                    self.status = tr!("NDI unavailable. See the NDI setup guide.");
                 } else {
                     self.source_type = source;
                     self.begin_cast(nd_ndi::ID.into(), &sender);

@@ -148,9 +148,10 @@ deadline, and whatever misses it becomes a hole in the sound. So discovery
 scanning pauses for the duration of a session — see
 [`nd-core::radio`](crates/nd-core/src/radio.rs).
 
-**No vendor binaries are bundled.** Native dependencies follow
-[`deny.toml`](deny.toml); CI runs the RustSec dependency audit. Optional NDI
-publishing requires a separately installed proprietary runtime; see the
+**No vendor binaries are embedded in the executable.** Native dependencies follow
+[`deny.toml`](deny.toml); CI runs the RustSec dependency audit. The open-source
+NDI plugin is built in; native packages require the separate vendor runtime and
+Avahi. See the
 [NDI setup and distribution notes](docs/ndi.md). The Cast protocol was implemented using Google's own
 open-source [Open Screen](https://chromium.googlesource.com/openscreen/) as a
 specification reference, with none of its code linked in.

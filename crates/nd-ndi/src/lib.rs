@@ -1,6 +1,6 @@
-//! Optional NDI sender. Vendor binaries are neither linked nor bundled.
+//! Built-in NDI sender. The vendor runtime remains a system dependency.
 
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -12,9 +12,14 @@ use nd_core::{NdError, Result};
 
 pub const ID: &str = "local:ndi-publisher";
 
-/// Verify plugin presence without starting capture or publishing a source.
+static NDI_PLUGIN: OnceLock<std::result::Result<(), String>> = OnceLock::new();
+
+/// Register the bundled plugin without loading the vendor runtime or starting capture.
 pub fn available() -> bool {
     pipeline::init().is_ok()
+        && NDI_PLUGIN
+            .get_or_init(|| gstndi::plugin_register_static().map_err(|err| err.to_string()))
+            .is_ok()
         && ["ndisink", "ndisinkcombiner"]
             .iter()
             .all(|name| gst::ElementFactory::find(name).is_some())
@@ -41,7 +46,9 @@ impl NdiPublisher {
         mut cancelled: tokio::sync::watch::Receiver<bool>,
     ) -> Result<()> {
         if !available() {
-            return Err(NdError::Unsupported("NDI requires gst-plugin-ndi and the separately installed NDI runtime (NDI_RUNTIME_DIR_V6 or NDI_RUNTIME_DIR_V5)".into()));
+            return Err(NdError::Unsupported(
+                "The built-in NDI plugin could not be initialized".into(),
+            ));
         }
         let _radio = nd_core::radio::quiet();
         let preferences = nd_core::settings::current();
@@ -49,12 +56,20 @@ impl NdiPublisher {
             StreamConfig::fit_within(source.size_or((1920, 1080)), preferences.resolution_limit());
         let fps = preferences.fps;
         let description = description(&source.video_source(), source.audio_source(), size, fps);
-        let (pipeline, mut events) = pipeline::build_configured_pipeline(&description, 0, |pipeline| {
-            let sink = pipeline.by_name("ndi-output").ok_or_else(|| NdError::Gst("NDI sink missing".into()))?;
-            // Configure before READY starts the NDI sender; avoid launch-string interpolation.
-            sink.set_property("ndi-name", format!("BigNetScreen — {}", self.name));
-            Ok(())
-        }).map_err(|err| NdError::Gst(format!("NDI initialization failed; check gst-plugin-ndi and the NDI runtime installation: {err}")))?;
+        let (pipeline, mut events) =
+            pipeline::build_configured_pipeline(&description, 0, |pipeline| {
+                let sink = pipeline
+                    .by_name("ndi-output")
+                    .ok_or_else(|| NdError::Gst("NDI sink missing".into()))?;
+                // Configure before READY starts the NDI sender; avoid launch-string interpolation.
+                sink.set_property("ndi-name", format!("BigNetScreen — {}", self.name));
+                Ok(())
+            })
+            .map_err(|err| {
+                NdError::Gst(format!(
+                    "NDI initialization failed; check the NDI runtime installation: {err}"
+                ))
+            })?;
         let guard = PipelineGuard::new(pipeline.clone());
         pipeline.set_state(gst::State::Playing).map_err(|e| {
             NdError::Gst(format!(
@@ -155,6 +170,133 @@ impl Sink for NdiPublisher {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bundled_plugin_registers_without_a_system_plugin_or_runtime() {
+        assert!(available());
+        assert!(available());
+        let plugin = gst::Registry::get().find_plugin("ndi").unwrap();
+        assert!(
+            plugin.filename().is_none(),
+            "NDI must use the bundled plugin"
+        );
+        for name in ["ndisink", "ndisinkcombiner"] {
+            gst::ElementFactory::make(name).build().unwrap();
+        }
+    }
+
+    #[test]
+    #[ignore = "Requires the NDI runtime, Avahi and network access"]
+    fn ndi_loopback_receives_video_and_audio() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        use std::time::{Duration, Instant};
+
+        assert!(available());
+        let name = format!("BigNetScreen test {}", std::process::id());
+        let sender = gst::parse::launch(&description(
+            &pipeline::VideoSource::Test,
+            pipeline::AudioSource::Silence,
+            (1280, 720),
+            30,
+        ))
+        .unwrap()
+        .downcast::<gst::Pipeline>()
+        .unwrap();
+        let _sender_guard = PipelineGuard::new(sender.clone());
+        sender
+            .by_name("ndi-output")
+            .unwrap()
+            .set_property("ndi-name", &name);
+        sender.set_state(gst::State::Playing).unwrap();
+
+        let monitor = gst::DeviceMonitor::new();
+        monitor.add_filter(
+            Some("Source/Network"),
+            Some(&gst::Caps::builder("application/x-ndi").build()),
+        );
+        monitor.start().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(15);
+        let device = loop {
+            if let Some(device) = monitor
+                .devices()
+                .into_iter()
+                .find(|device| device.display_name().contains(&name))
+            {
+                break Some(device);
+            }
+            if Instant::now() >= deadline {
+                break None;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        };
+        monitor.stop();
+        let device = device.expect("NDI publication must be discovered");
+
+        let receiver = gst::parse::launch(
+            "ndisrc name=source ! ndisrcdemux name=demux \
+             demux.video ! queue ! fakesink name=video sync=false signal-handoffs=true \
+             demux.audio ! queue ! fakesink name=audio sync=false signal-handoffs=true",
+        )
+        .unwrap()
+        .downcast::<gst::Pipeline>()
+        .unwrap();
+        let _receiver_guard = PipelineGuard::new(receiver.clone());
+        let properties = device.properties().unwrap();
+        let source = receiver.by_name("source").unwrap();
+        source.set_property("ndi-name", properties.get::<String>("ndi-name").unwrap());
+        source.set_property(
+            "url-address",
+            properties.get::<String>("url-address").unwrap(),
+        );
+        let counts: Vec<_> = ["video", "audio"]
+            .into_iter()
+            .map(|name| {
+                let count = Arc::new(AtomicUsize::new(0));
+                let callback_count = count.clone();
+                receiver
+                    .by_name(name)
+                    .unwrap()
+                    .connect("handoff", false, move |values| {
+                        let buffer = values[1].get::<gst::Buffer>().unwrap();
+                        if buffer.size() > 0 {
+                            callback_count.fetch_add(1, Ordering::Relaxed);
+                        }
+                        None
+                    });
+                count
+            })
+            .collect();
+        receiver.set_state(gst::State::Playing).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while counts
+            .iter()
+            .any(|count| count.load(Ordering::Relaxed) < 10)
+            && Instant::now() < deadline
+        {
+            for pipeline in [&sender, &receiver] {
+                if let Some(error) = pipeline
+                    .bus()
+                    .unwrap()
+                    .pop_filtered(&[gst::MessageType::Error])
+                {
+                    panic!("NDI pipeline failed: {error:?}");
+                }
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let received: Vec<_> = counts
+            .iter()
+            .map(|count| count.load(Ordering::Relaxed))
+            .collect();
+        assert!(
+            received.iter().all(|count| *count >= 10),
+            "received video/audio buffers: {received:?}"
+        );
+        eprintln!("NDI loopback received video/audio buffers: {received:?}");
+    }
 
     #[test]
     fn raw_branches_negotiate_the_requested_format() {

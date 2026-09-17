@@ -1,45 +1,101 @@
 # NDI publishing
 
-Requires native Linux, GStreamer's `gst-plugin-ndi`, and an NDI 5/6 runtime
-installed separately under its vendor terms. BigNetScreen does not download,
-link or redistribute the vendor runtime. The upstream plugin loads it dynamically.
+NDI is included in every native BigNetScreen build. The maintained GStreamer
+NDI plugin is compiled into the executable; users do not install `gst-plugin-ndi`.
+The vendor NDI runtime remains a separate shared library, loaded only when NDI
+is used. Opening the application does not start an NDI publication.
 
-Verify installation:
+## Native packages
+
+The BigNetScreen package requires `libndi` and `avahi`. Installing it through a
+repository that supplies both dependencies installs NDI support automatically.
+The package install/upgrade hook enables and starts `avahi-daemon.service` for
+network discovery. A masked service is not unmasked; installation reports a
+warning if service configuration fails.
+
+`pkgbuild/ndi-runtime/PKGBUILD` supplies the `libndi` dependency for x86_64 and
+aarch64. It packages only the official shared library and license notices,
+with a fixed checksum. Build and publish this runtime package before the new
+BigNetScreen package. An existing compatible `libndi` provider can also satisfy
+the dependency; the runtime package conflicts with other providers.
+
+For a local runtime package build, without publishing a repository:
 
 ```sh
-gst-inspect-1.0 ndisink
-gst-inspect-1.0 ndisinkcombiner
+cd pkgbuild/ndi-runtime
+makepkg -si
 ```
 
-Use the distribution's plugin package or follow the
-[upstream build instructions](https://github.com/GStreamer/gst-plugins-rs/tree/main/net/ndi).
+Build the application normally afterwards. Copying only the executable does not
+install the runtime. Source builds and unsupported package formats require an
+NDI 5/6 runtime and Avahi. For source builds, enable discovery explicitly:
+
+```sh
+sudo systemctl enable --now avahi-daemon.service
+```
+
 If the runtime is outside the library search path, set `NDI_RUNTIME_DIR_V6`
 (or `NDI_RUNTIME_DIR_V5`) to its library directory before launching the app.
-Linux discovery also needs the Avahi client libraries and daemon.
+Restart after installing a missing runtime.
 
-In Settings, choose the computer name, resolution, FPS and audio inputs.
-Under Home → Publish with NDI, choose Screen, Window or Extra screen.
-The receiver selects `BigNetScreen — <computer name>` from its NDI source list.
-Disconnect stops publication and capture. A receiver does not need to be
-present before publication starts. Sources are visible to NDI receivers on the
-network; use a trusted LAN. Wired Gigabit is recommended for high bandwidth video.
+`gst-inspect-1.0 ndisink` is not a test for this integration: an external GStreamer
+process cannot see the plugin compiled into BigNetScreen. No separate system
+plugin is required.
 
-This sends raw video and audio through the standard high bandwidth NDI path.
-It does not implement NDI reception, HX encoding or automatic firewall changes.
-The Flatpak manifest does not bundle the plugin/runtime; native use is the
-supported integration target. Actual end-to-end operation requires testing with
-an installed runtime and a second receiver (for example OBS + DistroAV).
+## Use the stream
 
-Suggested hardware checks: 720p30/1080p30/custom size, microphone/system audio,
-A/V synchronization, receiver join/leave, repeated Start/Stop, capture cancellation,
-CPU/RSS/network use. No latency or interoperability guarantee is implied by the
-synthetic pipeline tests.
+1. In Settings, choose the computer name, resolution, FPS and audio inputs.
+2. Under Home → Publish with NDI, choose Screen, Window or Extra screen.
+3. On a receiver on the same LAN, select `BigNetScreen — <computer name>`.
+   The receiver may prefix it with the sender's hostname.
+4. Disconnect stops publication and capture.
 
-Distribution must review the selected SDK's license, attribution and GPL
-combination requirements before bundling any NDI components. Dynamic loading
-alone does not settle compatibility. NDI® is a registered trademark of Vizrt NDI AB.
+For an OBS receiver on Linux, install OBS and DistroAV from Flathub:
+
+```sh
+flatpak install flathub com.obsproject.Studio com.obsproject.Studio.Plugin.DistroAV
+```
+
+Follow the [DistroAV installation guide](https://github.com/DistroAV/DistroAV/wiki/1.-Installation)
+for the Avahi D-Bus permission required by current OBS Flatpak releases, or for
+Windows/macOS installation. In OBS, add an **NDI Source** to a scene and select
+the publication. The receiver's Flatpak runtime does not satisfy the native
+sender's runtime dependency.
+
+A receiver need not be present before publication starts. Sources are visible
+to NDI receivers on the network; use a trusted LAN. Wired Gigabit is recommended
+for high bandwidth video. A same-computer OBS test is possible, but does not
+verify transmission between separate machines.
+
+This sends raw video and audio through standard high bandwidth NDI. The app
+does not offer NDI reception, HX encoding or automatic firewall changes. Native
+packaging is the supported target; the Flatpak manifest does not bundle the
+vendor runtime.
+
+## Validation
+
+```sh
+cargo test -p nd-ndi --locked
+# Requires the runtime, Avahi and access to the host network:
+cargo test -p nd-ndi --locked ndi_loopback_receives_video_and_audio -- --ignored --nocapture
+```
+
+The ordinary tests cover built-in plugin registration and raw video/audio caps
+without a vendor runtime. The opt-in loopback test publishes 720p30, discovers
+the source and receives nonempty video and audio buffers through the real NDI
+runtime. It does not replace testing OBS or a receiver on a second computer.
+
+Suggested external receiver checks: 720p30/1080p30/custom size, microphone/system
+audio, A/V synchronization, receiver join/leave, repeated Start/Stop, capture
+cancellation, CPU/RSS/network use.
+
+The bundled GStreamer plugin uses MPL-2.0; the vendor runtime retains its own
+license. The runtime package includes the SDK license and third-party notices.
+Distribution requirements remain those of the selected SDK.
+NDI® is a registered trademark of Vizrt NDI AB.
 
 References:
 - [GStreamer plugin](https://github.com/GStreamer/gst-plugins-rs/blob/main/net/ndi/README.md)
+- [Static plugin integration](https://github.com/GStreamer/gst-plugins-rs#static-linking)
 - [NDI SDK licensing](https://docs.ndi.video/all/developing-with-ndi/sdk/licensing)
 - [Linux requirements](https://docs.ndi.video/all/developing-with-ndi/sdk/platform-considerations)
