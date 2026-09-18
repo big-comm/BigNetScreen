@@ -29,6 +29,20 @@ Use an isolated `XDG_CONFIG_HOME` with `user-dirs.dirs` pointing to empty media 
 
 Preview extraction uses [GStreamer's playbin API](https://gstreamer.freedesktop.org/documentation/playback/playbin.html), with explicit fake sinks to avoid audio output or video windows.
 
+## Preview tests in build containers
+
+The default suite checks video pixels/aspect ratio and music duration/artist without artwork.
+Embedded artwork also uses GdkPixbuf, which can delegate PNG encoding and decoding
+to Glycin's sandboxed processes. Build containers may forbid the required namespaces.
+The artwork test is therefore explicit, like the GTK integration tests; failures
+are still reported when it is selected. Run on a host with a working image loader:
+
+```sh
+cargo test -p nd-gui --locked music_preview_uses_embedded_cover_and_metadata -- --ignored --nocapture
+```
+
+No application sandbox settings are changed.
+
 ## Home composition follow-up
 
 Receiver heading/count and compact rows; equal-height receiver/tips cards; three illustrated tips; compact icon-labelled NDI actions. Vector marks inherit theme colors and avoid missing theme icons. Initial discovery-disabled state now shows the correct empty placeholder. Seven new messages translated in all 29 locales. Layout capture and strict Clippy passed; local release executable rebuilt.

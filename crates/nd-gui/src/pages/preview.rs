@@ -257,19 +257,21 @@ pub(super) mod tests {
             .by_name("out")
             .unwrap()
             .set_property("location", path.to_str().unwrap());
-        if cover {
-            let pixbuf =
-                Pixbuf::new(relm4::gtk::gdk_pixbuf::Colorspace::Rgb, false, 8, 80, 80).unwrap();
-            pixbuf.fill(0x238adfff);
-            let data = pixbuf.save_to_bufferv("png", &[]).unwrap();
-            let sample = gst::Sample::builder()
-                .buffer(&gst::Buffer::from_mut_slice(data))
-                .caps(&gst::Caps::builder("image/png").build())
-                .build();
+        if !video {
             let mut tags = gst::TagList::new();
-            tags.get_mut()
-                .unwrap()
-                .add::<gst::tags::Image>(&sample, gst::TagMergeMode::Replace);
+            if cover {
+                let pixbuf =
+                    Pixbuf::new(relm4::gtk::gdk_pixbuf::Colorspace::Rgb, false, 8, 80, 80).unwrap();
+                pixbuf.fill(0x238adfff);
+                let data = pixbuf.save_to_bufferv("png", &[]).unwrap();
+                let sample = gst::Sample::builder()
+                    .buffer(&gst::Buffer::from_mut_slice(data))
+                    .caps(&gst::Caps::builder("image/png").build())
+                    .build();
+                tags.get_mut()
+                    .unwrap()
+                    .add::<gst::tags::Image>(&sample, gst::TagMergeMode::Replace);
+            }
             tags.get_mut()
                 .unwrap()
                 .add::<gst::tags::Artist>(&"Preview test artist", gst::TagMergeMode::Replace);
@@ -306,6 +308,22 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn music_preview_without_artwork_keeps_metadata() {
+        // Isolate the track from adjacent covers in the system temp directory.
+        let dir = std::env::temp_dir().join(format!("bns-audio-metadata-{}", std::process::id()));
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("track.ogg");
+        fixture(&path, false, false);
+        let preview = decode(&path, MediaKind::Music).unwrap();
+        assert!(preview.image.is_none());
+        assert_eq!(preview.artist.as_deref(), Some("Preview test artist"));
+        assert!(preview.duration.is_some_and(|duration| duration > 1.0));
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(dir).unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires an image loader with a working sandbox (bwrap or Flatpak)"]
     fn music_preview_uses_embedded_cover_and_metadata() {
         let path =
             std::env::temp_dir().join(format!("bns-audio-preview-{}.ogg", std::process::id()));
