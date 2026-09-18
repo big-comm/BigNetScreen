@@ -20,6 +20,12 @@ initialise on this CPU (`NDIlib_initialize` returned false), or ready, along
 with the version string from `NDIlib_version`. The elements alone cannot make
 that distinction, and the error the user is shown should.
 
+## Upstream submission
+
+The same change against gst-plugins-rs `main` is in `upstream/`, with the
+merge request text. Once it is merged and released, point `nd-ndi` back at
+crates.io and delete this directory.
+
 ## Changed files
 
 - `Cargo.toml` (description/readme only)

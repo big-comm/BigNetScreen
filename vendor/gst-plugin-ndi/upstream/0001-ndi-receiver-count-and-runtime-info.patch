@@ -1,0 +1,238 @@
+diff --git a/net/ndi/src/lib.rs b/net/ndi/src/lib.rs
+index aa84256..c1b8259 100644
+--- a/net/ndi/src/lib.rs
++++ b/net/ndi/src/lib.rs
+@@ -154,6 +154,36 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+     Ok(())
+ }
+ 
++/// Information about the NDI runtime, without creating any sender or
++/// receiver.
++///
++/// Additions for BigNetScreen: applications need to tell "no runtime" apart
++/// from "runtime present but this CPU is not supported" and report the version
++/// they found, none of which the elements expose.
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub enum RuntimeInfo {
++    /// The shared library could not be loaded; the message says where it was
++    /// looked for.
++    Missing(String),
++    /// The library loaded but `NDIlib_initialize` refused to run here.
++    CpuUnsupported { version: Option<String> },
++    /// Ready to use.
++    Ready { version: Option<String> },
++}
++
++/// Loads the runtime and asks it whether it can run on this machine.
++pub fn runtime_info() -> RuntimeInfo {
++    if let Err(err) = ndi::load() {
++        return RuntimeInfo::Missing(err.to_string());
++    }
++    let version = ndi::version();
++    if ndi::initialize() {
++        RuntimeInfo::Ready { version }
++    } else {
++        RuntimeInfo::CpuUnsupported { version }
++    }
++}
++
+ static TIMECODE_CAPS: LazyLock<gst::Caps> =
+     LazyLock::new(|| gst::Caps::new_empty_simple("timestamp/x-ndi-timecode"));
+ static TIMESTAMP_CAPS: LazyLock<gst::Caps> =
+diff --git a/net/ndi/src/ndi.rs b/net/ndi/src/ndi.rs
+index 6b08415..fda3bea 100644
+--- a/net/ndi/src/ndi.rs
++++ b/net/ndi/src/ndi.rs
+@@ -16,6 +16,25 @@ pub fn load() -> Result<(), glib::BoolError> {
+     ndisys::load()
+ }
+ 
++/// Initialises the runtime; `false` means the CPU is not supported by it.
++///
++/// Requires [`load`] to have succeeded.
++pub fn initialize() -> bool {
++    unsafe { NDIlib_initialize() }
++}
++
++/// The runtime's version string. Requires [`load`] to have succeeded.
++pub fn version() -> Option<String> {
++    unsafe {
++        let ptr = NDIlib_version();
++        if ptr.is_null() {
++            None
++        } else {
++            Some(ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned())
++        }
++    }
++}
++
+ #[derive(Debug)]
+ pub struct FindBuilder<'a> {
+     show_local_sources: bool,
+@@ -416,6 +435,11 @@ impl SendInstance {
+         }
+     }
+ 
++    /// How many receivers are connected right now (never blocks).
++    pub fn connections(&self) -> i32 {
++        unsafe { NDIlib_send_get_no_connections(self.0.as_ptr(), 0) }
++    }
++
+     pub fn send_audio(&mut self, frame: &AudioFrame) {
+         unsafe {
+             NDIlib_send_send_audio_v3(self.0.as_ptr(), frame.as_ptr());
+diff --git a/net/ndi/src/ndisink/imp.rs b/net/ndi/src/ndisink/imp.rs
+index cb12dd5..5c7e1f9 100644
+--- a/net/ndi/src/ndisink/imp.rs
++++ b/net/ndi/src/ndisink/imp.rs
+@@ -7,6 +7,8 @@ use gst_base::prelude::*;
+ use gst_base::subclass::prelude::*;
+ 
+ use std::sync::Mutex;
++use std::sync::atomic::{AtomicI32, Ordering};
++use std::time::{Duration, Instant};
+ 
+ use std::sync::LazyLock;
+ 
+@@ -39,11 +41,22 @@ struct State {
+     video_info: Option<gst_video::VideoInfo>,
+     ndi_cc_encoder: Option<NDICCMetaEncoder>,
+     audio_info: Option<gst_audio::AudioInfo>,
++    /// When the receiver count was last asked for (see `CONNECTIONS_INTERVAL`).
++    last_connection_check: Option<Instant>,
+ }
+ 
++/// How often the runtime is asked how many receivers are connected.
++///
++/// Asking on every frame is wasteful and the answer barely changes; once a
++/// second is what the reference OBS plugin does as well.
++const CONNECTIONS_INTERVAL: Duration = Duration::from_secs(1);
++
+ pub struct NdiSink {
+     settings: Mutex<Settings>,
+     state: Mutex<Option<State>>,
++    /// Receivers currently connected, refreshed while rendering; `-1` before
++    /// the first check. Exposed through the read-only `connections` property.
++    connections: AtomicI32,
+ }
+ 
+ static CAT: LazyLock<gst::DebugCategory> = LazyLock::new(|| {
+@@ -60,6 +73,7 @@ impl ObjectSubclass for NdiSink {
+         Self {
+             settings: Mutex::new(Default::default()),
+             state: Mutex::new(Default::default()),
++            connections: AtomicI32::new(-1),
+         }
+     }
+ }
+@@ -73,6 +87,16 @@ impl ObjectImpl for NdiSink {
+                     .blurb("NDI Name to use")
+                     .doc_show_default()
+                     .build(),
++                glib::ParamSpecInt::builder("connections")
++                    .nick("Connections")
++                    .blurb(
++                        "Number of receivers currently connected to this sender \
++                         (-1 until the first frame has been sent)",
++                    )
++                    .minimum(-1)
++                    .default_value(-1)
++                    .read_only()
++                    .build(),
+             ]
+         });
+ 
+@@ -97,6 +121,7 @@ impl ObjectImpl for NdiSink {
+                 let settings = self.settings.lock().unwrap();
+                 settings.ndi_name.to_value()
+             }
++            "connections" => self.connections.load(Ordering::Relaxed).to_value(),
+             _ => unimplemented!(),
+         }
+     }
+@@ -209,8 +234,10 @@ impl BaseSinkImpl for NdiSink {
+             video_info: None,
+             ndi_cc_encoder: None,
+             audio_info: None,
++            last_connection_check: None,
+         };
+         *state_storage = Some(state);
++        self.connections.store(-1, Ordering::Relaxed);
+         gst::info!(CAT, imp = self, "Started");
+ 
+         Ok(())
+@@ -381,6 +408,28 @@ impl BaseSinkImpl for NdiSink {
+             return Err(gst::FlowError::Error);
+         }
+ 
++        self.refresh_connections(state);
++
+         Ok(gst::FlowSuccess::Ok)
+     }
+ }
++
++impl NdiSink {
++    /// Refreshes the `connections` property at most once per
++    /// `CONNECTIONS_INTERVAL`, notifying listeners when the count changes.
++    fn refresh_connections(&self, state: &mut State) {
++        let now = Instant::now();
++        if state
++            .last_connection_check
++            .is_some_and(|last| now.duration_since(last) < CONNECTIONS_INTERVAL)
++        {
++            return;
++        }
++        state.last_connection_check = Some(now);
++        let count = state.send.connections();
++        if self.connections.swap(count, Ordering::Relaxed) != count {
++            gst::debug!(CAT, imp = self, "{count} receiver(s) connected");
++            self.obj().notify("connections");
++        }
++    }
++}
+diff --git a/net/ndi/src/ndisys.rs b/net/ndi/src/ndisys.rs
+index 5172c87..a7cc9ed 100644
+--- a/net/ndi/src/ndisys.rs
++++ b/net/ndi/src/ndisys.rs
+@@ -31,6 +31,9 @@ struct FFI {
+     _library: Library,
+     initialize: Symbol<fn() -> bool>,
+     destroy: Symbol<fn()>,
++    version: Symbol<fn() -> *const ::std::os::raw::c_char>,
++    send_get_no_connections:
++        Symbol<fn(p_instance: NDIlib_send_instance_t, timeout_in_ms: u32) -> i32>,
+     find_create_v2:
+         Symbol<fn(p_create_settings: *const NDIlib_find_create_t) -> NDIlib_find_instance_t>,
+     find_destroy: Symbol<fn(p_instance: NDIlib_find_instance_t)>,
+@@ -417,6 +420,8 @@ pub fn load() -> Result<(), glib::BoolError> {
+         let ffi = FFI {
+             initialize: load_symbol!(NDIlib_initialize),
+             destroy: load_symbol!(NDIlib_destroy),
++            version: load_symbol!(NDIlib_version),
++            send_get_no_connections: load_symbol!(NDIlib_send_get_no_connections),
+             find_create_v2: load_symbol!(NDIlib_find_create_v2),
+             find_destroy: load_symbol!(NDIlib_find_destroy),
+             find_wait_for_sources: load_symbol!(NDIlib_find_wait_for_sources),
+@@ -558,6 +563,22 @@ pub unsafe fn NDIlib_send_destroy(p_instance: NDIlib_send_instance_t) {
+     unsafe { (FFI.get().unwrap_unchecked().send_destroy)(p_instance) }
+ }
+ 
++/// The runtime's own version string, e.g. `NDI SDK LINUX 14:24:55 Jun 12 2025 6.3.2.0`.
++pub unsafe fn NDIlib_version() -> *const ::std::os::raw::c_char {
++    unsafe { (FFI.get().unwrap_unchecked().version)() }
++}
++
++/// How many receivers are currently connected to this sender.
++///
++/// `timeout_in_ms` is how long to wait for at least one connection; `0`
++/// returns the current count immediately.
++pub unsafe fn NDIlib_send_get_no_connections(
++    p_instance: NDIlib_send_instance_t,
++    timeout_in_ms: u32,
++) -> i32 {
++    unsafe { (FFI.get().unwrap_unchecked().send_get_no_connections)(p_instance, timeout_in_ms) }
++}
++
+ pub unsafe fn NDIlib_send_send_video_v2(
+     p_instance: NDIlib_send_instance_t,
+     p_video_data: *const NDIlib_video_frame_v2_t,
