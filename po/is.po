@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-17 19:52-0300\n"
+"POT-Creation-Date: 2026-09-17 20:43-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Icelandic <is@li.org>\n"
@@ -16,8 +16,8 @@ msgstr ""
 
 #: crates/nd-gui/src/pages/settings.rs:266
 msgid ""
-"0 lets the system choose. Set one only if you opened a port on your firewall"
-" by hand."
+"0 lets the system choose. Set one only if you opened a port on your firewall "
+"by hand."
 msgstr ""
 "0 lætur kerfið velja. Stilltu aðeins á ef þú opnaðir gátt á eldveggnum "
 "handvirkt."
@@ -52,8 +52,8 @@ msgstr "60 er sléttara og kostar helmingi meira í bandbreidd"
 
 #: crates/nd-gui/src/pages/settings.rs:111
 msgid ""
-"A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver"
-" will accept it."
+"A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver "
+"will accept it."
 msgstr ""
 "Þak: Minnni skjár er sendur eins og hann er. Yfir 1080p munu ekki allir "
 "móttakarar taka við honum."
@@ -62,7 +62,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "Nýr skjár"
 
-#: crates/nd-gui/src/app.rs:939
+#: crates/nd-gui/src/app.rs:953
 msgid "A stream is already running"
 msgstr "Streymi er þegar í gangi"
 
@@ -70,7 +70,7 @@ msgstr "Streymi er þegar í gangi"
 msgid "A window"
 msgstr "Gluggi"
 
-#: crates/nd-gui/src/app.rs:289
+#: crates/nd-gui/src/app.rs:290
 msgid "About BigNetScreen"
 msgstr "Um BigNetScreen"
 
@@ -111,7 +111,7 @@ msgstr "Sjálfvirkt"
 msgid "Automatic discovery"
 msgstr "Sjálfvirk uppgötvun"
 
-#: crates/nd-gui/src/app.rs:414 crates/nd-gui/src/app.rs:888
+#: crates/nd-gui/src/app.rs:416 crates/nd-gui/src/app.rs:902
 msgid "Automatic discovery is off"
 msgstr "Sjálfvirk uppgötvun er óvirk"
 
@@ -123,24 +123,28 @@ msgstr "Laus"
 msgid "Back"
 msgstr "Til baka"
 
+#: crates/nd-gui/src/pages/media.rs:507 crates/nd-gui/src/pages/media.rs:1209
+msgid "Back 10 seconds"
+msgstr "Aftur um 10 sekúndur"
+
 #: crates/nd-gui/src/pages/settings.rs:188
 msgid ""
 "Buffers the picture so video plays smoothly, at the cost of delay. On "
 "Miracast it is applied here; on Chromecast it is a request the receiver may "
 "ignore."
 msgstr ""
-"Býður myndina svo myndband spilast slétt, á kostnað seinkunar. Á Miracast er"
-" það beitt hér; á Chromecast er það beiðni sem móttakari getur hunsað."
+"Býður myndina svo myndband spilast slétt, á kostnað seinkunar. Á Miracast er "
+"það beitt hér; á Chromecast er það beiðni sem móttakari getur hunsað."
 
-#: crates/nd-gui/src/pages/media.rs:642
+#: crates/nd-gui/src/pages/media.rs:794
 msgid "Choose a device…"
 msgstr "Veldu tæki…"
 
-#: crates/nd-gui/src/pages/media.rs:827
+#: crates/nd-gui/src/pages/media.rs:1007
 msgid "Choose a folder"
 msgstr "Veldu möppu"
 
-#: crates/nd-gui/src/pages/media.rs:829
+#: crates/nd-gui/src/pages/media.rs:1009
 msgid "Choose files"
 msgstr "Veldu skrár"
 
@@ -150,13 +154,13 @@ msgstr "Veldu tækið til að senda til."
 
 #: crates/nd-gui/src/pages/home.rs:244
 msgid ""
-"Choose this computer in OBS or another NDI receiver. Uses the name and audio"
-" options in Settings."
+"Choose this computer in OBS or another NDI receiver. Uses the name and audio "
+"options in Settings."
 msgstr ""
-"Veldu þessa tölvu í OBS eða öðrum NDI-móttakara. Nafn og hljóðvalkostir koma"
-" úr Stillingum."
+"Veldu þessa tölvu í OBS eða öðrum NDI-móttakara. Nafn og hljóðvalkostir koma "
+"úr Stillingum."
 
-#: crates/nd-gui/src/pages/media.rs:667
+#: crates/nd-gui/src/pages/media.rs:819
 msgid "Choose which device to send to."
 msgstr "Veldu hvaða tæki á að senda til."
 
@@ -174,23 +178,27 @@ msgstr "Aðeins Chromecast / AirPlay"
 
 #: crates/nd-gui/src/pages/home.rs:677 crates/nd-gui/src/pages/home.rs:789
 msgid ""
-"Chromecasts show up on their own. A TV or projector only appears while it is"
-" in screen mirroring mode — on Fire TV, under Settings › Display and Sounds "
-"› Display Mirroring."
+"Chromecasts show up on their own. A TV or projector only appears while it is "
+"in screen mirroring mode — on Fire TV, under Settings › Display and Sounds › "
+"Display Mirroring."
 msgstr ""
-"Chromecast-tæki birtast af sjálfu sér. Sjónvarp eða skjávarpi birtist aðeins"
-" meðan það er í skjáspeglingarham — á Fire TV, undir Stillingar › Skjár og "
+"Chromecast-tæki birtast af sjálfu sér. Sjónvarp eða skjávarpi birtist aðeins "
+"meðan það er í skjáspeglingarham — á Fire TV, undir Stillingar › Skjár og "
 "hljóð › Skjáspegling."
+
+#: crates/nd-gui/src/pages/media.rs:392
+msgid "Clear queue"
+msgstr "Hreinsa biðröð"
 
 #: crates/nd-gui/src/pages/mod.rs:125
 msgid "Connected"
 msgstr "Tengt"
 
-#: crates/nd-gui/src/app.rs:254
+#: crates/nd-gui/src/app.rs:255
 msgid "Connected to"
 msgstr "Tengt við"
 
-#: crates/nd-gui/src/app.rs:961 crates/nd-gui/src/pages/mod.rs:170
+#: crates/nd-gui/src/app.rs:975 crates/nd-gui/src/pages/mod.rs:170
 msgid "Connecting…"
 msgstr "Tengist…"
 
@@ -247,13 +255,17 @@ msgstr "Kvikmyndahamur"
 msgid "Find and connect to nearby wireless receivers."
 msgstr "Finndu og tengdu við nærliggjandi þráðlausa móttakara."
 
-#: crates/nd-gui/src/pages/media.rs:722
+#: crates/nd-gui/src/pages/media.rs:874
 msgid "Finished"
 msgstr "Lokið"
 
 #: crates/nd-gui/src/pages/settings.rs:265
 msgid "Fixed port"
 msgstr "Fastur tengiport"
+
+#: crates/nd-gui/src/pages/media.rs:523 crates/nd-gui/src/pages/media.rs:1210
+msgid "Forward 10 seconds"
+msgstr "Áfram um 10 sekúndur"
 
 #: crates/nd-gui/src/pages/settings.rs:173
 msgid "Frame rate"
@@ -263,7 +275,7 @@ msgstr "Rammathröðun"
 msgid "Good"
 msgstr "Gott"
 
-#: crates/nd-gui/src/app.rs:345
+#: crates/nd-gui/src/app.rs:346
 msgid "Got it"
 msgstr "Skil það"
 
@@ -291,7 +303,7 @@ msgstr "Taktu með hljóðnema"
 msgid "Keep every device on the same Wi-Fi network for the best results."
 msgstr "Haltu öllum tækjum á sama Wi-Fi-netinu fyrir bestu niðurstöður."
 
-#: crates/nd-gui/src/app.rs:1189
+#: crates/nd-gui/src/app.rs:1173
 msgid "Local network discovery unavailable"
 msgstr "Uppgötvun staðarnets ekki tiltæk"
 
@@ -331,17 +343,17 @@ msgstr "Hljóðstyrkur hljóðnema"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1248
+#: crates/nd-gui/src/app.rs:1232
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
 msgstr ""
 "Miracast virkar ekki í Flatpak-útgáfunni (það þarf system NetworkManager)"
 
-#: crates/nd-gui/src/app.rs:1256
+#: crates/nd-gui/src/app.rs:1240
 msgid ""
-"Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the"
-" network still works."
+"Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
+"network still works."
 msgstr ""
 "Miracast þarfnast Wi-Fi millistyks, og þessi tölva hefur ekkert. Sending "
 "yfir netið virkar samt."
@@ -350,11 +362,11 @@ msgstr ""
 msgid "Miracast only"
 msgstr "Aðeins Miracast"
 
-#: crates/nd-gui/src/app.rs:1264
+#: crates/nd-gui/src/app.rs:1248
 msgid "Miracast unavailable"
 msgstr "Miracast ótiltækt"
 
-#: crates/nd-gui/src/app.rs:1262
+#: crates/nd-gui/src/app.rs:1246
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast ótiltækt: þetta Wi-Fi-kort styður ekki Wi-Fi Direct"
 
@@ -366,19 +378,23 @@ msgstr "Spegla skjá"
 msgid "Mix your voice into what is sent"
 msgstr "Blandaðu röddinni þinni inn í það sem sent er"
 
-#: crates/nd-gui/src/pages/media.rs:511
+#: crates/nd-gui/src/pages/media.rs:576
 msgid "Music"
 msgstr "Tónlist"
 
-#: crates/nd-gui/src/app.rs:1280
+#: crates/nd-gui/src/app.rs:1264
 msgid "NDI setup"
 msgstr "Uppsetning NDI"
 
-#: crates/nd-gui/src/app.rs:508
+#: crates/nd-gui/src/app.rs:510
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI er ekki tiltækt. Sjá leiðbeiningar um uppsetningu NDI."
 
-#: crates/nd-gui/src/pages/media.rs:664
+#: crates/nd-gui/src/pages/media.rs:530 crates/nd-gui/src/pages/media.rs:1211
+msgid "Next file"
+msgstr "Næsta skrá"
+
+#: crates/nd-gui/src/pages/media.rs:816
 msgid "No device found yet. Turn your TV, projector or Chromecast on."
 msgstr ""
 "Ekkert tæki fannst enn. Kveiktu á sjónvarpinu, skjávarpanum eða Chromecast-"
@@ -388,27 +404,27 @@ msgstr ""
 msgid "No devices found"
 msgstr "Engin tæki fundust"
 
-#: crates/nd-gui/src/pages/media.rs:695
+#: crates/nd-gui/src/pages/media.rs:847
 msgid "No music in your Music folder. Use “Select files”."
 msgstr "Engin tónlist í Tónlistarmöppunni. Notaðu „Velja skrár“."
 
-#: crates/nd-gui/src/pages/media.rs:693
+#: crates/nd-gui/src/pages/media.rs:845
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "Engar myndir í Myndamöppunni. Notaðu „Velja skrár“."
 
-#: crates/nd-gui/src/app.rs:896 crates/nd-gui/src/pages/home.rs:785
+#: crates/nd-gui/src/app.rs:910 crates/nd-gui/src/pages/home.rs:785
 msgid "No receivers found"
 msgstr "Engir móttakendur fundust"
 
-#: crates/nd-gui/src/pages/media.rs:694
+#: crates/nd-gui/src/pages/media.rs:846
 msgid "No videos in your Videos folder. Use “Select files”."
 msgstr "Engin myndbönd í Myndbandamöppunni. Notaðu „Velja skrár“."
 
-#: crates/nd-gui/src/pages/media.rs:701
+#: crates/nd-gui/src/pages/media.rs:853
 msgid "Nothing selected"
 msgstr "Ekkert valið"
 
-#: crates/nd-gui/src/pages/media.rs:460
+#: crates/nd-gui/src/pages/media.rs:493
 msgid "Now playing"
 msgstr "Spilar nú"
 
@@ -420,7 +436,11 @@ msgstr "Aðeins einn glugga"
 msgid "Opening the firewall port…"
 msgstr "Opna eldveggshlaupinn…"
 
-#: crates/nd-gui/src/pages/media.rs:511
+#: crates/nd-gui/src/pages/media.rs:516
+msgid "Pause"
+msgstr "Gera hlé"
+
+#: crates/nd-gui/src/pages/media.rs:576
 msgid "Photos"
 msgstr "Myndir"
 
@@ -428,7 +448,7 @@ msgstr "Myndir"
 msgid "Photos, videos and music"
 msgstr "Ljósmyndir, myndbönd og tónlist"
 
-#: crates/nd-gui/src/pages/media.rs:311
+#: crates/nd-gui/src/pages/media.rs:310
 msgid "Pick files and choose where to play them."
 msgstr "Veldu skrár og ákvarðaðu hvar þær skuli spilaðar."
 
@@ -448,6 +468,10 @@ msgstr "Samskiptaregla"
 msgid "Publish with NDI"
 msgstr "Birta með NDI"
 
+#: crates/nd-gui/src/pages/media.rs:386
+msgid "Queue"
+msgstr "Biðröð"
+
 #: crates/nd-gui/src/pages/devices.rs:442
 msgid "Ready"
 msgstr "Tilbúið"
@@ -460,6 +484,10 @@ msgstr "Tilbúið að deila"
 msgid "Refresh"
 msgstr "Endurnýja"
 
+#: crates/nd-gui/src/pages/media.rs:775
+msgid "Remove from queue"
+msgstr "Fjarlægja úr biðröð"
+
 #: crates/nd-gui/src/pages/settings.rs:110
 msgid "Resolution limit"
 msgstr "Upplausnarmörk"
@@ -468,11 +496,15 @@ msgstr "Upplausnarmörk"
 msgid "Restore defaults"
 msgstr "Endursetja sjálfgefnar stillingar"
 
+#: crates/nd-gui/src/pages/media.rs:516 crates/nd-gui/src/pages/media.rs:1208
+msgid "Resume"
+msgstr "Halda áfram"
+
 #: crates/nd-gui/src/pages/settings.rs:295
 msgid "Saved as you change them"
 msgstr "Vistað um leið og þú breytir"
 
-#: crates/nd-gui/src/app.rs:320 crates/nd-gui/src/pages/devices.rs:116
+#: crates/nd-gui/src/app.rs:321 crates/nd-gui/src/pages/devices.rs:116
 msgid "Scan again"
 msgstr "Leita aftur"
 
@@ -480,20 +512,20 @@ msgstr "Leita aftur"
 msgid "Screen"
 msgstr "Skjár"
 
-#: crates/nd-gui/src/app.rs:412 crates/nd-gui/src/app.rs:528
-#: crates/nd-gui/src/app.rs:894
+#: crates/nd-gui/src/app.rs:414 crates/nd-gui/src/app.rs:530
+#: crates/nd-gui/src/app.rs:908
 msgid "Searching…"
 msgstr "Leitar…"
 
-#: crates/nd-gui/src/pages/media.rs:337
+#: crates/nd-gui/src/pages/media.rs:338
 msgid "Select files"
 msgstr "Veldu skrár"
 
-#: crates/nd-gui/src/pages/media.rs:762
+#: crates/nd-gui/src/pages/media.rs:942
 msgid "Select up to 1000 files at a time."
 msgstr "Veldu allt að 1000 skrár í einu."
 
-#: crates/nd-gui/src/pages/media.rs:344
+#: crates/nd-gui/src/pages/media.rs:347
 msgid "Send a folder"
 msgstr "Senda möppu"
 
@@ -501,11 +533,11 @@ msgstr "Senda möppu"
 msgid "Send media"
 msgstr "Senda margmiðlun"
 
-#: crates/nd-gui/src/pages/media.rs:407
+#: crates/nd-gui/src/pages/media.rs:440
 msgid "Send to"
 msgstr "Senda til"
 
-#: crates/nd-gui/src/pages/media.rs:432
+#: crates/nd-gui/src/pages/media.rs:465
 msgid "Send to device"
 msgstr "Senda til tækis"
 
@@ -513,7 +545,7 @@ msgstr "Senda til tækis"
 msgid "Send whatever this computer is playing"
 msgstr "Senda það sem þessi tölva spilar"
 
-#: crates/nd-gui/src/app.rs:1008
+#: crates/nd-gui/src/app.rs:1022
 msgid "Sending files…"
 msgstr "Sendi skrár…"
 
@@ -525,15 +557,15 @@ msgstr "Stillingar"
 msgid "Settings cannot be saved on this system."
 msgstr "Ekki er hægt að vista stillingar á þessu kerfi."
 
-#: crates/nd-gui/src/pages/media.rs:306
+#: crates/nd-gui/src/pages/media.rs:305
 msgid "Share media"
 msgstr "Deila margmiðlun"
 
-#: crates/nd-gui/src/app.rs:220
+#: crates/nd-gui/src/app.rs:221
 msgid "Share your screen wirelessly"
 msgstr "Deildu skjánum þínum þráðlaust"
 
-#: crates/nd-gui/src/app.rs:1277
+#: crates/nd-gui/src/app.rs:1261
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "Deildu skjánum þínum með sjónvarpi, skjávarpa eða Chromecast."
 
@@ -545,7 +577,7 @@ msgstr ""
 "Að deila glugga opnar sjálfvalinn valmynd skrifborðsins. Aðeins sýnilegir "
 "gluggar er hægt að deila."
 
-#: crates/nd-gui/src/app.rs:310
+#: crates/nd-gui/src/app.rs:311
 msgid "Show the sidebar"
 msgstr "Sýna hliðarstikuna"
 
@@ -554,26 +586,26 @@ msgid ""
 "Sound goes to the receiver and to this computer. Mute this computer if you "
 "hear an echo."
 msgstr ""
-"Hljóðið fer bæði til móttakara og þessa tölvu. Þaggaðu niður í þessari tölvu"
-" ef þú heyrir bergmál."
+"Hljóðið fer bæði til móttakara og þessa tölvu. Þaggaðu niður í þessari tölvu "
+"ef þú heyrir bergmál."
 
 #: crates/nd-gui/src/pages/devices.rs:276
 msgid "Status"
 msgstr "Staða"
 
-#: crates/nd-gui/src/app.rs:327
+#: crates/nd-gui/src/app.rs:328
 msgid "Stop"
 msgstr "Stöðva"
 
-#: crates/nd-gui/src/pages/media.rs:475
+#: crates/nd-gui/src/pages/media.rs:538
 msgid "Stop sending"
 msgstr "Hætta sendingu"
 
-#: crates/nd-gui/src/app.rs:1002
+#: crates/nd-gui/src/app.rs:1016
 msgid "Stop sharing your screen before sending files"
 msgstr "Hættu að deila skjánum þínum áður en þú sendir skrár"
 
-#: crates/nd-gui/src/app.rs:928
+#: crates/nd-gui/src/app.rs:942
 msgid "Stopping…"
 msgstr "Stöðva…"
 
@@ -589,8 +621,8 @@ msgstr "Streymir á"
 msgid "Test"
 msgstr "Próf"
 
-#: crates/nd-gui/src/app.rs:947 crates/nd-gui/src/app.rs:995
-#: crates/nd-gui/src/app.rs:1012
+#: crates/nd-gui/src/app.rs:961 crates/nd-gui/src/app.rs:1009
+#: crates/nd-gui/src/app.rs:1026
 msgid "That device is no longer available"
 msgstr "Það tæki er ekki lengur tiltækt"
 
@@ -621,7 +653,7 @@ msgstr "Ábendingar"
 msgid "Very high (1440p)"
 msgstr "Mjög há (1440p)"
 
-#: crates/nd-gui/src/pages/media.rs:511
+#: crates/nd-gui/src/pages/media.rs:576
 msgid "Videos"
 msgstr "Myndbönd"
 
@@ -661,7 +693,7 @@ msgstr "tæki fundust"
 msgid "instant response"
 msgstr "tafarlaus svörun"
 
-#: crates/nd-gui/src/pages/media.rs:727
+#: crates/nd-gui/src/pages/media.rs:887
 msgid "item"
 msgstr "atriði"
 
@@ -677,17 +709,17 @@ msgstr "ekki birt ennþá"
 msgid "quick response"
 msgstr "hröð svörun"
 
-#: crates/nd-gui/src/app.rs:955
+#: crates/nd-gui/src/app.rs:969
 msgid "shows up in discovery only"
 msgstr "birtist aðeins í uppgötvun"
 
-#: crates/nd-gui/src/pages/media.rs:702
+#: crates/nd-gui/src/pages/media.rs:854
 msgid "{} file selected"
 msgid_plural "{} files selected"
 msgstr[0] "{} skrá valin"
 msgstr[1] "{} skrár valdar"
 
-#: crates/nd-gui/src/app.rs:899
+#: crates/nd-gui/src/app.rs:913
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "{} móttakari fannst"

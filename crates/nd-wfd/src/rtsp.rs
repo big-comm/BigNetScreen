@@ -652,6 +652,7 @@ enum Awaiting {
 
 /// Parameters of the WFD cast session.
 pub struct WfdCastConfig {
+    pub media_control: Option<nd_core::media::FilePlaybackControl>,
     /// Nosso IP no link P2P (vai na `wfd_presentation_URL`).
     pub our_ip: IpAddr,
     /// IP do sink (destino do RTP).
@@ -680,6 +681,7 @@ impl WfdCastConfig {
         encoder: nd_core::pipeline::H264Encoder,
     ) -> Self {
         Self {
+            media_control: None,
             our_ip,
             sink_ip,
             video,
@@ -948,6 +950,9 @@ pub async fn cast_to_sink(
                 // A guard rather than a bare value: ending through an error,
                 // a TEARDOWN or the Stop button all have to pass through
                 // `NULL` just the same.
+                if let Some(control) = &cfg.media_control {
+                    control.attach(&monitored.pipeline);
+                }
                 playing = Some(pipeline::PipelineGuard::new(monitored.pipeline));
                 pipeline_events = Some(monitored.events);
             }

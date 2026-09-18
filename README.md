@@ -156,6 +156,18 @@ Avahi. See the
 open-source [Open Screen](https://chromium.googlesource.com/openscreen/) as a
 specification reference, with none of its code linked in.
 
+## Media queues and playback
+
+The media page lists selected files in playback order, including files picked
+outside the library folders. Remove individual items or clear the queue without
+restarting the app. During playback, removing the current item advances to the
+next; clearing the queue stops sending.
+
+Video and music offer pause/resume, backward/forward 10 seconds, elapsed time
+and next file. Cast uses receiver-reported capabilities; Miracast controls the
+local file pipeline while retaining the RTSP session. Playback stays on the media
+page. Photos retain timed advance and can be skipped.
+
 ## NDI and resolutions
 
 Home offers **Publish with NDI** for a screen, window or supported extra screen.

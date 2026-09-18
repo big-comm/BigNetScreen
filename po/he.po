@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-17 19:52-0300\n"
+"POT-Creation-Date: 2026-09-17 20:43-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Hebrew <he@li.org>\n"
@@ -16,8 +16,8 @@ msgstr ""
 
 #: crates/nd-gui/src/pages/settings.rs:266
 msgid ""
-"0 lets the system choose. Set one only if you opened a port on your firewall"
-" by hand."
+"0 lets the system choose. Set one only if you opened a port on your firewall "
+"by hand."
 msgstr "0 מאפשר למערכת לבחור. הגדר ערך רק אם פתחת port בחומת האש ידנית."
 
 #: crates/nd-gui/src/pages/devices.rs:456
@@ -50,15 +50,15 @@ msgstr "60 חלק יותר ועולה בערך חצי יותר ברוחב פס"
 
 #: crates/nd-gui/src/pages/settings.rs:111
 msgid ""
-"A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver"
-" will accept it."
+"A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver "
+"will accept it."
 msgstr "תקרה: מסך קטן יותר נשלח כפי שהוא. מעל 1080p לא כל מקלט יקבל אותו."
 
 #: crates/nd-gui/src/pages/home.rs:472
 msgid "A new screen"
 msgstr "מסך חדש"
 
-#: crates/nd-gui/src/app.rs:939
+#: crates/nd-gui/src/app.rs:953
 msgid "A stream is already running"
 msgstr "שידור כבר פעיל"
 
@@ -66,7 +66,7 @@ msgstr "שידור כבר פעיל"
 msgid "A window"
 msgstr "חלון"
 
-#: crates/nd-gui/src/app.rs:289
+#: crates/nd-gui/src/app.rs:290
 msgid "About BigNetScreen"
 msgstr "אודות BigNetScreen"
 
@@ -105,7 +105,7 @@ msgstr "אוטומטי"
 msgid "Automatic discovery"
 msgstr "גילוי אוטומטי"
 
-#: crates/nd-gui/src/app.rs:414 crates/nd-gui/src/app.rs:888
+#: crates/nd-gui/src/app.rs:416 crates/nd-gui/src/app.rs:902
 msgid "Automatic discovery is off"
 msgstr "גילוי אוטומטי כבוי"
 
@@ -117,6 +117,10 @@ msgstr "זמין"
 msgid "Back"
 msgstr "חזרה"
 
+#: crates/nd-gui/src/pages/media.rs:507 crates/nd-gui/src/pages/media.rs:1209
+msgid "Back 10 seconds"
+msgstr "10 שניות אחורה"
+
 #: crates/nd-gui/src/pages/settings.rs:188
 msgid ""
 "Buffers the picture so video plays smoothly, at the cost of delay. On "
@@ -126,15 +130,15 @@ msgstr ""
 "מאגר את התמונה כך שהווידאו ינוגן בצורה חלקה, במחיר של עיכוב. ב‑Miracast זה "
 "מוחל כאן; ב‑Chromecast זו בקשה שהמקלט עשוי להתעלם ממנה."
 
-#: crates/nd-gui/src/pages/media.rs:642
+#: crates/nd-gui/src/pages/media.rs:794
 msgid "Choose a device…"
 msgstr "בחר התקן…"
 
-#: crates/nd-gui/src/pages/media.rs:827
+#: crates/nd-gui/src/pages/media.rs:1007
 msgid "Choose a folder"
 msgstr "בחירת תיקייה"
 
-#: crates/nd-gui/src/pages/media.rs:829
+#: crates/nd-gui/src/pages/media.rs:1009
 msgid "Choose files"
 msgstr "בחירת קבצים"
 
@@ -144,13 +148,13 @@ msgstr "בחר את המכשיר שאליו לשלוח."
 
 #: crates/nd-gui/src/pages/home.rs:244
 msgid ""
-"Choose this computer in OBS or another NDI receiver. Uses the name and audio"
-" options in Settings."
+"Choose this computer in OBS or another NDI receiver. Uses the name and audio "
+"options in Settings."
 msgstr ""
 "בחר במחשב זה ב-OBS או בכל מקלט NDI אחר. נעשה שימוש בשם ובאפשרויות השמע "
 "שבהגדרות."
 
-#: crates/nd-gui/src/pages/media.rs:667
+#: crates/nd-gui/src/pages/media.rs:819
 msgid "Choose which device to send to."
 msgstr "בחר לאיזה מכשיר לשלוח."
 
@@ -168,22 +172,26 @@ msgstr "Chromecast / AirPlay בלבד"
 
 #: crates/nd-gui/src/pages/home.rs:677 crates/nd-gui/src/pages/home.rs:789
 msgid ""
-"Chromecasts show up on their own. A TV or projector only appears while it is"
-" in screen mirroring mode — on Fire TV, under Settings › Display and Sounds "
-"› Display Mirroring."
+"Chromecasts show up on their own. A TV or projector only appears while it is "
+"in screen mirroring mode — on Fire TV, under Settings › Display and Sounds › "
+"Display Mirroring."
 msgstr ""
 "מכשירי Chromecast מופיעים מעצמם. טלוויזיה או מקרן מופיעים רק במצב שיקוף מסך "
 "— ב-Fire TV, תחת הגדרות › תצוגה וצליל › שיקוף תצוגה."
+
+#: crates/nd-gui/src/pages/media.rs:392
+msgid "Clear queue"
+msgstr "נקה את רשימת ההשמעה"
 
 #: crates/nd-gui/src/pages/mod.rs:125
 msgid "Connected"
 msgstr "מחובר"
 
-#: crates/nd-gui/src/app.rs:254
+#: crates/nd-gui/src/app.rs:255
 msgid "Connected to"
 msgstr "מחובר אל"
 
-#: crates/nd-gui/src/app.rs:961 crates/nd-gui/src/pages/mod.rs:170
+#: crates/nd-gui/src/app.rs:975 crates/nd-gui/src/pages/mod.rs:170
 msgid "Connecting…"
 msgstr "מתחבר…"
 
@@ -240,13 +248,17 @@ msgstr "מצב סרט"
 msgid "Find and connect to nearby wireless receivers."
 msgstr "איתור וחיבור למקלטים אלחוטיים בקרבת מקום."
 
-#: crates/nd-gui/src/pages/media.rs:722
+#: crates/nd-gui/src/pages/media.rs:874
 msgid "Finished"
 msgstr "הושלם"
 
 #: crates/nd-gui/src/pages/settings.rs:265
 msgid "Fixed port"
 msgstr "פורט קבוע"
+
+#: crates/nd-gui/src/pages/media.rs:523 crates/nd-gui/src/pages/media.rs:1210
+msgid "Forward 10 seconds"
+msgstr "10 שניות קדימה"
 
 #: crates/nd-gui/src/pages/settings.rs:173
 msgid "Frame rate"
@@ -256,7 +268,7 @@ msgstr "קצב פריימים"
 msgid "Good"
 msgstr "טוב"
 
-#: crates/nd-gui/src/app.rs:345
+#: crates/nd-gui/src/app.rs:346
 msgid "Got it"
 msgstr "הבנתי"
 
@@ -284,7 +296,7 @@ msgstr "כלול מיקרופון"
 msgid "Keep every device on the same Wi-Fi network for the best results."
 msgstr "השאר את כל המכשירים על אותה רשת Wi-Fi לתוצאות המיטביות."
 
-#: crates/nd-gui/src/app.rs:1189
+#: crates/nd-gui/src/app.rs:1173
 msgid "Local network discovery unavailable"
 msgstr "גילוי רשת מקומית אינו זמין"
 
@@ -324,17 +336,17 @@ msgstr "עוצמת מיקרופון"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1248
+#: crates/nd-gui/src/app.rs:1232
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
 msgstr ""
 "Miracast אינו פועל בגרסת Flatpak (הוא דורש את NetworkManager של המערכת)"
 
-#: crates/nd-gui/src/app.rs:1256
+#: crates/nd-gui/src/app.rs:1240
 msgid ""
-"Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the"
-" network still works."
+"Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
+"network still works."
 msgstr ""
 "Miracast דורש מתאם Wi‑Fi, ולמחשב זה אין כזה. שידור דרך הרשת עדיין פועל."
 
@@ -342,11 +354,11 @@ msgstr ""
 msgid "Miracast only"
 msgstr "Miracast בלבד"
 
-#: crates/nd-gui/src/app.rs:1264
+#: crates/nd-gui/src/app.rs:1248
 msgid "Miracast unavailable"
 msgstr "Miracast אינו זמין"
 
-#: crates/nd-gui/src/app.rs:1262
+#: crates/nd-gui/src/app.rs:1246
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast אינו זמין: כרטיס ה-Wi-Fi הזה אינו תומך ב-Wi-Fi Direct"
 
@@ -358,19 +370,23 @@ msgstr "שיקוף מסך"
 msgid "Mix your voice into what is sent"
 msgstr "ערבב את קולך עם מה שנשלח"
 
-#: crates/nd-gui/src/pages/media.rs:511
+#: crates/nd-gui/src/pages/media.rs:576
 msgid "Music"
 msgstr "מוזיקה"
 
-#: crates/nd-gui/src/app.rs:1280
+#: crates/nd-gui/src/app.rs:1264
 msgid "NDI setup"
 msgstr "הגדרת NDI"
 
-#: crates/nd-gui/src/app.rs:508
+#: crates/nd-gui/src/app.rs:510
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI אינו זמין. עיינו במדריך ההגדרה של NDI."
 
-#: crates/nd-gui/src/pages/media.rs:664
+#: crates/nd-gui/src/pages/media.rs:530 crates/nd-gui/src/pages/media.rs:1211
+msgid "Next file"
+msgstr "הקובץ הבא"
+
+#: crates/nd-gui/src/pages/media.rs:816
 msgid "No device found yet. Turn your TV, projector or Chromecast on."
 msgstr "עדיין לא נמצא מכשיר. הפעל את הטלוויזיה, המקרן או ה-Chromecast."
 
@@ -378,27 +394,27 @@ msgstr "עדיין לא נמצא מכשיר. הפעל את הטלוויזיה, �
 msgid "No devices found"
 msgstr "לא נמצאו התקנים"
 
-#: crates/nd-gui/src/pages/media.rs:695
+#: crates/nd-gui/src/pages/media.rs:847
 msgid "No music in your Music folder. Use “Select files”."
 msgstr "אין מוזיקה בתיקיית Music. השתמש ב־\"בחירת קבצים\"."
 
-#: crates/nd-gui/src/pages/media.rs:693
+#: crates/nd-gui/src/pages/media.rs:845
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "אין תמונות בתיקיית Pictures. השתמש ב־\"בחירת קבצים\"."
 
-#: crates/nd-gui/src/app.rs:896 crates/nd-gui/src/pages/home.rs:785
+#: crates/nd-gui/src/app.rs:910 crates/nd-gui/src/pages/home.rs:785
 msgid "No receivers found"
 msgstr "לא נמצאו מקלטים"
 
-#: crates/nd-gui/src/pages/media.rs:694
+#: crates/nd-gui/src/pages/media.rs:846
 msgid "No videos in your Videos folder. Use “Select files”."
 msgstr "אין סרטונים בתיקיית Videos. השתמש ב־\"בחירת קבצים\"."
 
-#: crates/nd-gui/src/pages/media.rs:701
+#: crates/nd-gui/src/pages/media.rs:853
 msgid "Nothing selected"
 msgstr "לא נבחר דבר"
 
-#: crates/nd-gui/src/pages/media.rs:460
+#: crates/nd-gui/src/pages/media.rs:493
 msgid "Now playing"
 msgstr "מתנגן כעת"
 
@@ -410,7 +426,11 @@ msgstr "חלון אחד בלבד"
 msgid "Opening the firewall port…"
 msgstr "פותח את יציאת חומת האש…"
 
-#: crates/nd-gui/src/pages/media.rs:511
+#: crates/nd-gui/src/pages/media.rs:516
+msgid "Pause"
+msgstr "השהה"
+
+#: crates/nd-gui/src/pages/media.rs:576
 msgid "Photos"
 msgstr "תמונות"
 
@@ -418,7 +438,7 @@ msgstr "תמונות"
 msgid "Photos, videos and music"
 msgstr "תמונות, סרטונים ומוזיקה"
 
-#: crates/nd-gui/src/pages/media.rs:311
+#: crates/nd-gui/src/pages/media.rs:310
 msgid "Pick files and choose where to play them."
 msgstr "בחר קבצים ובחר היכן לנגן אותם."
 
@@ -438,6 +458,10 @@ msgstr "פרוטוקול"
 msgid "Publish with NDI"
 msgstr "שידור באמצעות NDI"
 
+#: crates/nd-gui/src/pages/media.rs:386
+msgid "Queue"
+msgstr "רשימת השמעה"
+
 #: crates/nd-gui/src/pages/devices.rs:442
 msgid "Ready"
 msgstr "מוכן"
@@ -450,6 +474,10 @@ msgstr "מוכן לשיתוף"
 msgid "Refresh"
 msgstr "רענון"
 
+#: crates/nd-gui/src/pages/media.rs:775
+msgid "Remove from queue"
+msgstr "הסר מרשימת ההשמעה"
+
 #: crates/nd-gui/src/pages/settings.rs:110
 msgid "Resolution limit"
 msgstr "מגבלת רזולוציה"
@@ -458,11 +486,15 @@ msgstr "מגבלת רזולוציה"
 msgid "Restore defaults"
 msgstr "שחזור ברירות מחדל"
 
+#: crates/nd-gui/src/pages/media.rs:516 crates/nd-gui/src/pages/media.rs:1208
+msgid "Resume"
+msgstr "המשך"
+
 #: crates/nd-gui/src/pages/settings.rs:295
 msgid "Saved as you change them"
 msgstr "נשמר אוטומטית בעת שינוי"
 
-#: crates/nd-gui/src/app.rs:320 crates/nd-gui/src/pages/devices.rs:116
+#: crates/nd-gui/src/app.rs:321 crates/nd-gui/src/pages/devices.rs:116
 msgid "Scan again"
 msgstr "סריקה שוב"
 
@@ -470,20 +502,20 @@ msgstr "סריקה שוב"
 msgid "Screen"
 msgstr "מסך"
 
-#: crates/nd-gui/src/app.rs:412 crates/nd-gui/src/app.rs:528
-#: crates/nd-gui/src/app.rs:894
+#: crates/nd-gui/src/app.rs:414 crates/nd-gui/src/app.rs:530
+#: crates/nd-gui/src/app.rs:908
 msgid "Searching…"
 msgstr "מחפש…"
 
-#: crates/nd-gui/src/pages/media.rs:337
+#: crates/nd-gui/src/pages/media.rs:338
 msgid "Select files"
 msgstr "בחירת קבצים"
 
-#: crates/nd-gui/src/pages/media.rs:762
+#: crates/nd-gui/src/pages/media.rs:942
 msgid "Select up to 1000 files at a time."
 msgstr "ניתן לבחור עד 1000 קבצים בכל פעם."
 
-#: crates/nd-gui/src/pages/media.rs:344
+#: crates/nd-gui/src/pages/media.rs:347
 msgid "Send a folder"
 msgstr "שליחת תיקייה"
 
@@ -491,11 +523,11 @@ msgstr "שליחת תיקייה"
 msgid "Send media"
 msgstr "שליחת מדיה"
 
-#: crates/nd-gui/src/pages/media.rs:407
+#: crates/nd-gui/src/pages/media.rs:440
 msgid "Send to"
 msgstr "שליחה אל"
 
-#: crates/nd-gui/src/pages/media.rs:432
+#: crates/nd-gui/src/pages/media.rs:465
 msgid "Send to device"
 msgstr "שליחה למכשיר"
 
@@ -503,7 +535,7 @@ msgstr "שליחה למכשיר"
 msgid "Send whatever this computer is playing"
 msgstr "שליחת כל מה שמתנגן במחשב זה"
 
-#: crates/nd-gui/src/app.rs:1008
+#: crates/nd-gui/src/app.rs:1022
 msgid "Sending files…"
 msgstr "שולח קבצים…"
 
@@ -515,15 +547,15 @@ msgstr "הגדרות"
 msgid "Settings cannot be saved on this system."
 msgstr "לא ניתן לשמור הגדרות במערכת זו."
 
-#: crates/nd-gui/src/pages/media.rs:306
+#: crates/nd-gui/src/pages/media.rs:305
 msgid "Share media"
 msgstr "שיתוף מדיה"
 
-#: crates/nd-gui/src/app.rs:220
+#: crates/nd-gui/src/app.rs:221
 msgid "Share your screen wirelessly"
 msgstr "שתף את המסך שלך באופן אלחוטי"
 
-#: crates/nd-gui/src/app.rs:1277
+#: crates/nd-gui/src/app.rs:1261
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "שתף את המסך שלך עם טלוויזיה, מקרן או Chromecast."
 
@@ -534,7 +566,7 @@ msgid ""
 msgstr ""
 "שיתוף חלון פותח את הבורר של שולחן העבודה. רק חלונות גלויים ניתנים לשיתוף."
 
-#: crates/nd-gui/src/app.rs:310
+#: crates/nd-gui/src/app.rs:311
 msgid "Show the sidebar"
 msgstr "הצג את סרגל הצד"
 
@@ -548,19 +580,19 @@ msgstr "הסאונד מגיע למקלט ולמחשב זה. השתק מחשב ז
 msgid "Status"
 msgstr "מצב"
 
-#: crates/nd-gui/src/app.rs:327
+#: crates/nd-gui/src/app.rs:328
 msgid "Stop"
 msgstr "עצור"
 
-#: crates/nd-gui/src/pages/media.rs:475
+#: crates/nd-gui/src/pages/media.rs:538
 msgid "Stop sending"
 msgstr "הפסק שליחה"
 
-#: crates/nd-gui/src/app.rs:1002
+#: crates/nd-gui/src/app.rs:1016
 msgid "Stop sharing your screen before sending files"
 msgstr "הפסק לשתף את המסך שלך לפני שליחת קבצים"
 
-#: crates/nd-gui/src/app.rs:928
+#: crates/nd-gui/src/app.rs:942
 msgid "Stopping…"
 msgstr "מפסיק…"
 
@@ -576,8 +608,8 @@ msgstr "הזרמה ב"
 msgid "Test"
 msgstr "בדיקה"
 
-#: crates/nd-gui/src/app.rs:947 crates/nd-gui/src/app.rs:995
-#: crates/nd-gui/src/app.rs:1012
+#: crates/nd-gui/src/app.rs:961 crates/nd-gui/src/app.rs:1009
+#: crates/nd-gui/src/app.rs:1026
 msgid "That device is no longer available"
 msgstr "המכשיר הזה אינו זמין יותר"
 
@@ -607,7 +639,7 @@ msgstr "טיפים"
 msgid "Very high (1440p)"
 msgstr "גבוה מאוד (1440p)"
 
-#: crates/nd-gui/src/pages/media.rs:511
+#: crates/nd-gui/src/pages/media.rs:576
 msgid "Videos"
 msgstr "סרטונים"
 
@@ -647,7 +679,7 @@ msgstr "התקנים נמצאו"
 msgid "instant response"
 msgstr "תגובה מיידית"
 
-#: crates/nd-gui/src/pages/media.rs:727
+#: crates/nd-gui/src/pages/media.rs:887
 msgid "item"
 msgstr "פריט"
 
@@ -663,17 +695,17 @@ msgstr "עדיין לא פורסם"
 msgid "quick response"
 msgstr "תגובה מהירה"
 
-#: crates/nd-gui/src/app.rs:955
+#: crates/nd-gui/src/app.rs:969
 msgid "shows up in discovery only"
 msgstr "מופיע רק בגילוי"
 
-#: crates/nd-gui/src/pages/media.rs:702
+#: crates/nd-gui/src/pages/media.rs:854
 msgid "{} file selected"
 msgid_plural "{} files selected"
 msgstr[0] "נבחר {} קובץ"
 msgstr[1] "נבחרו {} קבצים"
 
-#: crates/nd-gui/src/app.rs:899
+#: crates/nd-gui/src/app.rs:913
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "נמצא {} מקלט"

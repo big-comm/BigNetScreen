@@ -60,8 +60,9 @@ pub struct CaptureSource {
 }
 
 /// A file being played to a receiver instead of a screen.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct MediaPlayback {
+    pub control: Option<crate::media::FilePlaybackControl>,
     pub path: std::path::PathBuf,
     pub kind: crate::media::MediaKind,
     /// The name to show when the file has no picture of its own.

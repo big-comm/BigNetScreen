@@ -511,9 +511,13 @@ pub mod cast {
         let driver = nd_net::detect_gpu_driver();
         let encoder = pipeline::best_encoder(driver)?;
         // The captured screen's aspect ratio guides the WFD mode choice.
-        let cfg = WfdCastConfig::new(our_ip, addr.ip(), source.video_source(), encoder)
+        let mut cfg = WfdCastConfig::new(our_ip, addr.ip(), source.video_source(), encoder)
             .with_audio(source.audio_source())
             .with_source_size(source.size_or((1920, 1080)));
+        cfg.media_control = source
+            .media
+            .as_ref()
+            .and_then(|media| media.control.clone());
 
         status.set(SinkState::Streaming);
         // The RTSP session runs until TEARDOWN, an error, or the user stopping it.

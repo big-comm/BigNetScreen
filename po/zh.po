@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-17 19:52-0300\n"
+"POT-Creation-Date: 2026-09-17 20:43-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Chinese <zh@li.org>\n"
@@ -16,8 +16,8 @@ msgstr ""
 
 #: crates/nd-gui/src/pages/settings.rs:266
 msgid ""
-"0 lets the system choose. Set one only if you opened a port on your firewall"
-" by hand."
+"0 lets the system choose. Set one only if you opened a port on your firewall "
+"by hand."
 msgstr "0 让系统自动选择。仅当您手动在防火墙上打开端口时才设置此值。"
 
 #: crates/nd-gui/src/pages/devices.rs:456
@@ -50,15 +50,15 @@ msgstr "60 帧更流畅，但带宽消耗大约增加一半"
 
 #: crates/nd-gui/src/pages/settings.rs:111
 msgid ""
-"A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver"
-" will accept it."
+"A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver "
+"will accept it."
 msgstr "限制：较小的屏幕会按原样发送。高于1080p时，并非所有接收器都能接受。"
 
 #: crates/nd-gui/src/pages/home.rs:472
 msgid "A new screen"
 msgstr "新屏幕"
 
-#: crates/nd-gui/src/app.rs:939
+#: crates/nd-gui/src/app.rs:953
 msgid "A stream is already running"
 msgstr "已有一个流正在运行"
 
@@ -66,7 +66,7 @@ msgstr "已有一个流正在运行"
 msgid "A window"
 msgstr "一个窗口"
 
-#: crates/nd-gui/src/app.rs:289
+#: crates/nd-gui/src/app.rs:290
 msgid "About BigNetScreen"
 msgstr "关于 BigNetScreen"
 
@@ -105,7 +105,7 @@ msgstr "自动"
 msgid "Automatic discovery"
 msgstr "自动发现"
 
-#: crates/nd-gui/src/app.rs:414 crates/nd-gui/src/app.rs:888
+#: crates/nd-gui/src/app.rs:416 crates/nd-gui/src/app.rs:902
 msgid "Automatic discovery is off"
 msgstr "自动发现已关闭"
 
@@ -117,22 +117,28 @@ msgstr "可用"
 msgid "Back"
 msgstr "返回"
 
+#: crates/nd-gui/src/pages/media.rs:507 crates/nd-gui/src/pages/media.rs:1209
+msgid "Back 10 seconds"
+msgstr "后退 10 秒"
+
 #: crates/nd-gui/src/pages/settings.rs:188
 msgid ""
 "Buffers the picture so video plays smoothly, at the cost of delay. On "
 "Miracast it is applied here; on Chromecast it is a request the receiver may "
 "ignore."
-msgstr "缓冲画面以使视频流畅播放，但会带来延迟。在Miracast上，缓冲在此应用；在Chromecast上，这只是一个接收器可能忽略的请求。"
+msgstr ""
+"缓冲画面以使视频流畅播放，但会带来延迟。在Miracast上，缓冲在此应用；在"
+"Chromecast上，这只是一个接收器可能忽略的请求。"
 
-#: crates/nd-gui/src/pages/media.rs:642
+#: crates/nd-gui/src/pages/media.rs:794
 msgid "Choose a device…"
 msgstr "选择设备…"
 
-#: crates/nd-gui/src/pages/media.rs:827
+#: crates/nd-gui/src/pages/media.rs:1007
 msgid "Choose a folder"
 msgstr "选择文件夹"
 
-#: crates/nd-gui/src/pages/media.rs:829
+#: crates/nd-gui/src/pages/media.rs:1009
 msgid "Choose files"
 msgstr "选择文件"
 
@@ -142,11 +148,12 @@ msgstr "选择要发送到的设备。"
 
 #: crates/nd-gui/src/pages/home.rs:244
 msgid ""
-"Choose this computer in OBS or another NDI receiver. Uses the name and audio"
-" options in Settings."
-msgstr "请在 OBS 或其他 NDI 接收端中选择此计算机。将使用设置中配置的名称和音频选项。"
+"Choose this computer in OBS or another NDI receiver. Uses the name and audio "
+"options in Settings."
+msgstr ""
+"请在 OBS 或其他 NDI 接收端中选择此计算机。将使用设置中配置的名称和音频选项。"
 
-#: crates/nd-gui/src/pages/media.rs:667
+#: crates/nd-gui/src/pages/media.rs:819
 msgid "Choose which device to send to."
 msgstr "选择要发送到的设备。"
 
@@ -164,21 +171,26 @@ msgstr "仅限 Chromecast / AirPlay"
 
 #: crates/nd-gui/src/pages/home.rs:677 crates/nd-gui/src/pages/home.rs:789
 msgid ""
-"Chromecasts show up on their own. A TV or projector only appears while it is"
-" in screen mirroring mode — on Fire TV, under Settings › Display and Sounds "
-"› Display Mirroring."
+"Chromecasts show up on their own. A TV or projector only appears while it is "
+"in screen mirroring mode — on Fire TV, under Settings › Display and Sounds › "
+"Display Mirroring."
 msgstr ""
-"Chromecast 会自动显示。电视或投影仪仅在屏幕镜像模式下出现——在 Fire TV 上，位于“设置”›“显示和声音”›“显示镜像”下。"
+"Chromecast 会自动显示。电视或投影仪仅在屏幕镜像模式下出现——在 Fire TV 上，位"
+"于“设置”›“显示和声音”›“显示镜像”下。"
+
+#: crates/nd-gui/src/pages/media.rs:392
+msgid "Clear queue"
+msgstr "清空播放队列"
 
 #: crates/nd-gui/src/pages/mod.rs:125
 msgid "Connected"
 msgstr "已连接"
 
-#: crates/nd-gui/src/app.rs:254
+#: crates/nd-gui/src/app.rs:255
 msgid "Connected to"
 msgstr "已连接到"
 
-#: crates/nd-gui/src/app.rs:961 crates/nd-gui/src/pages/mod.rs:170
+#: crates/nd-gui/src/app.rs:975 crates/nd-gui/src/pages/mod.rs:170
 msgid "Connecting…"
 msgstr "正在连接…"
 
@@ -235,13 +247,17 @@ msgstr "电影模式"
 msgid "Find and connect to nearby wireless receivers."
 msgstr "查找并连接到附近的无线接收器。"
 
-#: crates/nd-gui/src/pages/media.rs:722
+#: crates/nd-gui/src/pages/media.rs:874
 msgid "Finished"
 msgstr "已完成"
 
 #: crates/nd-gui/src/pages/settings.rs:265
 msgid "Fixed port"
 msgstr "固定端口"
+
+#: crates/nd-gui/src/pages/media.rs:523 crates/nd-gui/src/pages/media.rs:1210
+msgid "Forward 10 seconds"
+msgstr "前进 10 秒"
 
 #: crates/nd-gui/src/pages/settings.rs:173
 msgid "Frame rate"
@@ -251,7 +267,7 @@ msgstr "帧率"
 msgid "Good"
 msgstr "良好"
 
-#: crates/nd-gui/src/app.rs:345
+#: crates/nd-gui/src/app.rs:346
 msgid "Got it"
 msgstr "明白了"
 
@@ -279,7 +295,7 @@ msgstr "包含麦克风"
 msgid "Keep every device on the same Wi-Fi network for the best results."
 msgstr "将所有设备保持在同一 Wi-Fi 网络中以获得最佳效果。"
 
-#: crates/nd-gui/src/app.rs:1189
+#: crates/nd-gui/src/app.rs:1173
 msgid "Local network discovery unavailable"
 msgstr "本地网络发现不可用"
 
@@ -319,27 +335,27 @@ msgstr "麦克风音量"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1248
+#: crates/nd-gui/src/app.rs:1232
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
 msgstr "Miracast 在 Flatpak 版本中无法工作（需要系统 NetworkManager）"
 
-#: crates/nd-gui/src/app.rs:1256
+#: crates/nd-gui/src/app.rs:1240
 msgid ""
-"Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the"
-" network still works."
+"Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
+"network still works."
 msgstr "Miracast需要Wi-Fi适配器，但此计算机没有。通过网络投屏仍然可以工作。"
 
 #: crates/nd-gui/src/pages/settings.rs:96
 msgid "Miracast only"
 msgstr "仅 Miracast"
 
-#: crates/nd-gui/src/app.rs:1264
+#: crates/nd-gui/src/app.rs:1248
 msgid "Miracast unavailable"
 msgstr "Miracast 不可用"
 
-#: crates/nd-gui/src/app.rs:1262
+#: crates/nd-gui/src/app.rs:1246
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast 不可用：此 Wi-Fi 网卡不支持 Wi-Fi Direct"
 
@@ -351,19 +367,23 @@ msgstr "镜像屏幕"
 msgid "Mix your voice into what is sent"
 msgstr "将您的声音混入发送内容"
 
-#: crates/nd-gui/src/pages/media.rs:511
+#: crates/nd-gui/src/pages/media.rs:576
 msgid "Music"
 msgstr "音乐"
 
-#: crates/nd-gui/src/app.rs:1280
+#: crates/nd-gui/src/app.rs:1264
 msgid "NDI setup"
 msgstr "NDI 设置"
 
-#: crates/nd-gui/src/app.rs:508
+#: crates/nd-gui/src/app.rs:510
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI 不可用。请参阅 NDI 设置指南。"
 
-#: crates/nd-gui/src/pages/media.rs:664
+#: crates/nd-gui/src/pages/media.rs:530 crates/nd-gui/src/pages/media.rs:1211
+msgid "Next file"
+msgstr "下一个文件"
+
+#: crates/nd-gui/src/pages/media.rs:816
 msgid "No device found yet. Turn your TV, projector or Chromecast on."
 msgstr "尚未找到设备。请打开电视、投影仪或 Chromecast。"
 
@@ -371,27 +391,27 @@ msgstr "尚未找到设备。请打开电视、投影仪或 Chromecast。"
 msgid "No devices found"
 msgstr "未找到设备"
 
-#: crates/nd-gui/src/pages/media.rs:695
+#: crates/nd-gui/src/pages/media.rs:847
 msgid "No music in your Music folder. Use “Select files”."
 msgstr "您的音乐文件夹中没有音乐。请使用“选择文件”。"
 
-#: crates/nd-gui/src/pages/media.rs:693
+#: crates/nd-gui/src/pages/media.rs:845
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "您的图片文件夹中没有照片。请使用“选择文件”。"
 
-#: crates/nd-gui/src/app.rs:896 crates/nd-gui/src/pages/home.rs:785
+#: crates/nd-gui/src/app.rs:910 crates/nd-gui/src/pages/home.rs:785
 msgid "No receivers found"
 msgstr "未找到接收设备"
 
-#: crates/nd-gui/src/pages/media.rs:694
+#: crates/nd-gui/src/pages/media.rs:846
 msgid "No videos in your Videos folder. Use “Select files”."
 msgstr "您的视频文件夹中没有视频。请使用“选择文件”。"
 
-#: crates/nd-gui/src/pages/media.rs:701
+#: crates/nd-gui/src/pages/media.rs:853
 msgid "Nothing selected"
 msgstr "未选择任何内容"
 
-#: crates/nd-gui/src/pages/media.rs:460
+#: crates/nd-gui/src/pages/media.rs:493
 msgid "Now playing"
 msgstr "正在播放"
 
@@ -403,7 +423,11 @@ msgstr "仅一个窗口"
 msgid "Opening the firewall port…"
 msgstr "正在打开防火墙端口…"
 
-#: crates/nd-gui/src/pages/media.rs:511
+#: crates/nd-gui/src/pages/media.rs:516
+msgid "Pause"
+msgstr "暂停"
+
+#: crates/nd-gui/src/pages/media.rs:576
 msgid "Photos"
 msgstr "照片"
 
@@ -411,7 +435,7 @@ msgstr "照片"
 msgid "Photos, videos and music"
 msgstr "照片、视频和音乐"
 
-#: crates/nd-gui/src/pages/media.rs:311
+#: crates/nd-gui/src/pages/media.rs:310
 msgid "Pick files and choose where to play them."
 msgstr "选择文件并指定播放位置。"
 
@@ -431,6 +455,10 @@ msgstr "协议"
 msgid "Publish with NDI"
 msgstr "通过 NDI 发布"
 
+#: crates/nd-gui/src/pages/media.rs:386
+msgid "Queue"
+msgstr "播放队列"
+
 #: crates/nd-gui/src/pages/devices.rs:442
 msgid "Ready"
 msgstr "就绪"
@@ -443,6 +471,10 @@ msgstr "准备共享"
 msgid "Refresh"
 msgstr "刷新"
 
+#: crates/nd-gui/src/pages/media.rs:775
+msgid "Remove from queue"
+msgstr "从播放队列中移除"
+
 #: crates/nd-gui/src/pages/settings.rs:110
 msgid "Resolution limit"
 msgstr "分辨率上限"
@@ -451,11 +483,15 @@ msgstr "分辨率上限"
 msgid "Restore defaults"
 msgstr "恢复默认设置"
 
+#: crates/nd-gui/src/pages/media.rs:516 crates/nd-gui/src/pages/media.rs:1208
+msgid "Resume"
+msgstr "继续播放"
+
 #: crates/nd-gui/src/pages/settings.rs:295
 msgid "Saved as you change them"
 msgstr "随更改自动保存"
 
-#: crates/nd-gui/src/app.rs:320 crates/nd-gui/src/pages/devices.rs:116
+#: crates/nd-gui/src/app.rs:321 crates/nd-gui/src/pages/devices.rs:116
 msgid "Scan again"
 msgstr "重新扫描"
 
@@ -463,20 +499,20 @@ msgstr "重新扫描"
 msgid "Screen"
 msgstr "屏幕"
 
-#: crates/nd-gui/src/app.rs:412 crates/nd-gui/src/app.rs:528
-#: crates/nd-gui/src/app.rs:894
+#: crates/nd-gui/src/app.rs:414 crates/nd-gui/src/app.rs:530
+#: crates/nd-gui/src/app.rs:908
 msgid "Searching…"
 msgstr "正在搜索…"
 
-#: crates/nd-gui/src/pages/media.rs:337
+#: crates/nd-gui/src/pages/media.rs:338
 msgid "Select files"
 msgstr "选择文件"
 
-#: crates/nd-gui/src/pages/media.rs:762
+#: crates/nd-gui/src/pages/media.rs:942
 msgid "Select up to 1000 files at a time."
 msgstr "每次最多选择 1000 个文件。"
 
-#: crates/nd-gui/src/pages/media.rs:344
+#: crates/nd-gui/src/pages/media.rs:347
 msgid "Send a folder"
 msgstr "发送文件夹"
 
@@ -484,11 +520,11 @@ msgstr "发送文件夹"
 msgid "Send media"
 msgstr "发送媒体"
 
-#: crates/nd-gui/src/pages/media.rs:407
+#: crates/nd-gui/src/pages/media.rs:440
 msgid "Send to"
 msgstr "发送到"
 
-#: crates/nd-gui/src/pages/media.rs:432
+#: crates/nd-gui/src/pages/media.rs:465
 msgid "Send to device"
 msgstr "发送到设备"
 
@@ -496,7 +532,7 @@ msgstr "发送到设备"
 msgid "Send whatever this computer is playing"
 msgstr "发送这台计算机正在播放的内容"
 
-#: crates/nd-gui/src/app.rs:1008
+#: crates/nd-gui/src/app.rs:1022
 msgid "Sending files…"
 msgstr "正在发送文件…"
 
@@ -508,15 +544,15 @@ msgstr "设置"
 msgid "Settings cannot be saved on this system."
 msgstr "此系统上无法保存设置。"
 
-#: crates/nd-gui/src/pages/media.rs:306
+#: crates/nd-gui/src/pages/media.rs:305
 msgid "Share media"
 msgstr "共享媒体"
 
-#: crates/nd-gui/src/app.rs:220
+#: crates/nd-gui/src/app.rs:221
 msgid "Share your screen wirelessly"
 msgstr "无线共享屏幕"
 
-#: crates/nd-gui/src/app.rs:1277
+#: crates/nd-gui/src/app.rs:1261
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "将你的屏幕共享到电视、投影仪或Chromecast。"
 
@@ -526,7 +562,7 @@ msgid ""
 "be shared."
 msgstr "共享窗口会打开您桌面的选择器。只有可见的窗口才能被共享。"
 
-#: crates/nd-gui/src/app.rs:310
+#: crates/nd-gui/src/app.rs:311
 msgid "Show the sidebar"
 msgstr "显示侧边栏"
 
@@ -540,19 +576,19 @@ msgstr "声音会同时传到接收设备和这台电脑。如果听到回声，
 msgid "Status"
 msgstr "状态"
 
-#: crates/nd-gui/src/app.rs:327
+#: crates/nd-gui/src/app.rs:328
 msgid "Stop"
 msgstr "停止"
 
-#: crates/nd-gui/src/pages/media.rs:475
+#: crates/nd-gui/src/pages/media.rs:538
 msgid "Stop sending"
 msgstr "停止发送"
 
-#: crates/nd-gui/src/app.rs:1002
+#: crates/nd-gui/src/app.rs:1016
 msgid "Stop sharing your screen before sending files"
 msgstr "发送文件前请先停止共享屏幕"
 
-#: crates/nd-gui/src/app.rs:928
+#: crates/nd-gui/src/app.rs:942
 msgid "Stopping…"
 msgstr "正在停止…"
 
@@ -568,8 +604,8 @@ msgstr "流媒体传输于"
 msgid "Test"
 msgstr "测试"
 
-#: crates/nd-gui/src/app.rs:947 crates/nd-gui/src/app.rs:995
-#: crates/nd-gui/src/app.rs:1012
+#: crates/nd-gui/src/app.rs:961 crates/nd-gui/src/app.rs:1009
+#: crates/nd-gui/src/app.rs:1026
 msgid "That device is no longer available"
 msgstr "该设备已不可用"
 
@@ -598,7 +634,7 @@ msgstr "提示"
 msgid "Very high (1440p)"
 msgstr "非常高（1440p）"
 
-#: crates/nd-gui/src/pages/media.rs:511
+#: crates/nd-gui/src/pages/media.rs:576
 msgid "Videos"
 msgstr "视频"
 
@@ -638,7 +674,7 @@ msgstr "找到的设备"
 msgid "instant response"
 msgstr "即时响应"
 
-#: crates/nd-gui/src/pages/media.rs:727
+#: crates/nd-gui/src/pages/media.rs:887
 msgid "item"
 msgstr "项"
 
@@ -654,16 +690,16 @@ msgstr "尚未发布"
 msgid "quick response"
 msgstr "快速响应"
 
-#: crates/nd-gui/src/app.rs:955
+#: crates/nd-gui/src/app.rs:969
 msgid "shows up in discovery only"
 msgstr "仅出现在发现中"
 
-#: crates/nd-gui/src/pages/media.rs:702
+#: crates/nd-gui/src/pages/media.rs:854
 msgid "{} file selected"
 msgid_plural "{} files selected"
 msgstr[0] "已选择 {} 个文件"
 
-#: crates/nd-gui/src/app.rs:899
+#: crates/nd-gui/src/app.rs:913
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "找到 {} 个接收端"

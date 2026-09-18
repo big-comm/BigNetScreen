@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-17 19:52-0300\n"
+"POT-Creation-Date: 2026-09-17 20:43-0300\n"
 "PO-Revision-Date: 2026-08-17 22:27-0300\n"
 "Last-Translator: BigCommunity <contato@communitybig.org>\n"
 "Language-Team: Brazilian Portuguese <contato@communitybig.org>\n"
@@ -65,7 +65,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "Uma nova tela"
 
-#: crates/nd-gui/src/app.rs:939
+#: crates/nd-gui/src/app.rs:953
 msgid "A stream is already running"
 msgstr "Já existe uma transmissão em andamento"
 
@@ -73,7 +73,7 @@ msgstr "Já existe uma transmissão em andamento"
 msgid "A window"
 msgstr "Uma janela"
 
-#: crates/nd-gui/src/app.rs:289
+#: crates/nd-gui/src/app.rs:290
 msgid "About BigNetScreen"
 msgstr "Sobre o BigNetScreen"
 
@@ -114,7 +114,7 @@ msgstr "Automático"
 msgid "Automatic discovery"
 msgstr "Descoberta automática"
 
-#: crates/nd-gui/src/app.rs:414 crates/nd-gui/src/app.rs:888
+#: crates/nd-gui/src/app.rs:416 crates/nd-gui/src/app.rs:902
 msgid "Automatic discovery is off"
 msgstr "A descoberta automática está desativada"
 
@@ -126,6 +126,10 @@ msgstr "Disponível"
 msgid "Back"
 msgstr "Voltar"
 
+#: crates/nd-gui/src/pages/media.rs:507 crates/nd-gui/src/pages/media.rs:1209
+msgid "Back 10 seconds"
+msgstr "Voltar 10 segundos"
+
 #: crates/nd-gui/src/pages/settings.rs:188
 msgid ""
 "Buffers the picture so video plays smoothly, at the cost of delay. On "
@@ -136,15 +140,15 @@ msgstr ""
 "custo de atraso. No Miracast, isso é aplicado aqui; no Chromecast, é uma "
 "solicitação que o receptor pode ignorar."
 
-#: crates/nd-gui/src/pages/media.rs:642
+#: crates/nd-gui/src/pages/media.rs:794
 msgid "Choose a device…"
 msgstr "Escolha um dispositivo…"
 
-#: crates/nd-gui/src/pages/media.rs:827
+#: crates/nd-gui/src/pages/media.rs:1007
 msgid "Choose a folder"
 msgstr "Escolha uma pasta"
 
-#: crates/nd-gui/src/pages/media.rs:829
+#: crates/nd-gui/src/pages/media.rs:1009
 msgid "Choose files"
 msgstr "Escolher arquivos"
 
@@ -160,7 +164,7 @@ msgstr ""
 "Selecione este computador no OBS ou em outro receptor NDI. Usa o nome e as "
 "opções de áudio das Configurações."
 
-#: crates/nd-gui/src/pages/media.rs:667
+#: crates/nd-gui/src/pages/media.rs:819
 msgid "Choose which device to send to."
 msgstr "Escolha para qual dispositivo enviar."
 
@@ -186,15 +190,19 @@ msgstr ""
 "estiver no modo de espelhamento de tela — na Fire TV, em Configurações › "
 "Tela e sons › Espelhamento de tela."
 
+#: crates/nd-gui/src/pages/media.rs:392
+msgid "Clear queue"
+msgstr "Limpar fila"
+
 #: crates/nd-gui/src/pages/mod.rs:125
 msgid "Connected"
 msgstr "Conectado"
 
-#: crates/nd-gui/src/app.rs:254
+#: crates/nd-gui/src/app.rs:255
 msgid "Connected to"
 msgstr "Conectado a"
 
-#: crates/nd-gui/src/app.rs:961 crates/nd-gui/src/pages/mod.rs:170
+#: crates/nd-gui/src/app.rs:975 crates/nd-gui/src/pages/mod.rs:170
 msgid "Connecting…"
 msgstr "Conectando…"
 
@@ -251,13 +259,17 @@ msgstr "Modo filme"
 msgid "Find and connect to nearby wireless receivers."
 msgstr "Encontre e conecte-se a receptores sem fio próximos."
 
-#: crates/nd-gui/src/pages/media.rs:722
+#: crates/nd-gui/src/pages/media.rs:874
 msgid "Finished"
 msgstr "Concluído"
 
 #: crates/nd-gui/src/pages/settings.rs:265
 msgid "Fixed port"
 msgstr "Porta fixa"
+
+#: crates/nd-gui/src/pages/media.rs:523 crates/nd-gui/src/pages/media.rs:1210
+msgid "Forward 10 seconds"
+msgstr "Avançar 10 segundos"
 
 #: crates/nd-gui/src/pages/settings.rs:173
 msgid "Frame rate"
@@ -267,7 +279,7 @@ msgstr "Taxa de quadros"
 msgid "Good"
 msgstr "Boa"
 
-#: crates/nd-gui/src/app.rs:345
+#: crates/nd-gui/src/app.rs:346
 msgid "Got it"
 msgstr "Entendi"
 
@@ -297,7 +309,7 @@ msgstr ""
 "Mantenha todos os aparelhos na mesma rede Wi-Fi para obter o melhor "
 "resultado."
 
-#: crates/nd-gui/src/app.rs:1189
+#: crates/nd-gui/src/app.rs:1173
 msgid "Local network discovery unavailable"
 msgstr "Descoberta na rede local indisponível"
 
@@ -337,7 +349,7 @@ msgstr "Volume do microfone"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1248
+#: crates/nd-gui/src/app.rs:1232
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
@@ -345,7 +357,7 @@ msgstr ""
 "Miracast não funciona na versão Flatpak (precisa do NetworkManager do "
 "sistema)"
 
-#: crates/nd-gui/src/app.rs:1256
+#: crates/nd-gui/src/app.rs:1240
 msgid ""
 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
 "network still works."
@@ -357,11 +369,11 @@ msgstr ""
 msgid "Miracast only"
 msgstr "Somente Miracast"
 
-#: crates/nd-gui/src/app.rs:1264
+#: crates/nd-gui/src/app.rs:1248
 msgid "Miracast unavailable"
 msgstr "Miracast indisponível"
 
-#: crates/nd-gui/src/app.rs:1262
+#: crates/nd-gui/src/app.rs:1246
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast indisponível: esta placa Wi-Fi não suporta Wi-Fi Direct"
 
@@ -373,19 +385,23 @@ msgstr "Espelhar tela"
 msgid "Mix your voice into what is sent"
 msgstr "Misturar sua voz no que é enviado"
 
-#: crates/nd-gui/src/pages/media.rs:511
+#: crates/nd-gui/src/pages/media.rs:576
 msgid "Music"
 msgstr "Música"
 
-#: crates/nd-gui/src/app.rs:1280
+#: crates/nd-gui/src/app.rs:1264
 msgid "NDI setup"
 msgstr "Configuração do NDI"
 
-#: crates/nd-gui/src/app.rs:508
+#: crates/nd-gui/src/app.rs:510
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "O NDI não está disponível. Consulte o guia de configuração do NDI."
 
-#: crates/nd-gui/src/pages/media.rs:664
+#: crates/nd-gui/src/pages/media.rs:530 crates/nd-gui/src/pages/media.rs:1211
+msgid "Next file"
+msgstr "Próximo arquivo"
+
+#: crates/nd-gui/src/pages/media.rs:816
 msgid "No device found yet. Turn your TV, projector or Chromecast on."
 msgstr ""
 "Nenhum aparelho encontrado ainda. Ligue sua TV, projetor ou "
@@ -396,27 +412,27 @@ msgstr ""
 msgid "No devices found"
 msgstr "Nenhum dispositivo encontrado"
 
-#: crates/nd-gui/src/pages/media.rs:695
+#: crates/nd-gui/src/pages/media.rs:847
 msgid "No music in your Music folder. Use “Select files”."
 msgstr "Nenhuma música na sua pasta Música. Use \"Selecionar arquivos\"."
 
-#: crates/nd-gui/src/pages/media.rs:693
+#: crates/nd-gui/src/pages/media.rs:845
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "Nenhuma foto na sua pasta Imagens. Use \"Selecionar arquivos\"."
 
-#: crates/nd-gui/src/app.rs:896 crates/nd-gui/src/pages/home.rs:785
+#: crates/nd-gui/src/app.rs:910 crates/nd-gui/src/pages/home.rs:785
 msgid "No receivers found"
 msgstr "Nenhum receptor encontrado"
 
-#: crates/nd-gui/src/pages/media.rs:694
+#: crates/nd-gui/src/pages/media.rs:846
 msgid "No videos in your Videos folder. Use “Select files”."
 msgstr "Nenhum vídeo na sua pasta Vídeos. Use \"Selecionar arquivos\"."
 
-#: crates/nd-gui/src/pages/media.rs:701
+#: crates/nd-gui/src/pages/media.rs:853
 msgid "Nothing selected"
 msgstr "Nada selecionado"
 
-#: crates/nd-gui/src/pages/media.rs:460
+#: crates/nd-gui/src/pages/media.rs:493
 msgid "Now playing"
 msgstr "Reproduzindo agora"
 
@@ -428,7 +444,11 @@ msgstr "Apenas uma janela"
 msgid "Opening the firewall port…"
 msgstr "Liberando a porta no firewall…"
 
-#: crates/nd-gui/src/pages/media.rs:511
+#: crates/nd-gui/src/pages/media.rs:516
+msgid "Pause"
+msgstr "Pausar"
+
+#: crates/nd-gui/src/pages/media.rs:576
 msgid "Photos"
 msgstr "Fotos"
 
@@ -436,7 +456,7 @@ msgstr "Fotos"
 msgid "Photos, videos and music"
 msgstr "Fotos, vídeos e músicas"
 
-#: crates/nd-gui/src/pages/media.rs:311
+#: crates/nd-gui/src/pages/media.rs:310
 msgid "Pick files and choose where to play them."
 msgstr "Selecione arquivos e escolha onde reproduzi-los."
 
@@ -456,6 +476,10 @@ msgstr "Protocolo"
 msgid "Publish with NDI"
 msgstr "Publicar com NDI"
 
+#: crates/nd-gui/src/pages/media.rs:386
+msgid "Queue"
+msgstr "Fila"
+
 #: crates/nd-gui/src/pages/devices.rs:442
 msgid "Ready"
 msgstr "Pronto"
@@ -468,6 +492,10 @@ msgstr "Pronto para compartilhar"
 msgid "Refresh"
 msgstr "Atualizar"
 
+#: crates/nd-gui/src/pages/media.rs:775
+msgid "Remove from queue"
+msgstr "Remover da fila"
+
 #: crates/nd-gui/src/pages/settings.rs:110
 msgid "Resolution limit"
 msgstr "Limite de resolução"
@@ -476,11 +504,15 @@ msgstr "Limite de resolução"
 msgid "Restore defaults"
 msgstr "Restaurar padrões"
 
+#: crates/nd-gui/src/pages/media.rs:516 crates/nd-gui/src/pages/media.rs:1208
+msgid "Resume"
+msgstr "Retomar"
+
 #: crates/nd-gui/src/pages/settings.rs:295
 msgid "Saved as you change them"
 msgstr "Salvo conforme você altera"
 
-#: crates/nd-gui/src/app.rs:320 crates/nd-gui/src/pages/devices.rs:116
+#: crates/nd-gui/src/app.rs:321 crates/nd-gui/src/pages/devices.rs:116
 msgid "Scan again"
 msgstr "Procurar novamente"
 
@@ -488,20 +520,20 @@ msgstr "Procurar novamente"
 msgid "Screen"
 msgstr "Tela"
 
-#: crates/nd-gui/src/app.rs:412 crates/nd-gui/src/app.rs:528
-#: crates/nd-gui/src/app.rs:894
+#: crates/nd-gui/src/app.rs:414 crates/nd-gui/src/app.rs:530
+#: crates/nd-gui/src/app.rs:908
 msgid "Searching…"
 msgstr "Procurando…"
 
-#: crates/nd-gui/src/pages/media.rs:337
+#: crates/nd-gui/src/pages/media.rs:338
 msgid "Select files"
 msgstr "Selecionar arquivos"
 
-#: crates/nd-gui/src/pages/media.rs:762
+#: crates/nd-gui/src/pages/media.rs:942
 msgid "Select up to 1000 files at a time."
 msgstr "Selecione até 1000 arquivos por vez."
 
-#: crates/nd-gui/src/pages/media.rs:344
+#: crates/nd-gui/src/pages/media.rs:347
 msgid "Send a folder"
 msgstr "Enviar uma pasta"
 
@@ -509,11 +541,11 @@ msgstr "Enviar uma pasta"
 msgid "Send media"
 msgstr "Enviar mídia"
 
-#: crates/nd-gui/src/pages/media.rs:407
+#: crates/nd-gui/src/pages/media.rs:440
 msgid "Send to"
 msgstr "Enviar para"
 
-#: crates/nd-gui/src/pages/media.rs:432
+#: crates/nd-gui/src/pages/media.rs:465
 msgid "Send to device"
 msgstr "Enviar para o dispositivo"
 
@@ -521,7 +553,7 @@ msgstr "Enviar para o dispositivo"
 msgid "Send whatever this computer is playing"
 msgstr "Enviar o que este computador está reproduzindo"
 
-#: crates/nd-gui/src/app.rs:1008
+#: crates/nd-gui/src/app.rs:1022
 msgid "Sending files…"
 msgstr "Enviando arquivos…"
 
@@ -533,15 +565,15 @@ msgstr "Configurações"
 msgid "Settings cannot be saved on this system."
 msgstr "Não é possível salvar as configurações neste sistema."
 
-#: crates/nd-gui/src/pages/media.rs:306
+#: crates/nd-gui/src/pages/media.rs:305
 msgid "Share media"
 msgstr "Compartilhar mídia"
 
-#: crates/nd-gui/src/app.rs:220
+#: crates/nd-gui/src/app.rs:221
 msgid "Share your screen wirelessly"
 msgstr "Compartilhe sua tela sem fio"
 
-#: crates/nd-gui/src/app.rs:1277
+#: crates/nd-gui/src/app.rs:1261
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "Compartilhe sua tela com uma TV, projetor ou Chromecast."
 
@@ -553,7 +585,7 @@ msgstr ""
 "Compartilhar uma janela abre o seletor do seu desktop. Somente janelas "
 "visíveis podem ser compartilhadas."
 
-#: crates/nd-gui/src/app.rs:310
+#: crates/nd-gui/src/app.rs:311
 msgid "Show the sidebar"
 msgstr "Mostrar a barra lateral"
 
@@ -569,19 +601,19 @@ msgstr ""
 msgid "Status"
 msgstr "Status"
 
-#: crates/nd-gui/src/app.rs:327
+#: crates/nd-gui/src/app.rs:328
 msgid "Stop"
 msgstr "Parar"
 
-#: crates/nd-gui/src/pages/media.rs:475
+#: crates/nd-gui/src/pages/media.rs:538
 msgid "Stop sending"
 msgstr "Parar envio"
 
-#: crates/nd-gui/src/app.rs:1002
+#: crates/nd-gui/src/app.rs:1016
 msgid "Stop sharing your screen before sending files"
 msgstr "Pare de compartilhar sua tela antes de enviar arquivos"
 
-#: crates/nd-gui/src/app.rs:928
+#: crates/nd-gui/src/app.rs:942
 msgid "Stopping…"
 msgstr "Encerrando…"
 
@@ -597,8 +629,8 @@ msgstr "Transmitindo em"
 msgid "Test"
 msgstr "Teste"
 
-#: crates/nd-gui/src/app.rs:947 crates/nd-gui/src/app.rs:995
-#: crates/nd-gui/src/app.rs:1012
+#: crates/nd-gui/src/app.rs:961 crates/nd-gui/src/app.rs:1009
+#: crates/nd-gui/src/app.rs:1026
 msgid "That device is no longer available"
 msgstr "Esse dispositivo não está mais disponível"
 
@@ -629,7 +661,7 @@ msgstr "Dicas"
 msgid "Very high (1440p)"
 msgstr "Muito alto (1440p)"
 
-#: crates/nd-gui/src/pages/media.rs:511
+#: crates/nd-gui/src/pages/media.rs:576
 msgid "Videos"
 msgstr "Vídeos"
 
@@ -669,7 +701,7 @@ msgstr "dispositivos encontrados"
 msgid "instant response"
 msgstr "resposta imediata"
 
-#: crates/nd-gui/src/pages/media.rs:727
+#: crates/nd-gui/src/pages/media.rs:887
 msgid "item"
 msgstr "item"
 
@@ -685,17 +717,17 @@ msgstr "ainda não publicado"
 msgid "quick response"
 msgstr "resposta rápida"
 
-#: crates/nd-gui/src/app.rs:955
+#: crates/nd-gui/src/app.rs:969
 msgid "shows up in discovery only"
 msgstr "aparece apenas na descoberta"
 
-#: crates/nd-gui/src/pages/media.rs:702
+#: crates/nd-gui/src/pages/media.rs:854
 msgid "{} file selected"
 msgid_plural "{} files selected"
 msgstr[0] "{} arquivo selecionado"
 msgstr[1] "{} arquivos selecionados"
 
-#: crates/nd-gui/src/app.rs:899
+#: crates/nd-gui/src/app.rs:913
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "{} receptor encontrado"

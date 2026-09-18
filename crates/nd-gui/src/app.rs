@@ -130,6 +130,7 @@ pub enum AppMsg {
     /// Send these files to the receiver with this id.
     SendMedia(Vec<MediaFile>, String),
     CancelMedia,
+    ControlMedia(nd_core::media::MediaCommand),
     /// Send files to this receiver (from the devices page).
     MediaTarget(String),
     About,
@@ -392,6 +393,7 @@ impl Component for AppModel {
             .forward(sender.input_sender(), |output| match output {
                 MediaOutput::Send(files, target) => AppMsg::SendMedia(files, target),
                 MediaOutput::Cancel => AppMsg::CancelMedia,
+                MediaOutput::Control(command) => AppMsg::ControlMedia(command),
             });
         let settings_page = SettingsPage::builder().launch(()).forward(
             sender.input_sender(),
@@ -580,6 +582,13 @@ impl Component for AppModel {
             }
             AppMsg::SendMedia(files, target) => self.send_media(files, target, &sender),
             AppMsg::CancelMedia => self.stop_everything(&sender),
+            AppMsg::ControlMedia(command) => {
+                if let Some(session) = &self.media_session {
+                    if let Err(err) = session.command(command) {
+                        self.status = err.to_string();
+                    }
+                }
+            }
             AppMsg::About => show_about(root),
         }
 
@@ -778,6 +787,11 @@ impl AppModel {
         if let Some(status) = &status {
             if status.finished {
                 self.media_session = None;
+                self.active_cast = None;
+                self.active_sink = None;
+                self.cast_cancel = None;
+                self.measured = None;
+                self.push_devices();
                 if let Some(error) = &status.error {
                     self.status = error.clone();
                     self.media.emit(MediaMsg::Status(Some(status.clone())));
@@ -989,7 +1003,7 @@ impl AppModel {
         &mut self,
         files: Vec<MediaFile>,
         target: String,
-        sender: &ComponentSender<Self>,
+        _sender: &ComponentSender<Self>,
     ) {
         let Some(sink) = self.registry.get(&target).cloned() else {
             self.status = tr!("That device is no longer available");
@@ -1021,24 +1035,22 @@ impl AppModel {
                 Ok(session) => self.media_session = Some(session),
                 Err(err) => self.status = err.to_string(),
             }
+            self.push_media_status();
             return;
         }
 
-        // The mirroring route. It is a cast session like any other, so the Stop
-        // button, the status on the row and the audio guard all apply — the
-        // only difference is what is being sent.
         self.operation_generation += 1;
         self.probing = false;
         self.measured = None;
-        self.active_cast = Some(target.clone());
-        self.active_sink = Some(sink.clone());
-        let (cancel, cancelled) = tokio::sync::watch::channel(false);
-        self.cast_cancel = Some(cancel);
-        self.page = Page::Home;
-        sender.oneshot_command(async move {
-            let error = play_files_by_mirroring(sink, files, cancelled).await.err();
-            AppCmd::CastFinished { id: target, error }
-        });
+        match MediaSession::start_mirroring(sink.clone(), files) {
+            Ok(session) => {
+                self.active_cast = Some(target);
+                self.active_sink = Some(sink);
+                self.media_session = Some(session);
+            }
+            Err(err) => self.status = err.to_string(),
+        }
+        self.push_media_status();
     }
 }
 
@@ -1054,34 +1066,6 @@ impl Drop for AppModel {
             session.stop();
         }
     }
-}
-
-/// Plays a queue of files to a receiver that can only be a screen.
-///
-/// One session per file, in order. Not one session for the queue: the pipeline
-/// is built around a single decoder, and swapping the file inside a running
-/// session would mean rebuilding it anyway — with the receiver watching the
-/// picture disappear and come back regardless.
-async fn play_files_by_mirroring(
-    sink: Arc<dyn Sink>,
-    files: Vec<MediaFile>,
-    mut cancel: tokio::sync::watch::Receiver<bool>,
-) -> std::result::Result<(), String> {
-    for file in files {
-        if *cancel.borrow() {
-            break;
-        }
-        let playback = nd_core::capture::MediaPlayback {
-            path: file.path.clone(),
-            kind: file.kind,
-            title: file.title(),
-        };
-        let source = nd_core::capture::CaptureSource::media_file(playback, (1920, 1080));
-        let photo = (file.kind == nd_core::media::MediaKind::Photo)
-            .then_some(Duration::from_secs(nd_chromecast::media::PHOTO_SECONDS));
-        stream_until_cancelled(&sink, source, &mut cancel, photo).await?;
-    }
-    Ok(())
 }
 
 async fn stream_until_cancelled(
@@ -1350,15 +1334,18 @@ mod tests {
     #[tokio::test]
     async fn stopping_a_playlist_does_not_start_the_next_item() {
         let sink = Arc::new(TestSink::new());
-        let (cancel, cancelled) = tokio::sync::watch::channel(false);
-        let queue =
-            play_files_by_mirroring(sink.clone(), vec![test_media(), test_media()], cancelled);
-        let stop = async {
-            sink.ready.notified().await;
-            cancel.send_replace(true);
-        };
-        let (result, _) = tokio::join!(queue, stop);
-        result.unwrap();
+        let session =
+            MediaSession::start_mirroring(sink.clone(), vec![test_media(), test_media()]).unwrap();
+        sink.ready.notified().await;
+        session.stop();
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !session.is_finished() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(session.status().error.is_none());
         assert_eq!(sink.started.load(std::sync::atomic::Ordering::SeqCst), 1);
         assert_eq!(sink.finished.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
@@ -1369,6 +1356,7 @@ mod tests {
         let sink: Arc<dyn Sink> = concrete.clone();
         let (_cancel, mut cancelled) = tokio::sync::watch::channel(false);
         let media = nd_core::capture::MediaPlayback {
+            control: None,
             path: "/unused/photo.jpg".into(),
             kind: nd_core::media::MediaKind::Photo,
             title: "Test".into(),
