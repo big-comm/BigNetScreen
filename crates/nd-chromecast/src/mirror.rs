@@ -63,10 +63,32 @@ pub const DEFAULT_TARGET_DELAY_MS: u32 = 150;
 /// holds frames for this long before showing them, which is what smooths out
 /// uneven arrival — and what delays the pointer by the same amount.
 pub fn target_delay_ms() -> u32 {
-    if nd_core::latency::is_film() {
+    let default = if nd_core::latency::is_film() {
         nd_core::latency::FILM_PLAYOUT_DELAY_MS
     } else {
         DEFAULT_TARGET_DELAY_MS
+    };
+    resolve_target_delay_ms(
+        default,
+        std::env::var("BIGNETSCREEN_CAST_TARGET_DELAY_MS")
+            .ok()
+            .as_deref(),
+    )
+}
+
+fn resolve_target_delay_ms(default: u32, override_value: Option<&str>) -> u32 {
+    match override_value {
+        Some(value) => match value.parse::<u32>() {
+            Ok(delay) => delay.clamp(50, 1_000),
+            Err(_) => {
+                tracing::warn!(
+                    value,
+                    "invalid BIGNETSCREEN_CAST_TARGET_DELAY_MS; using profile default"
+                );
+                default
+            }
+        },
+        None => default,
     }
 }
 
@@ -420,6 +442,58 @@ pub async fn negotiate(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn target_delay_keeps_profile_defaults_without_a_valid_override() {
+        for default in [
+            DEFAULT_TARGET_DELAY_MS,
+            nd_core::latency::FILM_PLAYOUT_DELAY_MS,
+        ] {
+            for value in [
+                None,
+                Some(""),
+                Some("invalid"),
+                Some("-1"),
+                Some("4294967296"),
+            ] {
+                assert_eq!(resolve_target_delay_ms(default, value), default);
+            }
+        }
+    }
+
+    #[test]
+    fn target_delay_override_is_bounded_for_both_profiles() {
+        for default in [
+            DEFAULT_TARGET_DELAY_MS,
+            nd_core::latency::FILM_PLAYOUT_DELAY_MS,
+        ] {
+            for (value, expected) in [
+                ("0", 50),
+                ("50", 50),
+                ("100", 100),
+                ("1000", 1000),
+                ("4294967295", 1000),
+            ] {
+                assert_eq!(resolve_target_delay_ms(default, Some(value)), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn offer_requests_the_same_delay_for_audio_and_video() {
+        for value in [None, Some("75"), Some("0"), Some("2000"), Some("invalid")] {
+            let cfg = MirrorConfig {
+                target_delay_ms: resolve_target_delay_ms(DEFAULT_TARGET_DELAY_MS, value),
+                ..Default::default()
+            };
+            let (payload, _) = build_offer(&cfg, 1).unwrap();
+            let streams = payload["offer"]["supportedStreams"].as_array().unwrap();
+            assert_eq!(streams.len(), 2);
+            for stream in streams {
+                assert_eq!(stream["targetDelay"], cfg.target_delay_ms);
+            }
+        }
+    }
 
     #[test]
     fn offer_has_the_fields_the_receiver_requires() {

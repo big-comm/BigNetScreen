@@ -122,8 +122,13 @@ unusual setups.
 | `BIGNETSCREEN_ENCODER=x264enc` | force an encoder (by default it tries the GPU and falls back to software on its own) |
 | `BIGNETSCREEN_PIPELINE_LATENCY_MS=N` | force the pipeline latency (`0` = automatic) |
 | `BIGNETSCREEN_LATENCY=1` | measure and log the per-stage latency |
+| `BIGNETSCREEN_CAST_TARGET_DELAY_MS=N` | experimental Cast mirroring buffer request, clamped to 50–1000 ms; overrides film mode (defaults without override: 150 ms, or 400 ms in film mode) |
 | `BIGNETSCREEN_LOCALEDIR=<dir>` | translations outside the install prefix |
 | `NETWORK_DISPLAYS_DUMMY=1` | inject fake receivers to exercise the UI |
+
+The Cast delay override applies to audio and video when starting a new session.
+Invalid values keep the profile default. Receivers may ignore the request;
+lower values can increase stuttering and do not increase encoding FPS.
 
 ## How it works
 

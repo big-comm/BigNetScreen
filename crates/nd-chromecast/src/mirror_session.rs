@@ -109,6 +109,11 @@ type HistoryEntry = (u8, std::time::Instant, Vec<Vec<u8>>);
 /// A stream's window of recent frames.
 type History = std::collections::VecDeque<HistoryEntry>;
 
+fn video_frame_interval(fps: u32) -> Duration {
+    // Round up so timestamp rounding cannot turn two frames into a false gap.
+    Duration::from_nanos(1_000_000_000u64.div_ceil(u64::from(fps.max(1))))
+}
+
 /// Streams one track (video or audio) from the `appsink` to the receiver.
 ///
 /// It runs on a thread of its own: `appsink` is a blocking API and the hot
@@ -126,6 +131,7 @@ struct StreamSender {
     socket: std::sync::Arc<UdpSocket>,
     target: SocketAddr,
     time_base: u32,
+    expected_frame_interval: Duration,
     frame_id: u32,
     label: &'static str,
     /// Recent packets, per frame, for serving retransmission requests.
@@ -153,7 +159,7 @@ impl StreamSender {
         stream: &OfferedStream,
         socket: std::sync::Arc<UdpSocket>,
         target: SocketAddr,
-        time_base: u32,
+        fps: u32,
         label: &'static str,
     ) -> Result<Self> {
         let sink = pipeline
@@ -168,7 +174,16 @@ impl StreamSender {
             keys: stream.keys.clone(),
             socket,
             target,
-            time_base,
+            time_base: if stream.is_video {
+                mirror::VIDEO_TIME_BASE
+            } else {
+                mirror::AUDIO_TIME_BASE
+            },
+            expected_frame_interval: if stream.is_video {
+                video_frame_interval(fps)
+            } else {
+                Duration::from_millis(10)
+            },
             frame_id: 0,
             label,
             history: std::collections::VecDeque::new(),
@@ -235,13 +250,8 @@ impl StreamSender {
             .push_back(((self.frame_id & 0xFF) as u8, now, packets));
         prune_history(&mut self.history, now);
 
-        // A 10 ms Opus frame for audio; at 30 fps video expects ~33 ms.
-        let esperado = if self.is_video() {
-            Duration::from_millis(33)
-        } else {
-            Duration::from_millis(10)
-        };
-        self.flow.record(pts.nseconds(), esperado);
+        self.flow
+            .record(pts.nseconds(), self.expected_frame_interval);
 
         self.send_report_if_due();
 
@@ -597,7 +607,7 @@ async fn stream(
             stream,
             socket.clone(),
             target,
-            mirror::VIDEO_TIME_BASE,
+            cfg.fps,
             "video",
         )?);
     }
@@ -608,7 +618,7 @@ async fn stream(
             stream,
             socket.clone(),
             target,
-            mirror::AUDIO_TIME_BASE,
+            cfg.fps,
             "audio",
         ) {
             Ok(sender) => senders.push(sender),
@@ -909,6 +919,43 @@ mod tests {
             "the receiver stopped responding".into()
         )));
         assert!(!is_unsupported(&NdError::Cancelled));
+    }
+
+    #[test]
+    fn flow_gap_detection_respects_configured_video_fps() {
+        for (fps, expected_jumps) in [(24, 0), (30, 0), (60, 1)] {
+            let mut flow = FlowWatch::default();
+            let interval = video_frame_interval(fps);
+            flow.record(0, interval);
+            flow.record(50_000_000, interval);
+            assert_eq!(flow.pts_jumps, expected_jumps, "{fps} fps");
+        }
+    }
+
+    #[test]
+    fn flow_tolerates_two_video_frames_with_timestamp_rounding() {
+        for fps in [24, 30, 60, 120, 144] {
+            let mut flow = FlowWatch::default();
+            let interval = video_frame_interval(fps);
+            for frame in [0, 2, 4, 6, 8] {
+                flow.record(frame * 1_000_000_000 / u64::from(fps), interval);
+            }
+            assert_eq!(flow.pts_jumps, 0, "{fps} fps");
+        }
+        assert_eq!(video_frame_interval(0), Duration::from_secs(1));
+    }
+
+    #[test]
+    fn flow_keeps_opus_ten_millisecond_cadence() {
+        let mut flow = FlowWatch::default();
+        let interval = Duration::from_millis(10);
+        for pts in [0, 10_000_000, 30_000_000] {
+            flow.record(pts, interval);
+        }
+        assert_eq!(flow.pts_jumps, 0);
+        flow.record(60_000_000, interval);
+        assert_eq!(flow.pts_jumps, 1);
+        assert_eq!(flow.worst_pts_jump_ms, 30);
     }
 
     /// Builds a history of `count` frames spaced `step` apart.
