@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-18 00:47-0300\n"
+"POT-Creation-Date: 2026-09-18 14:58-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Croatian <hr@li.org>\n"
@@ -15,7 +15,7 @@ msgstr ""
 "n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 "X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/pages/settings.rs:278
+#: crates/nd-gui/src/pages/settings.rs:287
 msgid ""
 "0 lets the system choose. Set one only if you opened a port on your firewall "
 "by hand."
@@ -23,35 +23,31 @@ msgstr ""
 "0 prepušta odabir sustavu. Postavite vrijednost samo ako ste ručno otvorili "
 "port na vatrozidu."
 
-#: crates/nd-gui/src/pages/devices.rs:472
-msgid "1 device found"
-msgstr "pronađen 1 uređaj"
-
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "24 FPS"
 msgstr "24 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "25 FPS"
 msgstr "25 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "30 FPS"
 msgstr "30 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "50 FPS"
 msgstr "50 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "60 FPS"
 msgstr "60 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:179
+#: crates/nd-gui/src/pages/settings.rs:188
 msgid "60 is smoother and costs about half as much again in bandwidth"
 msgstr "60 je glađe i košta otprilike pola više u propusnosti"
 
-#: crates/nd-gui/src/pages/settings.rs:115
+#: crates/nd-gui/src/pages/settings.rs:124
 msgid ""
 "A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver "
 "will accept it."
@@ -63,7 +59,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "Novi zaslon"
 
-#: crates/nd-gui/src/app.rs:1058
+#: crates/nd-gui/src/app.rs:1071
 msgid "A stream is already running"
 msgstr "Prijenos je već u tijeku"
 
@@ -91,7 +87,7 @@ msgstr "Svi protokoli"
 msgid "An extra desktop, just for this"
 msgstr "Dodatna radna površina, samo za ovo"
 
-#: crates/nd-gui/src/pages/settings.rs:163
+#: crates/nd-gui/src/pages/settings.rs:172
 msgid ""
 "Aspect ratio is preserved. Miracast uses a supported mode within these "
 "limits."
@@ -99,11 +95,11 @@ msgstr ""
 "Omjer slike ostaje sačuvan. Miracast koristi podržani način rada unutar ovih "
 "ograničenja."
 
-#: crates/nd-gui/src/pages/settings.rs:206
+#: crates/nd-gui/src/pages/settings.rs:215
 msgid "Audio"
 msgstr "Zvuk"
 
-#: crates/nd-gui/src/app.rs:534
+#: crates/nd-gui/src/app.rs:540
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
@@ -112,16 +108,16 @@ msgstr ""
 "potrajati nekoliko minuta. Ostavite aplikaciju otvorenom dok instalacija ne "
 "završi."
 
-#: crates/nd-gui/src/pages/settings.rs:98
+#: crates/nd-gui/src/pages/settings.rs:107
 msgid "Automatic"
 msgstr "Automatski"
 
 #: crates/nd-gui/src/pages/devices.rs:170
-#: crates/nd-gui/src/pages/settings.rs:258
+#: crates/nd-gui/src/pages/settings.rs:267
 msgid "Automatic discovery"
 msgstr "Automatsko otkrivanje"
 
-#: crates/nd-gui/src/app.rs:413 crates/nd-gui/src/app.rs:1007
+#: crates/nd-gui/src/app.rs:419 crates/nd-gui/src/app.rs:1020
 msgid "Automatic discovery is off"
 msgstr "Automatsko otkrivanje je isključeno"
 
@@ -133,11 +129,11 @@ msgstr "Dostupno"
 msgid "Back"
 msgstr "Natrag"
 
-#: crates/nd-gui/src/pages/media.rs:458 crates/nd-gui/src/pages/media.rs:1215
+#: crates/nd-gui/src/pages/media.rs:462 crates/nd-gui/src/pages/media.rs:1219
 msgid "Back 10 seconds"
 msgstr "Natrag 10 sekundi"
 
-#: crates/nd-gui/src/pages/settings.rs:194
+#: crates/nd-gui/src/pages/settings.rs:203
 msgid ""
 "Buffers the picture so video plays smoothly, at the cost of delay. On "
 "Miracast it is applied here; on Chromecast it is a request the receiver may "
@@ -151,15 +147,15 @@ msgstr ""
 msgid "Can't find your device?"
 msgstr "Ne možete pronaći svoj uređaj?"
 
-#: crates/nd-gui/src/pages/media.rs:795
+#: crates/nd-gui/src/pages/media.rs:799
 msgid "Choose a device…"
 msgstr "Odaberite uređaj…"
 
-#: crates/nd-gui/src/pages/media.rs:1008
+#: crates/nd-gui/src/pages/media.rs:1012
 msgid "Choose a folder"
 msgstr "Odaberite mapu"
 
-#: crates/nd-gui/src/pages/media.rs:1010
+#: crates/nd-gui/src/pages/media.rs:1014
 msgid "Choose files"
 msgstr "Odaberite datoteke"
 
@@ -175,7 +171,7 @@ msgstr ""
 "U OBS-u ili drugom NDI prijamniku odaberite ovo računalo. Koristit će se "
 "naziv i postavke zvuka iz Postavki."
 
-#: crates/nd-gui/src/pages/media.rs:820
+#: crates/nd-gui/src/pages/media.rs:824
 msgid "Choose which device to send to."
 msgstr "Odaberite uređaj na koji želite poslati."
 
@@ -187,7 +183,7 @@ msgstr "Chromecast"
 msgid "Chromecast / AirPlay"
 msgstr "Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/settings.rs:100
+#: crates/nd-gui/src/pages/settings.rs:109
 msgid "Chromecast / AirPlay only"
 msgstr "Samo Chromecast / AirPlay"
 
@@ -201,11 +197,11 @@ msgstr ""
 "u načinu zrcaljenja zaslona — na Fire TV-u, pod Postavke › Zaslon i zvuk › "
 "Zrcaljenje zaslona."
 
-#: crates/nd-gui/src/pages/media.rs:342
+#: crates/nd-gui/src/pages/media.rs:346
 msgid "Clear queue"
 msgstr "Isprazni red čekanja"
 
-#: crates/nd-gui/src/app.rs:693 crates/nd-gui/src/app.rs:810
+#: crates/nd-gui/src/app.rs:699 crates/nd-gui/src/app.rs:822
 msgid "Close"
 msgstr "Zatvori"
 
@@ -221,7 +217,7 @@ msgstr "Povezano"
 msgid "Connected to"
 msgstr "Povezano s"
 
-#: crates/nd-gui/src/app.rs:1080 crates/nd-gui/src/pages/mod.rs:171
+#: crates/nd-gui/src/app.rs:1093 crates/nd-gui/src/pages/mod.rs:171
 msgid "Connecting…"
 msgstr "Povezivanje…"
 
@@ -233,7 +229,7 @@ msgstr "Veza"
 msgid "Connection quality"
 msgstr "Kvaliteta veze"
 
-#: crates/nd-gui/src/pages/settings.rs:130
+#: crates/nd-gui/src/pages/settings.rs:139
 msgid "Custom resolution"
 msgstr "Prilagođena razlučivost"
 
@@ -245,7 +241,7 @@ msgstr "Uređaji"
 msgid "Disconnect"
 msgstr "Prekini vezu"
 
-#: crates/nd-gui/src/pages/settings.rs:253
+#: crates/nd-gui/src/pages/settings.rs:262
 msgid "Discovery and devices"
 msgstr "Otkrivanje i uređaji"
 
@@ -275,7 +271,7 @@ msgstr "Dodatni zaslon"
 msgid "Failed"
 msgstr "Neuspješno"
 
-#: crates/nd-gui/src/pages/settings.rs:192
+#: crates/nd-gui/src/pages/settings.rs:201
 msgid "Film mode"
 msgstr "Filmski način"
 
@@ -287,11 +283,11 @@ msgstr "Pronađi i poveži se s obližnjim bežičnim prijamnicima."
 msgid "Find compatible devices"
 msgstr "Pronađi kompatibilne uređaje"
 
-#: crates/nd-gui/src/pages/media.rs:875
+#: crates/nd-gui/src/pages/media.rs:879
 msgid "Finished"
 msgstr "Završeno"
 
-#: crates/nd-gui/src/pages/settings.rs:276
+#: crates/nd-gui/src/pages/settings.rs:285
 msgid "Fixed port"
 msgstr "Fiksni port"
 
@@ -299,11 +295,11 @@ msgstr "Fiksni port"
 msgid "For Chromecast, connect both devices to the same Wi-Fi network."
 msgstr "Za Chromecast povežite oba uređaja na istu Wi-Fi mrežu."
 
-#: crates/nd-gui/src/pages/media.rs:474 crates/nd-gui/src/pages/media.rs:1216
+#: crates/nd-gui/src/pages/media.rs:478 crates/nd-gui/src/pages/media.rs:1220
 msgid "Forward 10 seconds"
 msgstr "Naprijed 10 sekundi"
 
-#: crates/nd-gui/src/pages/settings.rs:177
+#: crates/nd-gui/src/pages/settings.rs:186
 msgid "Frame rate"
 msgstr "Broj sličica u sekundi"
 
@@ -315,11 +311,11 @@ msgstr "Dobro"
 msgid "Got it"
 msgstr "Razumijem"
 
-#: crates/nd-gui/src/pages/settings.rs:162
+#: crates/nd-gui/src/pages/settings.rs:171
 msgid "Height (pixels)"
 msgstr "Visina (u pikselima)"
 
-#: crates/nd-gui/src/pages/settings.rs:122
+#: crates/nd-gui/src/pages/settings.rs:131
 msgid "High (1080p)"
 msgstr "Visoka (1080p)"
 
@@ -327,19 +323,19 @@ msgstr "Visoka (1080p)"
 msgid "Home"
 msgstr "Početna"
 
-#: crates/nd-gui/src/pages/settings.rs:211
+#: crates/nd-gui/src/pages/settings.rs:220
 msgid "Include system audio"
 msgstr "Uključi sistemski zvuk"
 
-#: crates/nd-gui/src/pages/settings.rs:221
+#: crates/nd-gui/src/pages/settings.rs:230
 msgid "Include the microphone"
 msgstr "Uključi mikrofon"
 
-#: crates/nd-gui/src/app.rs:813
+#: crates/nd-gui/src/app.rs:825
 msgid "Install"
 msgstr "Instaliraj"
 
-#: crates/nd-gui/src/app.rs:674
+#: crates/nd-gui/src/app.rs:680
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
@@ -347,7 +343,7 @@ msgstr ""
 "Instalacija nije uspjela ili je autentifikacija otkazana. Možete pokušati "
 "ponovno ili ručno instalirati biblioteku."
 
-#: crates/nd-gui/src/app.rs:533
+#: crates/nd-gui/src/app.rs:539
 msgid "Installing NDI…"
 msgstr "Instalacija NDI-ja…"
 
@@ -359,11 +355,11 @@ msgstr "Držite sve uređaje na istoj Wi-Fi mreži za najbolje rezultate."
 msgid "Keep the receiver ready"
 msgstr "Pripremite prijamnik"
 
-#: crates/nd-gui/src/app.rs:1293
+#: crates/nd-gui/src/app.rs:1306
 msgid "Local network discovery unavailable"
 msgstr "Otkrivanje lokalne mreže nije dostupno"
 
-#: crates/nd-gui/src/pages/settings.rs:260
+#: crates/nd-gui/src/pages/settings.rs:269
 msgid "Look for receivers as soon as the app starts"
 msgstr "Traži prijemnike čim se aplikacija pokrene"
 
@@ -371,11 +367,11 @@ msgstr "Traži prijemnike čim se aplikacija pokrene"
 msgid "Looking for receivers…"
 msgstr "Tražim prijamnike…"
 
-#: crates/nd-gui/src/pages/settings.rs:124
+#: crates/nd-gui/src/pages/settings.rs:133
 msgid "Low (480p)"
 msgstr "Niska (480p)"
 
-#: crates/nd-gui/src/pages/settings.rs:120
+#: crates/nd-gui/src/pages/settings.rs:129
 msgid "Maximum (2160p)"
 msgstr "Maksimalno (2160p)"
 
@@ -387,11 +383,11 @@ msgstr "Mjerenje…"
 msgid "Media"
 msgstr "Mediji"
 
-#: crates/nd-gui/src/pages/settings.rs:123
+#: crates/nd-gui/src/pages/settings.rs:132
 msgid "Medium (720p)"
 msgstr "Srednja (720p)"
 
-#: crates/nd-gui/src/pages/settings.rs:230
+#: crates/nd-gui/src/pages/settings.rs:239
 msgid "Microphone volume"
 msgstr "Jačina mikrofona"
 
@@ -399,14 +395,14 @@ msgstr "Jačina mikrofona"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1352
+#: crates/nd-gui/src/app.rs:1365
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
 msgstr ""
 "Miracast ne radi u Flatpak verziji (potreban je sistemski NetworkManager)"
 
-#: crates/nd-gui/src/app.rs:1360
+#: crates/nd-gui/src/app.rs:1373
 msgid ""
 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
 "network still works."
@@ -414,15 +410,15 @@ msgstr ""
 "Miracast zahtijeva Wi-Fi adapter, a ovo računalo ga nema. Slanje putem mreže "
 "i dalje radi."
 
-#: crates/nd-gui/src/pages/settings.rs:99
+#: crates/nd-gui/src/pages/settings.rs:108
 msgid "Miracast only"
 msgstr "Samo Miracast"
 
-#: crates/nd-gui/src/app.rs:1368
+#: crates/nd-gui/src/app.rs:1381
 msgid "Miracast unavailable"
 msgstr "Miracast nije dostupan"
 
-#: crates/nd-gui/src/app.rs:1366
+#: crates/nd-gui/src/app.rs:1379
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast nije dostupan: ova Wi-Fi kartica ne podržava Wi-Fi Direct"
 
@@ -430,34 +426,34 @@ msgstr "Miracast nije dostupan: ova Wi-Fi kartica ne podržava Wi-Fi Direct"
 msgid "Mirror screen"
 msgstr "Preslikaj zaslon"
 
-#: crates/nd-gui/src/pages/settings.rs:223
+#: crates/nd-gui/src/pages/settings.rs:232
 msgid "Mix your voice into what is sent"
 msgstr "Umiješaj svoj glas u ono što se šalje"
 
-#: crates/nd-gui/src/pages/media.rs:544
+#: crates/nd-gui/src/pages/media.rs:548
 msgid "Music"
 msgstr "Glazba"
 
-#: crates/nd-gui/src/app.rs:673
+#: crates/nd-gui/src/app.rs:679
 msgid "NDI installation did not finish"
 msgstr "Instalacija NDI-ja nije dovršena"
 
-#: crates/nd-gui/src/app.rs:667
+#: crates/nd-gui/src/app.rs:673
 msgid "NDI installed"
 msgstr "NDI je instaliran"
 
-#: crates/nd-gui/src/app.rs:804
+#: crates/nd-gui/src/app.rs:816
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
 "ask for administrator authentication. Other sharing methods work without it."
 msgstr ""
 "NDI zahtijeva vlasničku biblioteku koja nije uključena u BigNetScreen. "
-"Želite li instalirati ndi-sdk iz AUR-a i potrebne alate za izgradnju? "
-"Sustav će zatražiti administratorsku autentifikaciju. Ostali načini "
-"dijeljenja rade i bez te biblioteke."
+"Želite li instalirati ndi-sdk iz AUR-a i potrebne alate za izgradnju? Sustav "
+"će zatražiti administratorsku autentifikaciju. Ostali načini dijeljenja rade "
+"i bez te biblioteke."
 
-#: crates/nd-gui/src/app.rs:806
+#: crates/nd-gui/src/app.rs:818
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
@@ -467,23 +463,23 @@ msgstr ""
 "Instalirajte runtime NDI 5 ili 6 za svoju distribuciju, a zatim ponovno "
 "pokrenite aplikaciju. Ostali načini dijeljenja rade i bez te biblioteke."
 
-#: crates/nd-gui/src/app.rs:809 crates/nd-gui/src/app.rs:1102
+#: crates/nd-gui/src/app.rs:821 crates/nd-gui/src/app.rs:1115
 msgid "NDI runtime required"
 msgstr "Potrebno je NDI izvršno okruženje"
 
-#: crates/nd-gui/src/app.rs:830 crates/nd-gui/src/app.rs:1384
+#: crates/nd-gui/src/app.rs:842 crates/nd-gui/src/app.rs:1397
 msgid "NDI setup"
 msgstr "Postavljanje NDI-ja"
 
-#: crates/nd-gui/src/app.rs:521
+#: crates/nd-gui/src/app.rs:527
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI nije dostupan. Pogledajte vodič za postavljanje NDI-ja."
 
-#: crates/nd-gui/src/pages/media.rs:481 crates/nd-gui/src/pages/media.rs:1217
+#: crates/nd-gui/src/pages/media.rs:485 crates/nd-gui/src/pages/media.rs:1221
 msgid "Next file"
 msgstr "Sljedeća datoteka"
 
-#: crates/nd-gui/src/pages/media.rs:817
+#: crates/nd-gui/src/pages/media.rs:821
 msgid "No device found yet. Turn your TV, projector or Chromecast on."
 msgstr "Uređaj još nije pronađen. Uključite TV, projektor ili Chromecast."
 
@@ -491,27 +487,27 @@ msgstr "Uređaj još nije pronađen. Uključite TV, projektor ili Chromecast."
 msgid "No devices found"
 msgstr "Nisu pronađeni uređaji"
 
-#: crates/nd-gui/src/pages/media.rs:848
+#: crates/nd-gui/src/pages/media.rs:852
 msgid "No music in your Music folder. Use “Select files”."
 msgstr "Nema glazbe u mapi Glazba. Koristite „Odaberi datoteke”."
 
-#: crates/nd-gui/src/pages/media.rs:846
+#: crates/nd-gui/src/pages/media.rs:850
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "Nema fotografija u mapi Slike. Koristite „Odaberi datoteke”."
 
-#: crates/nd-gui/src/app.rs:1015 crates/nd-gui/src/pages/home.rs:925
+#: crates/nd-gui/src/app.rs:1028 crates/nd-gui/src/pages/home.rs:925
 msgid "No receivers found"
 msgstr "Nisu pronađeni prijamnici"
 
-#: crates/nd-gui/src/pages/media.rs:847
+#: crates/nd-gui/src/pages/media.rs:851
 msgid "No videos in your Videos folder. Use “Select files”."
 msgstr "Nema videa u mapi Videi. Koristite „Odaberi datoteke”."
 
-#: crates/nd-gui/src/pages/media.rs:854
+#: crates/nd-gui/src/pages/media.rs:858
 msgid "Nothing selected"
 msgstr "Ništa nije odabrano"
 
-#: crates/nd-gui/src/pages/media.rs:444
+#: crates/nd-gui/src/pages/media.rs:448
 msgid "Now playing"
 msgstr "Trenutačno se reproducira"
 
@@ -523,11 +519,11 @@ msgstr "Samo jedan prozor"
 msgid "Opening the firewall port…"
 msgstr "Otvaranje vatrenog zida…"
 
-#: crates/nd-gui/src/pages/media.rs:467
+#: crates/nd-gui/src/pages/media.rs:471
 msgid "Pause"
 msgstr "Pauziraj"
 
-#: crates/nd-gui/src/pages/media.rs:544
+#: crates/nd-gui/src/pages/media.rs:548
 msgid "Photos"
 msgstr "Fotografije"
 
@@ -535,11 +531,11 @@ msgstr "Fotografije"
 msgid "Photos, videos and music"
 msgstr "Fotografije, videozapisi i glazba"
 
-#: crates/nd-gui/src/pages/media.rs:257
+#: crates/nd-gui/src/pages/media.rs:261
 msgid "Pick files and choose where to play them."
 msgstr "Odaberite datoteke i odredite gdje će se reproducirati."
 
-#: crates/nd-gui/src/pages/settings.rs:94
+#: crates/nd-gui/src/pages/settings.rs:103
 msgid "Preferred protocol"
 msgstr "Željeni protokol"
 
@@ -555,7 +551,7 @@ msgstr "Protokol"
 msgid "Publish with NDI"
 msgstr "Objavi putem NDI-ja"
 
-#: crates/nd-gui/src/pages/media.rs:336
+#: crates/nd-gui/src/pages/media.rs:340
 msgid "Queue"
 msgstr "Red čekanja"
 
@@ -579,27 +575,27 @@ msgstr "Osvježi"
 msgid "Refresh the device list and check that your receiver is turned on."
 msgstr "Osvježite popis uređaja i provjerite je li prijamnik uključen."
 
-#: crates/nd-gui/src/pages/media.rs:776
+#: crates/nd-gui/src/pages/media.rs:780
 msgid "Remove from queue"
 msgstr "Ukloni iz reda čekanja"
 
-#: crates/nd-gui/src/pages/settings.rs:113
+#: crates/nd-gui/src/pages/settings.rs:122
 msgid "Resolution limit"
 msgstr "Maksimalna razlučivost"
 
-#: crates/nd-gui/src/app.rs:668
+#: crates/nd-gui/src/app.rs:674
 msgid "Restart BigNetScreen to use NDI."
 msgstr "Ponovno pokrenite BigNetScreen da biste koristili NDI."
 
-#: crates/nd-gui/src/pages/settings.rs:324
+#: crates/nd-gui/src/pages/settings.rs:333
 msgid "Restore defaults"
 msgstr "Vrati zadane postavke"
 
-#: crates/nd-gui/src/pages/media.rs:467 crates/nd-gui/src/pages/media.rs:1214
+#: crates/nd-gui/src/pages/media.rs:471 crates/nd-gui/src/pages/media.rs:1218
 msgid "Resume"
 msgstr "Nastavi"
 
-#: crates/nd-gui/src/pages/settings.rs:307
+#: crates/nd-gui/src/pages/settings.rs:316
 msgid "Saved as you change them"
 msgstr "Sprema se automatski pri promjeni"
 
@@ -611,20 +607,20 @@ msgstr "Ponovno skeniraj"
 msgid "Screen"
 msgstr "Zaslon"
 
-#: crates/nd-gui/src/app.rs:411 crates/nd-gui/src/app.rs:560
-#: crates/nd-gui/src/app.rs:1013
+#: crates/nd-gui/src/app.rs:417 crates/nd-gui/src/app.rs:566
+#: crates/nd-gui/src/app.rs:1026
 msgid "Searching…"
 msgstr "Pretraživanje…"
 
-#: crates/nd-gui/src/pages/media.rs:285
+#: crates/nd-gui/src/pages/media.rs:289
 msgid "Select files"
 msgstr "Odaberi datoteke"
 
-#: crates/nd-gui/src/pages/media.rs:943
+#: crates/nd-gui/src/pages/media.rs:947
 msgid "Select up to 1000 files at a time."
 msgstr "Odaberite najviše 1000 datoteka odjednom."
 
-#: crates/nd-gui/src/pages/media.rs:294
+#: crates/nd-gui/src/pages/media.rs:298
 msgid "Send a folder"
 msgstr "Pošalji mapu"
 
@@ -632,31 +628,31 @@ msgstr "Pošalji mapu"
 msgid "Send media"
 msgstr "Pošalji medije"
 
-#: crates/nd-gui/src/pages/media.rs:391
+#: crates/nd-gui/src/pages/media.rs:395
 msgid "Send to"
 msgstr "Pošalji na"
 
-#: crates/nd-gui/src/pages/media.rs:416
+#: crates/nd-gui/src/pages/media.rs:420
 msgid "Send to device"
 msgstr "Pošalji na uređaj"
 
-#: crates/nd-gui/src/pages/settings.rs:213
+#: crates/nd-gui/src/pages/settings.rs:222
 msgid "Send whatever this computer is playing"
 msgstr "Pošalji ono što ovo računalo reproducira"
 
-#: crates/nd-gui/src/app.rs:1142
+#: crates/nd-gui/src/app.rs:1155
 msgid "Sending files…"
 msgstr "Slanje datoteka…"
 
-#: crates/nd-gui/src/pages/mod.rs:50 crates/nd-gui/src/pages/settings.rs:83
+#: crates/nd-gui/src/pages/mod.rs:50 crates/nd-gui/src/pages/settings.rs:92
 msgid "Settings"
 msgstr "Postavke"
 
-#: crates/nd-gui/src/pages/settings.rs:510
+#: crates/nd-gui/src/pages/settings.rs:546
 msgid "Settings cannot be saved on this system."
 msgstr "Postavke se ne mogu spremiti na ovom sustavu."
 
-#: crates/nd-gui/src/pages/media.rs:256
+#: crates/nd-gui/src/pages/media.rs:260
 msgid "Share media"
 msgstr "Dijeli medije"
 
@@ -664,7 +660,7 @@ msgstr "Dijeli medije"
 msgid "Share your screen wirelessly"
 msgstr "Dijelite svoj zaslon bežično"
 
-#: crates/nd-gui/src/app.rs:1381
+#: crates/nd-gui/src/app.rs:1394
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "Dijelite svoj zaslon s TV-om, projektorom ili Chromecastom."
 
@@ -692,19 +688,19 @@ msgstr "Status"
 msgid "Stop"
 msgstr "Zaustavi"
 
-#: crates/nd-gui/src/pages/media.rs:489
+#: crates/nd-gui/src/pages/media.rs:493
 msgid "Stop sending"
 msgstr "Zaustavi slanje"
 
-#: crates/nd-gui/src/app.rs:1136
+#: crates/nd-gui/src/app.rs:1149
 msgid "Stop sharing your screen before sending files"
 msgstr "Prestanite dijeliti zaslon prije slanja datoteka"
 
-#: crates/nd-gui/src/app.rs:1047
+#: crates/nd-gui/src/app.rs:1060
 msgid "Stopping…"
 msgstr "Zaustavljanje…"
 
-#: crates/nd-gui/src/pages/mod.rs:175 crates/nd-gui/src/pages/settings.rs:89
+#: crates/nd-gui/src/pages/mod.rs:175 crates/nd-gui/src/pages/settings.rs:98
 msgid "Streaming"
 msgstr "Prijenos uživo"
 
@@ -716,8 +712,8 @@ msgstr "Prijenos uživo na"
 msgid "Test"
 msgstr "Test"
 
-#: crates/nd-gui/src/app.rs:1066 crates/nd-gui/src/app.rs:1129
-#: crates/nd-gui/src/app.rs:1146
+#: crates/nd-gui/src/app.rs:1079 crates/nd-gui/src/app.rs:1142
+#: crates/nd-gui/src/app.rs:1159
 msgid "That device is no longer available"
 msgstr "Taj uređaj više nije dostupan"
 
@@ -725,11 +721,11 @@ msgstr "Taj uređaj više nije dostupan"
 msgid "The receiver is not answering"
 msgstr "Prijamnik ne odgovara"
 
-#: crates/nd-gui/src/pages/settings.rs:84
+#: crates/nd-gui/src/pages/settings.rs:93
 msgid "These apply to your next session."
 msgstr "To se primjenjuje na vašu sljedeću sesiju."
 
-#: crates/nd-gui/src/pages/settings.rs:268
+#: crates/nd-gui/src/pages/settings.rs:277
 msgid "This computer's name"
 msgstr "Naziv ovog računala"
 
@@ -744,15 +740,15 @@ msgstr ""
 msgid "Tips"
 msgstr "Savjeti"
 
-#: crates/nd-gui/src/pages/settings.rs:121
+#: crates/nd-gui/src/pages/settings.rs:130
 msgid "Very high (1440p)"
 msgstr "Vrlo visoko (1440p)"
 
-#: crates/nd-gui/src/pages/media.rs:544
+#: crates/nd-gui/src/pages/media.rs:548
 msgid "Videos"
 msgstr "Videozapisi"
 
-#: crates/nd-gui/src/app.rs:828
+#: crates/nd-gui/src/app.rs:840
 msgid "View ndi-sdk in the AUR"
 msgstr "Prikaži ndi-sdk u AUR-u"
 
@@ -768,7 +764,7 @@ msgstr "Slab signal"
 msgid "What do you want to share?"
 msgstr "Što želite podijeliti?"
 
-#: crates/nd-gui/src/pages/settings.rs:96
+#: crates/nd-gui/src/pages/settings.rs:105
 msgid "Which kind of receiver to look for"
 msgstr "Koju vrstu prijamnika tražiti"
 
@@ -776,7 +772,7 @@ msgstr "Koju vrstu prijamnika tražiti"
 msgid "Whole screen"
 msgstr "Cijeli zaslon"
 
-#: crates/nd-gui/src/pages/settings.rs:150
+#: crates/nd-gui/src/pages/settings.rs:159
 msgid "Width (pixels)"
 msgstr "Širina (u pikselima)"
 
@@ -784,15 +780,11 @@ msgstr "Širina (u pikselima)"
 msgid "Window"
 msgstr "Prozor"
 
-#: crates/nd-gui/src/pages/devices.rs:473
-msgid "devices found"
-msgstr "pronađenih uređaja"
-
 #: crates/nd-gui/src/pages/mod.rs:187
 msgid "instant response"
 msgstr "trenutačan odgovor"
 
-#: crates/nd-gui/src/pages/media.rs:888
+#: crates/nd-gui/src/pages/media.rs:892
 msgid "item"
 msgstr "stavka"
 
@@ -808,18 +800,25 @@ msgstr "još nije objavljeno"
 msgid "quick response"
 msgstr "brz odgovor"
 
-#: crates/nd-gui/src/app.rs:1074
+#: crates/nd-gui/src/app.rs:1087
 msgid "shows up in discovery only"
 msgstr "prikazuje se samo u otkrivanju"
 
-#: crates/nd-gui/src/pages/media.rs:855
+#: crates/nd-gui/src/pages/devices.rs:473
+msgid "{} device found"
+msgid_plural "{} devices found"
+msgstr[0] "pronađen {} uređaj"
+msgstr[1] "{} pronađenih uređaja"
+msgstr[2] "{} pronađenih uređaja"
+
+#: crates/nd-gui/src/pages/media.rs:859
 msgid "{} file selected"
 msgid_plural "{} files selected"
 msgstr[0] "Odabrana je {} datoteka"
 msgstr[1] "Odabrane su {} datoteke"
 msgstr[2] "Odabrano je {} datoteka"
 
-#: crates/nd-gui/src/app.rs:1018
+#: crates/nd-gui/src/app.rs:1031
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "Pronađen je {} prijamnik"

@@ -386,8 +386,8 @@ impl FlowWatch {
         let now = std::time::Instant::now();
         if let Some(prev) = self.last_pts_ns {
             let delta = pts_ns.saturating_sub(prev);
-            let limite = expected.as_nanos() as u64 * 2;
-            if delta > limite {
+            let limit = expected.as_nanos() as u64 * 2;
+            if delta > limit {
                 self.pts_jumps += 1;
                 self.worst_pts_jump_ms = self.worst_pts_jump_ms.max(delta / 1_000_000);
             }
@@ -474,7 +474,7 @@ pub async fn run(
     // `nd_core::radio`).
     let _radio = nd_core::radio::quiet();
 
-    // 1. Canal de controle e app de espelhamento.
+    // 1. Control channel and mirroring app.
     let channel = CastChannel::connect_to(receiver_ip, receiver_port).await?;
     let app = channel.launch(MIRRORING_APP_ID).await?;
     let result = async {
@@ -595,7 +595,7 @@ async fn stream(
         .connect(target)
         .map_err(|e| NdError::Network(e.to_string()))?;
     tracing::debug!(
-        origem = ?socket.local_addr().ok(),
+        source = ?socket.local_addr().ok(),
         target = %target,
         "mirroring session socket"
     );
@@ -842,20 +842,20 @@ async fn stream(
                     }
 
                     if last_stats.elapsed() >= Duration::from_secs(5) {
-                        let (quadros, saltos, pior_salto, pior_envio) = sender.flow.take();
+                        let (frames, pts_jumps, worst_jump, worst_send) = sender.flow.take();
                         tracing::debug!(
                             stream = label,
-                            quadros,
-                            saltos_de_pts = saltos,
-                            pior_salto_ms = pior_salto,
-                            pior_envio_ms = pior_envio,
+                            frames,
+                            pts_jumps,
+                            worst_jump_ms = worst_jump,
+                            worst_send_ms = worst_send,
                             "outgoing flow"
                         );
                         tracing::debug!(
                             stream = label,
                             nacks = nacks_seen,
-                            reenviados = packets_resent,
-                            expirados = nacks_expired,
+                            resent = packets_resent,
+                            expired = nacks_expired,
                             "retransmission requests"
                         );
                         last_stats = std::time::Instant::now();

@@ -9,15 +9,21 @@
 //!   configuration: a reboot or a `firewall-cmd --reload` discards them;
 //! - the scope is the **P2P interface's zone**, not the whole machine;
 //! - if firewalld is not installed/active, everything becomes a silent no-op
-//!   (the user may be on ufw, raw nftables, or no firewall at all).
+//!   (the user may be on ufw, raw nftables, or no firewall at all);
+//! - the rules applied are **remembered on disk** while they are open, so a
+//!   run that dies without releasing them (crash, `SIGKILL`) does not leave
+//!   the ports open until the next reboot: the next run closes them first
+//!   (see [`release_stale`]).
+
+use std::path::PathBuf;
 
 use zbus::Connection;
 
 use nd_core::{NdError, Result};
 
-/// Porta do servidor RTSP do WFD.
+/// Port of the WFD RTSP server.
 pub const RTSP_PORT: u16 = 7236;
-/// Portas RTP/RTCP locais (o RTCP de volta do sink chega em `+1`).
+/// Local RTP/RTCP ports (the RTCP coming back from the sink arrives at `+1`).
 pub const RTP_PORTS: &str = "16384-16385";
 
 #[zbus::proxy(
@@ -74,6 +80,96 @@ impl FirewallLease {
     pub fn zone(&self) -> &str {
         &self.zone
     }
+
+    /// The on-disk form: the zone, then one `port protocol` per line.
+    fn to_file(&self) -> String {
+        let mut out = format!("{}\n", self.zone);
+        for (port, proto) in &self.ports {
+            out.push_str(port);
+            out.push(' ');
+            out.push_str(proto);
+            out.push('\n');
+        }
+        out
+    }
+
+    /// Reads back what [`Self::to_file`] wrote; `None` if the file makes no
+    /// sense (there is nothing safe to do with a half-written zone name).
+    fn from_file(contents: &str) -> Option<Self> {
+        let mut lines = contents.lines();
+        let zone = lines.next()?.trim();
+        if zone.is_empty() {
+            return None;
+        }
+        let ports = lines
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| {
+                let mut parts = line.split_whitespace();
+                Some((parts.next()?.to_string(), parts.next()?.to_string()))
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some(Self {
+            zone: zone.to_string(),
+            ports,
+        })
+    }
+}
+
+/// Where the open rules are remembered between runs.
+fn lease_path() -> Option<PathBuf> {
+    let base = std::env::var_os("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/state"))
+        })?;
+    Some(base.join("bignetscreen").join("firewall-lease"))
+}
+
+/// Writes the lease down so a later run can undo it if this one cannot.
+fn remember(lease: &FirewallLease) {
+    if lease.is_noop() {
+        return;
+    }
+    let Some(path) = lease_path() else {
+        return;
+    };
+    if let Err(err) = nd_core::persistence::write_private(&path, lease.to_file().as_bytes()) {
+        tracing::warn!(%err, path = %path.display(), "could not record the firewall lease");
+    }
+}
+
+/// The lease was released: nothing left to remember.
+fn forget() {
+    let Some(path) = lease_path() else {
+        return;
+    };
+    if let Err(err) = std::fs::remove_file(&path) {
+        if err.kind() != std::io::ErrorKind::NotFound {
+            tracing::debug!(%err, "could not remove the firewall lease record");
+        }
+    }
+}
+
+/// Closes the ports a previous run left open and forgets them.
+///
+/// Meant for startup and for right before opening new ports; both are no-ops
+/// when nothing was left behind.
+pub async fn release_stale() {
+    let Some(path) = lease_path() else {
+        return;
+    };
+    let contents = match std::fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(_) => return,
+    };
+    let Some(lease) = FirewallLease::from_file(&contents) else {
+        tracing::warn!(path = %path.display(), "unreadable firewall lease record; discarding it");
+        forget();
+        return;
+    };
+    tracing::info!(zone = %lease.zone, "closing firewall ports left open by a previous run");
+    release(lease).await;
 }
 
 async fn connect() -> Option<Connection> {
@@ -97,6 +193,7 @@ pub async fn ensure_ports_open(interface: Option<&str>) -> Result<FirewallLease>
     let Some(conn) = connect().await else {
         return Ok(FirewallLease::noop());
     };
+    release_stale().await;
 
     let zone_proxy = match FirewallZoneProxy::new(&conn).await {
         Ok(p) => p,
@@ -153,7 +250,7 @@ pub async fn ensure_ports_open(interface: Option<&str>) -> Result<FirewallLease>
         }
         match zone_proxy.add_port(&zone, &port, &proto, 0).await {
             Ok(_) => {
-                tracing::info!(%zone, %port, %proto, "porta aberta no firewalld");
+                tracing::info!(%zone, %port, %proto, "port opened in firewalld");
                 applied.push((port, proto));
             }
             Err(err) => {
@@ -169,10 +266,12 @@ pub async fn ensure_ports_open(interface: Option<&str>) -> Result<FirewallLease>
         }
     }
 
-    Ok(FirewallLease {
+    let lease = FirewallLease {
         zone,
         ports: applied,
-    })
+    };
+    remember(&lease);
+    Ok(lease)
 }
 
 /// firewalld's default zone, or `None` when firewalld is not there.
@@ -205,6 +304,10 @@ pub async fn release(lease: FirewallLease) {
     if lease.is_noop() {
         return;
     }
+    // Forgotten before the attempt rather than after: a record that keeps
+    // pointing at ports firewalld already dropped would only make the next
+    // run log spurious failures.
+    forget();
     let Some(conn) = connect().await else {
         return;
     };
@@ -214,7 +317,7 @@ pub async fn release(lease: FirewallLease) {
 
     for (port, proto) in &lease.ports {
         match zone_proxy.remove_port(&lease.zone, port, proto).await {
-            Ok(_) => tracing::info!(zone = %lease.zone, %port, %proto, "porta fechada"),
+            Ok(_) => tracing::info!(zone = %lease.zone, %port, %proto, "port closed"),
             Err(err) => {
                 tracing::warn!(zone = %lease.zone, %port, %proto, %err, "failed to close the port")
             }
@@ -225,6 +328,28 @@ pub async fn release(lease: FirewallLease) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lease_record_round_trips() {
+        let lease = FirewallLease {
+            zone: "public".into(),
+            ports: vec![
+                (RTSP_PORT.to_string(), "tcp".into()),
+                (RTP_PORTS.to_string(), "udp".into()),
+            ],
+        };
+        assert_eq!(FirewallLease::from_file(&lease.to_file()), Some(lease));
+        assert_eq!(FirewallLease::from_file(""), None);
+        assert_eq!(FirewallLease::from_file("\n7236 tcp\n"), None);
+        assert_eq!(FirewallLease::from_file("public\n7236\n"), None);
+        assert_eq!(
+            FirewallLease::from_file("home\n"),
+            Some(FirewallLease {
+                zone: "home".into(),
+                ports: Vec::new(),
+            })
+        );
+    }
 
     #[test]
     fn noop_lease_releases_cleanly() {

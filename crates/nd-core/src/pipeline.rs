@@ -195,28 +195,28 @@ pub fn instrument_latency(pipeline: &gst::Pipeline) {
             let Some(now) = clock.time().checked_sub(base) else {
                 return gst::PadProbeReturn::Ok;
             };
-            let Some(idade) = now.checked_sub(pts) else {
+            let Some(age) = now.checked_sub(pts) else {
                 return gst::PadProbeReturn::Ok;
             };
 
-            let ms = idade.mseconds();
+            let ms = age.mseconds();
             if let Ok(mut guard) = state.lock() {
-                let (ref mut last, ref mut n, ref mut soma, ref mut pior) = *guard;
+                let (ref mut last, ref mut n, ref mut sum, ref mut worst) = *guard;
                 *n += 1;
-                *soma += ms;
-                *pior = (*pior).max(ms);
+                *sum += ms;
+                *worst = (*worst).max(ms);
                 if last.elapsed() >= std::time::Duration::from_secs(5) {
                     tracing::info!(
                         sink = %name,
-                        media_ms = *soma / (*n).max(1),
-                        pior_ms = *pior,
-                        quadros = *n,
+                        mean_ms = *sum / (*n).max(1),
+                        worst_ms = *worst,
+                        frames = *n,
                         "latency inside the pipeline (no network, no receiver)"
                     );
                     *last = std::time::Instant::now();
                     *n = 0;
-                    *soma = 0;
-                    *pior = 0;
+                    *sum = 0;
+                    *worst = 0;
                 }
             }
             gst::PadProbeReturn::Ok
@@ -316,6 +316,7 @@ pub fn build_configured_pipeline(
 
     let (tx, rx) = futures::channel::mpsc::channel(32);
     let tx = std::sync::Mutex::new(tx);
+    let weak_pipeline = pipeline.downgrade();
     if let Some(bus) = pipeline.bus() {
         bus.set_sync_handler(move |_, msg| {
             match msg.view() {
@@ -340,6 +341,24 @@ pub fn build_configured_pipeline(
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner)
                         .try_send(PipelineEvent::Eos);
+                }
+                gst::MessageView::Latency(_) => {
+                    // GstBin does not act on this by itself: the application
+                    // has to redistribute the latency. Hardware encoders often
+                    // learn their delay only once the first caps arrive, after
+                    // `Playing`; ignoring the message leaves the synchronised
+                    // sinks dropping every frame as "late". The query walks
+                    // the whole graph and this is a streaming thread, so it
+                    // runs on its own thread instead.
+                    if let Some(pipeline) = weak_pipeline.upgrade() {
+                        std::thread::spawn(move || {
+                            if let Err(err) = pipeline.recalculate_latency() {
+                                tracing::debug!(%err, "latency could not be recalculated");
+                            } else {
+                                tracing::debug!("pipeline latency recalculated");
+                            }
+                        });
+                    }
                 }
                 _ => {}
             }
@@ -394,7 +413,7 @@ pub fn rtp_latency_ms() -> u64 {
 }
 /// The video queue before the encoder: few buffers, ~1 frame.
 pub const VIDEO_QUEUE_BUFFERS: u32 = 3;
-/// Idem, em milissegundos.
+/// The same, in milliseconds.
 pub const VIDEO_QUEUE_MS: u64 = 30;
 /// The audio queue on the muxed path (the reference C used 100000 — a bug).
 ///
@@ -404,7 +423,7 @@ pub const VIDEO_QUEUE_MS: u64 = 30;
 /// the measured ~40 ms behind and the lag became visible when moving the
 /// mouse.
 pub const AUDIO_QUEUE_BUFFERS: u32 = 4;
-/// Idem, em milissegundos.
+/// The same, in milliseconds.
 pub const AUDIO_QUEUE_MS: u64 = 40;
 /// The Cast mirroring audio queue, in frames.
 ///
@@ -414,9 +433,9 @@ pub const AUDIO_QUEUE_MS: u64 = 40;
 /// and, above all, **does not leak**: dropping samples does not bring the sound
 /// forward, it opens a hole in it.
 pub const MIRROR_AUDIO_QUEUE_BUFFERS: u32 = 64;
-/// Idem, em milissegundos.
+/// The same, in milliseconds.
 pub const MIRROR_AUDIO_QUEUE_MS: u64 = 200;
-/// Porta RTP local usada como origem do stream WFD.
+/// Local RTP port used as the source of the WFD stream.
 pub const LOCAL_RTP_PORT: u16 = 16384;
 
 /// The WFD path's pipeline latency: automatic.
@@ -493,7 +512,7 @@ impl H264Encoder {
         }
     }
 
-    /// Encode por hardware?
+    /// Hardware encoding?
     pub fn is_hardware(self) -> bool {
         !matches!(self, H264Encoder::X264 | H264Encoder::OpenH264)
     }
@@ -644,25 +663,31 @@ pub fn probe_encoders() -> Vec<H264Encoder> {
 /// problematic (`nouveau`), and never cross stacks (NVENC only on NVIDIA;
 /// VA-API does not work under NVIDIA's proprietary driver).
 pub fn select_encoder(available: &[H264Encoder], driver: GpuDriver) -> Option<H264Encoder> {
-    let hw_ok = driver.hardware_encode_is_reliable();
     available
         .iter()
         .copied()
-        .filter(|enc| {
-            if !enc.is_hardware() {
-                return true;
-            }
-            if !hw_ok {
-                return false;
-            }
-            match (*enc, driver) {
-                (H264Encoder::NvH264, GpuDriver::Nvidia) => true,
-                (H264Encoder::NvH264, _) => false,
-                (e, GpuDriver::Nvidia) if e.is_va() => false,
-                _ => true,
-            }
-        })
+        .filter(|enc| encoder_fits_driver(*enc, driver))
         .max_by_key(|enc| enc.priority())
+}
+
+/// Whether an encoder can run at all on top of the given driver.
+///
+/// Software encoders always can. Hardware ones need a driver whose encoding
+/// is known to be reliable, and must not cross stacks: NVENC only exists on
+/// NVIDIA, and VA-API does not work under NVIDIA's proprietary driver.
+fn encoder_fits_driver(enc: H264Encoder, driver: GpuDriver) -> bool {
+    if !enc.is_hardware() {
+        return true;
+    }
+    if !driver.hardware_encode_is_reliable() {
+        return false;
+    }
+    match (enc, driver) {
+        (H264Encoder::NvH264, GpuDriver::Nvidia) => true,
+        (H264Encoder::NvH264, _) => false,
+        (e, GpuDriver::Nvidia) if e.is_va() => false,
+        _ => true,
+    }
 }
 
 /// The name given to the encoder element in every description.
@@ -691,20 +716,7 @@ pub fn encoder_candidates(driver: GpuDriver) -> Vec<H264Encoder> {
 
     let mut candidates: Vec<H264Encoder> = available
         .into_iter()
-        .filter(|enc| {
-            if !enc.is_hardware() {
-                return true;
-            }
-            if !driver.hardware_encode_is_reliable() {
-                return false;
-            }
-            match (*enc, driver) {
-                (H264Encoder::NvH264, GpuDriver::Nvidia) => true,
-                (H264Encoder::NvH264, _) => false,
-                (e, GpuDriver::Nvidia) if e.is_va() => false,
-                _ => true,
-            }
-        })
+        .filter(|enc| encoder_fits_driver(*enc, driver))
         .collect();
     candidates.sort_by_key(|enc| std::cmp::Reverse(enc.priority()));
     tracing::info!(?candidates, ?driver, "encoder attempt order");
@@ -873,7 +885,7 @@ pub fn best_encoder(driver: GpuDriver) -> Result<H264Encoder> {
 }
 
 // ------------------------------------------------------------------------
-// Fontes
+// Sources
 // ------------------------------------------------------------------------
 
 /// Where the video frames come from.
@@ -1415,7 +1427,7 @@ pub struct WfdTransport {
     pub sink_ip: IpAddr,
     /// The RTP port the sink asked for (`wfd_client_rtp_ports` / `client_port=`).
     pub rtp_port: u16,
-    /// Porta RTP local de origem.
+    /// Local source RTP port.
     pub local_rtp_port: u16,
 }
 
@@ -1754,10 +1766,10 @@ mod tests {
 
     #[test]
     fn a_pipeline_guard_leaves_the_pipeline_in_null() {
-        // Descartar um pipeline em PLAYING derrubava o app ao apertar Parar.
+        // Dropping a pipeline in PLAYING used to crash the app when pressing Stop.
         init().expect("gstreamer");
         let pipeline = gst::parse::launch("fakesrc num-buffers=1 ! fakesink")
-            .expect("pipeline de teste")
+            .expect("test pipeline")
             .downcast::<gst::Pipeline>()
             .expect("it is a Pipeline");
         pipeline.set_state(gst::State::Playing).expect("playing");

@@ -19,8 +19,17 @@ use nd_core::settings::{self, Protocol, Quality, Settings};
 
 use crate::tr;
 
+/// How long the controls have to settle before the file is written.
+///
+/// A slider emits dozens of values per second and each write ends in an
+/// `fsync`; doing that on the GTK thread stutters the window while dragging.
+/// In memory the change is immediate, only the disk waits.
+const SAVE_DELAY: std::time::Duration = std::time::Duration::from_millis(400);
+
 pub struct SettingsPage {
     settings: Settings,
+    /// The write scheduled for when the controls settle, if any.
+    pending_write: std::rc::Rc<std::cell::Cell<Option<gtk::glib::SourceId>>>,
     /// Set while the widgets are being brought in line with the model, so that
     /// setting a control's value does not read back as the person changing it.
     loading: bool,
@@ -337,6 +346,7 @@ impl Component for SettingsPage {
     ) -> ComponentParts<Self> {
         let model = SettingsPage {
             settings: settings::current(),
+            pending_write: Default::default(),
             loading: true,
         };
         let widgets = view_output!();
@@ -389,15 +399,41 @@ impl Component for SettingsPage {
             }
         }
 
-        settings::set(self.settings.clone());
+        self.schedule_write();
         sender
             .output(SettingsOutput::Changed(self.settings.clone()))
             .ok();
         self.update_view(widgets, sender);
     }
+
+    fn shutdown(&mut self, _widgets: &mut Self::Widgets, _output: relm4::Sender<Self::Output>) {
+        // Nothing chosen may be lost to the timer: flush what is still pending.
+        if let Some(pending) = self.pending_write.take() {
+            pending.remove();
+            settings::persist(&self.settings);
+        }
+    }
 }
 
 impl SettingsPage {
+    /// Applies the settings now and saves them once the controls settle,
+    /// off the GTK thread (see [`SAVE_DELAY`]).
+    fn schedule_write(&mut self) {
+        settings::set_in_memory(&self.settings);
+        if let Some(pending) = self.pending_write.take() {
+            pending.remove();
+        }
+        let settings = self.settings.clone();
+        let slot = self.pending_write.clone();
+        let id = gtk::glib::timeout_add_local_once(SAVE_DELAY, move || {
+            // The source is gone once it has fired; forget its id so a later
+            // cancellation does not try to remove it twice.
+            slot.set(None);
+            relm4::spawn_blocking(move || settings::persist(&settings));
+        });
+        self.pending_write.set(Some(id));
+    }
+
     /// Writes the model into the controls, without that reading back as a
     /// change.
     fn show(&mut self, widgets: &SettingsPageWidgets) {

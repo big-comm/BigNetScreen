@@ -138,7 +138,7 @@ struct ActiveSession {
     virtual_connector: Option<String>,
 }
 
-/// Backend baseado em `org.gnome.Mutter.ScreenCast`.
+/// Backend based on `org.gnome.Mutter.ScreenCast`.
 pub struct MutterBackend {
     active: Mutex<Option<ActiveSession>>,
     /// The desired resolution for the virtual monitor.
@@ -265,34 +265,46 @@ impl MutterBackend {
             .await
             .map_err(cap_err)?;
 
-        let mut props: std::collections::HashMap<&str, Value<'_>> =
-            std::collections::HashMap::new();
-        props.insert("cursor-mode", Value::from(*self.cursor_mode.lock().await));
-        let stream_path = session
-            .record_monitor(connector, props)
-            .await
-            .map_err(cap_err)?;
+        // Everything past `CreateSession` runs inside one block so that a
+        // failure anywhere in it stops the session: this one is not tracked in
+        // `active`, so nobody else could ever close it.
+        let cursor_mode = *self.cursor_mode.lock().await;
+        let result = async {
+            let mut props: std::collections::HashMap<&str, Value<'_>> =
+                std::collections::HashMap::new();
+            props.insert("cursor-mode", Value::from(cursor_mode));
+            let stream_path = session
+                .record_monitor(connector, props)
+                .await
+                .map_err(cap_err)?;
 
-        let stream = ScreenCastStreamProxy::builder(conn)
-            .path(stream_path)
-            .map_err(cap_err)?
-            .build()
-            .await
-            .map_err(cap_err)?;
-        let mut added = stream
-            .receive_pipe_wire_stream_added()
-            .await
-            .map_err(cap_err)?;
+            let stream = ScreenCastStreamProxy::builder(conn)
+                .path(stream_path)
+                .map_err(cap_err)?
+                .build()
+                .await
+                .map_err(cap_err)?;
+            let mut added = stream
+                .receive_pipe_wire_stream_added()
+                .await
+                .map_err(cap_err)?;
 
-        session.start().await.map_err(cap_err)?;
+            session.start().await.map_err(cap_err)?;
 
-        match tokio::time::timeout(STREAM_TIMEOUT, added.next()).await {
-            Ok(Some(signal)) => Ok((session_path, signal.args().map_err(cap_err)?.node_id)),
-            _ => {
-                let _ = session.stop().await;
-                Err(NdError::Capture(
+            match tokio::time::timeout(STREAM_TIMEOUT, added.next()).await {
+                Ok(Some(signal)) => Ok(signal.args().map_err(cap_err)?.node_id),
+                _ => Err(NdError::Capture(
                     "the extra screen did not announce a PipeWire node".into(),
-                ))
+                )),
+            }
+        }
+        .await;
+
+        match result {
+            Ok(node_id) => Ok((session_path, node_id)),
+            Err(err) => {
+                let _ = session.stop().await;
+                Err(err)
             }
         }
     }
@@ -552,12 +564,26 @@ impl CaptureBackend for MutterBackend {
             *self.layout.lock().await = layout_before;
 
             // Second session: the same screen, recorded as a monitor.
-            let (monitor_session, monitor_node) = self
-                .record_connector(&conn, &connector)
-                .await
-                .inspect_err(|_| {
-                    let _ = keep_alive.set_state(gstreamer::State::Null);
-                })?;
+            let (monitor_session, monitor_node) =
+                match self.record_connector(&conn, &connector).await {
+                    Ok(recorded) => recorded,
+                    Err(err) => {
+                        // Undo the extra screen: release the keep-alive, stop
+                        // the virtual session and put the desktop back the way
+                        // it was, since `stop()` has nothing in `active` yet.
+                        let _ = keep_alive.set_state(gstreamer::State::Null);
+                        let _ = session.stop().await;
+                        if let Some(layout) = self.layout.lock().await.take() {
+                            if let Err(err) = layout.restore(&conn).await {
+                                tracing::warn!(
+                                    %err,
+                                    "could not restore the previous desktop layout"
+                                );
+                            }
+                        }
+                        return Err(err);
+                    }
+                };
 
             *self.active.lock().await = Some(ActiveSession {
                 _conn: conn.clone(),

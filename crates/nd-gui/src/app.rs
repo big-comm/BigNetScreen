@@ -365,6 +365,12 @@ impl Component for AppModel {
     ) -> ComponentParts<Self> {
         let current = settings::current();
 
+        // Ports a crashed run left open in firewalld are closed before
+        // anything else. Under Flatpak the system bus is out of reach anyway.
+        if !nd_capture::is_sandboxed() {
+            relm4::spawn(nd_net::firewall::release_stale());
+        }
+
         let home = HomePage::builder()
             .launch(())
             .forward(sender.input_sender(), |output| match output {
@@ -779,10 +785,15 @@ impl Component for AppModel {
             }
             AppCmd::LinkMeasured(generation, round_trip) => {
                 if generation != self.operation_generation {
+                    // A newer session owns `probing` now; leave it alone.
                     return;
                 }
                 self.probing = false;
-                self.measured = Some(round_trip);
+                // The session may have ended while the probe was in flight:
+                // a reading for a link that no longer exists is not shown.
+                if self.active_sink.is_some() {
+                    self.measured = Some(round_trip);
+                }
             }
             AppCmd::CastFinished {
                 id,
@@ -798,6 +809,7 @@ impl Component for AppModel {
                 }
                 // The measurement belonged to that session.
                 self.measured = None;
+                self.probing = false;
                 if ndi_runtime_unavailable {
                     let can_install = crate::ndi_setup::can_install();
                     let body = if can_install {
@@ -896,6 +908,7 @@ impl AppModel {
                 self.active_sink = None;
                 self.cast_cancel = None;
                 self.measured = None;
+                self.probing = false;
                 self.push_devices();
                 if let Some(error) = &status.error {
                     self.status = error.clone();

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-18 00:47-0300\n"
+"POT-Creation-Date: 2026-09-18 14:58-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Turkish <tr@li.org>\n"
@@ -14,7 +14,7 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/pages/settings.rs:278
+#: crates/nd-gui/src/pages/settings.rs:287
 msgid ""
 "0 lets the system choose. Set one only if you opened a port on your firewall "
 "by hand."
@@ -22,37 +22,33 @@ msgstr ""
 "0, sistemin seçmesini sağlar. Yalnızca güvenlik duvarınızda elle bir "
 "bağlantı noktası açtıysanız bir değer belirleyin."
 
-#: crates/nd-gui/src/pages/devices.rs:472
-msgid "1 device found"
-msgstr "1 cihaz bulundu"
-
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "24 FPS"
 msgstr "24 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "25 FPS"
 msgstr "25 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "30 FPS"
 msgstr "30 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "50 FPS"
 msgstr "50 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "60 FPS"
 msgstr "60 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:179
+#: crates/nd-gui/src/pages/settings.rs:188
 msgid "60 is smoother and costs about half as much again in bandwidth"
 msgstr ""
 "60 daha akıcıdır ve bant genişliğinde yaklaşık yarısı kadar daha fazla "
 "maliyete neden olur"
 
-#: crates/nd-gui/src/pages/settings.rs:115
+#: crates/nd-gui/src/pages/settings.rs:124
 msgid ""
 "A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver "
 "will accept it."
@@ -64,7 +60,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "Yeni bir ekran"
 
-#: crates/nd-gui/src/app.rs:1058
+#: crates/nd-gui/src/app.rs:1071
 msgid "A stream is already running"
 msgstr "Zaten çalışan bir akış var"
 
@@ -92,7 +88,7 @@ msgstr "Tüm protokoller"
 msgid "An extra desktop, just for this"
 msgstr "Yalnızca bunun için ek bir masaüstü"
 
-#: crates/nd-gui/src/pages/settings.rs:163
+#: crates/nd-gui/src/pages/settings.rs:172
 msgid ""
 "Aspect ratio is preserved. Miracast uses a supported mode within these "
 "limits."
@@ -100,11 +96,11 @@ msgstr ""
 "En-boy oranı korunur. Miracast, bu sınırlar içindeki desteklenen bir modu "
 "kullanır."
 
-#: crates/nd-gui/src/pages/settings.rs:206
+#: crates/nd-gui/src/pages/settings.rs:215
 msgid "Audio"
 msgstr "Ses"
 
-#: crates/nd-gui/src/app.rs:534
+#: crates/nd-gui/src/app.rs:540
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
@@ -112,16 +108,16 @@ msgstr ""
 "İstendiğinde kimlik doğrulaması yapın. Paketin indirilmesi ve derlenmesi "
 "birkaç dakika sürebilir. Yükleme tamamlanana kadar uygulamayı açık tutun."
 
-#: crates/nd-gui/src/pages/settings.rs:98
+#: crates/nd-gui/src/pages/settings.rs:107
 msgid "Automatic"
 msgstr "Otomatik"
 
 #: crates/nd-gui/src/pages/devices.rs:170
-#: crates/nd-gui/src/pages/settings.rs:258
+#: crates/nd-gui/src/pages/settings.rs:267
 msgid "Automatic discovery"
 msgstr "Otomatik keşif"
 
-#: crates/nd-gui/src/app.rs:413 crates/nd-gui/src/app.rs:1007
+#: crates/nd-gui/src/app.rs:419 crates/nd-gui/src/app.rs:1020
 msgid "Automatic discovery is off"
 msgstr "Otomatik keşif kapalı"
 
@@ -133,11 +129,11 @@ msgstr "Kullanılabilir"
 msgid "Back"
 msgstr "Geri"
 
-#: crates/nd-gui/src/pages/media.rs:458 crates/nd-gui/src/pages/media.rs:1215
+#: crates/nd-gui/src/pages/media.rs:462 crates/nd-gui/src/pages/media.rs:1219
 msgid "Back 10 seconds"
 msgstr "10 saniye geri"
 
-#: crates/nd-gui/src/pages/settings.rs:194
+#: crates/nd-gui/src/pages/settings.rs:203
 msgid ""
 "Buffers the picture so video plays smoothly, at the cost of delay. On "
 "Miracast it is applied here; on Chromecast it is a request the receiver may "
@@ -151,15 +147,15 @@ msgstr ""
 msgid "Can't find your device?"
 msgstr "Cihazınızı bulamıyor musunuz?"
 
-#: crates/nd-gui/src/pages/media.rs:795
+#: crates/nd-gui/src/pages/media.rs:799
 msgid "Choose a device…"
 msgstr "Bir cihaz seçin…"
 
-#: crates/nd-gui/src/pages/media.rs:1008
+#: crates/nd-gui/src/pages/media.rs:1012
 msgid "Choose a folder"
 msgstr "Bir klasör seç"
 
-#: crates/nd-gui/src/pages/media.rs:1010
+#: crates/nd-gui/src/pages/media.rs:1014
 msgid "Choose files"
 msgstr "Dosyaları seç"
 
@@ -175,7 +171,7 @@ msgstr ""
 "OBS'de veya başka bir NDI alıcısında bu bilgisayarı seçin. Ayarlar'da "
 "belirtilen ad ve ses seçenekleri kullanılır."
 
-#: crates/nd-gui/src/pages/media.rs:820
+#: crates/nd-gui/src/pages/media.rs:824
 msgid "Choose which device to send to."
 msgstr "Hangi cihaza gönderileceğini seçin."
 
@@ -187,7 +183,7 @@ msgstr "Chromecast"
 msgid "Chromecast / AirPlay"
 msgstr "Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/settings.rs:100
+#: crates/nd-gui/src/pages/settings.rs:109
 msgid "Chromecast / AirPlay only"
 msgstr "Yalnızca Chromecast / AirPlay"
 
@@ -201,11 +197,11 @@ msgstr ""
 "ekran yansıtma modundayken görünür — Fire TV'de Ayarlar › Ekran ve Sesler › "
 "Ekran Yansıtma altından."
 
-#: crates/nd-gui/src/pages/media.rs:342
+#: crates/nd-gui/src/pages/media.rs:346
 msgid "Clear queue"
 msgstr "Çalma sırasını temizle"
 
-#: crates/nd-gui/src/app.rs:693 crates/nd-gui/src/app.rs:810
+#: crates/nd-gui/src/app.rs:699 crates/nd-gui/src/app.rs:822
 msgid "Close"
 msgstr "Kapat"
 
@@ -221,7 +217,7 @@ msgstr "Bağlı"
 msgid "Connected to"
 msgstr "Bağlanıldı"
 
-#: crates/nd-gui/src/app.rs:1080 crates/nd-gui/src/pages/mod.rs:171
+#: crates/nd-gui/src/app.rs:1093 crates/nd-gui/src/pages/mod.rs:171
 msgid "Connecting…"
 msgstr "Bağlanılıyor…"
 
@@ -233,7 +229,7 @@ msgstr "Bağlantı"
 msgid "Connection quality"
 msgstr "Bağlantı kalitesi"
 
-#: crates/nd-gui/src/pages/settings.rs:130
+#: crates/nd-gui/src/pages/settings.rs:139
 msgid "Custom resolution"
 msgstr "Özel çözünürlük"
 
@@ -245,7 +241,7 @@ msgstr "Cihazlar"
 msgid "Disconnect"
 msgstr "Bağlantıyı kes"
 
-#: crates/nd-gui/src/pages/settings.rs:253
+#: crates/nd-gui/src/pages/settings.rs:262
 msgid "Discovery and devices"
 msgstr "Keşif ve cihazlar"
 
@@ -276,7 +272,7 @@ msgstr "Ek ekran"
 msgid "Failed"
 msgstr "Başarısız"
 
-#: crates/nd-gui/src/pages/settings.rs:192
+#: crates/nd-gui/src/pages/settings.rs:201
 msgid "Film mode"
 msgstr "Film modu"
 
@@ -288,11 +284,11 @@ msgstr "Yakındaki kablosuz alıcıları bulun ve bağlanın."
 msgid "Find compatible devices"
 msgstr "Uyumlu cihazları bulun"
 
-#: crates/nd-gui/src/pages/media.rs:875
+#: crates/nd-gui/src/pages/media.rs:879
 msgid "Finished"
 msgstr "Tamamlandı"
 
-#: crates/nd-gui/src/pages/settings.rs:276
+#: crates/nd-gui/src/pages/settings.rs:285
 msgid "Fixed port"
 msgstr "Sabit bağlantı noktası"
 
@@ -300,11 +296,11 @@ msgstr "Sabit bağlantı noktası"
 msgid "For Chromecast, connect both devices to the same Wi-Fi network."
 msgstr "Chromecast için iki cihazı da aynı Wi-Fi ağına bağlayın."
 
-#: crates/nd-gui/src/pages/media.rs:474 crates/nd-gui/src/pages/media.rs:1216
+#: crates/nd-gui/src/pages/media.rs:478 crates/nd-gui/src/pages/media.rs:1220
 msgid "Forward 10 seconds"
 msgstr "10 saniye ileri"
 
-#: crates/nd-gui/src/pages/settings.rs:177
+#: crates/nd-gui/src/pages/settings.rs:186
 msgid "Frame rate"
 msgstr "Kare hızı"
 
@@ -316,11 +312,11 @@ msgstr "İyi"
 msgid "Got it"
 msgstr "Anladım"
 
-#: crates/nd-gui/src/pages/settings.rs:162
+#: crates/nd-gui/src/pages/settings.rs:171
 msgid "Height (pixels)"
 msgstr "Yükseklik (piksel)"
 
-#: crates/nd-gui/src/pages/settings.rs:122
+#: crates/nd-gui/src/pages/settings.rs:131
 msgid "High (1080p)"
 msgstr "Yüksek (1080p)"
 
@@ -328,19 +324,19 @@ msgstr "Yüksek (1080p)"
 msgid "Home"
 msgstr "Ana sayfa"
 
-#: crates/nd-gui/src/pages/settings.rs:211
+#: crates/nd-gui/src/pages/settings.rs:220
 msgid "Include system audio"
 msgstr "Sistem sesini dahil et"
 
-#: crates/nd-gui/src/pages/settings.rs:221
+#: crates/nd-gui/src/pages/settings.rs:230
 msgid "Include the microphone"
 msgstr "Mikrofonu dahil et"
 
-#: crates/nd-gui/src/app.rs:813
+#: crates/nd-gui/src/app.rs:825
 msgid "Install"
 msgstr "Yükle"
 
-#: crates/nd-gui/src/app.rs:674
+#: crates/nd-gui/src/app.rs:680
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
@@ -348,7 +344,7 @@ msgstr ""
 "Yükleme başarısız oldu veya kimlik doğrulaması iptal edildi. Yeniden "
 "deneyebilir ya da kitaplığı elle yükleyebilirsiniz."
 
-#: crates/nd-gui/src/app.rs:533
+#: crates/nd-gui/src/app.rs:539
 msgid "Installing NDI…"
 msgstr "NDI yükleniyor…"
 
@@ -360,11 +356,11 @@ msgstr "En iyi sonuçlar için tüm cihazları aynı Wi-Fi ağında tutun."
 msgid "Keep the receiver ready"
 msgstr "Alıcıyı hazır tutun"
 
-#: crates/nd-gui/src/app.rs:1293
+#: crates/nd-gui/src/app.rs:1306
 msgid "Local network discovery unavailable"
 msgstr "Yerel ağ keşfi kullanılamıyor"
 
-#: crates/nd-gui/src/pages/settings.rs:260
+#: crates/nd-gui/src/pages/settings.rs:269
 msgid "Look for receivers as soon as the app starts"
 msgstr "Uygulama başlar başlamaz alıcıları ara"
 
@@ -372,11 +368,11 @@ msgstr "Uygulama başlar başlamaz alıcıları ara"
 msgid "Looking for receivers…"
 msgstr "Alıcılar aranıyor…"
 
-#: crates/nd-gui/src/pages/settings.rs:124
+#: crates/nd-gui/src/pages/settings.rs:133
 msgid "Low (480p)"
 msgstr "Düşük (480p)"
 
-#: crates/nd-gui/src/pages/settings.rs:120
+#: crates/nd-gui/src/pages/settings.rs:129
 msgid "Maximum (2160p)"
 msgstr "Maksimum (2160p)"
 
@@ -388,11 +384,11 @@ msgstr "Ölçülüyor…"
 msgid "Media"
 msgstr "Medya"
 
-#: crates/nd-gui/src/pages/settings.rs:123
+#: crates/nd-gui/src/pages/settings.rs:132
 msgid "Medium (720p)"
 msgstr "Orta (720p)"
 
-#: crates/nd-gui/src/pages/settings.rs:230
+#: crates/nd-gui/src/pages/settings.rs:239
 msgid "Microphone volume"
 msgstr "Mikrofon ses düzeyi"
 
@@ -400,13 +396,13 @@ msgstr "Mikrofon ses düzeyi"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1352
+#: crates/nd-gui/src/app.rs:1365
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
 msgstr "Miracast Flatpak sürümünde çalışmaz (sistem NetworkManager gerektirir)"
 
-#: crates/nd-gui/src/app.rs:1360
+#: crates/nd-gui/src/app.rs:1373
 msgid ""
 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
 "network still works."
@@ -414,15 +410,15 @@ msgstr ""
 "Miracast bir Wi-Fi bağdaştırıcısı gerektirir ve bu bilgisayarda hiçbiri yok. "
 "Ağ üzerinden yayın yapmak yine de çalışır."
 
-#: crates/nd-gui/src/pages/settings.rs:99
+#: crates/nd-gui/src/pages/settings.rs:108
 msgid "Miracast only"
 msgstr "Yalnızca Miracast"
 
-#: crates/nd-gui/src/app.rs:1368
+#: crates/nd-gui/src/app.rs:1381
 msgid "Miracast unavailable"
 msgstr "Miracast kullanılamıyor"
 
-#: crates/nd-gui/src/app.rs:1366
+#: crates/nd-gui/src/app.rs:1379
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast kullanılamıyor: bu Wi-Fi kartı Wi-Fi Direct'i desteklemiyor"
 
@@ -430,61 +426,60 @@ msgstr "Miracast kullanılamıyor: bu Wi-Fi kartı Wi-Fi Direct'i desteklemiyor"
 msgid "Mirror screen"
 msgstr "Ekranı yansıt"
 
-#: crates/nd-gui/src/pages/settings.rs:223
+#: crates/nd-gui/src/pages/settings.rs:232
 msgid "Mix your voice into what is sent"
 msgstr "Sesinizi gönderilen içeriğe karıştır"
 
-#: crates/nd-gui/src/pages/media.rs:544
+#: crates/nd-gui/src/pages/media.rs:548
 msgid "Music"
 msgstr "Müzik"
 
-#: crates/nd-gui/src/app.rs:673
+#: crates/nd-gui/src/app.rs:679
 msgid "NDI installation did not finish"
 msgstr "NDI yüklemesi tamamlanmadı"
 
-#: crates/nd-gui/src/app.rs:667
+#: crates/nd-gui/src/app.rs:673
 msgid "NDI installed"
 msgstr "NDI yüklendi"
 
-#: crates/nd-gui/src/app.rs:804
+#: crates/nd-gui/src/app.rs:816
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
 "ask for administrator authentication. Other sharing methods work without it."
 msgstr ""
-"NDI, BigNetScreen'e dahil olmayan özel mülk bir kitaplık gerektirir. "
-"AUR'dan ndi-sdk paketini ve gerekli derleme araçlarını yüklemek istiyor "
-"musunuz? Sistem yönetici kimlik doğrulaması isteyecek. Diğer paylaşım "
-"yöntemleri bu kitaplık olmadan da çalışır."
+"NDI, BigNetScreen'e dahil olmayan özel mülk bir kitaplık gerektirir. AUR'dan "
+"ndi-sdk paketini ve gerekli derleme araçlarını yüklemek istiyor musunuz? "
+"Sistem yönetici kimlik doğrulaması isteyecek. Diğer paylaşım yöntemleri bu "
+"kitaplık olmadan da çalışır."
 
-#: crates/nd-gui/src/app.rs:806
+#: crates/nd-gui/src/app.rs:818
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
 "Other sharing methods work without it."
 msgstr ""
 "NDI, BigNetScreen'e dahil olmayan özel mülk bir kitaplık gerektirir. "
-"Dağıtımınız için NDI 5 veya 6 çalışma zamanını yükleyin, ardından "
-"uygulamayı yeniden başlatın. Diğer paylaşım yöntemleri bu kitaplık olmadan "
-"da çalışır."
+"Dağıtımınız için NDI 5 veya 6 çalışma zamanını yükleyin, ardından uygulamayı "
+"yeniden başlatın. Diğer paylaşım yöntemleri bu kitaplık olmadan da çalışır."
 
-#: crates/nd-gui/src/app.rs:809 crates/nd-gui/src/app.rs:1102
+#: crates/nd-gui/src/app.rs:821 crates/nd-gui/src/app.rs:1115
 msgid "NDI runtime required"
 msgstr "NDI çalışma zamanı gerekli"
 
-#: crates/nd-gui/src/app.rs:830 crates/nd-gui/src/app.rs:1384
+#: crates/nd-gui/src/app.rs:842 crates/nd-gui/src/app.rs:1397
 msgid "NDI setup"
 msgstr "NDI kurulumu"
 
-#: crates/nd-gui/src/app.rs:521
+#: crates/nd-gui/src/app.rs:527
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI kullanılamıyor. NDI kurulum kılavuzuna bakın."
 
-#: crates/nd-gui/src/pages/media.rs:481 crates/nd-gui/src/pages/media.rs:1217
+#: crates/nd-gui/src/pages/media.rs:485 crates/nd-gui/src/pages/media.rs:1221
 msgid "Next file"
 msgstr "Sonraki dosya"
 
-#: crates/nd-gui/src/pages/media.rs:817
+#: crates/nd-gui/src/pages/media.rs:821
 msgid "No device found yet. Turn your TV, projector or Chromecast on."
 msgstr ""
 "Henüz cihaz bulunamadı. Televizyonunuzu, projektörünüzü veya "
@@ -494,27 +489,27 @@ msgstr ""
 msgid "No devices found"
 msgstr "Cihaz bulunamadı"
 
-#: crates/nd-gui/src/pages/media.rs:848
+#: crates/nd-gui/src/pages/media.rs:852
 msgid "No music in your Music folder. Use “Select files”."
 msgstr "Müzik klasörünüzde müzik yok. \"Dosya Seç\"i kullanın."
 
-#: crates/nd-gui/src/pages/media.rs:846
+#: crates/nd-gui/src/pages/media.rs:850
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "Resimler klasörünüzde fotoğraf yok. \"Dosya Seç\"i kullanın."
 
-#: crates/nd-gui/src/app.rs:1015 crates/nd-gui/src/pages/home.rs:925
+#: crates/nd-gui/src/app.rs:1028 crates/nd-gui/src/pages/home.rs:925
 msgid "No receivers found"
 msgstr "Alıcı bulunamadı"
 
-#: crates/nd-gui/src/pages/media.rs:847
+#: crates/nd-gui/src/pages/media.rs:851
 msgid "No videos in your Videos folder. Use “Select files”."
 msgstr "Videolar klasörünüzde video yok. \"Dosya Seç\"i kullanın."
 
-#: crates/nd-gui/src/pages/media.rs:854
+#: crates/nd-gui/src/pages/media.rs:858
 msgid "Nothing selected"
 msgstr "Hiçbir şey seçilmedi"
 
-#: crates/nd-gui/src/pages/media.rs:444
+#: crates/nd-gui/src/pages/media.rs:448
 msgid "Now playing"
 msgstr "Şu an çalıyor"
 
@@ -526,11 +521,11 @@ msgstr "Yalnızca bir pencere"
 msgid "Opening the firewall port…"
 msgstr "Güvenlik duvarı bağlantı noktası açılıyor…"
 
-#: crates/nd-gui/src/pages/media.rs:467
+#: crates/nd-gui/src/pages/media.rs:471
 msgid "Pause"
 msgstr "Duraklat"
 
-#: crates/nd-gui/src/pages/media.rs:544
+#: crates/nd-gui/src/pages/media.rs:548
 msgid "Photos"
 msgstr "Fotoğraflar"
 
@@ -538,11 +533,11 @@ msgstr "Fotoğraflar"
 msgid "Photos, videos and music"
 msgstr "Fotoğraflar, videolar ve müzik"
 
-#: crates/nd-gui/src/pages/media.rs:257
+#: crates/nd-gui/src/pages/media.rs:261
 msgid "Pick files and choose where to play them."
 msgstr "Dosyaları seçin ve nerede oynatılacağını belirleyin."
 
-#: crates/nd-gui/src/pages/settings.rs:94
+#: crates/nd-gui/src/pages/settings.rs:103
 msgid "Preferred protocol"
 msgstr "Tercih edilen protokol"
 
@@ -558,7 +553,7 @@ msgstr "Protokol"
 msgid "Publish with NDI"
 msgstr "NDI ile yayınla"
 
-#: crates/nd-gui/src/pages/media.rs:336
+#: crates/nd-gui/src/pages/media.rs:340
 msgid "Queue"
 msgstr "Çalma sırası"
 
@@ -582,27 +577,27 @@ msgstr "Yenile"
 msgid "Refresh the device list and check that your receiver is turned on."
 msgstr "Cihaz listesini yenileyin ve alıcının açık olduğundan emin olun."
 
-#: crates/nd-gui/src/pages/media.rs:776
+#: crates/nd-gui/src/pages/media.rs:780
 msgid "Remove from queue"
 msgstr "Çalma sırasından kaldır"
 
-#: crates/nd-gui/src/pages/settings.rs:113
+#: crates/nd-gui/src/pages/settings.rs:122
 msgid "Resolution limit"
 msgstr "Çözünürlük sınırı"
 
-#: crates/nd-gui/src/app.rs:668
+#: crates/nd-gui/src/app.rs:674
 msgid "Restart BigNetScreen to use NDI."
 msgstr "NDI'yi kullanmak için BigNetScreen'i yeniden başlatın."
 
-#: crates/nd-gui/src/pages/settings.rs:324
+#: crates/nd-gui/src/pages/settings.rs:333
 msgid "Restore defaults"
 msgstr "Varsayılanları geri yükle"
 
-#: crates/nd-gui/src/pages/media.rs:467 crates/nd-gui/src/pages/media.rs:1214
+#: crates/nd-gui/src/pages/media.rs:471 crates/nd-gui/src/pages/media.rs:1218
 msgid "Resume"
 msgstr "Devam et"
 
-#: crates/nd-gui/src/pages/settings.rs:307
+#: crates/nd-gui/src/pages/settings.rs:316
 msgid "Saved as you change them"
 msgstr "Değiştirdikçe kaydedilir"
 
@@ -614,20 +609,20 @@ msgstr "Tekrar tara"
 msgid "Screen"
 msgstr "Ekran"
 
-#: crates/nd-gui/src/app.rs:411 crates/nd-gui/src/app.rs:560
-#: crates/nd-gui/src/app.rs:1013
+#: crates/nd-gui/src/app.rs:417 crates/nd-gui/src/app.rs:566
+#: crates/nd-gui/src/app.rs:1026
 msgid "Searching…"
 msgstr "Aranıyor…"
 
-#: crates/nd-gui/src/pages/media.rs:285
+#: crates/nd-gui/src/pages/media.rs:289
 msgid "Select files"
 msgstr "Dosya seç"
 
-#: crates/nd-gui/src/pages/media.rs:943
+#: crates/nd-gui/src/pages/media.rs:947
 msgid "Select up to 1000 files at a time."
 msgstr "Her seferinde en fazla 1000 dosya seçin."
 
-#: crates/nd-gui/src/pages/media.rs:294
+#: crates/nd-gui/src/pages/media.rs:298
 msgid "Send a folder"
 msgstr "Klasör gönder"
 
@@ -635,31 +630,31 @@ msgstr "Klasör gönder"
 msgid "Send media"
 msgstr "Medya gönder"
 
-#: crates/nd-gui/src/pages/media.rs:391
+#: crates/nd-gui/src/pages/media.rs:395
 msgid "Send to"
 msgstr "Şuraya gönder:"
 
-#: crates/nd-gui/src/pages/media.rs:416
+#: crates/nd-gui/src/pages/media.rs:420
 msgid "Send to device"
 msgstr "Cihaza gönder"
 
-#: crates/nd-gui/src/pages/settings.rs:213
+#: crates/nd-gui/src/pages/settings.rs:222
 msgid "Send whatever this computer is playing"
 msgstr "Bu bilgisayarda çalınan her şeyi gönder"
 
-#: crates/nd-gui/src/app.rs:1142
+#: crates/nd-gui/src/app.rs:1155
 msgid "Sending files…"
 msgstr "Dosyalar gönderiliyor…"
 
-#: crates/nd-gui/src/pages/mod.rs:50 crates/nd-gui/src/pages/settings.rs:83
+#: crates/nd-gui/src/pages/mod.rs:50 crates/nd-gui/src/pages/settings.rs:92
 msgid "Settings"
 msgstr "Ayarlar"
 
-#: crates/nd-gui/src/pages/settings.rs:510
+#: crates/nd-gui/src/pages/settings.rs:546
 msgid "Settings cannot be saved on this system."
 msgstr "Ayarlar bu sistemde kaydedilemiyor."
 
-#: crates/nd-gui/src/pages/media.rs:256
+#: crates/nd-gui/src/pages/media.rs:260
 msgid "Share media"
 msgstr "Medya paylaş"
 
@@ -667,7 +662,7 @@ msgstr "Medya paylaş"
 msgid "Share your screen wirelessly"
 msgstr "Ekranınızı kablosuz olarak paylaşın"
 
-#: crates/nd-gui/src/app.rs:1381
+#: crates/nd-gui/src/app.rs:1394
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "Ekranınızı bir TV, projektör veya Chromecast ile paylaşın."
 
@@ -695,19 +690,19 @@ msgstr "Durum"
 msgid "Stop"
 msgstr "Durdur"
 
-#: crates/nd-gui/src/pages/media.rs:489
+#: crates/nd-gui/src/pages/media.rs:493
 msgid "Stop sending"
 msgstr "Göndermeyi durdur"
 
-#: crates/nd-gui/src/app.rs:1136
+#: crates/nd-gui/src/app.rs:1149
 msgid "Stop sharing your screen before sending files"
 msgstr "Dosya göndermeden önce ekran paylaşımınızı durdurun"
 
-#: crates/nd-gui/src/app.rs:1047
+#: crates/nd-gui/src/app.rs:1060
 msgid "Stopping…"
 msgstr "Durduruluyor…"
 
-#: crates/nd-gui/src/pages/mod.rs:175 crates/nd-gui/src/pages/settings.rs:89
+#: crates/nd-gui/src/pages/mod.rs:175 crates/nd-gui/src/pages/settings.rs:98
 msgid "Streaming"
 msgstr "Akış"
 
@@ -719,8 +714,8 @@ msgstr "Yayın akışı:"
 msgid "Test"
 msgstr "Test"
 
-#: crates/nd-gui/src/app.rs:1066 crates/nd-gui/src/app.rs:1129
-#: crates/nd-gui/src/app.rs:1146
+#: crates/nd-gui/src/app.rs:1079 crates/nd-gui/src/app.rs:1142
+#: crates/nd-gui/src/app.rs:1159
 msgid "That device is no longer available"
 msgstr "Bu cihaz artık kullanılamıyor"
 
@@ -728,11 +723,11 @@ msgstr "Bu cihaz artık kullanılamıyor"
 msgid "The receiver is not answering"
 msgstr "Alıcı yanıt vermiyor"
 
-#: crates/nd-gui/src/pages/settings.rs:84
+#: crates/nd-gui/src/pages/settings.rs:93
 msgid "These apply to your next session."
 msgstr "Bunlar bir sonraki oturumunuz için geçerlidir."
 
-#: crates/nd-gui/src/pages/settings.rs:268
+#: crates/nd-gui/src/pages/settings.rs:277
 msgid "This computer's name"
 msgstr "Bu bilgisayarın adı"
 
@@ -747,15 +742,15 @@ msgstr ""
 msgid "Tips"
 msgstr "İpuçları"
 
-#: crates/nd-gui/src/pages/settings.rs:121
+#: crates/nd-gui/src/pages/settings.rs:130
 msgid "Very high (1440p)"
 msgstr "Çok yüksek (1440p)"
 
-#: crates/nd-gui/src/pages/media.rs:544
+#: crates/nd-gui/src/pages/media.rs:548
 msgid "Videos"
 msgstr "Videolar"
 
-#: crates/nd-gui/src/app.rs:828
+#: crates/nd-gui/src/app.rs:840
 msgid "View ndi-sdk in the AUR"
 msgstr "AUR'daki ndi-sdk paketini görüntüle"
 
@@ -771,7 +766,7 @@ msgstr "Zayıf sinyal"
 msgid "What do you want to share?"
 msgstr "Ne paylaşmak istiyorsunuz?"
 
-#: crates/nd-gui/src/pages/settings.rs:96
+#: crates/nd-gui/src/pages/settings.rs:105
 msgid "Which kind of receiver to look for"
 msgstr "Hangi tür alıcı aranacağı"
 
@@ -779,7 +774,7 @@ msgstr "Hangi tür alıcı aranacağı"
 msgid "Whole screen"
 msgstr "Tam ekran"
 
-#: crates/nd-gui/src/pages/settings.rs:150
+#: crates/nd-gui/src/pages/settings.rs:159
 msgid "Width (pixels)"
 msgstr "Genişlik (piksel)"
 
@@ -787,15 +782,11 @@ msgstr "Genişlik (piksel)"
 msgid "Window"
 msgstr "Pencere"
 
-#: crates/nd-gui/src/pages/devices.rs:473
-msgid "devices found"
-msgstr "cihaz bulundu"
-
 #: crates/nd-gui/src/pages/mod.rs:187
 msgid "instant response"
 msgstr "anında yanıt"
 
-#: crates/nd-gui/src/pages/media.rs:888
+#: crates/nd-gui/src/pages/media.rs:892
 msgid "item"
 msgstr "öğe"
 
@@ -811,17 +802,23 @@ msgstr "henüz yayınlanmadı"
 msgid "quick response"
 msgstr "hızlı yanıt"
 
-#: crates/nd-gui/src/app.rs:1074
+#: crates/nd-gui/src/app.rs:1087
 msgid "shows up in discovery only"
 msgstr "yalnızca keşifte görünür"
 
-#: crates/nd-gui/src/pages/media.rs:855
+#: crates/nd-gui/src/pages/devices.rs:473
+msgid "{} device found"
+msgid_plural "{} devices found"
+msgstr[0] "{} cihaz bulundu"
+msgstr[1] "{} cihaz bulundu"
+
+#: crates/nd-gui/src/pages/media.rs:859
 msgid "{} file selected"
 msgid_plural "{} files selected"
 msgstr[0] "{} dosya seçildi"
 msgstr[1] "{} dosya seçildi"
 
-#: crates/nd-gui/src/app.rs:1018
+#: crates/nd-gui/src/app.rs:1031
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "{} alıcı bulundu"

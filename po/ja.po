@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-18 00:47-0300\n"
+"POT-Creation-Date: 2026-09-18 14:58-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Japanese <ja@li.org>\n"
@@ -14,7 +14,7 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 "X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/pages/settings.rs:278
+#: crates/nd-gui/src/pages/settings.rs:287
 msgid ""
 "0 lets the system choose. Set one only if you opened a port on your firewall "
 "by hand."
@@ -22,35 +22,31 @@ msgstr ""
 "0 の場合はシステムが選択します。ファイアウォールで手動でポートを開放した場合"
 "にのみ設定してください。"
 
-#: crates/nd-gui/src/pages/devices.rs:472
-msgid "1 device found"
-msgstr "1 台のデバイスが見つかりました"
-
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "24 FPS"
 msgstr "24 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "25 FPS"
 msgstr "25 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "30 FPS"
 msgstr "30 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "50 FPS"
 msgstr "50 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "60 FPS"
 msgstr "60 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:179
+#: crates/nd-gui/src/pages/settings.rs:188
 msgid "60 is smoother and costs about half as much again in bandwidth"
 msgstr "60 の方が滑らかですが、帯域幅は約1.5倍必要になります"
 
-#: crates/nd-gui/src/pages/settings.rs:115
+#: crates/nd-gui/src/pages/settings.rs:124
 msgid ""
 "A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver "
 "will accept it."
@@ -62,7 +58,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "新しい画面"
 
-#: crates/nd-gui/src/app.rs:1058
+#: crates/nd-gui/src/app.rs:1071
 msgid "A stream is already running"
 msgstr "ストリームがすでに実行されています"
 
@@ -90,7 +86,7 @@ msgstr "すべてのプロトコル"
 msgid "An extra desktop, just for this"
 msgstr "このためだけの追加デスクトップ"
 
-#: crates/nd-gui/src/pages/settings.rs:163
+#: crates/nd-gui/src/pages/settings.rs:172
 msgid ""
 "Aspect ratio is preserved. Miracast uses a supported mode within these "
 "limits."
@@ -98,28 +94,29 @@ msgstr ""
 "縦横比は維持されます。Miracast では、この範囲内で対応しているモードが使用され"
 "ます。"
 
-#: crates/nd-gui/src/pages/settings.rs:206
+#: crates/nd-gui/src/pages/settings.rs:215
 msgid "Audio"
 msgstr "オーディオ"
 
-#: crates/nd-gui/src/app.rs:534
+#: crates/nd-gui/src/app.rs:540
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
 msgstr ""
-"認証を求められたら認証してください。パッケージのダウンロードとビルドには数分かかることがあります。インストールが完了するまでアプリを開いたままにしてくだ"
+"認証を求められたら認証してください。パッケージのダウンロードとビルドには数分"
+"かかることがあります。インストールが完了するまでアプリを開いたままにしてくだ"
 "さい。"
 
-#: crates/nd-gui/src/pages/settings.rs:98
+#: crates/nd-gui/src/pages/settings.rs:107
 msgid "Automatic"
 msgstr "自動"
 
 #: crates/nd-gui/src/pages/devices.rs:170
-#: crates/nd-gui/src/pages/settings.rs:258
+#: crates/nd-gui/src/pages/settings.rs:267
 msgid "Automatic discovery"
 msgstr "自動検出"
 
-#: crates/nd-gui/src/app.rs:413 crates/nd-gui/src/app.rs:1007
+#: crates/nd-gui/src/app.rs:419 crates/nd-gui/src/app.rs:1020
 msgid "Automatic discovery is off"
 msgstr "自動検出はオフです"
 
@@ -131,11 +128,11 @@ msgstr "利用可能"
 msgid "Back"
 msgstr "戻る"
 
-#: crates/nd-gui/src/pages/media.rs:458 crates/nd-gui/src/pages/media.rs:1215
+#: crates/nd-gui/src/pages/media.rs:462 crates/nd-gui/src/pages/media.rs:1219
 msgid "Back 10 seconds"
 msgstr "10秒戻る"
 
-#: crates/nd-gui/src/pages/settings.rs:194
+#: crates/nd-gui/src/pages/settings.rs:203
 msgid ""
 "Buffers the picture so video plays smoothly, at the cost of delay. On "
 "Miracast it is applied here; on Chromecast it is a request the receiver may "
@@ -149,15 +146,15 @@ msgstr ""
 msgid "Can't find your device?"
 msgstr "デバイスが見つかりませんか？"
 
-#: crates/nd-gui/src/pages/media.rs:795
+#: crates/nd-gui/src/pages/media.rs:799
 msgid "Choose a device…"
 msgstr "デバイスを選択…"
 
-#: crates/nd-gui/src/pages/media.rs:1008
+#: crates/nd-gui/src/pages/media.rs:1012
 msgid "Choose a folder"
 msgstr "フォルダーを選択"
 
-#: crates/nd-gui/src/pages/media.rs:1010
+#: crates/nd-gui/src/pages/media.rs:1014
 msgid "Choose files"
 msgstr "ファイルを選択"
 
@@ -173,7 +170,7 @@ msgstr ""
 "OBS または他の NDI 受信機器やソフトウェアで、このコンピューターを選択してくだ"
 "さい。設定で指定した名前と音声オプションが使用されます。"
 
-#: crates/nd-gui/src/pages/media.rs:820
+#: crates/nd-gui/src/pages/media.rs:824
 msgid "Choose which device to send to."
 msgstr "送信先のデバイスを選択してください。"
 
@@ -185,7 +182,7 @@ msgstr "Chromecast"
 msgid "Chromecast / AirPlay"
 msgstr "Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/settings.rs:100
+#: crates/nd-gui/src/pages/settings.rs:109
 msgid "Chromecast / AirPlay only"
 msgstr "Chromecast / AirPlayのみ"
 
@@ -199,11 +196,11 @@ msgstr ""
 "モードの間だけ表示されます。Fire TVでは、設定 › ディスプレイとサウンド › ディ"
 "スプレイミラーリングの順に選択します。"
 
-#: crates/nd-gui/src/pages/media.rs:342
+#: crates/nd-gui/src/pages/media.rs:346
 msgid "Clear queue"
 msgstr "再生キューをクリア"
 
-#: crates/nd-gui/src/app.rs:693 crates/nd-gui/src/app.rs:810
+#: crates/nd-gui/src/app.rs:699 crates/nd-gui/src/app.rs:822
 msgid "Close"
 msgstr "閉じる"
 
@@ -219,7 +216,7 @@ msgstr "接続済み"
 msgid "Connected to"
 msgstr "接続先"
 
-#: crates/nd-gui/src/app.rs:1080 crates/nd-gui/src/pages/mod.rs:171
+#: crates/nd-gui/src/app.rs:1093 crates/nd-gui/src/pages/mod.rs:171
 msgid "Connecting…"
 msgstr "接続中…"
 
@@ -231,7 +228,7 @@ msgstr "接続"
 msgid "Connection quality"
 msgstr "接続品質"
 
-#: crates/nd-gui/src/pages/settings.rs:130
+#: crates/nd-gui/src/pages/settings.rs:139
 msgid "Custom resolution"
 msgstr "カスタム解像度"
 
@@ -243,7 +240,7 @@ msgstr "デバイス"
 msgid "Disconnect"
 msgstr "切断"
 
-#: crates/nd-gui/src/pages/settings.rs:253
+#: crates/nd-gui/src/pages/settings.rs:262
 msgid "Discovery and devices"
 msgstr "検出とデバイス"
 
@@ -274,7 +271,7 @@ msgstr "追加画面"
 msgid "Failed"
 msgstr "失敗"
 
-#: crates/nd-gui/src/pages/settings.rs:192
+#: crates/nd-gui/src/pages/settings.rs:201
 msgid "Film mode"
 msgstr "フィルムモード"
 
@@ -286,11 +283,11 @@ msgstr "近くのワイヤレスレシーバーを検出して接続します。
 msgid "Find compatible devices"
 msgstr "対応デバイスを検索"
 
-#: crates/nd-gui/src/pages/media.rs:875
+#: crates/nd-gui/src/pages/media.rs:879
 msgid "Finished"
 msgstr "完了"
 
-#: crates/nd-gui/src/pages/settings.rs:276
+#: crates/nd-gui/src/pages/settings.rs:285
 msgid "Fixed port"
 msgstr "固定ポート"
 
@@ -300,11 +297,11 @@ msgstr ""
 "Chromecast を使うには、両方のデバイスを同じ Wi-Fi ネットワークに接続してくだ"
 "さい。"
 
-#: crates/nd-gui/src/pages/media.rs:474 crates/nd-gui/src/pages/media.rs:1216
+#: crates/nd-gui/src/pages/media.rs:478 crates/nd-gui/src/pages/media.rs:1220
 msgid "Forward 10 seconds"
 msgstr "10秒進む"
 
-#: crates/nd-gui/src/pages/settings.rs:177
+#: crates/nd-gui/src/pages/settings.rs:186
 msgid "Frame rate"
 msgstr "フレームレート"
 
@@ -316,11 +313,11 @@ msgstr "良好"
 msgid "Got it"
 msgstr "了解"
 
-#: crates/nd-gui/src/pages/settings.rs:162
+#: crates/nd-gui/src/pages/settings.rs:171
 msgid "Height (pixels)"
 msgstr "高さ（ピクセル）"
 
-#: crates/nd-gui/src/pages/settings.rs:122
+#: crates/nd-gui/src/pages/settings.rs:131
 msgid "High (1080p)"
 msgstr "高（1080p）"
 
@@ -328,25 +325,27 @@ msgstr "高（1080p）"
 msgid "Home"
 msgstr "ホーム"
 
-#: crates/nd-gui/src/pages/settings.rs:211
+#: crates/nd-gui/src/pages/settings.rs:220
 msgid "Include system audio"
 msgstr "システムオーディオを含める"
 
-#: crates/nd-gui/src/pages/settings.rs:221
+#: crates/nd-gui/src/pages/settings.rs:230
 msgid "Include the microphone"
 msgstr "マイクを含める"
 
-#: crates/nd-gui/src/app.rs:813
+#: crates/nd-gui/src/app.rs:825
 msgid "Install"
 msgstr "インストール"
 
-#: crates/nd-gui/src/app.rs:674
+#: crates/nd-gui/src/app.rs:680
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
-msgstr "インストールに失敗したか、認証がキャンセルされました。再試行するか、ライブラリを手動でインストールできます。"
+msgstr ""
+"インストールに失敗したか、認証がキャンセルされました。再試行するか、ライブラ"
+"リを手動でインストールできます。"
 
-#: crates/nd-gui/src/app.rs:533
+#: crates/nd-gui/src/app.rs:539
 msgid "Installing NDI…"
 msgstr "NDI をインストール中…"
 
@@ -360,11 +359,11 @@ msgstr ""
 msgid "Keep the receiver ready"
 msgstr "受信機器を準備しておいてください"
 
-#: crates/nd-gui/src/app.rs:1293
+#: crates/nd-gui/src/app.rs:1306
 msgid "Local network discovery unavailable"
 msgstr "ローカルネットワークの検出が利用できません"
 
-#: crates/nd-gui/src/pages/settings.rs:260
+#: crates/nd-gui/src/pages/settings.rs:269
 msgid "Look for receivers as soon as the app starts"
 msgstr "アプリ起動時にすぐレシーバーを探す"
 
@@ -372,11 +371,11 @@ msgstr "アプリ起動時にすぐレシーバーを探す"
 msgid "Looking for receivers…"
 msgstr "レシーバーを検索中…"
 
-#: crates/nd-gui/src/pages/settings.rs:124
+#: crates/nd-gui/src/pages/settings.rs:133
 msgid "Low (480p)"
 msgstr "低（480p）"
 
-#: crates/nd-gui/src/pages/settings.rs:120
+#: crates/nd-gui/src/pages/settings.rs:129
 msgid "Maximum (2160p)"
 msgstr "最大 (2160p)"
 
@@ -388,11 +387,11 @@ msgstr "測定中…"
 msgid "Media"
 msgstr "メディア"
 
-#: crates/nd-gui/src/pages/settings.rs:123
+#: crates/nd-gui/src/pages/settings.rs:132
 msgid "Medium (720p)"
 msgstr "中（720p）"
 
-#: crates/nd-gui/src/pages/settings.rs:230
+#: crates/nd-gui/src/pages/settings.rs:239
 msgid "Microphone volume"
 msgstr "マイク音量"
 
@@ -400,14 +399,14 @@ msgstr "マイク音量"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1352
+#: crates/nd-gui/src/app.rs:1365
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
 msgstr ""
 "MiracastはFlatpakビルドでは動作しません（システムのNetworkManagerが必要です）"
 
-#: crates/nd-gui/src/app.rs:1360
+#: crates/nd-gui/src/app.rs:1373
 msgid ""
 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
 "network still works."
@@ -415,15 +414,15 @@ msgstr ""
 "Miracast にはWi-Fiアダプターが必要ですが、このコンピューターにはありません。"
 "ネットワーク経由でのキャストは引き続き動作します。"
 
-#: crates/nd-gui/src/pages/settings.rs:99
+#: crates/nd-gui/src/pages/settings.rs:108
 msgid "Miracast only"
 msgstr "Miracastのみ"
 
-#: crates/nd-gui/src/app.rs:1368
+#: crates/nd-gui/src/app.rs:1381
 msgid "Miracast unavailable"
 msgstr "Miracastは利用できません"
 
-#: crates/nd-gui/src/app.rs:1366
+#: crates/nd-gui/src/app.rs:1379
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr ""
 "Miracastは利用できません：このWi-FiカードはWi-Fi Directをサポートしていません"
@@ -432,57 +431,61 @@ msgstr ""
 msgid "Mirror screen"
 msgstr "画面をミラーリング"
 
-#: crates/nd-gui/src/pages/settings.rs:223
+#: crates/nd-gui/src/pages/settings.rs:232
 msgid "Mix your voice into what is sent"
 msgstr "送信内容にあなたの声をミックスする"
 
-#: crates/nd-gui/src/pages/media.rs:544
+#: crates/nd-gui/src/pages/media.rs:548
 msgid "Music"
 msgstr "音楽"
 
-#: crates/nd-gui/src/app.rs:673
+#: crates/nd-gui/src/app.rs:679
 msgid "NDI installation did not finish"
 msgstr "NDI のインストールが完了しませんでした"
 
-#: crates/nd-gui/src/app.rs:667
+#: crates/nd-gui/src/app.rs:673
 msgid "NDI installed"
 msgstr "NDI をインストールしました"
 
-#: crates/nd-gui/src/app.rs:804
+#: crates/nd-gui/src/app.rs:816
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
 "ask for administrator authentication. Other sharing methods work without it."
 msgstr ""
-"NDI にはプロプライエタリなライブラリが必要ですが、BigNetScreen には含まれていません。AUR から ndi-sdk "
-"と必要なビルドツールをインストールしますか？システムから管理者認証を求められます。その他の共有方法はこのライブラリがなくても利用できます。"
+"NDI にはプロプライエタリなライブラリが必要ですが、BigNetScreen には含まれてい"
+"ません。AUR から ndi-sdk と必要なビルドツールをインストールしますか？システム"
+"から管理者認証を求められます。その他の共有方法はこのライブラリがなくても利用"
+"できます。"
 
-#: crates/nd-gui/src/app.rs:806
+#: crates/nd-gui/src/app.rs:818
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
 "Other sharing methods work without it."
 msgstr ""
-"NDI にはプロプライエタリなライブラリが必要ですが、BigNetScreen には含まれていません。お使いのディストリビューション向けに NDI 5 "
-"または 6 のランタイムをインストールし、その後アプリを再起動してください。その他の共有方法はこのライブラリがなくても利用できます。"
+"NDI にはプロプライエタリなライブラリが必要ですが、BigNetScreen には含まれてい"
+"ません。お使いのディストリビューション向けに NDI 5 または 6 のランタイムをイ"
+"ンストールし、その後アプリを再起動してください。その他の共有方法はこのライブ"
+"ラリがなくても利用できます。"
 
-#: crates/nd-gui/src/app.rs:809 crates/nd-gui/src/app.rs:1102
+#: crates/nd-gui/src/app.rs:821 crates/nd-gui/src/app.rs:1115
 msgid "NDI runtime required"
 msgstr "NDI ランタイムが必要です"
 
-#: crates/nd-gui/src/app.rs:830 crates/nd-gui/src/app.rs:1384
+#: crates/nd-gui/src/app.rs:842 crates/nd-gui/src/app.rs:1397
 msgid "NDI setup"
 msgstr "NDI のセットアップ"
 
-#: crates/nd-gui/src/app.rs:521
+#: crates/nd-gui/src/app.rs:527
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI を利用できません。NDI セットアップガイドを参照してください。"
 
-#: crates/nd-gui/src/pages/media.rs:481 crates/nd-gui/src/pages/media.rs:1217
+#: crates/nd-gui/src/pages/media.rs:485 crates/nd-gui/src/pages/media.rs:1221
 msgid "Next file"
 msgstr "次のファイル"
 
-#: crates/nd-gui/src/pages/media.rs:817
+#: crates/nd-gui/src/pages/media.rs:821
 msgid "No device found yet. Turn your TV, projector or Chromecast on."
 msgstr ""
 "デバイスが見つかりません。テレビ、プロジェクター、またはChromecastの電源を入"
@@ -492,30 +495,30 @@ msgstr ""
 msgid "No devices found"
 msgstr "デバイスが見つかりません"
 
-#: crates/nd-gui/src/pages/media.rs:848
+#: crates/nd-gui/src/pages/media.rs:852
 msgid "No music in your Music folder. Use “Select files”."
 msgstr ""
 "Musicフォルダに音楽がありません。「ファイルを選択」を使用してください。"
 
-#: crates/nd-gui/src/pages/media.rs:846
+#: crates/nd-gui/src/pages/media.rs:850
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr ""
 "Picturesフォルダに写真がありません。「ファイルを選択」を使用してください。"
 
-#: crates/nd-gui/src/app.rs:1015 crates/nd-gui/src/pages/home.rs:925
+#: crates/nd-gui/src/app.rs:1028 crates/nd-gui/src/pages/home.rs:925
 msgid "No receivers found"
 msgstr "レシーバーが見つかりません"
 
-#: crates/nd-gui/src/pages/media.rs:847
+#: crates/nd-gui/src/pages/media.rs:851
 msgid "No videos in your Videos folder. Use “Select files”."
 msgstr ""
 "Videosフォルダに動画がありません。「ファイルを選択」を使用してください。"
 
-#: crates/nd-gui/src/pages/media.rs:854
+#: crates/nd-gui/src/pages/media.rs:858
 msgid "Nothing selected"
 msgstr "何も選択されていません"
 
-#: crates/nd-gui/src/pages/media.rs:444
+#: crates/nd-gui/src/pages/media.rs:448
 msgid "Now playing"
 msgstr "再生中"
 
@@ -527,11 +530,11 @@ msgstr "1つのウィンドウのみ"
 msgid "Opening the firewall port…"
 msgstr "ファイアウォールのポートを開いています…"
 
-#: crates/nd-gui/src/pages/media.rs:467
+#: crates/nd-gui/src/pages/media.rs:471
 msgid "Pause"
 msgstr "一時停止"
 
-#: crates/nd-gui/src/pages/media.rs:544
+#: crates/nd-gui/src/pages/media.rs:548
 msgid "Photos"
 msgstr "写真"
 
@@ -539,11 +542,11 @@ msgstr "写真"
 msgid "Photos, videos and music"
 msgstr "写真、動画、音楽"
 
-#: crates/nd-gui/src/pages/media.rs:257
+#: crates/nd-gui/src/pages/media.rs:261
 msgid "Pick files and choose where to play them."
 msgstr "ファイルを選択し、再生先を指定してください。"
 
-#: crates/nd-gui/src/pages/settings.rs:94
+#: crates/nd-gui/src/pages/settings.rs:103
 msgid "Preferred protocol"
 msgstr "優先プロトコル"
 
@@ -559,7 +562,7 @@ msgstr "プロトコル"
 msgid "Publish with NDI"
 msgstr "NDI で配信"
 
-#: crates/nd-gui/src/pages/media.rs:336
+#: crates/nd-gui/src/pages/media.rs:340
 msgid "Queue"
 msgstr "再生キュー"
 
@@ -584,27 +587,27 @@ msgid "Refresh the device list and check that your receiver is turned on."
 msgstr ""
 "デバイス一覧を更新し、受信機器の電源が入っていることを確認してください。"
 
-#: crates/nd-gui/src/pages/media.rs:776
+#: crates/nd-gui/src/pages/media.rs:780
 msgid "Remove from queue"
 msgstr "再生キューから削除"
 
-#: crates/nd-gui/src/pages/settings.rs:113
+#: crates/nd-gui/src/pages/settings.rs:122
 msgid "Resolution limit"
 msgstr "解像度の上限"
 
-#: crates/nd-gui/src/app.rs:668
+#: crates/nd-gui/src/app.rs:674
 msgid "Restart BigNetScreen to use NDI."
 msgstr "NDI を使用するには BigNetScreen を再起動してください。"
 
-#: crates/nd-gui/src/pages/settings.rs:324
+#: crates/nd-gui/src/pages/settings.rs:333
 msgid "Restore defaults"
 msgstr "既定値に戻す"
 
-#: crates/nd-gui/src/pages/media.rs:467 crates/nd-gui/src/pages/media.rs:1214
+#: crates/nd-gui/src/pages/media.rs:471 crates/nd-gui/src/pages/media.rs:1218
 msgid "Resume"
 msgstr "再開"
 
-#: crates/nd-gui/src/pages/settings.rs:307
+#: crates/nd-gui/src/pages/settings.rs:316
 msgid "Saved as you change them"
 msgstr "変更すると自動的に保存されます"
 
@@ -616,20 +619,20 @@ msgstr "再スキャン"
 msgid "Screen"
 msgstr "画面"
 
-#: crates/nd-gui/src/app.rs:411 crates/nd-gui/src/app.rs:560
-#: crates/nd-gui/src/app.rs:1013
+#: crates/nd-gui/src/app.rs:417 crates/nd-gui/src/app.rs:566
+#: crates/nd-gui/src/app.rs:1026
 msgid "Searching…"
 msgstr "検索中…"
 
-#: crates/nd-gui/src/pages/media.rs:285
+#: crates/nd-gui/src/pages/media.rs:289
 msgid "Select files"
 msgstr "ファイルを選択"
 
-#: crates/nd-gui/src/pages/media.rs:943
+#: crates/nd-gui/src/pages/media.rs:947
 msgid "Select up to 1000 files at a time."
 msgstr "一度に選択できるファイルは最大1000件です。"
 
-#: crates/nd-gui/src/pages/media.rs:294
+#: crates/nd-gui/src/pages/media.rs:298
 msgid "Send a folder"
 msgstr "フォルダーを送信"
 
@@ -637,31 +640,31 @@ msgstr "フォルダーを送信"
 msgid "Send media"
 msgstr "メディアを送信"
 
-#: crates/nd-gui/src/pages/media.rs:391
+#: crates/nd-gui/src/pages/media.rs:395
 msgid "Send to"
 msgstr "送信先"
 
-#: crates/nd-gui/src/pages/media.rs:416
+#: crates/nd-gui/src/pages/media.rs:420
 msgid "Send to device"
 msgstr "デバイスに送信"
 
-#: crates/nd-gui/src/pages/settings.rs:213
+#: crates/nd-gui/src/pages/settings.rs:222
 msgid "Send whatever this computer is playing"
 msgstr "このコンピューターで再生中のものを送信"
 
-#: crates/nd-gui/src/app.rs:1142
+#: crates/nd-gui/src/app.rs:1155
 msgid "Sending files…"
 msgstr "ファイルを送信中…"
 
-#: crates/nd-gui/src/pages/mod.rs:50 crates/nd-gui/src/pages/settings.rs:83
+#: crates/nd-gui/src/pages/mod.rs:50 crates/nd-gui/src/pages/settings.rs:92
 msgid "Settings"
 msgstr "設定"
 
-#: crates/nd-gui/src/pages/settings.rs:510
+#: crates/nd-gui/src/pages/settings.rs:546
 msgid "Settings cannot be saved on this system."
 msgstr "このシステムでは設定を保存できません。"
 
-#: crates/nd-gui/src/pages/media.rs:256
+#: crates/nd-gui/src/pages/media.rs:260
 msgid "Share media"
 msgstr "メディアを共有"
 
@@ -669,7 +672,7 @@ msgstr "メディアを共有"
 msgid "Share your screen wirelessly"
 msgstr "画面をワイヤレスで共有する"
 
-#: crates/nd-gui/src/app.rs:1381
+#: crates/nd-gui/src/app.rs:1394
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "テレビ、プロジェクター、Chromecast で画面を共有します。"
 
@@ -697,19 +700,19 @@ msgstr "ステータス"
 msgid "Stop"
 msgstr "停止"
 
-#: crates/nd-gui/src/pages/media.rs:489
+#: crates/nd-gui/src/pages/media.rs:493
 msgid "Stop sending"
 msgstr "送信を停止"
 
-#: crates/nd-gui/src/app.rs:1136
+#: crates/nd-gui/src/app.rs:1149
 msgid "Stop sharing your screen before sending files"
 msgstr "ファイルを送信する前に、画面共有を停止してください"
 
-#: crates/nd-gui/src/app.rs:1047
+#: crates/nd-gui/src/app.rs:1060
 msgid "Stopping…"
 msgstr "停止中…"
 
-#: crates/nd-gui/src/pages/mod.rs:175 crates/nd-gui/src/pages/settings.rs:89
+#: crates/nd-gui/src/pages/mod.rs:175 crates/nd-gui/src/pages/settings.rs:98
 msgid "Streaming"
 msgstr "ストリーミング中"
 
@@ -721,8 +724,8 @@ msgstr "ストリーミング中:"
 msgid "Test"
 msgstr "テスト"
 
-#: crates/nd-gui/src/app.rs:1066 crates/nd-gui/src/app.rs:1129
-#: crates/nd-gui/src/app.rs:1146
+#: crates/nd-gui/src/app.rs:1079 crates/nd-gui/src/app.rs:1142
+#: crates/nd-gui/src/app.rs:1159
 msgid "That device is no longer available"
 msgstr "そのデバイスはもう利用できません"
 
@@ -730,11 +733,11 @@ msgstr "そのデバイスはもう利用できません"
 msgid "The receiver is not answering"
 msgstr "受信側が応答していません"
 
-#: crates/nd-gui/src/pages/settings.rs:84
+#: crates/nd-gui/src/pages/settings.rs:93
 msgid "These apply to your next session."
 msgstr "これらは次回のセッションに適用されます。"
 
-#: crates/nd-gui/src/pages/settings.rs:268
+#: crates/nd-gui/src/pages/settings.rs:277
 msgid "This computer's name"
 msgstr "このコンピューターの名前"
 
@@ -749,15 +752,15 @@ msgstr ""
 msgid "Tips"
 msgstr "ヒント"
 
-#: crates/nd-gui/src/pages/settings.rs:121
+#: crates/nd-gui/src/pages/settings.rs:130
 msgid "Very high (1440p)"
 msgstr "非常に高い (1440p)"
 
-#: crates/nd-gui/src/pages/media.rs:544
+#: crates/nd-gui/src/pages/media.rs:548
 msgid "Videos"
 msgstr "ビデオ"
 
-#: crates/nd-gui/src/app.rs:828
+#: crates/nd-gui/src/app.rs:840
 msgid "View ndi-sdk in the AUR"
 msgstr "AUR で ndi-sdk を表示"
 
@@ -773,7 +776,7 @@ msgstr "信号が弱い"
 msgid "What do you want to share?"
 msgstr "何を共有しますか?"
 
-#: crates/nd-gui/src/pages/settings.rs:96
+#: crates/nd-gui/src/pages/settings.rs:105
 msgid "Which kind of receiver to look for"
 msgstr "検索するレシーバーの種類"
 
@@ -781,7 +784,7 @@ msgstr "検索するレシーバーの種類"
 msgid "Whole screen"
 msgstr "画面全体"
 
-#: crates/nd-gui/src/pages/settings.rs:150
+#: crates/nd-gui/src/pages/settings.rs:159
 msgid "Width (pixels)"
 msgstr "幅（ピクセル）"
 
@@ -789,15 +792,11 @@ msgstr "幅（ピクセル）"
 msgid "Window"
 msgstr "ウィンドウ"
 
-#: crates/nd-gui/src/pages/devices.rs:473
-msgid "devices found"
-msgstr "台のデバイスが見つかりました"
-
 #: crates/nd-gui/src/pages/mod.rs:187
 msgid "instant response"
 msgstr "即時応答"
 
-#: crates/nd-gui/src/pages/media.rs:888
+#: crates/nd-gui/src/pages/media.rs:892
 msgid "item"
 msgstr "項目"
 
@@ -813,16 +812,21 @@ msgstr "未公開"
 msgid "quick response"
 msgstr "クイック応答"
 
-#: crates/nd-gui/src/app.rs:1074
+#: crates/nd-gui/src/app.rs:1087
 msgid "shows up in discovery only"
 msgstr "検出のみに表示されます"
 
-#: crates/nd-gui/src/pages/media.rs:855
+#: crates/nd-gui/src/pages/devices.rs:473
+msgid "{} device found"
+msgid_plural "{} devices found"
+msgstr[0] "{} 台のデバイスが見つかりました"
+
+#: crates/nd-gui/src/pages/media.rs:859
 msgid "{} file selected"
 msgid_plural "{} files selected"
 msgstr[0] "{} 件のファイルを選択中"
 
-#: crates/nd-gui/src/app.rs:1018
+#: crates/nd-gui/src/app.rs:1031
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "{} 件のレシーバーが見つかりました"

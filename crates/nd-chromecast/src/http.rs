@@ -270,7 +270,7 @@ impl StreamServer {
             let accepted = tokio::select! {
                 result = self.listener.accept() => result,
                 _ = cancel.changed() => {
-                    tracing::debug!("servidor do stream encerrado a pedido");
+                    tracing::debug!("stream server stopped on request");
                     return Ok(());
                 }
             };
@@ -298,7 +298,7 @@ impl StreamServer {
             if verdict != Verdict::Stream {
                 if verdict == Verdict::Forbidden {
                     tracing::warn!(
-                        %peer, esperado = %self.allowed,
+                        %peer, expected = %self.allowed,
                         "refusing a stream request from another address"
                     );
                 } else {
@@ -499,7 +499,7 @@ mod tests {
         let client = tokio::spawn(async move {
             let mut stream = TcpStream::connect(addr).await.unwrap();
             stream
-                .write_all(b"GET /nada HTTP/1.1\r\nHost: x\r\n\r\n")
+                .write_all(b"GET /nothing HTTP/1.1\r\nHost: x\r\n\r\n")
                 .await
                 .unwrap();
             let mut response = String::new();

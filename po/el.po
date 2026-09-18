@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-18 00:47-0300\n"
+"POT-Creation-Date: 2026-09-18 14:58-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Greek <el@li.org>\n"
@@ -14,7 +14,7 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/pages/settings.rs:278
+#: crates/nd-gui/src/pages/settings.rs:287
 msgid ""
 "0 lets the system choose. Set one only if you opened a port on your firewall "
 "by hand."
@@ -22,35 +22,31 @@ msgstr ""
 "Το 0 αφήνει το σύστημα να επιλέξει. Ορίστε μόνο αν ανοίξατε κάποια θύρα στο "
 "τείχος προστασίας χειροκίνητα."
 
-#: crates/nd-gui/src/pages/devices.rs:472
-msgid "1 device found"
-msgstr "Βρέθηκε 1 συσκευή"
-
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "24 FPS"
 msgstr "24 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "25 FPS"
 msgstr "25 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "30 FPS"
 msgstr "30 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "50 FPS"
 msgstr "50 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:182
+#: crates/nd-gui/src/pages/settings.rs:191
 msgid "60 FPS"
 msgstr "60 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:179
+#: crates/nd-gui/src/pages/settings.rs:188
 msgid "60 is smoother and costs about half as much again in bandwidth"
 msgstr "Το 60 είναι πιο ομαλό και κοστίζει περίπου το μισό σε εύρος ζώνης"
 
-#: crates/nd-gui/src/pages/settings.rs:115
+#: crates/nd-gui/src/pages/settings.rs:124
 msgid ""
 "A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver "
 "will accept it."
@@ -62,7 +58,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "Μια νέα οθόνη"
 
-#: crates/nd-gui/src/app.rs:1058
+#: crates/nd-gui/src/app.rs:1071
 msgid "A stream is already running"
 msgstr "Μια ροή εκτελείται ήδη"
 
@@ -90,7 +86,7 @@ msgstr "Όλα τα πρωτόκολλα"
 msgid "An extra desktop, just for this"
 msgstr "Μια επιπλέον επιφάνεια εργασίας, μόνο για αυτό"
 
-#: crates/nd-gui/src/pages/settings.rs:163
+#: crates/nd-gui/src/pages/settings.rs:172
 msgid ""
 "Aspect ratio is preserved. Miracast uses a supported mode within these "
 "limits."
@@ -98,29 +94,29 @@ msgstr ""
 "Η αναλογία διαστάσεων διατηρείται. Το Miracast χρησιμοποιεί μια "
 "υποστηριζόμενη λειτουργία εντός αυτών των ορίων."
 
-#: crates/nd-gui/src/pages/settings.rs:206
+#: crates/nd-gui/src/pages/settings.rs:215
 msgid "Audio"
 msgstr "Ήχος"
 
-#: crates/nd-gui/src/app.rs:534
+#: crates/nd-gui/src/app.rs:540
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
 msgstr ""
-"Πιστοποιήστε την ταυτότητά σας όταν σας ζητηθεί. Η λήψη και η δημιουργία "
-"του πακέτου μπορεί να διαρκέσουν λίγα λεπτά. Αφήστε την εφαρμογή ανοιχτή "
-"μέχρι να ολοκληρωθεί η εγκατάσταση."
+"Πιστοποιήστε την ταυτότητά σας όταν σας ζητηθεί. Η λήψη και η δημιουργία του "
+"πακέτου μπορεί να διαρκέσουν λίγα λεπτά. Αφήστε την εφαρμογή ανοιχτή μέχρι "
+"να ολοκληρωθεί η εγκατάσταση."
 
-#: crates/nd-gui/src/pages/settings.rs:98
+#: crates/nd-gui/src/pages/settings.rs:107
 msgid "Automatic"
 msgstr "Αυτόματο"
 
 #: crates/nd-gui/src/pages/devices.rs:170
-#: crates/nd-gui/src/pages/settings.rs:258
+#: crates/nd-gui/src/pages/settings.rs:267
 msgid "Automatic discovery"
 msgstr "Αυτόματη ανακάλυψη"
 
-#: crates/nd-gui/src/app.rs:413 crates/nd-gui/src/app.rs:1007
+#: crates/nd-gui/src/app.rs:419 crates/nd-gui/src/app.rs:1020
 msgid "Automatic discovery is off"
 msgstr "Η αυτόματη ανακάλυψη είναι απενεργοποιημένη"
 
@@ -132,11 +128,11 @@ msgstr "Διαθέσιμο"
 msgid "Back"
 msgstr "Πίσω"
 
-#: crates/nd-gui/src/pages/media.rs:458 crates/nd-gui/src/pages/media.rs:1215
+#: crates/nd-gui/src/pages/media.rs:462 crates/nd-gui/src/pages/media.rs:1219
 msgid "Back 10 seconds"
 msgstr "Πίσω 10 δευτερόλεπτα"
 
-#: crates/nd-gui/src/pages/settings.rs:194
+#: crates/nd-gui/src/pages/settings.rs:203
 msgid ""
 "Buffers the picture so video plays smoothly, at the cost of delay. On "
 "Miracast it is applied here; on Chromecast it is a request the receiver may "
@@ -150,15 +146,15 @@ msgstr ""
 msgid "Can't find your device?"
 msgstr "Δεν βρίσκετε τη συσκευή σας;"
 
-#: crates/nd-gui/src/pages/media.rs:795
+#: crates/nd-gui/src/pages/media.rs:799
 msgid "Choose a device…"
 msgstr "Επιλέξτε μια συσκευή…"
 
-#: crates/nd-gui/src/pages/media.rs:1008
+#: crates/nd-gui/src/pages/media.rs:1012
 msgid "Choose a folder"
 msgstr "Επιλογή φακέλου"
 
-#: crates/nd-gui/src/pages/media.rs:1010
+#: crates/nd-gui/src/pages/media.rs:1014
 msgid "Choose files"
 msgstr "Επιλογή αρχείων"
 
@@ -174,7 +170,7 @@ msgstr ""
 "Επιλέξτε αυτόν τον υπολογιστή στο OBS ή σε έναν άλλο δέκτη NDI. "
 "Χρησιμοποιούνται το όνομα και οι επιλογές ήχου από τις Ρυθμίσεις."
 
-#: crates/nd-gui/src/pages/media.rs:820
+#: crates/nd-gui/src/pages/media.rs:824
 msgid "Choose which device to send to."
 msgstr "Επιλέξτε σε ποια συσκευή θέλετε να στείλετε."
 
@@ -186,7 +182,7 @@ msgstr "Chromecast"
 msgid "Chromecast / AirPlay"
 msgstr "Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/settings.rs:100
+#: crates/nd-gui/src/pages/settings.rs:109
 msgid "Chromecast / AirPlay only"
 msgstr "Μόνο Chromecast / AirPlay"
 
@@ -200,11 +196,11 @@ msgstr ""
 "εμφανίζεται μόνο όσο βρίσκεται σε λειτουργία καθρεφτίσματος οθόνης — στο "
 "Fire TV, στη διαδρομή Ρυθμίσεις › Οθόνη και ήχοι › Καθρεφτισμός οθόνης."
 
-#: crates/nd-gui/src/pages/media.rs:342
+#: crates/nd-gui/src/pages/media.rs:346
 msgid "Clear queue"
 msgstr "Εκκαθάριση ουράς"
 
-#: crates/nd-gui/src/app.rs:693 crates/nd-gui/src/app.rs:810
+#: crates/nd-gui/src/app.rs:699 crates/nd-gui/src/app.rs:822
 msgid "Close"
 msgstr "Κλείσιμο"
 
@@ -220,7 +216,7 @@ msgstr "Συνδεδεμένο"
 msgid "Connected to"
 msgstr "Συνδεδεμένο με"
 
-#: crates/nd-gui/src/app.rs:1080 crates/nd-gui/src/pages/mod.rs:171
+#: crates/nd-gui/src/app.rs:1093 crates/nd-gui/src/pages/mod.rs:171
 msgid "Connecting…"
 msgstr "Σύνδεση…"
 
@@ -232,7 +228,7 @@ msgstr "Σύνδεση"
 msgid "Connection quality"
 msgstr "Ποιότητα σύνδεσης"
 
-#: crates/nd-gui/src/pages/settings.rs:130
+#: crates/nd-gui/src/pages/settings.rs:139
 msgid "Custom resolution"
 msgstr "Προσαρμοσμένη ανάλυση"
 
@@ -244,7 +240,7 @@ msgstr "Συσκευές"
 msgid "Disconnect"
 msgstr "Αποσύνδεση"
 
-#: crates/nd-gui/src/pages/settings.rs:253
+#: crates/nd-gui/src/pages/settings.rs:262
 msgid "Discovery and devices"
 msgstr "Ανακάλυψη και συσκευές"
 
@@ -275,7 +271,7 @@ msgstr "Επιπλέον οθόνη"
 msgid "Failed"
 msgstr "Αποτυχία"
 
-#: crates/nd-gui/src/pages/settings.rs:192
+#: crates/nd-gui/src/pages/settings.rs:201
 msgid "Film mode"
 msgstr "Λειτουργία ταινίας"
 
@@ -287,11 +283,11 @@ msgstr "Βρείτε και συνδεθείτε με κοντινούς ασύ�
 msgid "Find compatible devices"
 msgstr "Εύρεση συμβατών συσκευών"
 
-#: crates/nd-gui/src/pages/media.rs:875
+#: crates/nd-gui/src/pages/media.rs:879
 msgid "Finished"
 msgstr "Ολοκληρώθηκε"
 
-#: crates/nd-gui/src/pages/settings.rs:276
+#: crates/nd-gui/src/pages/settings.rs:285
 msgid "Fixed port"
 msgstr "Σταθερή θύρα"
 
@@ -300,11 +296,11 @@ msgid "For Chromecast, connect both devices to the same Wi-Fi network."
 msgstr ""
 "Για το Chromecast, συνδέστε και τις δύο συσκευές στο ίδιο δίκτυο Wi-Fi."
 
-#: crates/nd-gui/src/pages/media.rs:474 crates/nd-gui/src/pages/media.rs:1216
+#: crates/nd-gui/src/pages/media.rs:478 crates/nd-gui/src/pages/media.rs:1220
 msgid "Forward 10 seconds"
 msgstr "Μπροστά 10 δευτερόλεπτα"
 
-#: crates/nd-gui/src/pages/settings.rs:177
+#: crates/nd-gui/src/pages/settings.rs:186
 msgid "Frame rate"
 msgstr "Ρυθμός καρέ"
 
@@ -316,11 +312,11 @@ msgstr "Καλή"
 msgid "Got it"
 msgstr "Κατάλαβα"
 
-#: crates/nd-gui/src/pages/settings.rs:162
+#: crates/nd-gui/src/pages/settings.rs:171
 msgid "Height (pixels)"
 msgstr "Ύψος (εικονοστοιχεία)"
 
-#: crates/nd-gui/src/pages/settings.rs:122
+#: crates/nd-gui/src/pages/settings.rs:131
 msgid "High (1080p)"
 msgstr "Υψηλή (1080p)"
 
@@ -328,19 +324,19 @@ msgstr "Υψηλή (1080p)"
 msgid "Home"
 msgstr "Αρχική"
 
-#: crates/nd-gui/src/pages/settings.rs:211
+#: crates/nd-gui/src/pages/settings.rs:220
 msgid "Include system audio"
 msgstr "Συμπερίληψη ήχου συστήματος"
 
-#: crates/nd-gui/src/pages/settings.rs:221
+#: crates/nd-gui/src/pages/settings.rs:230
 msgid "Include the microphone"
 msgstr "Συμπερίληψη μικροφώνου"
 
-#: crates/nd-gui/src/app.rs:813
+#: crates/nd-gui/src/app.rs:825
 msgid "Install"
 msgstr "Εγκατάσταση"
 
-#: crates/nd-gui/src/app.rs:674
+#: crates/nd-gui/src/app.rs:680
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
@@ -348,7 +344,7 @@ msgstr ""
 "Η εγκατάσταση απέτυχε ή ακυρώθηκε ο έλεγχος ταυτότητας. Μπορείτε να "
 "δοκιμάσετε ξανά ή να εγκαταστήσετε τη βιβλιοθήκη χειροκίνητα."
 
-#: crates/nd-gui/src/app.rs:533
+#: crates/nd-gui/src/app.rs:539
 msgid "Installing NDI…"
 msgstr "Εγκατάσταση του NDI…"
 
@@ -361,11 +357,11 @@ msgstr ""
 msgid "Keep the receiver ready"
 msgstr "Έχετε τον δέκτη έτοιμο"
 
-#: crates/nd-gui/src/app.rs:1293
+#: crates/nd-gui/src/app.rs:1306
 msgid "Local network discovery unavailable"
 msgstr "Η ανακάλυψη τοπικού δικτύου δεν είναι διαθέσιμη"
 
-#: crates/nd-gui/src/pages/settings.rs:260
+#: crates/nd-gui/src/pages/settings.rs:269
 msgid "Look for receivers as soon as the app starts"
 msgstr "Αναζήτηση δεκτών μόλις ξεκινήσει η εφαρμογή"
 
@@ -373,11 +369,11 @@ msgstr "Αναζήτηση δεκτών μόλις ξεκινήσει η εφα�
 msgid "Looking for receivers…"
 msgstr "Αναζήτηση συσκευών λήψης…"
 
-#: crates/nd-gui/src/pages/settings.rs:124
+#: crates/nd-gui/src/pages/settings.rs:133
 msgid "Low (480p)"
 msgstr "Χαμηλή (480p)"
 
-#: crates/nd-gui/src/pages/settings.rs:120
+#: crates/nd-gui/src/pages/settings.rs:129
 msgid "Maximum (2160p)"
 msgstr "Μέγιστη (2160p)"
 
@@ -389,11 +385,11 @@ msgstr "Μέτρηση…"
 msgid "Media"
 msgstr "Πολυμέσα"
 
-#: crates/nd-gui/src/pages/settings.rs:123
+#: crates/nd-gui/src/pages/settings.rs:132
 msgid "Medium (720p)"
 msgstr "Μεσαία (720p)"
 
-#: crates/nd-gui/src/pages/settings.rs:230
+#: crates/nd-gui/src/pages/settings.rs:239
 msgid "Microphone volume"
 msgstr "Ένταση μικροφώνου"
 
@@ -401,7 +397,7 @@ msgstr "Ένταση μικροφώνου"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1352
+#: crates/nd-gui/src/app.rs:1365
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
@@ -409,7 +405,7 @@ msgstr ""
 "Το Miracast δεν λειτουργεί στην έκδοση Flatpak (απαιτείται ο διαχειριστής "
 "δικτύου του συστήματος)"
 
-#: crates/nd-gui/src/app.rs:1360
+#: crates/nd-gui/src/app.rs:1373
 msgid ""
 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
 "network still works."
@@ -417,15 +413,15 @@ msgstr ""
 "Το Miracast χρειάζεται προσαρμογέα Wi-Fi και αυτός ο υπολογιστής δεν έχει "
 "κανέναν. Η μετάδοση μέσω δικτύου εξακολουθεί να λειτουργεί."
 
-#: crates/nd-gui/src/pages/settings.rs:99
+#: crates/nd-gui/src/pages/settings.rs:108
 msgid "Miracast only"
 msgstr "Μόνο Miracast"
 
-#: crates/nd-gui/src/app.rs:1368
+#: crates/nd-gui/src/app.rs:1381
 msgid "Miracast unavailable"
 msgstr "Το Miracast δεν είναι διαθέσιμο"
 
-#: crates/nd-gui/src/app.rs:1366
+#: crates/nd-gui/src/app.rs:1379
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr ""
 "Το Miracast δεν είναι διαθέσιμο: αυτή η κάρτα Wi-Fi δεν υποστηρίζει το Wi-Fi "
@@ -435,23 +431,23 @@ msgstr ""
 msgid "Mirror screen"
 msgstr "Κατοπτρισμός οθόνης"
 
-#: crates/nd-gui/src/pages/settings.rs:223
+#: crates/nd-gui/src/pages/settings.rs:232
 msgid "Mix your voice into what is sent"
 msgstr "Ανάμειξη της φωνής σας σε ό,τι αποστέλλεται"
 
-#: crates/nd-gui/src/pages/media.rs:544
+#: crates/nd-gui/src/pages/media.rs:548
 msgid "Music"
 msgstr "Μουσική"
 
-#: crates/nd-gui/src/app.rs:673
+#: crates/nd-gui/src/app.rs:679
 msgid "NDI installation did not finish"
 msgstr "Η εγκατάσταση του NDI δεν ολοκληρώθηκε"
 
-#: crates/nd-gui/src/app.rs:667
+#: crates/nd-gui/src/app.rs:673
 msgid "NDI installed"
 msgstr "Το NDI εγκαταστάθηκε"
 
-#: crates/nd-gui/src/app.rs:804
+#: crates/nd-gui/src/app.rs:816
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
@@ -459,11 +455,11 @@ msgid ""
 msgstr ""
 "Το NDI χρειάζεται μια ιδιόκτητη βιβλιοθήκη που δεν περιλαμβάνεται στο "
 "BigNetScreen. Θέλετε να εγκαταστήσετε το ndi-sdk από το AUR και τα "
-"απαραίτητα εργαλεία δημιουργίας; Το σύστημά σας θα ζητήσει έλεγχο "
-"ταυτότητας διαχειριστή. Οι άλλοι τρόποι κοινής χρήσης λειτουργούν και χωρίς "
-"αυτή τη βιβλιοθήκη."
+"απαραίτητα εργαλεία δημιουργίας; Το σύστημά σας θα ζητήσει έλεγχο ταυτότητας "
+"διαχειριστή. Οι άλλοι τρόποι κοινής χρήσης λειτουργούν και χωρίς αυτή τη "
+"βιβλιοθήκη."
 
-#: crates/nd-gui/src/app.rs:806
+#: crates/nd-gui/src/app.rs:818
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
@@ -474,23 +470,23 @@ msgstr ""
 "σας και έπειτα επανεκκινήστε την εφαρμογή. Οι άλλοι τρόποι κοινής χρήσης "
 "λειτουργούν και χωρίς αυτή τη βιβλιοθήκη."
 
-#: crates/nd-gui/src/app.rs:809 crates/nd-gui/src/app.rs:1102
+#: crates/nd-gui/src/app.rs:821 crates/nd-gui/src/app.rs:1115
 msgid "NDI runtime required"
 msgstr "Απαιτείται το περιβάλλον εκτέλεσης NDI"
 
-#: crates/nd-gui/src/app.rs:830 crates/nd-gui/src/app.rs:1384
+#: crates/nd-gui/src/app.rs:842 crates/nd-gui/src/app.rs:1397
 msgid "NDI setup"
 msgstr "Ρύθμιση NDI"
 
-#: crates/nd-gui/src/app.rs:521
+#: crates/nd-gui/src/app.rs:527
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "Το NDI δεν είναι διαθέσιμο. Δείτε τον οδηγό ρύθμισης του NDI."
 
-#: crates/nd-gui/src/pages/media.rs:481 crates/nd-gui/src/pages/media.rs:1217
+#: crates/nd-gui/src/pages/media.rs:485 crates/nd-gui/src/pages/media.rs:1221
 msgid "Next file"
 msgstr "Επόμενο αρχείο"
 
-#: crates/nd-gui/src/pages/media.rs:817
+#: crates/nd-gui/src/pages/media.rs:821
 msgid "No device found yet. Turn your TV, projector or Chromecast on."
 msgstr ""
 "Δεν βρέθηκε ακόμη συσκευή. Ενεργοποιήστε την τηλεόραση, τον προβολέα ή το "
@@ -500,31 +496,31 @@ msgstr ""
 msgid "No devices found"
 msgstr "Δεν βρέθηκαν συσκευές"
 
-#: crates/nd-gui/src/pages/media.rs:848
+#: crates/nd-gui/src/pages/media.rs:852
 msgid "No music in your Music folder. Use “Select files”."
 msgstr ""
 "Δεν υπάρχει μουσική στον φάκελο Μουσική. Χρησιμοποιήστε «Επιλογή αρχείων»."
 
-#: crates/nd-gui/src/pages/media.rs:846
+#: crates/nd-gui/src/pages/media.rs:850
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr ""
 "Δεν υπάρχουν φωτογραφίες στον φάκελο Εικόνες. Χρησιμοποιήστε «Επιλογή "
 "αρχείων»."
 
-#: crates/nd-gui/src/app.rs:1015 crates/nd-gui/src/pages/home.rs:925
+#: crates/nd-gui/src/app.rs:1028 crates/nd-gui/src/pages/home.rs:925
 msgid "No receivers found"
 msgstr "Δεν βρέθηκαν δέκτες"
 
-#: crates/nd-gui/src/pages/media.rs:847
+#: crates/nd-gui/src/pages/media.rs:851
 msgid "No videos in your Videos folder. Use “Select files”."
 msgstr ""
 "Δεν υπάρχουν βίντεο στον φάκελο Βίντεο. Χρησιμοποιήστε «Επιλογή αρχείων»."
 
-#: crates/nd-gui/src/pages/media.rs:854
+#: crates/nd-gui/src/pages/media.rs:858
 msgid "Nothing selected"
 msgstr "Δεν επιλέχθηκε τίποτα"
 
-#: crates/nd-gui/src/pages/media.rs:444
+#: crates/nd-gui/src/pages/media.rs:448
 msgid "Now playing"
 msgstr "Αναπαραγωγή τώρα"
 
@@ -536,11 +532,11 @@ msgstr "Μόνο ένα παράθυρο"
 msgid "Opening the firewall port…"
 msgstr "Άνοιγμα της θύρας τείχους προστασίας…"
 
-#: crates/nd-gui/src/pages/media.rs:467
+#: crates/nd-gui/src/pages/media.rs:471
 msgid "Pause"
 msgstr "Παύση"
 
-#: crates/nd-gui/src/pages/media.rs:544
+#: crates/nd-gui/src/pages/media.rs:548
 msgid "Photos"
 msgstr "Φωτογραφίες"
 
@@ -548,11 +544,11 @@ msgstr "Φωτογραφίες"
 msgid "Photos, videos and music"
 msgstr "Φωτογραφίες, βίντεο και μουσική"
 
-#: crates/nd-gui/src/pages/media.rs:257
+#: crates/nd-gui/src/pages/media.rs:261
 msgid "Pick files and choose where to play them."
 msgstr "Επιλέξτε αρχεία και αποφασίστε πού θα αναπαραχθούν."
 
-#: crates/nd-gui/src/pages/settings.rs:94
+#: crates/nd-gui/src/pages/settings.rs:103
 msgid "Preferred protocol"
 msgstr "Προτιμώμενο πρωτόκολλο"
 
@@ -568,7 +564,7 @@ msgstr "Πρωτόκολλο"
 msgid "Publish with NDI"
 msgstr "Μετάδοση μέσω NDI"
 
-#: crates/nd-gui/src/pages/media.rs:336
+#: crates/nd-gui/src/pages/media.rs:340
 msgid "Queue"
 msgstr "Ουρά"
 
@@ -593,27 +589,27 @@ msgid "Refresh the device list and check that your receiver is turned on."
 msgstr ""
 "Ανανεώστε τη λίστα συσκευών και ελέγξτε ότι ο δέκτης είναι ενεργοποιημένος."
 
-#: crates/nd-gui/src/pages/media.rs:776
+#: crates/nd-gui/src/pages/media.rs:780
 msgid "Remove from queue"
 msgstr "Αφαίρεση από την ουρά"
 
-#: crates/nd-gui/src/pages/settings.rs:113
+#: crates/nd-gui/src/pages/settings.rs:122
 msgid "Resolution limit"
 msgstr "Όριο ανάλυσης"
 
-#: crates/nd-gui/src/app.rs:668
+#: crates/nd-gui/src/app.rs:674
 msgid "Restart BigNetScreen to use NDI."
 msgstr "Επανεκκινήστε το BigNetScreen για να χρησιμοποιήσετε το NDI."
 
-#: crates/nd-gui/src/pages/settings.rs:324
+#: crates/nd-gui/src/pages/settings.rs:333
 msgid "Restore defaults"
 msgstr "Επαναφορά προεπιλογών"
 
-#: crates/nd-gui/src/pages/media.rs:467 crates/nd-gui/src/pages/media.rs:1214
+#: crates/nd-gui/src/pages/media.rs:471 crates/nd-gui/src/pages/media.rs:1218
 msgid "Resume"
 msgstr "Συνέχιση"
 
-#: crates/nd-gui/src/pages/settings.rs:307
+#: crates/nd-gui/src/pages/settings.rs:316
 msgid "Saved as you change them"
 msgstr "Αποθηκεύονται καθώς τις αλλάζετε"
 
@@ -625,20 +621,20 @@ msgstr "Νέα σάρωση"
 msgid "Screen"
 msgstr "Οθόνη"
 
-#: crates/nd-gui/src/app.rs:411 crates/nd-gui/src/app.rs:560
-#: crates/nd-gui/src/app.rs:1013
+#: crates/nd-gui/src/app.rs:417 crates/nd-gui/src/app.rs:566
+#: crates/nd-gui/src/app.rs:1026
 msgid "Searching…"
 msgstr "Αναζήτηση…"
 
-#: crates/nd-gui/src/pages/media.rs:285
+#: crates/nd-gui/src/pages/media.rs:289
 msgid "Select files"
 msgstr "Επιλογή αρχείων"
 
-#: crates/nd-gui/src/pages/media.rs:943
+#: crates/nd-gui/src/pages/media.rs:947
 msgid "Select up to 1000 files at a time."
 msgstr "Επιλέξτε έως 1000 αρχεία κάθε φορά."
 
-#: crates/nd-gui/src/pages/media.rs:294
+#: crates/nd-gui/src/pages/media.rs:298
 msgid "Send a folder"
 msgstr "Αποστολή φακέλου"
 
@@ -646,31 +642,31 @@ msgstr "Αποστολή φακέλου"
 msgid "Send media"
 msgstr "Αποστολή πολυμέσων"
 
-#: crates/nd-gui/src/pages/media.rs:391
+#: crates/nd-gui/src/pages/media.rs:395
 msgid "Send to"
 msgstr "Αποστολή σε"
 
-#: crates/nd-gui/src/pages/media.rs:416
+#: crates/nd-gui/src/pages/media.rs:420
 msgid "Send to device"
 msgstr "Αποστολή στη συσκευή"
 
-#: crates/nd-gui/src/pages/settings.rs:213
+#: crates/nd-gui/src/pages/settings.rs:222
 msgid "Send whatever this computer is playing"
 msgstr "Αποστολή ό,τι παίζει αυτός ο υπολογιστής"
 
-#: crates/nd-gui/src/app.rs:1142
+#: crates/nd-gui/src/app.rs:1155
 msgid "Sending files…"
 msgstr "Αποστολή αρχείων…"
 
-#: crates/nd-gui/src/pages/mod.rs:50 crates/nd-gui/src/pages/settings.rs:83
+#: crates/nd-gui/src/pages/mod.rs:50 crates/nd-gui/src/pages/settings.rs:92
 msgid "Settings"
 msgstr "Ρυθμίσεις"
 
-#: crates/nd-gui/src/pages/settings.rs:510
+#: crates/nd-gui/src/pages/settings.rs:546
 msgid "Settings cannot be saved on this system."
 msgstr "Οι ρυθμίσεις δεν μπορούν να αποθηκευτούν σε αυτό το σύστημα."
 
-#: crates/nd-gui/src/pages/media.rs:256
+#: crates/nd-gui/src/pages/media.rs:260
 msgid "Share media"
 msgstr "Κοινή χρήση πολυμέσων"
 
@@ -678,7 +674,7 @@ msgstr "Κοινή χρήση πολυμέσων"
 msgid "Share your screen wirelessly"
 msgstr "Μοιραστείτε την οθόνη σας ασύρματα"
 
-#: crates/nd-gui/src/app.rs:1381
+#: crates/nd-gui/src/app.rs:1394
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "Μοιραστείτε την οθόνη σας με μια τηλεόραση, προβολέα ή Chromecast."
 
@@ -706,19 +702,19 @@ msgstr "Κατάσταση"
 msgid "Stop"
 msgstr "Διακοπή"
 
-#: crates/nd-gui/src/pages/media.rs:489
+#: crates/nd-gui/src/pages/media.rs:493
 msgid "Stop sending"
 msgstr "Διακοπή αποστολής"
 
-#: crates/nd-gui/src/app.rs:1136
+#: crates/nd-gui/src/app.rs:1149
 msgid "Stop sharing your screen before sending files"
 msgstr "Σταματήστε να μοιράζεστε την οθόνη πριν στείλετε αρχεία"
 
-#: crates/nd-gui/src/app.rs:1047
+#: crates/nd-gui/src/app.rs:1060
 msgid "Stopping…"
 msgstr "Διακοπή…"
 
-#: crates/nd-gui/src/pages/mod.rs:175 crates/nd-gui/src/pages/settings.rs:89
+#: crates/nd-gui/src/pages/mod.rs:175 crates/nd-gui/src/pages/settings.rs:98
 msgid "Streaming"
 msgstr "Μετάδοση ροής"
 
@@ -730,8 +726,8 @@ msgstr "Μετάδοση σε"
 msgid "Test"
 msgstr "Δοκιμή"
 
-#: crates/nd-gui/src/app.rs:1066 crates/nd-gui/src/app.rs:1129
-#: crates/nd-gui/src/app.rs:1146
+#: crates/nd-gui/src/app.rs:1079 crates/nd-gui/src/app.rs:1142
+#: crates/nd-gui/src/app.rs:1159
 msgid "That device is no longer available"
 msgstr "Αυτή η συσκευή δεν είναι πλέον διαθέσιμη"
 
@@ -739,11 +735,11 @@ msgstr "Αυτή η συσκευή δεν είναι πλέον διαθέσιμ
 msgid "The receiver is not answering"
 msgstr "Ο δέκτης δεν αποκρίνεται"
 
-#: crates/nd-gui/src/pages/settings.rs:84
+#: crates/nd-gui/src/pages/settings.rs:93
 msgid "These apply to your next session."
 msgstr "Αυτά ισχύουν για την επόμενη συνεδρία σας."
 
-#: crates/nd-gui/src/pages/settings.rs:268
+#: crates/nd-gui/src/pages/settings.rs:277
 msgid "This computer's name"
 msgstr "Όνομα αυτού του υπολογιστή"
 
@@ -758,15 +754,15 @@ msgstr ""
 msgid "Tips"
 msgstr "Συμβουλές"
 
-#: crates/nd-gui/src/pages/settings.rs:121
+#: crates/nd-gui/src/pages/settings.rs:130
 msgid "Very high (1440p)"
 msgstr "Πολύ υψηλή (1440p)"
 
-#: crates/nd-gui/src/pages/media.rs:544
+#: crates/nd-gui/src/pages/media.rs:548
 msgid "Videos"
 msgstr "Βίντεο"
 
-#: crates/nd-gui/src/app.rs:828
+#: crates/nd-gui/src/app.rs:840
 msgid "View ndi-sdk in the AUR"
 msgstr "Προβολή του ndi-sdk στο AUR"
 
@@ -782,7 +778,7 @@ msgstr "Ασθενές σήμα"
 msgid "What do you want to share?"
 msgstr "Τι θέλετε να μοιραστείτε;"
 
-#: crates/nd-gui/src/pages/settings.rs:96
+#: crates/nd-gui/src/pages/settings.rs:105
 msgid "Which kind of receiver to look for"
 msgstr "Ποιο είδος δέκτη να αναζητηθεί"
 
@@ -790,7 +786,7 @@ msgstr "Ποιο είδος δέκτη να αναζητηθεί"
 msgid "Whole screen"
 msgstr "Ολόκληρη οθόνη"
 
-#: crates/nd-gui/src/pages/settings.rs:150
+#: crates/nd-gui/src/pages/settings.rs:159
 msgid "Width (pixels)"
 msgstr "Πλάτος (εικονοστοιχεία)"
 
@@ -798,15 +794,11 @@ msgstr "Πλάτος (εικονοστοιχεία)"
 msgid "Window"
 msgstr "Παράθυρο"
 
-#: crates/nd-gui/src/pages/devices.rs:473
-msgid "devices found"
-msgstr "συσκευές βρέθηκαν"
-
 #: crates/nd-gui/src/pages/mod.rs:187
 msgid "instant response"
 msgstr "άμεση απόκριση"
 
-#: crates/nd-gui/src/pages/media.rs:888
+#: crates/nd-gui/src/pages/media.rs:892
 msgid "item"
 msgstr "στοιχείο"
 
@@ -822,17 +814,23 @@ msgstr "δεν έχει δημοσιευτεί ακόμη"
 msgid "quick response"
 msgstr "γρήγορη απόκριση"
 
-#: crates/nd-gui/src/app.rs:1074
+#: crates/nd-gui/src/app.rs:1087
 msgid "shows up in discovery only"
 msgstr "εμφανίζεται μόνο στην ανακάλυψη"
 
-#: crates/nd-gui/src/pages/media.rs:855
+#: crates/nd-gui/src/pages/devices.rs:473
+msgid "{} device found"
+msgid_plural "{} devices found"
+msgstr[0] "Βρέθηκε {} συσκευή"
+msgstr[1] "{} συσκευές βρέθηκαν"
+
+#: crates/nd-gui/src/pages/media.rs:859
 msgid "{} file selected"
 msgid_plural "{} files selected"
 msgstr[0] "Επιλέχθηκε {} αρχείο"
 msgstr[1] "Επιλέχθηκαν {} αρχεία"
 
-#: crates/nd-gui/src/app.rs:1018
+#: crates/nd-gui/src/app.rs:1031
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "Βρέθηκε {} δέκτης"

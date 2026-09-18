@@ -73,7 +73,7 @@ pub fn build_sender_report(ssrc: u32, ntp: u64, rtp_timestamp: u32, stats: Sende
 
     packet.push(RTCP_FIRST_BYTE);
     packet.push(PT_SENDER_REPORT);
-    // Comprimento em palavras de 32 bits, menos um (regra do RFC 3550).
+    // Length in 32-bit words, minus one (RFC 3550 rule).
     let length_words = (SENDER_REPORT_SIZE / 4 - 1) as u16;
     packet.extend_from_slice(&length_words.to_be_bytes());
 
@@ -102,7 +102,7 @@ mod tests {
         assert_eq!(packet.len(), 28);
         assert_eq!(packet[0], 0b1000_0000, "version 2, no padding, RC=0");
         assert_eq!(packet[1], 200, "packet type = SR");
-        // Comprimento em palavras de 32 bits menos um: 28/4 - 1 = 6.
+        // Length in 32-bit words minus one: 28/4 - 1 = 6.
         assert_eq!(u16::from_be_bytes([packet[2], packet[3]]), 6);
 
         assert_eq!(
@@ -250,7 +250,7 @@ pub fn classify_receiver_packet(packet: &[u8]) -> Option<ReceiverPacket> {
         return None;
     }
 
-    // O subtipo mora nos 5 bits baixos do primeiro byte.
+    // The subtype lives in the low 5 bits of the first byte.
     let subtype = packet[0] & 0b0001_1111;
     Some(match payload_type {
         PT_RECEIVER_REPORT => ReceiverPacket::ReceiverReport,
@@ -295,7 +295,7 @@ mod incoming_tests {
 
     #[test]
     fn recognises_cast_feedback() {
-        // Subtipo 15 = feedback do Cast (NACKs, checkpoint).
+        // Subtype 15 = Cast feedback (NACKs, checkpoint).
         let p = packet(0x8F, PT_PAYLOAD_SPECIFIC, 4, 16);
         assert_eq!(
             classify_receiver_packet(&p),
@@ -313,10 +313,10 @@ mod incoming_tests {
 
     #[test]
     fn ignores_truncated_or_inconsistent_packets() {
-        assert_eq!(classify_receiver_packet(&[0x81, 201]), None, "curto demais");
+        assert_eq!(classify_receiver_packet(&[0x81, 201]), None, "too short");
         // Declares 100 words but is only 8 bytes long.
         let p = packet(0x81, PT_RECEIVER_REPORT, 100, 4);
-        assert_eq!(classify_receiver_packet(&p), None, "comprimento incoerente");
+        assert_eq!(classify_receiver_packet(&p), None, "inconsistent length");
         // Wrong version.
         let p = packet(0x41, PT_RECEIVER_REPORT, 1, 4);
         assert_eq!(classify_receiver_packet(&p), None, "invalid version");
@@ -378,7 +378,7 @@ mod compound_tests {
 // Cast feedback: retransmission requests
 // ---------------------------------------------------------------------------
 
-/// Palavra identificadora do bloco de feedback do Cast.
+/// Identifier word of the Cast feedback block.
 const CAST_IDENTIFIER: &[u8; 4] = b"CAST";
 
 /// A retransmission request.
@@ -493,7 +493,7 @@ mod feedback_tests {
         let words = (payload_len / 4) as u16;
         let mut b = vec![0x8F, PT_PAYLOAD_SPECIFIC];
         b.extend_from_slice(&words.to_be_bytes());
-        b.extend_from_slice(&100_002u32.to_be_bytes()); // ssrc do receptor
+        b.extend_from_slice(&100_002u32.to_be_bytes()); // receiver ssrc
         b.extend_from_slice(&100_001u32.to_be_bytes()); // ssrc do emissor
         b.extend_from_slice(CAST_IDENTIFIER);
         b.push(checkpoint);
@@ -510,7 +510,7 @@ mod feedback_tests {
     #[test]
     fn reads_the_checkpoint_and_the_losses() {
         let block = feedback_block(42, &[(43, 5, 0b0000_0011), (44, 0, 0)]);
-        let feedback = parse_cast_feedback(&block).expect("bloco de feedback");
+        let feedback = parse_cast_feedback(&block).expect("feedback block");
         assert_eq!(feedback.checkpoint_frame_id, 42);
         assert_eq!(feedback.sender_ssrc, 100_001, "identifica a stream");
         assert_eq!(feedback.nacks.len(), 2);
@@ -553,7 +553,7 @@ mod feedback_tests {
         let mut packet = vec![0x81, PT_RECEIVER_REPORT, 0x00, 0x07];
         packet.resize(32, 0);
         packet.extend(feedback_block(7, &[(8, 0, 0)]));
-        let feedback = parse_cast_feedback(&packet).expect("feedback no composto");
+        let feedback = parse_cast_feedback(&packet).expect("feedback in the compound packet");
         assert_eq!(feedback.checkpoint_frame_id, 7);
     }
 

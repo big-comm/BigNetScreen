@@ -195,15 +195,15 @@ fn decode_table(
 /// The capabilities the sink advertises (M3's response).
 #[derive(Debug, Default, Clone)]
 pub struct SinkCaps {
-    /// Valor cru de `wfd_video_formats`.
+    /// Raw value of `wfd_video_formats`.
     pub video_formats: Option<String>,
     /// Video modes decoded from the CEA/VESA/HH tables.
     pub modes: Vec<WfdMode>,
-    /// Perfil H.264 aceito (bitmask; 0x01 = Constrained Baseline).
+    /// Accepted H.264 profile (bitmask; 0x01 = Constrained Baseline).
     pub profile: u8,
     /// The accepted H.264 level (a bitmask).
     pub level: u8,
-    /// Valor cru de `wfd_audio_codecs`.
+    /// Raw value of `wfd_audio_codecs`.
     pub audio_codecs: Option<String>,
     /// The RTP port where the sink wants to receive the stream.
     pub rtp_port: u16,
@@ -314,7 +314,7 @@ impl SinkCaps {
 
 /// Parses the `wfd_video_formats` value the sink advertises.
 ///
-/// Formato: `<native> <pref-display-mode> <profile> <level> <CEA> <VESA> <HH>
+/// Format: `<native> <pref-display-mode> <profile> <level> <CEA> <VESA> <HH>
 /// <latency> <min-slice> <slice-enc> <frame-rate-control> [<h-res> <v-res>]`
 pub fn parse_video_formats(value: &str) -> SinkCaps {
     let mut caps = SinkCaps {
@@ -517,13 +517,13 @@ where
 async fn send(writer: &mut OwnedWriteHalf, msg: &str) -> Result<()> {
     // The raw RTSP dialogue is the only way to debug interoperability with a
     // real sink: enable it with `RUST_LOG=nd_wfd::rtsp=trace`.
-    tracing::trace!("\n>>> ENVIADO >>>\n{}", msg.trim_end());
+    tracing::trace!("\n>>> SENT >>>\n{}", msg.trim_end());
     writer.write_all(msg.as_bytes()).await.map_err(proto_err)?;
     writer.flush().await.map_err(proto_err)?;
     Ok(())
 }
 
-/// Parseia o corpo `text/parameters` da resposta M3.
+/// Parses the `text/parameters` body of the M3 response.
 pub fn parse_caps(body: &str) -> SinkCaps {
     let mut caps = SinkCaps::default();
     for line in body.lines() {
@@ -573,7 +573,7 @@ pub async fn negotiate_caps(stream: TcpStream) -> Result<SinkCaps> {
         &format!("OPTIONS * RTSP/1.0\r\nCSeq: {cseq}\r\nRequire: org.wfa.wfd1.0\r\n\r\n"),
     )
     .await?;
-    tracing::debug!("WFD M1 OPTIONS enviado");
+    tracing::debug!("WFD M1 OPTIONS sent");
 
     let mut m3_cseq = None;
     let deadline = tokio::time::Instant::now() + NEGOTIATION_TIMEOUT;
@@ -589,7 +589,7 @@ pub async fn negotiate_caps(stream: TcpStream) -> Result<SinkCaps> {
             if Some(msg.cseq()) == m3_cseq {
                 if !msg.is_success() {
                     return Err(NdError::Protocol(format!(
-                        "o sink recusou a M3 ({})",
+                        "the sink refused M3 ({})",
                         msg.start_line
                     )));
                 }
@@ -612,7 +612,7 @@ pub async fn negotiate_caps(stream: TcpStream) -> Result<SinkCaps> {
                     cseq += 1;
                     send(&mut writer, &m3_request(cseq)).await?;
                     m3_cseq = Some(cseq);
-                    tracing::debug!("WFD M3 GET_PARAMETER enviado");
+                    tracing::debug!("WFD M3 GET_PARAMETER sent");
                 }
             }
             other => {
@@ -653,9 +653,9 @@ enum Awaiting {
 /// Parameters of the WFD cast session.
 pub struct WfdCastConfig {
     pub media_control: Option<nd_core::media::FilePlaybackControl>,
-    /// Nosso IP no link P2P (vai na `wfd_presentation_URL`).
+    /// Our IP on the P2P link (goes into `wfd_presentation_URL`).
     pub our_ip: IpAddr,
-    /// IP do sink (destino do RTP).
+    /// The sink's IP (RTP destination).
     pub sink_ip: IpAddr,
     /// The video source (a real capture, a media file, or a test pattern).
     pub video: VideoSource,
@@ -795,11 +795,11 @@ pub async fn cast_to_sink(
             // diagnosis.
             if !msg.is_success() {
                 if awaiting == Awaiting::Keepalive {
-                    tracing::warn!(status = ?msg.status(), "keepalive recusado");
+                    tracing::warn!(status = ?msg.status(), "keepalive refused");
                     continue;
                 }
                 break Err(NdError::Protocol(format!(
-                    "o sink recusou {awaiting:?}: {}",
+                    "the sink refused {awaiting:?}: {}",
                     msg.start_line
                 )));
             }

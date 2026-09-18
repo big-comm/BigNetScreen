@@ -106,7 +106,7 @@ impl Drop for MdnsProvider {
             let _ = self.daemon.stop_browse(service.service_type);
         }
         match self.daemon.shutdown() {
-            Ok(_) => tracing::debug!(provider = self.id, "daemon mDNS encerrado"),
+            Ok(_) => tracing::debug!(provider = self.id, "mDNS daemon stopped"),
             Err(err) => tracing::debug!(provider = self.id, %err, "mDNS daemon already shut down"),
         }
     }
@@ -166,7 +166,7 @@ impl Provider for MdnsProvider {
                         };
                         if let Some(msg) = msg {
                             if tx.unbounded_send(msg).is_err() {
-                                break; // consumidor do stream foi dropado
+                                break; // the stream consumer was dropped
                             }
                         }
                     }
@@ -404,7 +404,7 @@ mod tests {
         // A performance regression: two providers created two ServiceDaemons,
         // duplicating 5353 sockets and multicast traffic.
         let Ok(provider) = MdnsProvider::all_media_receivers() else {
-            return; // sem rede no ambiente de teste
+            return; // no network in the test environment
         };
         assert_eq!(provider.services.len(), 2);
     }

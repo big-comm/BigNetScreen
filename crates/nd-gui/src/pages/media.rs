@@ -248,7 +248,11 @@ impl Component for MediaPage {
                 set_spacing: 18,
                 gtk::Image {
                     #[watch]
-                    set_icon_name: Some(if model.kind == MediaKind::Music { "audio-x-generic-symbolic" } else { "folder-videos-symbolic" }),
+                    set_icon_name: Some(match model.kind {
+                        MediaKind::Photo => "folder-pictures-symbolic",
+                        MediaKind::Video => "folder-videos-symbolic",
+                        MediaKind::Music => "audio-x-generic-symbolic",
+                    }),
                     set_pixel_size: 32, add_css_class: "page-icon", set_valign: gtk::Align::Center,
                 },
                 gtk::Box {

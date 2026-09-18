@@ -200,7 +200,7 @@ impl From<u32> for ActiveState {
     }
 }
 
-/// Um peer Wi-Fi Direct descoberto.
+/// A discovered Wi-Fi Direct peer.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct P2pPeer {
     /// D-Bus path (a stable identifier).
@@ -254,7 +254,7 @@ fn classify(e: zbus::Error, context: &str) -> NdError {
     if unavailable {
         NdError::Unsupported(format!(
             "{context}: NetworkManager is not available on the system bus \
-             (esperado sob Flatpak)"
+             (expected under Flatpak)"
         ))
     } else {
         NdError::Network(format!("{context}: {e}"))
@@ -509,7 +509,7 @@ impl P2pDevice {
             .p2p
             .peers()
             .await
-            .map_err(|e| classify(e, "propriedade Peers"))?;
+            .map_err(|e| classify(e, "Peers property"))?;
 
         let mut peers = Vec::with_capacity(paths.len());
         for path in &paths {
@@ -597,7 +597,7 @@ impl P2pDevice {
         Ok(active)
     }
 
-    /// Desfaz o grupo P2P.
+    /// Tears down the P2P group.
     pub async fn disconnect(&self, active: &OwnedObjectPath) -> Result<()> {
         match self.nm.deactivate_connection(&active.as_ref()).await {
             Ok(()) => Ok(()),
@@ -806,7 +806,7 @@ impl P2pDevice {
                             }
                         };
                         if let Some(ip) = addresses.into_iter().next() {
-                            tracing::info!(%ip, "grupo P2P formado");
+                            tracing::info!(%ip, "P2P group formed");
                             return Ok((active, ip));
                         }
                         // Activated but no DHCP yet: keep waiting.

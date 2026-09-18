@@ -333,6 +333,16 @@ pub fn current() -> Settings {
 /// of the person keeps the settings they just chose, and only the memory of
 /// them across restarts is lost.
 pub fn set(settings: Settings) {
+    set_in_memory(&settings);
+    persist(&settings);
+}
+
+/// Applies new settings to the running process without touching the disk.
+///
+/// For callers that write on their own schedule: the preferences page
+/// coalesces a slider's stream of values into one [`persist`] instead of an
+/// `fsync` per pixel of movement. [`set`] does both at once.
+pub fn set_in_memory(settings: &Settings) {
     crate::latency::set(if settings.film_mode {
         crate::latency::Profile::Film
     } else {
@@ -341,6 +351,11 @@ pub fn set(settings: Settings) {
     if let Ok(mut guard) = CURRENT.write() {
         *guard = Some(settings.clone());
     }
+}
+
+/// Writes the settings to disk. Blocking (it syncs the file); see [`set`] for
+/// how failures are treated.
+pub fn persist(settings: &Settings) {
     let Some(path) = path() else {
         tracing::warn!("no configuration directory; settings will not persist");
         return;

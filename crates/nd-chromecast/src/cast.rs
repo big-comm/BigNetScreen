@@ -119,7 +119,7 @@ enum PayloadType {
 }
 
 // ---------------------------------------------------------------------------
-// Canal
+// Channel
 // ---------------------------------------------------------------------------
 
 /// A spontaneous message from the receiver (not a reply to anything we asked).
@@ -251,7 +251,7 @@ impl CastChannel {
         channel
             .send(NS_CONNECTION, PLATFORM_DEST, r#"{"type":"CONNECT"}"#)
             .await?;
-        tracing::debug!(%ip, "canal Cast estabelecido");
+        tracing::debug!(%ip, "Cast channel established");
         Ok(channel)
     }
 
@@ -585,7 +585,7 @@ async fn read_message(reader: &mut ReadHalf<TlsStream<TcpStream>>) -> Result<(St
     // A mandatory cap: the length comes from the other side of the network.
     if len > MAX_MESSAGE_BYTES {
         return Err(NdError::Protocol(format!(
-            "mensagem Cast de {len} bytes excede o limite de {MAX_MESSAGE_BYTES}"
+            "Cast message of {len} bytes exceeds the {MAX_MESSAGE_BYTES} limit"
         )));
     }
 
@@ -620,7 +620,7 @@ async fn reader_loop(
         let (namespace, payload) = match read_message(&mut reader).await {
             Ok(msg) => msg,
             Err(err) => {
-                tracing::debug!(%err, "canal Cast encerrado");
+                tracing::debug!(%err, "Cast channel closed");
                 break;
             }
         };

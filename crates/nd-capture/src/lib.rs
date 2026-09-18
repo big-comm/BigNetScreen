@@ -119,7 +119,7 @@ impl ParentWindow {
     }
 }
 
-/// Backend de captura via xdg-desktop-portal (`ashpd`).
+/// Capture backend through xdg-desktop-portal (`ashpd`).
 pub struct PortalBackend {
     session: Mutex<Option<std::sync::Arc<Session<Screencast>>>>,
     parent: ParentWindow,

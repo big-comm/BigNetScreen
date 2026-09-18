@@ -467,11 +467,10 @@ impl DevicesPage {
 }
 
 fn found_summary(count: usize) -> String {
-    match count {
-        0 => tr!("No devices found"),
-        1 => tr!("1 device found"),
-        n => format!("{n} {}", tr!("devices found")),
+    if count == 0 {
+        return tr!("No devices found");
     }
+    crate::tr_n!("{} device found", "{} devices found", count).replace("{}", &count.to_string())
 }
 
 #[cfg(test)]

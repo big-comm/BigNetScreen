@@ -205,13 +205,13 @@ impl DrainController {
             // grates far more than delay.
             self.frozen = true;
             tracing::info!(
-                alvo_final_s = format!("{:.2}", self.target),
-                travadas = self.stalls,
+                final_target_s = format!("{:.2}", self.target),
+                stalls = self.stalls,
                 "delay target frozen: prioritising smoothness"
             );
         } else {
             tracing::info!(
-                novo_alvo_s = format!("{:.2}", self.target),
+                new_target_s = format!("{:.2}", self.target),
                 "the receiver stalled while draining; loosening the target"
             );
         }
@@ -235,7 +235,7 @@ impl DrainController {
         if (tightened - self.target).abs() > f64::EPSILON {
             self.target = tightened;
             tracing::info!(
-                novo_alvo_s = format!("{:.2}", self.target),
+                new_target_s = format!("{:.2}", self.target),
                 "stable; tightening the delay target"
             );
         }
@@ -356,8 +356,8 @@ pub async fn run_with_video(
     );
     if (width, height) != size {
         tracing::info!(
-            origem = format!("{}x{}", size.0, size.1),
-            enviado = format!("{width}x{height}"),
+            source = format!("{}x{}", size.0, size.1),
+            sent = format!("{width}x{height}"),
             "resolution adjusted for the receiver"
         );
     }
@@ -481,7 +481,7 @@ pub async fn run_with_video(
                     if !started.load(std::sync::atomic::Ordering::SeqCst) {
                         break Err(NdError::Protocol(format!(
                             "the receiver did not fetch the stream within {}s — the receiver app \
-                             ter sido fechado na TV",
+                             may have been closed on the TV",
                             FIRST_CLIENT_TIMEOUT.as_secs()
                         )));
                     }
@@ -578,7 +578,7 @@ pub async fn run_with_video(
                                             playback_rate = rate;
                                             tracing::info!(
                                                 rate,
-                                                atraso_s = format!("{current:.2}"),
+                                                delay_s = format!("{current:.2}"),
                                                 "playback rate adjusted"
                                             );
                                         }
@@ -603,7 +603,7 @@ pub async fn run_with_video(
 
         if let Some(median) = lag.median() {
             tracing::info!(
-                atraso_mediano_s = format!("{median:.2}"),
+                median_delay_s = format!("{median:.2}"),
                 amostras = lag.samples.len(),
                 "receiver delay in this session"
             );
@@ -1040,7 +1040,7 @@ mod tests {
         assert!(!meter.stalled);
 
         // A second sample right after, with the position essentially still:
-        // o buffer esvaziou.
+        // the buffer ran dry.
         std::thread::sleep(Duration::from_millis(600));
         meter.observe(&json!({"status": [{"currentTime": 8.05}]}));
         assert!(meter.stalled, "a stalled position should register a stall");

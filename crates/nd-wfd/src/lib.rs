@@ -209,7 +209,7 @@ async fn run_discovery(
     }
 }
 
-/// Sink Miracast descoberto.
+/// A discovered Miracast sink.
 pub struct WfdSink {
     info: SinkInfo,
     peer_path: String,
@@ -324,7 +324,7 @@ pub mod cast {
 
     use crate::rtsp::{cast_to_sink, WfdCastConfig, RTSP_PORT};
 
-    /// Tentativas de formar o grupo P2P (drivers Realtek derrubam o primeiro).
+    /// Attempts at forming the P2P group (Realtek drivers tear down the first one).
     const CONNECT_ATTEMPTS: u32 = 4;
     /// Time per attempt until the group has an IP.
     const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
@@ -501,10 +501,8 @@ pub mod cast {
             }
         };
 
-        // We only accept the peer from our own P2P link.
-        if !addr.ip().is_ipv4() && !addr.ip().is_ipv6() {
-            return Err(NdError::Protocol("invalid source address".into()));
-        }
+        // The listener is bound to the P2P link's own address, so whoever
+        // arrives here came over that link; no further filtering is needed.
         tracing::info!(%addr, "the sink connected");
 
         status.set(SinkState::WaitStreaming);

@@ -31,7 +31,7 @@ use nd_core::{NdError, Result};
 
 use crate::cast::{CastChannel, LaunchedApp};
 
-/// App de espelhamento embutido nos aparelhos Cast ("Chrome Mirroring").
+/// The mirroring app built into Cast devices ("Chrome Mirroring").
 pub const MIRRORING_APP_ID: &str = "0F5096E8";
 /// Namespace of the OFFER/ANSWER negotiation.
 pub const NS_WEBRTC: &str = "urn:x-cast:com.google.cast.webrtc";
@@ -433,7 +433,7 @@ pub async fn negotiate(
                 )));
             }
             other => {
-                tracing::debug!(?other, "mensagem do namespace webrtc");
+                tracing::debug!(?other, "message from the webrtc namespace");
             }
         }
     }
