@@ -27,7 +27,15 @@ fn layout_pages_and_breakpoints() {
         &css,
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
-    let home = home::HomePage::builder().launch(()).detach();
+    let searches = std::rc::Rc::new(std::cell::Cell::new(0));
+    let observed_searches = searches.clone();
+    let home = home::HomePage::builder()
+        .launch(())
+        .connect_receiver(move |_, output| {
+            if matches!(output, home::HomeOutput::Rescan) {
+                observed_searches.set(observed_searches.get() + 1);
+            }
+        });
     let devices = devices::DevicesPage::builder().launch(()).detach();
     let media = media::MediaPage::builder().launch(()).detach();
     let settings = settings::SettingsPage::builder().launch(()).detach();
@@ -81,6 +89,13 @@ fn layout_pages_and_breakpoints() {
         }
         panic!("screenshot client timed out for {name}");
     };
+    home.widgets().find_devices.emit_clicked();
+    flush(100);
+    assert_eq!(
+        searches.get(),
+        1,
+        "search button must request discovery once"
+    );
     adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
     window.set_content(Some(home.widget()));
     window.present();

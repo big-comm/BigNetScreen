@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-17 21:39-0300\n"
+"POT-Creation-Date: 2026-09-17 21:51-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Romanian <ro@li.org>\n"
@@ -60,19 +60,19 @@ msgstr ""
 "O limită: un ecran mai mic este trimis așa cum este. Peste 1080p, nu toate "
 "receptoarele îl vor accepta."
 
-#: crates/nd-gui/src/pages/home.rs:536
+#: crates/nd-gui/src/pages/home.rs:553
 msgid "A new screen"
 msgstr "Un ecran nou"
 
-#: crates/nd-gui/src/app.rs:967
+#: crates/nd-gui/src/app.rs:946
 msgid "A stream is already running"
 msgstr "Un flux rulează deja"
 
-#: crates/nd-gui/src/pages/home.rs:529
+#: crates/nd-gui/src/pages/home.rs:546
 msgid "A window"
 msgstr "O fereastră"
 
-#: crates/nd-gui/src/app.rs:292
+#: crates/nd-gui/src/app.rs:293
 msgid "About BigNetScreen"
 msgstr "Despre BigNetScreen"
 
@@ -88,7 +88,7 @@ msgstr "AirPlay"
 msgid "All protocols"
 msgstr "Toate protocoalele"
 
-#: crates/nd-gui/src/pages/home.rs:537
+#: crates/nd-gui/src/pages/home.rs:554
 msgid "An extra desktop, just for this"
 msgstr "Un desktop suplimentar, doar pentru aceasta"
 
@@ -113,7 +113,7 @@ msgstr "Automat"
 msgid "Automatic discovery"
 msgstr "Descoperire automată"
 
-#: crates/nd-gui/src/app.rs:424 crates/nd-gui/src/app.rs:916
+#: crates/nd-gui/src/app.rs:408 crates/nd-gui/src/app.rs:895
 msgid "Automatic discovery is off"
 msgstr "Descoperirea automată este oprită"
 
@@ -121,7 +121,7 @@ msgstr "Descoperirea automată este oprită"
 msgid "Available"
 msgstr "Disponibil"
 
-#: crates/nd-gui/src/pages/home.rs:271
+#: crates/nd-gui/src/pages/home.rs:288
 msgid "Back"
 msgstr "Înapoi"
 
@@ -139,7 +139,7 @@ msgstr ""
 "întârzierii. Pe Miracast se aplică aici; pe Chromecast este o cerere pe care "
 "receptorul o poate ignora."
 
-#: crates/nd-gui/src/pages/home.rs:447
+#: crates/nd-gui/src/pages/home.rs:464
 msgid "Can't find your device?"
 msgstr "Nu găsiți dispozitivul?"
 
@@ -155,11 +155,11 @@ msgstr "Alege un folder"
 msgid "Choose files"
 msgstr "Alege fișiere"
 
-#: crates/nd-gui/src/pages/home.rs:714
+#: crates/nd-gui/src/pages/home.rs:741
 msgid "Choose the device to send to."
 msgstr "Alegeți dispozitivul către care să trimiteți."
 
-#: crates/nd-gui/src/pages/home.rs:472
+#: crates/nd-gui/src/pages/home.rs:489
 msgid ""
 "Choose this computer in OBS or another NDI receiver. Uses the name and audio "
 "options in Settings."
@@ -183,7 +183,7 @@ msgstr "Chromecast / AirPlay"
 msgid "Chromecast / AirPlay only"
 msgstr "Doar Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/home.rs:775 crates/nd-gui/src/pages/home.rs:902
+#: crates/nd-gui/src/pages/home.rs:802 crates/nd-gui/src/pages/home.rs:929
 msgid ""
 "Chromecasts show up on their own. A TV or projector only appears while it is "
 "in screen mirroring mode — on Fire TV, under Settings › Display and Sounds › "
@@ -197,7 +197,7 @@ msgstr ""
 msgid "Clear queue"
 msgstr "Golește coada"
 
-#: crates/nd-gui/src/pages/home.rs:427
+#: crates/nd-gui/src/pages/home.rs:444
 msgid "Connect to the same network"
 msgstr "Conectați-vă la aceeași rețea"
 
@@ -205,19 +205,19 @@ msgstr "Conectați-vă la aceeași rețea"
 msgid "Connected"
 msgstr "Conectat"
 
-#: crates/nd-gui/src/app.rs:257
+#: crates/nd-gui/src/app.rs:258
 msgid "Connected to"
 msgstr "Conectat la"
 
-#: crates/nd-gui/src/app.rs:989 crates/nd-gui/src/pages/mod.rs:171
+#: crates/nd-gui/src/app.rs:968 crates/nd-gui/src/pages/mod.rs:171
 msgid "Connecting…"
 msgstr "Se conectează…"
 
-#: crates/nd-gui/src/pages/home.rs:378
+#: crates/nd-gui/src/pages/home.rs:395
 msgid "Connection"
 msgstr "Conexiune"
 
-#: crates/nd-gui/src/pages/home.rs:376
+#: crates/nd-gui/src/pages/home.rs:393
 msgid "Connection quality"
 msgstr "Calitatea conexiunii"
 
@@ -229,7 +229,7 @@ msgstr "Rezoluție personalizată"
 msgid "Devices"
 msgstr "Dispozitive"
 
-#: crates/nd-gui/src/pages/home.rs:355 crates/nd-gui/src/pages/devices.rs:236
+#: crates/nd-gui/src/pages/home.rs:372 crates/nd-gui/src/pages/devices.rs:236
 msgid "Disconnect"
 msgstr "Deconectare"
 
@@ -242,11 +242,13 @@ msgstr "Descoperire și dispozitive"
 msgid "Discovery only"
 msgstr "Doar detectare"
 
-#: crates/nd-gui/src/pages/home.rs:438
+#: crates/nd-gui/src/pages/home.rs:455
 msgid "Enable screen mirroring on your TV or projector before connecting."
-msgstr "Activați oglindirea ecranului pe televizor sau proiector înainte de conectare."
+msgstr ""
+"Activați oglindirea ecranului pe televizor sau proiector înainte de "
+"conectare."
 
-#: crates/nd-gui/src/pages/home.rs:523
+#: crates/nd-gui/src/pages/home.rs:540
 msgid "Everything on your screen"
 msgstr "Tot ce este pe ecranul dumneavoastră"
 
@@ -254,7 +256,7 @@ msgstr "Tot ce este pe ecranul dumneavoastră"
 msgid "Excellent"
 msgstr "Excelent"
 
-#: crates/nd-gui/src/pages/home.rs:488
+#: crates/nd-gui/src/pages/home.rs:505
 msgid "Extra screen"
 msgstr "Ecran suplimentar"
 
@@ -270,6 +272,10 @@ msgstr "Mod film"
 msgid "Find and connect to nearby wireless receivers."
 msgstr "Găsește și conectează-te la receptoare wireless din apropiere."
 
+#: crates/nd-gui/src/pages/home.rs:259
+msgid "Find compatible devices"
+msgstr "Căutați dispozitive compatibile"
+
 #: crates/nd-gui/src/pages/media.rs:875
 msgid "Finished"
 msgstr "Terminat"
@@ -278,9 +284,10 @@ msgstr "Terminat"
 msgid "Fixed port"
 msgstr "Port fix"
 
-#: crates/nd-gui/src/pages/home.rs:428
+#: crates/nd-gui/src/pages/home.rs:445
 msgid "For Chromecast, connect both devices to the same Wi-Fi network."
-msgstr "Pentru Chromecast, conectați ambele dispozitive la aceeași rețea Wi-Fi."
+msgstr ""
+"Pentru Chromecast, conectați ambele dispozitive la aceeași rețea Wi-Fi."
 
 #: crates/nd-gui/src/pages/media.rs:474 crates/nd-gui/src/pages/media.rs:1216
 msgid "Forward 10 seconds"
@@ -294,7 +301,7 @@ msgstr "Rată de cadre"
 msgid "Good"
 msgstr "Bun"
 
-#: crates/nd-gui/src/app.rs:354
+#: crates/nd-gui/src/app.rs:337
 msgid "Got it"
 msgstr "Am înțeles"
 
@@ -318,17 +325,17 @@ msgstr "Include sunetul de sistem"
 msgid "Include the microphone"
 msgstr "Include microfonul"
 
-#: crates/nd-gui/src/pages/home.rs:417 crates/nd-gui/src/pages/home.rs:781
+#: crates/nd-gui/src/pages/home.rs:434 crates/nd-gui/src/pages/home.rs:808
 msgid "Keep every device on the same Wi-Fi network for the best results."
 msgstr ""
 "Menține toate dispozitivele pe aceeași rețea Wi-Fi pentru cele mai bune "
 "rezultate."
 
-#: crates/nd-gui/src/pages/home.rs:437
+#: crates/nd-gui/src/pages/home.rs:454
 msgid "Keep the receiver ready"
 msgstr "Pregătiți receptorul"
 
-#: crates/nd-gui/src/app.rs:1187
+#: crates/nd-gui/src/app.rs:1166
 msgid "Local network discovery unavailable"
 msgstr "Descoperirea rețelei locale indisponibilă"
 
@@ -336,7 +343,7 @@ msgstr "Descoperirea rețelei locale indisponibilă"
 msgid "Look for receivers as soon as the app starts"
 msgstr "Caută receptoare imediat ce pornește aplicația"
 
-#: crates/nd-gui/src/pages/home.rs:889
+#: crates/nd-gui/src/pages/home.rs:916
 msgid "Looking for receivers…"
 msgstr "Se caută receptoare…"
 
@@ -368,7 +375,7 @@ msgstr "Volum microfon"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1246
+#: crates/nd-gui/src/app.rs:1225
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
@@ -376,7 +383,7 @@ msgstr ""
 "Miracast nu funcționează în versiunea Flatpak (necesită NetworkManager de "
 "sistem)"
 
-#: crates/nd-gui/src/app.rs:1254
+#: crates/nd-gui/src/app.rs:1233
 msgid ""
 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
 "network still works."
@@ -388,11 +395,11 @@ msgstr ""
 msgid "Miracast only"
 msgstr "Doar Miracast"
 
-#: crates/nd-gui/src/app.rs:1262
+#: crates/nd-gui/src/app.rs:1241
 msgid "Miracast unavailable"
 msgstr "Miracast indisponibil"
 
-#: crates/nd-gui/src/app.rs:1260
+#: crates/nd-gui/src/app.rs:1239
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast indisponibil: această placă Wi-Fi nu acceptă Wi-Fi Direct"
 
@@ -408,11 +415,11 @@ msgstr "Amestecă vocea ta în ceea ce este trimis"
 msgid "Music"
 msgstr "Muzică"
 
-#: crates/nd-gui/src/app.rs:1278
+#: crates/nd-gui/src/app.rs:1257
 msgid "NDI setup"
 msgstr "Configurare NDI"
 
-#: crates/nd-gui/src/app.rs:524
+#: crates/nd-gui/src/app.rs:503
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI nu este disponibil. Consultă ghidul de configurare NDI."
 
@@ -439,7 +446,7 @@ msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr ""
 "Nu există fotografii în folderul Imagini. Folosește „Selectare fișiere”."
 
-#: crates/nd-gui/src/app.rs:924 crates/nd-gui/src/pages/home.rs:898
+#: crates/nd-gui/src/app.rs:903 crates/nd-gui/src/pages/home.rs:925
 msgid "No receivers found"
 msgstr "Nu s-au găsit receptoare"
 
@@ -456,7 +463,7 @@ msgstr "Nimic selectat"
 msgid "Now playing"
 msgstr "Redare curentă"
 
-#: crates/nd-gui/src/pages/home.rs:530
+#: crates/nd-gui/src/pages/home.rs:547
 msgid "One window only"
 msgstr "Doar o fereastră"
 
@@ -472,7 +479,7 @@ msgstr "Pauzează"
 msgid "Photos"
 msgstr "Fotografii"
 
-#: crates/nd-gui/src/pages/home.rs:544
+#: crates/nd-gui/src/pages/home.rs:561
 msgid "Photos, videos and music"
 msgstr "Fotografii, videoclipuri și muzică"
 
@@ -492,7 +499,7 @@ msgstr "Se pregătește videoclipul…"
 msgid "Protocol"
 msgstr "Protocol"
 
-#: crates/nd-gui/src/pages/home.rs:471
+#: crates/nd-gui/src/pages/home.rs:488
 msgid "Publish with NDI"
 msgstr "Publică prin NDI"
 
@@ -504,11 +511,11 @@ msgstr "Coadă"
 msgid "Ready"
 msgstr "Gata"
 
-#: crates/nd-gui/src/pages/home.rs:707
+#: crates/nd-gui/src/pages/home.rs:734
 msgid "Ready to share"
 msgstr "Gata de partajare"
 
-#: crates/nd-gui/src/pages/home.rs:243
+#: crates/nd-gui/src/pages/home.rs:249
 msgid "Receivers found"
 msgstr "Receptoare găsite"
 
@@ -516,9 +523,11 @@ msgstr "Receptoare găsite"
 msgid "Refresh"
 msgstr "Reîmprospătare"
 
-#: crates/nd-gui/src/pages/home.rs:448
+#: crates/nd-gui/src/pages/home.rs:465
 msgid "Refresh the device list and check that your receiver is turned on."
-msgstr "Reîmprospătați lista de dispozitive și verificați dacă receptorul este pornit."
+msgstr ""
+"Reîmprospătați lista de dispozitive și verificați dacă receptorul este "
+"pornit."
 
 #: crates/nd-gui/src/pages/media.rs:776
 msgid "Remove from queue"
@@ -540,16 +549,16 @@ msgstr "Reia"
 msgid "Saved as you change them"
 msgstr "Salvat pe măsură ce le modificați"
 
-#: crates/nd-gui/src/app.rs:329 crates/nd-gui/src/pages/devices.rs:115
+#: crates/nd-gui/src/pages/devices.rs:115
 msgid "Scan again"
 msgstr "Scanează din nou"
 
-#: crates/nd-gui/src/pages/home.rs:480
+#: crates/nd-gui/src/pages/home.rs:497
 msgid "Screen"
 msgstr "Ecran"
 
-#: crates/nd-gui/src/app.rs:422 crates/nd-gui/src/app.rs:544
-#: crates/nd-gui/src/app.rs:922
+#: crates/nd-gui/src/app.rs:406 crates/nd-gui/src/app.rs:523
+#: crates/nd-gui/src/app.rs:901
 msgid "Searching…"
 msgstr "Se caută…"
 
@@ -565,7 +574,7 @@ msgstr "Selectează până la 1000 de fișiere odată."
 msgid "Send a folder"
 msgstr "Trimiteți un folder"
 
-#: crates/nd-gui/src/pages/home.rs:543 crates/nd-gui/src/pages/devices.rs:250
+#: crates/nd-gui/src/pages/home.rs:560 crates/nd-gui/src/pages/devices.rs:250
 msgid "Send media"
 msgstr "Trimiteți media"
 
@@ -581,7 +590,7 @@ msgstr "Trimiteți către dispozitiv"
 msgid "Send whatever this computer is playing"
 msgstr "Trimiteți orice redă acest computer"
 
-#: crates/nd-gui/src/app.rs:1036
+#: crates/nd-gui/src/app.rs:1015
 msgid "Sending files…"
 msgstr "Se trimit fișiere..."
 
@@ -597,15 +606,15 @@ msgstr "Setările nu pot fi salvate pe acest sistem."
 msgid "Share media"
 msgstr "Partajați media"
 
-#: crates/nd-gui/src/app.rs:223
+#: crates/nd-gui/src/app.rs:224
 msgid "Share your screen wirelessly"
 msgstr "Partajează-ți ecranul fără fir"
 
-#: crates/nd-gui/src/app.rs:1275
+#: crates/nd-gui/src/app.rs:1254
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "Partajează-ți ecranul cu un televizor, proiector sau Chromecast."
 
-#: crates/nd-gui/src/pages/home.rs:296
+#: crates/nd-gui/src/pages/home.rs:313
 msgid ""
 "Sharing a window opens your desktop’s own picker. Only visible windows can "
 "be shared."
@@ -613,11 +622,7 @@ msgstr ""
 "Partajarea unei ferestre deschide selectorul propriu al desktopului. Doar "
 "ferestrele vizibile pot fi partajate."
 
-#: crates/nd-gui/src/app.rs:319
-msgid "Show the sidebar"
-msgstr "Arată bara laterală"
-
-#: crates/nd-gui/src/pages/home.rs:769
+#: crates/nd-gui/src/pages/home.rs:796
 msgid ""
 "Sound goes to the receiver and to this computer. Mute this computer if you "
 "hear an echo."
@@ -629,7 +634,7 @@ msgstr ""
 msgid "Status"
 msgstr "Stare"
 
-#: crates/nd-gui/src/app.rs:336
+#: crates/nd-gui/src/app.rs:319
 msgid "Stop"
 msgstr "Oprire"
 
@@ -637,11 +642,11 @@ msgstr "Oprire"
 msgid "Stop sending"
 msgstr "Oprește trimiterea"
 
-#: crates/nd-gui/src/app.rs:1030
+#: crates/nd-gui/src/app.rs:1009
 msgid "Stop sharing your screen before sending files"
 msgstr "Oprește partajarea ecranului înainte de a trimite fișiere"
 
-#: crates/nd-gui/src/app.rs:956
+#: crates/nd-gui/src/app.rs:935
 msgid "Stopping…"
 msgstr "Se oprește…"
 
@@ -657,8 +662,8 @@ msgstr "Transmisie la"
 msgid "Test"
 msgstr "Test"
 
-#: crates/nd-gui/src/app.rs:975 crates/nd-gui/src/app.rs:1023
-#: crates/nd-gui/src/app.rs:1040
+#: crates/nd-gui/src/app.rs:954 crates/nd-gui/src/app.rs:1002
+#: crates/nd-gui/src/app.rs:1019
 msgid "That device is no longer available"
 msgstr "Dispozitivul respectiv nu mai este disponibil"
 
@@ -674,14 +679,14 @@ msgstr "Acestea se aplică următoarei tale sesiuni."
 msgid "This computer's name"
 msgstr "Numele acestui computer"
 
-#: crates/nd-gui/src/pages/home.rs:653
+#: crates/nd-gui/src/pages/home.rs:675
 msgid ""
 "This desktop cannot create an extra screen (it needs GNOME running natively)"
 msgstr ""
 "Acest desktop nu poate crea un ecran suplimentar (necesită GNOME rulând "
 "nativ)"
 
-#: crates/nd-gui/src/pages/home.rs:416
+#: crates/nd-gui/src/pages/home.rs:433
 msgid "Tips"
 msgstr "Sfaturi"
 
@@ -701,7 +706,7 @@ msgstr "Se așteaptă receptorul…"
 msgid "Weak signal"
 msgstr "Semnal slab"
 
-#: crates/nd-gui/src/pages/home.rs:708
+#: crates/nd-gui/src/pages/home.rs:735
 msgid "What do you want to share?"
 msgstr "Ce doriți să partajați?"
 
@@ -709,7 +714,7 @@ msgstr "Ce doriți să partajați?"
 msgid "Which kind of receiver to look for"
 msgstr "Ce tip de receptor să caute"
 
-#: crates/nd-gui/src/pages/home.rs:522
+#: crates/nd-gui/src/pages/home.rs:539
 msgid "Whole screen"
 msgstr "Ecran întreg"
 
@@ -717,7 +722,7 @@ msgstr "Ecran întreg"
 msgid "Width (pixels)"
 msgstr "Lățime (în pixeli)"
 
-#: crates/nd-gui/src/pages/home.rs:484
+#: crates/nd-gui/src/pages/home.rs:501
 msgid "Window"
 msgstr "Fereastră"
 
@@ -745,7 +750,7 @@ msgstr "neafisat încă"
 msgid "quick response"
 msgstr "răspuns rapid"
 
-#: crates/nd-gui/src/app.rs:983
+#: crates/nd-gui/src/app.rs:962
 msgid "shows up in discovery only"
 msgstr "apare doar în descoperire"
 
@@ -756,9 +761,12 @@ msgstr[0] "{} fișier selectat"
 msgstr[1] "{} fișiere selectate"
 msgstr[2] "{} de fișiere selectate"
 
-#: crates/nd-gui/src/app.rs:927
+#: crates/nd-gui/src/app.rs:906
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "{} receptor găsit"
 msgstr[1] "{} receptoare găsite"
 msgstr[2] "{} de receptoare găsite"
+
+#~ msgid "Show the sidebar"
+#~ msgstr "Arată bara laterală"

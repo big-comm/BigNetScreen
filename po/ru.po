@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-17 21:39-0300\n"
+"POT-Creation-Date: 2026-09-17 21:51-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Russian <ru@li.org>\n"
@@ -59,19 +59,19 @@ msgstr ""
 "Отправка меньшего экрана: он передаётся как есть. При разрешении выше 1080p "
 "не все приёмники его примут."
 
-#: crates/nd-gui/src/pages/home.rs:536
+#: crates/nd-gui/src/pages/home.rs:553
 msgid "A new screen"
 msgstr "Новый экран"
 
-#: crates/nd-gui/src/app.rs:967
+#: crates/nd-gui/src/app.rs:946
 msgid "A stream is already running"
 msgstr "Поток уже запущен"
 
-#: crates/nd-gui/src/pages/home.rs:529
+#: crates/nd-gui/src/pages/home.rs:546
 msgid "A window"
 msgstr "Окно"
 
-#: crates/nd-gui/src/app.rs:292
+#: crates/nd-gui/src/app.rs:293
 msgid "About BigNetScreen"
 msgstr "О программе BigNetScreen"
 
@@ -87,7 +87,7 @@ msgstr "AirPlay"
 msgid "All protocols"
 msgstr "Все протоколы"
 
-#: crates/nd-gui/src/pages/home.rs:537
+#: crates/nd-gui/src/pages/home.rs:554
 msgid "An extra desktop, just for this"
 msgstr "Дополнительный рабочий стол, только для этого"
 
@@ -112,7 +112,7 @@ msgstr "Автоматически"
 msgid "Automatic discovery"
 msgstr "Автоматическое обнаружение"
 
-#: crates/nd-gui/src/app.rs:424 crates/nd-gui/src/app.rs:916
+#: crates/nd-gui/src/app.rs:408 crates/nd-gui/src/app.rs:895
 msgid "Automatic discovery is off"
 msgstr "Автоматическое обнаружение выключено"
 
@@ -120,7 +120,7 @@ msgstr "Автоматическое обнаружение выключено"
 msgid "Available"
 msgstr "Доступно"
 
-#: crates/nd-gui/src/pages/home.rs:271
+#: crates/nd-gui/src/pages/home.rs:288
 msgid "Back"
 msgstr "Назад"
 
@@ -138,7 +138,7 @@ msgstr ""
 "Для Miracast применяется здесь; для Chromecast это запрос, который приёмник "
 "может проигнорировать."
 
-#: crates/nd-gui/src/pages/home.rs:447
+#: crates/nd-gui/src/pages/home.rs:464
 msgid "Can't find your device?"
 msgstr "Не удаётся найти устройство?"
 
@@ -154,11 +154,11 @@ msgstr "Выберите папку"
 msgid "Choose files"
 msgstr "Выберите файлы"
 
-#: crates/nd-gui/src/pages/home.rs:714
+#: crates/nd-gui/src/pages/home.rs:741
 msgid "Choose the device to send to."
 msgstr "Выберите устройство для отправки."
 
-#: crates/nd-gui/src/pages/home.rs:472
+#: crates/nd-gui/src/pages/home.rs:489
 msgid ""
 "Choose this computer in OBS or another NDI receiver. Uses the name and audio "
 "options in Settings."
@@ -182,7 +182,7 @@ msgstr "Chromecast / AirPlay"
 msgid "Chromecast / AirPlay only"
 msgstr "Только Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/home.rs:775 crates/nd-gui/src/pages/home.rs:902
+#: crates/nd-gui/src/pages/home.rs:802 crates/nd-gui/src/pages/home.rs:929
 msgid ""
 "Chromecasts show up on their own. A TV or projector only appears while it is "
 "in screen mirroring mode — on Fire TV, under Settings › Display and Sounds › "
@@ -196,7 +196,7 @@ msgstr ""
 msgid "Clear queue"
 msgstr "Очистить очередь"
 
-#: crates/nd-gui/src/pages/home.rs:427
+#: crates/nd-gui/src/pages/home.rs:444
 msgid "Connect to the same network"
 msgstr "Подключитесь к той же сети"
 
@@ -204,19 +204,19 @@ msgstr "Подключитесь к той же сети"
 msgid "Connected"
 msgstr "Подключено"
 
-#: crates/nd-gui/src/app.rs:257
+#: crates/nd-gui/src/app.rs:258
 msgid "Connected to"
 msgstr "Подключено к"
 
-#: crates/nd-gui/src/app.rs:989 crates/nd-gui/src/pages/mod.rs:171
+#: crates/nd-gui/src/app.rs:968 crates/nd-gui/src/pages/mod.rs:171
 msgid "Connecting…"
 msgstr "Подключение…"
 
-#: crates/nd-gui/src/pages/home.rs:378
+#: crates/nd-gui/src/pages/home.rs:395
 msgid "Connection"
 msgstr "Подключение"
 
-#: crates/nd-gui/src/pages/home.rs:376
+#: crates/nd-gui/src/pages/home.rs:393
 msgid "Connection quality"
 msgstr "Качество соединения"
 
@@ -228,7 +228,7 @@ msgstr "Пользовательское разрешение"
 msgid "Devices"
 msgstr "Устройства"
 
-#: crates/nd-gui/src/pages/home.rs:355 crates/nd-gui/src/pages/devices.rs:236
+#: crates/nd-gui/src/pages/home.rs:372 crates/nd-gui/src/pages/devices.rs:236
 msgid "Disconnect"
 msgstr "Отключиться"
 
@@ -241,11 +241,12 @@ msgstr "Обнаружение и устройства"
 msgid "Discovery only"
 msgstr "Только обнаружение"
 
-#: crates/nd-gui/src/pages/home.rs:438
+#: crates/nd-gui/src/pages/home.rs:455
 msgid "Enable screen mirroring on your TV or projector before connecting."
-msgstr "Перед подключением включите дублирование экрана на телевизоре или проекторе."
+msgstr ""
+"Перед подключением включите дублирование экрана на телевизоре или проекторе."
 
-#: crates/nd-gui/src/pages/home.rs:523
+#: crates/nd-gui/src/pages/home.rs:540
 msgid "Everything on your screen"
 msgstr "Всё на вашем экране"
 
@@ -253,7 +254,7 @@ msgstr "Всё на вашем экране"
 msgid "Excellent"
 msgstr "Отлично"
 
-#: crates/nd-gui/src/pages/home.rs:488
+#: crates/nd-gui/src/pages/home.rs:505
 msgid "Extra screen"
 msgstr "Дополнительный экран"
 
@@ -269,6 +270,10 @@ msgstr "Режим кино"
 msgid "Find and connect to nearby wireless receivers."
 msgstr "Поиск и подключение к ближайшим беспроводным приемникам."
 
+#: crates/nd-gui/src/pages/home.rs:259
+msgid "Find compatible devices"
+msgstr "Найти совместимые устройства"
+
 #: crates/nd-gui/src/pages/media.rs:875
 msgid "Finished"
 msgstr "Завершено"
@@ -277,7 +282,7 @@ msgstr "Завершено"
 msgid "Fixed port"
 msgstr "Фиксированный порт"
 
-#: crates/nd-gui/src/pages/home.rs:428
+#: crates/nd-gui/src/pages/home.rs:445
 msgid "For Chromecast, connect both devices to the same Wi-Fi network."
 msgstr "Для Chromecast подключите оба устройства к одной сети Wi-Fi."
 
@@ -293,7 +298,7 @@ msgstr "Частота кадров"
 msgid "Good"
 msgstr "Хорошо"
 
-#: crates/nd-gui/src/app.rs:354
+#: crates/nd-gui/src/app.rs:337
 msgid "Got it"
 msgstr "Понятно"
 
@@ -317,15 +322,15 @@ msgstr "Включать системный звук"
 msgid "Include the microphone"
 msgstr "Включать микрофон"
 
-#: crates/nd-gui/src/pages/home.rs:417 crates/nd-gui/src/pages/home.rs:781
+#: crates/nd-gui/src/pages/home.rs:434 crates/nd-gui/src/pages/home.rs:808
 msgid "Keep every device on the same Wi-Fi network for the best results."
 msgstr "Держите все устройства в одной сети Wi-Fi для наилучших результатов."
 
-#: crates/nd-gui/src/pages/home.rs:437
+#: crates/nd-gui/src/pages/home.rs:454
 msgid "Keep the receiver ready"
 msgstr "Подготовьте приёмник"
 
-#: crates/nd-gui/src/app.rs:1187
+#: crates/nd-gui/src/app.rs:1166
 msgid "Local network discovery unavailable"
 msgstr "Поиск в локальной сети недоступен"
 
@@ -333,7 +338,7 @@ msgstr "Поиск в локальной сети недоступен"
 msgid "Look for receivers as soon as the app starts"
 msgstr "Искать получатели сразу после запуска приложения"
 
-#: crates/nd-gui/src/pages/home.rs:889
+#: crates/nd-gui/src/pages/home.rs:916
 msgid "Looking for receivers…"
 msgstr "Поиск приемников…"
 
@@ -365,14 +370,14 @@ msgstr "Громкость микрофона"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1246
+#: crates/nd-gui/src/app.rs:1225
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
 msgstr ""
 "Miracast не работает в сборке Flatpak (требуется системный NetworkManager)"
 
-#: crates/nd-gui/src/app.rs:1254
+#: crates/nd-gui/src/app.rs:1233
 msgid ""
 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
 "network still works."
@@ -384,11 +389,11 @@ msgstr ""
 msgid "Miracast only"
 msgstr "Только Miracast"
 
-#: crates/nd-gui/src/app.rs:1262
+#: crates/nd-gui/src/app.rs:1241
 msgid "Miracast unavailable"
 msgstr "Miracast недоступен"
 
-#: crates/nd-gui/src/app.rs:1260
+#: crates/nd-gui/src/app.rs:1239
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast недоступен: этот Wi-Fi адаптер не поддерживает Wi-Fi Direct"
 
@@ -404,11 +409,11 @@ msgstr "Добавлять ваш голос в передаваемый зву�
 msgid "Music"
 msgstr "Музыка"
 
-#: crates/nd-gui/src/app.rs:1278
+#: crates/nd-gui/src/app.rs:1257
 msgid "NDI setup"
 msgstr "Настройка NDI"
 
-#: crates/nd-gui/src/app.rs:524
+#: crates/nd-gui/src/app.rs:503
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI недоступен. См. руководство по настройке NDI."
 
@@ -433,7 +438,7 @@ msgstr "В папке «Музыка» нет музыки. Используйт
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "В папке «Изображения» нет фотографий. Используйте «Выбрать файлы»."
 
-#: crates/nd-gui/src/app.rs:924 crates/nd-gui/src/pages/home.rs:898
+#: crates/nd-gui/src/app.rs:903 crates/nd-gui/src/pages/home.rs:925
 msgid "No receivers found"
 msgstr "Приёмники не найдены"
 
@@ -449,7 +454,7 @@ msgstr "Ничего не выбрано"
 msgid "Now playing"
 msgstr "Сейчас воспроизводится"
 
-#: crates/nd-gui/src/pages/home.rs:530
+#: crates/nd-gui/src/pages/home.rs:547
 msgid "One window only"
 msgstr "Только одно окно"
 
@@ -465,7 +470,7 @@ msgstr "Пауза"
 msgid "Photos"
 msgstr "Фотографии"
 
-#: crates/nd-gui/src/pages/home.rs:544
+#: crates/nd-gui/src/pages/home.rs:561
 msgid "Photos, videos and music"
 msgstr "Фото, видео и музыка"
 
@@ -485,7 +490,7 @@ msgstr "Подготовка видео…"
 msgid "Protocol"
 msgstr "Протокол"
 
-#: crates/nd-gui/src/pages/home.rs:471
+#: crates/nd-gui/src/pages/home.rs:488
 msgid "Publish with NDI"
 msgstr "Публиковать через NDI"
 
@@ -497,11 +502,11 @@ msgstr "Очередь"
 msgid "Ready"
 msgstr "Готово"
 
-#: crates/nd-gui/src/pages/home.rs:707
+#: crates/nd-gui/src/pages/home.rs:734
 msgid "Ready to share"
 msgstr "Готов к трансляции"
 
-#: crates/nd-gui/src/pages/home.rs:243
+#: crates/nd-gui/src/pages/home.rs:249
 msgid "Receivers found"
 msgstr "Найдены приёмники"
 
@@ -509,7 +514,7 @@ msgstr "Найдены приёмники"
 msgid "Refresh"
 msgstr "Обновить"
 
-#: crates/nd-gui/src/pages/home.rs:448
+#: crates/nd-gui/src/pages/home.rs:465
 msgid "Refresh the device list and check that your receiver is turned on."
 msgstr "Обновите список устройств и проверьте, включён ли приёмник."
 
@@ -533,16 +538,16 @@ msgstr "Продолжить"
 msgid "Saved as you change them"
 msgstr "Сохраняется при изменении"
 
-#: crates/nd-gui/src/app.rs:329 crates/nd-gui/src/pages/devices.rs:115
+#: crates/nd-gui/src/pages/devices.rs:115
 msgid "Scan again"
 msgstr "Сканировать снова"
 
-#: crates/nd-gui/src/pages/home.rs:480
+#: crates/nd-gui/src/pages/home.rs:497
 msgid "Screen"
 msgstr "Экран"
 
-#: crates/nd-gui/src/app.rs:422 crates/nd-gui/src/app.rs:544
-#: crates/nd-gui/src/app.rs:922
+#: crates/nd-gui/src/app.rs:406 crates/nd-gui/src/app.rs:523
+#: crates/nd-gui/src/app.rs:901
 msgid "Searching…"
 msgstr "Поиск…"
 
@@ -558,7 +563,7 @@ msgstr "За один раз можно выбрать не более 1000 фа
 msgid "Send a folder"
 msgstr "Отправить папку"
 
-#: crates/nd-gui/src/pages/home.rs:543 crates/nd-gui/src/pages/devices.rs:250
+#: crates/nd-gui/src/pages/home.rs:560 crates/nd-gui/src/pages/devices.rs:250
 msgid "Send media"
 msgstr "Отправить медиа"
 
@@ -574,7 +579,7 @@ msgstr "Отправить на устройство"
 msgid "Send whatever this computer is playing"
 msgstr "Отправлять всё, что воспроизводится на этом компьютере"
 
-#: crates/nd-gui/src/app.rs:1036
+#: crates/nd-gui/src/app.rs:1015
 msgid "Sending files…"
 msgstr "Отправка файлов…"
 
@@ -590,15 +595,15 @@ msgstr "Настройки не могут быть сохранены в это
 msgid "Share media"
 msgstr "Поделиться медиа"
 
-#: crates/nd-gui/src/app.rs:223
+#: crates/nd-gui/src/app.rs:224
 msgid "Share your screen wirelessly"
 msgstr "Делитесь экраном по беспроводной сети"
 
-#: crates/nd-gui/src/app.rs:1275
+#: crates/nd-gui/src/app.rs:1254
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "Поделитесь экраном с телевизором, проектором или Chromecast."
 
-#: crates/nd-gui/src/pages/home.rs:296
+#: crates/nd-gui/src/pages/home.rs:313
 msgid ""
 "Sharing a window opens your desktop’s own picker. Only visible windows can "
 "be shared."
@@ -606,11 +611,7 @@ msgstr ""
 "При передаче окна открывается собственный выбор рабочего стола. Передавать "
 "можно только видимые окна."
 
-#: crates/nd-gui/src/app.rs:319
-msgid "Show the sidebar"
-msgstr "Показать боковую панель"
-
-#: crates/nd-gui/src/pages/home.rs:769
+#: crates/nd-gui/src/pages/home.rs:796
 msgid ""
 "Sound goes to the receiver and to this computer. Mute this computer if you "
 "hear an echo."
@@ -622,7 +623,7 @@ msgstr ""
 msgid "Status"
 msgstr "Статус"
 
-#: crates/nd-gui/src/app.rs:336
+#: crates/nd-gui/src/app.rs:319
 msgid "Stop"
 msgstr "Остановить"
 
@@ -630,11 +631,11 @@ msgstr "Остановить"
 msgid "Stop sending"
 msgstr "Прекратить отправку"
 
-#: crates/nd-gui/src/app.rs:1030
+#: crates/nd-gui/src/app.rs:1009
 msgid "Stop sharing your screen before sending files"
 msgstr "Прекратите демонстрацию экрана перед отправкой файлов"
 
-#: crates/nd-gui/src/app.rs:956
+#: crates/nd-gui/src/app.rs:935
 msgid "Stopping…"
 msgstr "Остановка…"
 
@@ -650,8 +651,8 @@ msgstr "Трансляция на"
 msgid "Test"
 msgstr "Тест"
 
-#: crates/nd-gui/src/app.rs:975 crates/nd-gui/src/app.rs:1023
-#: crates/nd-gui/src/app.rs:1040
+#: crates/nd-gui/src/app.rs:954 crates/nd-gui/src/app.rs:1002
+#: crates/nd-gui/src/app.rs:1019
 msgid "That device is no longer available"
 msgstr "Это устройство больше недоступно"
 
@@ -667,14 +668,14 @@ msgstr "Эти настройки применятся к вашему след�
 msgid "This computer's name"
 msgstr "Имя этого компьютера"
 
-#: crates/nd-gui/src/pages/home.rs:653
+#: crates/nd-gui/src/pages/home.rs:675
 msgid ""
 "This desktop cannot create an extra screen (it needs GNOME running natively)"
 msgstr ""
 "Этот рабочий стол не может создать дополнительный экран (для этого требуется "
 "нативный GNOME)"
 
-#: crates/nd-gui/src/pages/home.rs:416
+#: crates/nd-gui/src/pages/home.rs:433
 msgid "Tips"
 msgstr "Советы"
 
@@ -694,7 +695,7 @@ msgstr "Ожидание получателя…"
 msgid "Weak signal"
 msgstr "Слабый сигнал"
 
-#: crates/nd-gui/src/pages/home.rs:708
+#: crates/nd-gui/src/pages/home.rs:735
 msgid "What do you want to share?"
 msgstr "Что вы хотите передать?"
 
@@ -702,7 +703,7 @@ msgstr "Что вы хотите передать?"
 msgid "Which kind of receiver to look for"
 msgstr "Какой тип приемника искать"
 
-#: crates/nd-gui/src/pages/home.rs:522
+#: crates/nd-gui/src/pages/home.rs:539
 msgid "Whole screen"
 msgstr "Весь экран"
 
@@ -710,7 +711,7 @@ msgstr "Весь экран"
 msgid "Width (pixels)"
 msgstr "Ширина (в пикселях)"
 
-#: crates/nd-gui/src/pages/home.rs:484
+#: crates/nd-gui/src/pages/home.rs:501
 msgid "Window"
 msgstr "Окно"
 
@@ -738,7 +739,7 @@ msgstr "еще не опубликовано"
 msgid "quick response"
 msgstr "быстрый ответ"
 
-#: crates/nd-gui/src/app.rs:983
+#: crates/nd-gui/src/app.rs:962
 msgid "shows up in discovery only"
 msgstr "отображается только при поиске"
 
@@ -749,9 +750,12 @@ msgstr[0] "Выбран {} файл"
 msgstr[1] "Выбрано {} файла"
 msgstr[2] "Выбрано {} файлов"
 
-#: crates/nd-gui/src/app.rs:927
+#: crates/nd-gui/src/app.rs:906
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "Найден {} приёмник"
 msgstr[1] "Найдено {} приёмника"
 msgstr[2] "Найдено {} приёмников"
+
+#~ msgid "Show the sidebar"
+#~ msgstr "Показать боковую панель"

@@ -170,6 +170,7 @@ pub enum HomeMsg {
     PublishNdi(SourceType),
     /// Go to the media page with the chosen receiver.
     SendMedia,
+    Rescan,
     Stop,
 }
 
@@ -183,6 +184,7 @@ pub enum HomeOutput {
     },
     /// Open the media page with this receiver already selected.
     SendMedia(String),
+    Rescan,
     Stop,
 }
 
@@ -238,10 +240,25 @@ impl Component for HomePage {
                             #[watch]
                             set_visible: model.step == Step::Device,
 
+                            #[name = "receivers_heading"]
                             gtk::Box {
                                 set_spacing: 12,
-                                gtk::Label { set_label: &tr!("Receivers found"), set_xalign: 0.0, set_hexpand: true, add_css_class: "heading" },
-                                gtk::Label { #[watch] set_label: &model.devices.len().to_string(), add_css_class: "receiver-count", set_valign: gtk::Align::Center },
+                                gtk::Box {
+                                    set_spacing: 10,
+                                    set_hexpand: true,
+                                    gtk::Label { set_label: &tr!("Receivers found"), set_xalign: 0.0, set_wrap: true, add_css_class: "heading" },
+                                    gtk::Label { #[watch] set_label: &model.devices.len().to_string(), add_css_class: "receiver-count", set_valign: gtk::Align::Center },
+                                },
+                                #[name = "find_devices"]
+                                gtk::Button {
+                                    set_valign: gtk::Align::Center,
+                                    #[watch] set_sensitive: model.session.is_none(),
+                                    connect_clicked => HomeMsg::Rescan,
+                                    adw::ButtonContent {
+                                        set_icon_name: "system-search-symbolic",
+                                        set_label: &tr!("Find compatible devices"),
+                                    },
+                                },
                             },
                             #[local_ref]
                             device_list -> gtk::ListBox {
@@ -577,6 +594,11 @@ impl Component for HomePage {
             adw::BreakpointCondition::parse("max-width: 720px").expect("valid breakpoint"),
         );
         compact.add_setter(
+            &widgets.receivers_heading,
+            "orientation",
+            Some(&gtk::Orientation::Vertical.to_value()),
+        );
+        compact.add_setter(
             &widgets.columns,
             "orientation",
             Some(&gtk::Orientation::Vertical.to_value()),
@@ -690,6 +712,11 @@ impl Component for HomePage {
                 if let Some(chosen) = &self.chosen {
                     sender.output(HomeOutput::SendMedia(chosen.id.clone())).ok();
                     self.step = Step::Device;
+                }
+            }
+            HomeMsg::Rescan => {
+                if self.session.is_none() {
+                    sender.output(HomeOutput::Rescan).ok();
                 }
             }
             HomeMsg::Stop => {

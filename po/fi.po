@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-17 21:39-0300\n"
+"POT-Creation-Date: 2026-09-17 21:51-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Finnish <fi@li.org>\n"
@@ -59,19 +59,19 @@ msgstr ""
 "Katto: pienempi näyttö lähetetään sellaisenaan. Yli 1080p:tä kaikki "
 "vastaanottimet eivät hyväksy."
 
-#: crates/nd-gui/src/pages/home.rs:536
+#: crates/nd-gui/src/pages/home.rs:553
 msgid "A new screen"
 msgstr "Uusi näyttö"
 
-#: crates/nd-gui/src/app.rs:967
+#: crates/nd-gui/src/app.rs:946
 msgid "A stream is already running"
 msgstr "Suoratoisto on jo käynnissä"
 
-#: crates/nd-gui/src/pages/home.rs:529
+#: crates/nd-gui/src/pages/home.rs:546
 msgid "A window"
 msgstr "Ikkuna"
 
-#: crates/nd-gui/src/app.rs:292
+#: crates/nd-gui/src/app.rs:293
 msgid "About BigNetScreen"
 msgstr "Tietoja BigNetScreenistä"
 
@@ -87,7 +87,7 @@ msgstr "AirPlay"
 msgid "All protocols"
 msgstr "Kaikki protokollat"
 
-#: crates/nd-gui/src/pages/home.rs:537
+#: crates/nd-gui/src/pages/home.rs:554
 msgid "An extra desktop, just for this"
 msgstr "Ylimääräinen työpöytä vain tätä varten"
 
@@ -112,7 +112,7 @@ msgstr "Automaattinen"
 msgid "Automatic discovery"
 msgstr "Automaattinen etsintä"
 
-#: crates/nd-gui/src/app.rs:424 crates/nd-gui/src/app.rs:916
+#: crates/nd-gui/src/app.rs:408 crates/nd-gui/src/app.rs:895
 msgid "Automatic discovery is off"
 msgstr "Automaattinen etsintä on pois päältä"
 
@@ -120,7 +120,7 @@ msgstr "Automaattinen etsintä on pois päältä"
 msgid "Available"
 msgstr "Saatavilla"
 
-#: crates/nd-gui/src/pages/home.rs:271
+#: crates/nd-gui/src/pages/home.rs:288
 msgid "Back"
 msgstr "Takaisin"
 
@@ -138,7 +138,7 @@ msgstr ""
 "Miracastissa tätä sovelletaan täällä; Chromecastissa tämä on pyyntö, jonka "
 "vastaanotin voi ohittaa."
 
-#: crates/nd-gui/src/pages/home.rs:447
+#: crates/nd-gui/src/pages/home.rs:464
 msgid "Can't find your device?"
 msgstr "Etkö löydä laitettasi?"
 
@@ -154,11 +154,11 @@ msgstr "Valitse kansio"
 msgid "Choose files"
 msgstr "Valitse tiedostot"
 
-#: crates/nd-gui/src/pages/home.rs:714
+#: crates/nd-gui/src/pages/home.rs:741
 msgid "Choose the device to send to."
 msgstr "Valitse laite, jolle lähetetään."
 
-#: crates/nd-gui/src/pages/home.rs:472
+#: crates/nd-gui/src/pages/home.rs:489
 msgid ""
 "Choose this computer in OBS or another NDI receiver. Uses the name and audio "
 "options in Settings."
@@ -182,7 +182,7 @@ msgstr "Chromecast / AirPlay"
 msgid "Chromecast / AirPlay only"
 msgstr "Vain Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/home.rs:775 crates/nd-gui/src/pages/home.rs:902
+#: crates/nd-gui/src/pages/home.rs:802 crates/nd-gui/src/pages/home.rs:929
 msgid ""
 "Chromecasts show up on their own. A TV or projector only appears while it is "
 "in screen mirroring mode — on Fire TV, under Settings › Display and Sounds › "
@@ -196,7 +196,7 @@ msgstr ""
 msgid "Clear queue"
 msgstr "Tyhjennä jono"
 
-#: crates/nd-gui/src/pages/home.rs:427
+#: crates/nd-gui/src/pages/home.rs:444
 msgid "Connect to the same network"
 msgstr "Yhdistä samaan verkkoon"
 
@@ -204,19 +204,19 @@ msgstr "Yhdistä samaan verkkoon"
 msgid "Connected"
 msgstr "Yhdistetty"
 
-#: crates/nd-gui/src/app.rs:257
+#: crates/nd-gui/src/app.rs:258
 msgid "Connected to"
 msgstr "Yhdistetty laitteeseen"
 
-#: crates/nd-gui/src/app.rs:989 crates/nd-gui/src/pages/mod.rs:171
+#: crates/nd-gui/src/app.rs:968 crates/nd-gui/src/pages/mod.rs:171
 msgid "Connecting…"
 msgstr "Yhdistetään…"
 
-#: crates/nd-gui/src/pages/home.rs:378
+#: crates/nd-gui/src/pages/home.rs:395
 msgid "Connection"
 msgstr "Yhteys"
 
-#: crates/nd-gui/src/pages/home.rs:376
+#: crates/nd-gui/src/pages/home.rs:393
 msgid "Connection quality"
 msgstr "Yhteyden laatu"
 
@@ -228,7 +228,7 @@ msgstr "Mukautettu resoluutio"
 msgid "Devices"
 msgstr "Laitteet"
 
-#: crates/nd-gui/src/pages/home.rs:355 crates/nd-gui/src/pages/devices.rs:236
+#: crates/nd-gui/src/pages/home.rs:372 crates/nd-gui/src/pages/devices.rs:236
 msgid "Disconnect"
 msgstr "Katkaise yhteys"
 
@@ -241,11 +241,13 @@ msgstr "Löytäminen ja laitteet"
 msgid "Discovery only"
 msgstr "Vain etsintä"
 
-#: crates/nd-gui/src/pages/home.rs:438
+#: crates/nd-gui/src/pages/home.rs:455
 msgid "Enable screen mirroring on your TV or projector before connecting."
-msgstr "Ota näytön peilaus käyttöön televisiossa tai projektorissa ennen yhdistämistä."
+msgstr ""
+"Ota näytön peilaus käyttöön televisiossa tai projektorissa ennen "
+"yhdistämistä."
 
-#: crates/nd-gui/src/pages/home.rs:523
+#: crates/nd-gui/src/pages/home.rs:540
 msgid "Everything on your screen"
 msgstr "Kaikki näytölläsi"
 
@@ -253,7 +255,7 @@ msgstr "Kaikki näytölläsi"
 msgid "Excellent"
 msgstr "Erinomainen"
 
-#: crates/nd-gui/src/pages/home.rs:488
+#: crates/nd-gui/src/pages/home.rs:505
 msgid "Extra screen"
 msgstr "Lisänäyttö"
 
@@ -269,6 +271,10 @@ msgstr "Elokuvatila"
 msgid "Find and connect to nearby wireless receivers."
 msgstr "Etsi ja muodosta yhteys lähellä oleviin langattomiin vastaanottimiin."
 
+#: crates/nd-gui/src/pages/home.rs:259
+msgid "Find compatible devices"
+msgstr "Etsi yhteensopivia laitteita"
+
 #: crates/nd-gui/src/pages/media.rs:875
 msgid "Finished"
 msgstr "Valmis"
@@ -277,7 +283,7 @@ msgstr "Valmis"
 msgid "Fixed port"
 msgstr "Kiinteä portti"
 
-#: crates/nd-gui/src/pages/home.rs:428
+#: crates/nd-gui/src/pages/home.rs:445
 msgid "For Chromecast, connect both devices to the same Wi-Fi network."
 msgstr "Yhdistä Chromecastia varten molemmat laitteet samaan Wi-Fi-verkkoon."
 
@@ -293,7 +299,7 @@ msgstr "Kuvanopeus"
 msgid "Good"
 msgstr "Hyvä"
 
-#: crates/nd-gui/src/app.rs:354
+#: crates/nd-gui/src/app.rs:337
 msgid "Got it"
 msgstr "Selvä"
 
@@ -317,16 +323,16 @@ msgstr "Sisällytä järjestelmän ääni"
 msgid "Include the microphone"
 msgstr "Sisällytä mikrofoni"
 
-#: crates/nd-gui/src/pages/home.rs:417 crates/nd-gui/src/pages/home.rs:781
+#: crates/nd-gui/src/pages/home.rs:434 crates/nd-gui/src/pages/home.rs:808
 msgid "Keep every device on the same Wi-Fi network for the best results."
 msgstr ""
 "Pidä kaikki laitteet samassa Wi-Fi-verkossa parhaan tuloksen saavuttamiseksi."
 
-#: crates/nd-gui/src/pages/home.rs:437
+#: crates/nd-gui/src/pages/home.rs:454
 msgid "Keep the receiver ready"
 msgstr "Pidä vastaanotin valmiina"
 
-#: crates/nd-gui/src/app.rs:1187
+#: crates/nd-gui/src/app.rs:1166
 msgid "Local network discovery unavailable"
 msgstr "Lähiverkon etsintä ei ole käytettävissä"
 
@@ -334,7 +340,7 @@ msgstr "Lähiverkon etsintä ei ole käytettävissä"
 msgid "Look for receivers as soon as the app starts"
 msgstr "Etsi vastaanottimia heti, kun sovellus käynnistyy"
 
-#: crates/nd-gui/src/pages/home.rs:889
+#: crates/nd-gui/src/pages/home.rs:916
 msgid "Looking for receivers…"
 msgstr "Etsitään vastaanottimia…"
 
@@ -366,14 +372,14 @@ msgstr "Mikrofonin äänenvoimakkuus"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1246
+#: crates/nd-gui/src/app.rs:1225
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
 msgstr ""
 "Miracast ei toimi Flatpak-versiossa (se vaatii järjestelmän NetworkManagerin)"
 
-#: crates/nd-gui/src/app.rs:1254
+#: crates/nd-gui/src/app.rs:1233
 msgid ""
 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
 "network still works."
@@ -385,11 +391,11 @@ msgstr ""
 msgid "Miracast only"
 msgstr "Vain Miracast"
 
-#: crates/nd-gui/src/app.rs:1262
+#: crates/nd-gui/src/app.rs:1241
 msgid "Miracast unavailable"
 msgstr "Miracast ei ole käytettävissä"
 
-#: crates/nd-gui/src/app.rs:1260
+#: crates/nd-gui/src/app.rs:1239
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast ei ole käytettävissä: tämä Wi-Fi-kortti ei tue Wi-Fi Directiä"
 
@@ -405,11 +411,11 @@ msgstr "Sekoita äänesi lähetettävään sisältöön"
 msgid "Music"
 msgstr "Musiikki"
 
-#: crates/nd-gui/src/app.rs:1278
+#: crates/nd-gui/src/app.rs:1257
 msgid "NDI setup"
 msgstr "NDI-määritys"
 
-#: crates/nd-gui/src/app.rs:524
+#: crates/nd-gui/src/app.rs:503
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI ei ole käytettävissä. Katso NDI:n määritysohjetta."
 
@@ -435,7 +441,7 @@ msgstr "Musiikki-kansiossa ei ole musiikkia. Käytä ”Valitse tiedostot”."
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "Kuvat-kansiossa ei ole valokuvia. Käytä ”Valitse tiedostot”."
 
-#: crates/nd-gui/src/app.rs:924 crates/nd-gui/src/pages/home.rs:898
+#: crates/nd-gui/src/app.rs:903 crates/nd-gui/src/pages/home.rs:925
 msgid "No receivers found"
 msgstr "Ei löytynyt vastaanottimia"
 
@@ -451,7 +457,7 @@ msgstr "Ei mitään valittuna"
 msgid "Now playing"
 msgstr "Toistetaan nyt"
 
-#: crates/nd-gui/src/pages/home.rs:530
+#: crates/nd-gui/src/pages/home.rs:547
 msgid "One window only"
 msgstr "Vain yksi ikkuna"
 
@@ -467,7 +473,7 @@ msgstr "Keskeytä"
 msgid "Photos"
 msgstr "Valokuvat"
 
-#: crates/nd-gui/src/pages/home.rs:544
+#: crates/nd-gui/src/pages/home.rs:561
 msgid "Photos, videos and music"
 msgstr "Valokuvat, videot ja musiikki"
 
@@ -487,7 +493,7 @@ msgstr "Valmistellaan videota…"
 msgid "Protocol"
 msgstr "Protokolla"
 
-#: crates/nd-gui/src/pages/home.rs:471
+#: crates/nd-gui/src/pages/home.rs:488
 msgid "Publish with NDI"
 msgstr "Julkaise NDI:n kautta"
 
@@ -499,11 +505,11 @@ msgstr "Jono"
 msgid "Ready"
 msgstr "Valmis"
 
-#: crates/nd-gui/src/pages/home.rs:707
+#: crates/nd-gui/src/pages/home.rs:734
 msgid "Ready to share"
 msgstr "Valmiina jakamaan"
 
-#: crates/nd-gui/src/pages/home.rs:243
+#: crates/nd-gui/src/pages/home.rs:249
 msgid "Receivers found"
 msgstr "Vastaanottimia löytyi"
 
@@ -511,7 +517,7 @@ msgstr "Vastaanottimia löytyi"
 msgid "Refresh"
 msgstr "Päivitä"
 
-#: crates/nd-gui/src/pages/home.rs:448
+#: crates/nd-gui/src/pages/home.rs:465
 msgid "Refresh the device list and check that your receiver is turned on."
 msgstr "Päivitä laiteluettelo ja tarkista, että vastaanotin on päällä."
 
@@ -535,16 +541,16 @@ msgstr "Jatka"
 msgid "Saved as you change them"
 msgstr "Tallennetaan muutosten yhteydessä"
 
-#: crates/nd-gui/src/app.rs:329 crates/nd-gui/src/pages/devices.rs:115
+#: crates/nd-gui/src/pages/devices.rs:115
 msgid "Scan again"
 msgstr "Etsi uudelleen"
 
-#: crates/nd-gui/src/pages/home.rs:480
+#: crates/nd-gui/src/pages/home.rs:497
 msgid "Screen"
 msgstr "Näyttö"
 
-#: crates/nd-gui/src/app.rs:422 crates/nd-gui/src/app.rs:544
-#: crates/nd-gui/src/app.rs:922
+#: crates/nd-gui/src/app.rs:406 crates/nd-gui/src/app.rs:523
+#: crates/nd-gui/src/app.rs:901
 msgid "Searching…"
 msgstr "Haetaan…"
 
@@ -560,7 +566,7 @@ msgstr "Valitse enintään 1000 tiedostoa kerrallaan."
 msgid "Send a folder"
 msgstr "Lähetä kansio"
 
-#: crates/nd-gui/src/pages/home.rs:543 crates/nd-gui/src/pages/devices.rs:250
+#: crates/nd-gui/src/pages/home.rs:560 crates/nd-gui/src/pages/devices.rs:250
 msgid "Send media"
 msgstr "Lähetä media"
 
@@ -576,7 +582,7 @@ msgstr "Lähetä laitteeseen"
 msgid "Send whatever this computer is playing"
 msgstr "Lähetä mitä tämä tietokone toistaa"
 
-#: crates/nd-gui/src/app.rs:1036
+#: crates/nd-gui/src/app.rs:1015
 msgid "Sending files…"
 msgstr "Lähetetään tiedostoja…"
 
@@ -592,15 +598,15 @@ msgstr "Asetuksia ei voi tallentaa tähän järjestelmään."
 msgid "Share media"
 msgstr "Jaa media"
 
-#: crates/nd-gui/src/app.rs:223
+#: crates/nd-gui/src/app.rs:224
 msgid "Share your screen wirelessly"
 msgstr "Jaa näyttösi langattomasti"
 
-#: crates/nd-gui/src/app.rs:1275
+#: crates/nd-gui/src/app.rs:1254
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "Jaa näyttösi televisioon, projektoriin tai Chromecastiin."
 
-#: crates/nd-gui/src/pages/home.rs:296
+#: crates/nd-gui/src/pages/home.rs:313
 msgid ""
 "Sharing a window opens your desktop’s own picker. Only visible windows can "
 "be shared."
@@ -608,11 +614,7 @@ msgstr ""
 "Ikkunan jakaminen avaa työpöydän oman valitsimen. Vain näkyvissä olevia "
 "ikkunoita voi jakaa."
 
-#: crates/nd-gui/src/app.rs:319
-msgid "Show the sidebar"
-msgstr "Näytä sivupalkki"
-
-#: crates/nd-gui/src/pages/home.rs:769
+#: crates/nd-gui/src/pages/home.rs:796
 msgid ""
 "Sound goes to the receiver and to this computer. Mute this computer if you "
 "hear an echo."
@@ -624,7 +626,7 @@ msgstr ""
 msgid "Status"
 msgstr "Tila"
 
-#: crates/nd-gui/src/app.rs:336
+#: crates/nd-gui/src/app.rs:319
 msgid "Stop"
 msgstr "Lopeta"
 
@@ -632,11 +634,11 @@ msgstr "Lopeta"
 msgid "Stop sending"
 msgstr "Lopeta lähetys"
 
-#: crates/nd-gui/src/app.rs:1030
+#: crates/nd-gui/src/app.rs:1009
 msgid "Stop sharing your screen before sending files"
 msgstr "Lopeta näytön jakaminen ennen tiedostojen lähettämistä"
 
-#: crates/nd-gui/src/app.rs:956
+#: crates/nd-gui/src/app.rs:935
 msgid "Stopping…"
 msgstr "Pysäytetään…"
 
@@ -652,8 +654,8 @@ msgstr "Suoratoistetaan"
 msgid "Test"
 msgstr "Testi"
 
-#: crates/nd-gui/src/app.rs:975 crates/nd-gui/src/app.rs:1023
-#: crates/nd-gui/src/app.rs:1040
+#: crates/nd-gui/src/app.rs:954 crates/nd-gui/src/app.rs:1002
+#: crates/nd-gui/src/app.rs:1019
 msgid "That device is no longer available"
 msgstr "Tämä laite ei ole enää käytettävissä"
 
@@ -669,12 +671,12 @@ msgstr "Nämä koskevat seuraavaa istuntoasi."
 msgid "This computer's name"
 msgstr "Tämän tietokoneen nimi"
 
-#: crates/nd-gui/src/pages/home.rs:653
+#: crates/nd-gui/src/pages/home.rs:675
 msgid ""
 "This desktop cannot create an extra screen (it needs GNOME running natively)"
 msgstr "Tämä työpöytä ei voi luoda lisänäyttöä (se vaatii GNOME:n natiivina)"
 
-#: crates/nd-gui/src/pages/home.rs:416
+#: crates/nd-gui/src/pages/home.rs:433
 msgid "Tips"
 msgstr "Vinkkejä"
 
@@ -694,7 +696,7 @@ msgstr "Odotetaan vastaanotinta…"
 msgid "Weak signal"
 msgstr "Heikko signaali"
 
-#: crates/nd-gui/src/pages/home.rs:708
+#: crates/nd-gui/src/pages/home.rs:735
 msgid "What do you want to share?"
 msgstr "Mitä haluat jakaa?"
 
@@ -702,7 +704,7 @@ msgstr "Mitä haluat jakaa?"
 msgid "Which kind of receiver to look for"
 msgstr "Minkä tyyppistä vastaanotinta etsitään"
 
-#: crates/nd-gui/src/pages/home.rs:522
+#: crates/nd-gui/src/pages/home.rs:539
 msgid "Whole screen"
 msgstr "Koko näyttö"
 
@@ -710,7 +712,7 @@ msgstr "Koko näyttö"
 msgid "Width (pixels)"
 msgstr "Leveys (pikseleinä)"
 
-#: crates/nd-gui/src/pages/home.rs:484
+#: crates/nd-gui/src/pages/home.rs:501
 msgid "Window"
 msgstr "Ikkuna"
 
@@ -738,7 +740,7 @@ msgstr "ei julkaistu vielä"
 msgid "quick response"
 msgstr "nopea vastaus"
 
-#: crates/nd-gui/src/app.rs:983
+#: crates/nd-gui/src/app.rs:962
 msgid "shows up in discovery only"
 msgstr "näkyy vain etsinnässä"
 
@@ -748,8 +750,11 @@ msgid_plural "{} files selected"
 msgstr[0] "{} tiedosto valittu"
 msgstr[1] "{} tiedostoa valittu"
 
-#: crates/nd-gui/src/app.rs:927
+#: crates/nd-gui/src/app.rs:906
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "{} vastaanotin löytynyt"
 msgstr[1] "{} vastaanotinta löytynyt"
+
+#~ msgid "Show the sidebar"
+#~ msgstr "Näytä sivupalkki"

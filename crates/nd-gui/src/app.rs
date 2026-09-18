@@ -176,18 +176,19 @@ impl Component for AppModel {
     view! {
         adw::ApplicationWindow {
             set_title: Some("BigNetScreen"),
-            // Room for the sidebar, a list and the panel beside it. Below this
-            // the split view folds the sidebar away rather than squeezing it.
+            // Keep navigation visible alongside compact page layouts.
             add_css_class: "bns-window",
             set_default_width: 1280,
             set_default_height: 860,
-            set_width_request: 420,
+            set_width_request: 760,
             set_height_request: 480,
 
             #[name = "split"]
             adw::OverlaySplitView {
                 set_max_sidebar_width: 270.0,
                 set_min_sidebar_width: 250.0,
+                set_collapsed: false,
+                set_show_sidebar: true,
 
                 #[wrap(Some)]
                 // No header bar over the sidebar: an empty one only pushed the
@@ -314,24 +315,6 @@ impl Component for AppModel {
                             set_subtitle: &model.status,
                         },
 
-                        pack_start = &gtk::ToggleButton {
-                            set_icon_name: "sidebar-show-symbolic",
-                            set_tooltip_text: Some(&tr!("Show the sidebar")),
-                            #[watch]
-                            set_active: split.shows_sidebar(),
-                            connect_toggled[split] => move |button| {
-                                split.set_show_sidebar(button.is_active());
-                            },
-                        },
-
-                        pack_end = &gtk::Button {
-                            set_icon_name: "view-refresh-symbolic",
-                            set_tooltip_text: Some(&tr!("Scan again")),
-                            #[watch]
-                            set_sensitive: model.active_cast.is_none(),
-                            connect_clicked => AppMsg::Rescan,
-                        },
-
                         pack_end = &gtk::Button {
                             set_label: &tr!("Stop"),
                             add_css_class: "destructive-action",
@@ -386,6 +369,7 @@ impl Component for AppModel {
                 HomeOutput::Cast { id, source } => AppMsg::CastWith(id, source),
                 HomeOutput::SendMedia(id) => AppMsg::MediaTarget(id),
                 HomeOutput::Stop => AppMsg::Stop,
+                HomeOutput::Rescan => AppMsg::Rescan,
             });
         let devices = DevicesPage::builder()
             .launch(())
@@ -441,11 +425,6 @@ impl Component for AppModel {
 
         let widgets = view_output!();
 
-        let compact = adw::Breakpoint::new(
-            adw::BreakpointCondition::parse("max-width: 1000px").expect("valid breakpoint"),
-        );
-        compact.add_setter(&widgets.split, "collapsed", Some(&true.to_value()));
-        root.add_breakpoint(compact);
         let mapped = std::cell::Cell::new(false);
         root.connect_map(move |window| {
             if mapped.replace(true) {

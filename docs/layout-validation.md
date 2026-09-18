@@ -4,7 +4,7 @@
 
 - System accent and named GTK surface colors; no fixed application palette.
 - Larger sidebar navigation, page headings, sharing cards, receiver rows and settings icons.
-- Window and page breakpoints fold the sidebar and stack controls on narrow layouts. Short media pages scroll.
+- Sidebar stays visible; page breakpoints stack controls on narrow layouts. Minimum window width: 760 px. Short media pages scroll.
 - Video frames, embedded album art, conventional adjacent cover files, duration and artist metadata. Missing artwork retains a themed fallback.
 - Silent GStreamer preroll on two background workers; bounded decoded-preview cache. Images do not determine grid or queue row size.
 - Editable queue, playback controls, discovery and settings behavior preserved.
@@ -32,3 +32,5 @@ Preview extraction uses [GStreamer's playbin API](https://gstreamer.freedesktop.
 ## Home composition follow-up
 
 Receiver heading/count and compact rows; equal-height receiver/tips cards; three illustrated tips; compact icon-labelled NDI actions. Vector marks inherit theme colors and avoid missing theme icons. Initial discovery-disabled state now shows the correct empty placeholder. Seven new messages translated in all 29 locales. Layout capture and strict Clippy passed; local release executable rebuilt.
+
+Discovery now uses a labelled "Find compatible devices" button in the receiver heading. Header refresh and sidebar toggle removed. All 29 translations checked; button output, layout capture and strict Clippy passed. Local release executable rebuilt.
