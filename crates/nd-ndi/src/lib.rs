@@ -1,4 +1,4 @@
-//! Built-in NDI sender. The vendor runtime remains a system dependency.
+//! Open-source NDI sender integration. The vendor runtime is an optional system dependency.
 
 use std::sync::{Mutex, OnceLock};
 
@@ -23,6 +23,20 @@ pub fn available() -> bool {
         && ["ndisink", "ndisinkcombiner"]
             .iter()
             .all(|name| gst::ElementFactory::find(name).is_some())
+}
+
+/// Check the optional runtime without creating a sender or starting capture.
+/// A source in READY only loads symbols. A sink would already create a sender.
+pub fn runtime_available() -> bool {
+    if !available() {
+        return false;
+    }
+    let Ok(probe) = gst::ElementFactory::make("ndisrc").build() else {
+        return false;
+    };
+    let ready = probe.set_state(gst::State::Ready).is_ok();
+    let reset = probe.set_state(gst::State::Null).is_ok();
+    ready && reset
 }
 
 pub struct NdiPublisher {
@@ -170,6 +184,19 @@ impl Sink for NdiPublisher {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "Requires an absent or incompatible NDI runtime"]
+    fn missing_runtime_is_reported_before_capture() {
+        assert!(available());
+        assert!(!runtime_available());
+    }
+
+    #[test]
+    #[ignore = "Requires a compatible NDI runtime"]
+    fn installed_runtime_passes_preflight() {
+        assert!(runtime_available());
+    }
 
     #[test]
     fn bundled_plugin_registers_without_a_system_plugin_or_runtime() {

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-17 21:51-0300\n"
+"POT-Creation-Date: 2026-09-18 00:47-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Icelandic <is@li.org>\n"
@@ -62,7 +62,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "Nýr skjár"
 
-#: crates/nd-gui/src/app.rs:946
+#: crates/nd-gui/src/app.rs:1058
 msgid "A stream is already running"
 msgstr "Streymi er þegar í gangi"
 
@@ -70,7 +70,7 @@ msgstr "Streymi er þegar í gangi"
 msgid "A window"
 msgstr "Gluggi"
 
-#: crates/nd-gui/src/app.rs:293
+#: crates/nd-gui/src/app.rs:298
 msgid "About BigNetScreen"
 msgstr "Um BigNetScreen"
 
@@ -102,6 +102,14 @@ msgstr ""
 msgid "Audio"
 msgstr "Hljóð"
 
+#: crates/nd-gui/src/app.rs:534
+msgid ""
+"Authenticate when prompted. Downloading and building the package may take a "
+"few minutes. Keep the app open until installation finishes."
+msgstr ""
+"Auðkenndu þig þegar þess er óskað. Það getur tekið nokkrar mínútur að sækja "
+"og byggja pakkann. Hafðu forritið opið þar til uppsetningu lýkur."
+
 #: crates/nd-gui/src/pages/settings.rs:98
 msgid "Automatic"
 msgstr "Sjálfvirkt"
@@ -111,7 +119,7 @@ msgstr "Sjálfvirkt"
 msgid "Automatic discovery"
 msgstr "Sjálfvirk uppgötvun"
 
-#: crates/nd-gui/src/app.rs:408 crates/nd-gui/src/app.rs:895
+#: crates/nd-gui/src/app.rs:413 crates/nd-gui/src/app.rs:1007
 msgid "Automatic discovery is off"
 msgstr "Sjálfvirk uppgötvun er óvirk"
 
@@ -194,6 +202,10 @@ msgstr ""
 msgid "Clear queue"
 msgstr "Hreinsa biðröð"
 
+#: crates/nd-gui/src/app.rs:693 crates/nd-gui/src/app.rs:810
+msgid "Close"
+msgstr "Loka"
+
 #: crates/nd-gui/src/pages/home.rs:444
 msgid "Connect to the same network"
 msgstr "Tengstu sama neti"
@@ -202,11 +214,11 @@ msgstr "Tengstu sama neti"
 msgid "Connected"
 msgstr "Tengt"
 
-#: crates/nd-gui/src/app.rs:258
+#: crates/nd-gui/src/app.rs:263
 msgid "Connected to"
 msgstr "Tengt við"
 
-#: crates/nd-gui/src/app.rs:968 crates/nd-gui/src/pages/mod.rs:171
+#: crates/nd-gui/src/app.rs:1080 crates/nd-gui/src/pages/mod.rs:171
 msgid "Connecting…"
 msgstr "Tengist…"
 
@@ -296,7 +308,7 @@ msgstr "Rammathröðun"
 msgid "Good"
 msgstr "Gott"
 
-#: crates/nd-gui/src/app.rs:337
+#: crates/nd-gui/src/app.rs:342
 msgid "Got it"
 msgstr "Skil það"
 
@@ -320,6 +332,22 @@ msgstr "Taktu með kerfishljóð"
 msgid "Include the microphone"
 msgstr "Taktu með hljóðnema"
 
+#: crates/nd-gui/src/app.rs:813
+msgid "Install"
+msgstr "Setja upp"
+
+#: crates/nd-gui/src/app.rs:674
+msgid ""
+"Installation failed or authentication was cancelled. You can try again or "
+"install the library manually."
+msgstr ""
+"Uppsetning mistókst eða auðkenningu var hætt. Þú getur reynt aftur eða sett "
+"safnið upp handvirkt."
+
+#: crates/nd-gui/src/app.rs:533
+msgid "Installing NDI…"
+msgstr "Set upp NDI…"
+
 #: crates/nd-gui/src/pages/home.rs:434 crates/nd-gui/src/pages/home.rs:808
 msgid "Keep every device on the same Wi-Fi network for the best results."
 msgstr "Haltu öllum tækjum á sama Wi-Fi-netinu fyrir bestu niðurstöður."
@@ -328,7 +356,7 @@ msgstr "Haltu öllum tækjum á sama Wi-Fi-netinu fyrir bestu niðurstöður."
 msgid "Keep the receiver ready"
 msgstr "Hafðu móttakarann tilbúinn"
 
-#: crates/nd-gui/src/app.rs:1166
+#: crates/nd-gui/src/app.rs:1293
 msgid "Local network discovery unavailable"
 msgstr "Uppgötvun staðarnets ekki tiltæk"
 
@@ -368,14 +396,14 @@ msgstr "Hljóðstyrkur hljóðnema"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1225
+#: crates/nd-gui/src/app.rs:1352
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
 msgstr ""
 "Miracast virkar ekki í Flatpak-útgáfunni (það þarf system NetworkManager)"
 
-#: crates/nd-gui/src/app.rs:1233
+#: crates/nd-gui/src/app.rs:1360
 msgid ""
 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
 "network still works."
@@ -387,11 +415,11 @@ msgstr ""
 msgid "Miracast only"
 msgstr "Aðeins Miracast"
 
-#: crates/nd-gui/src/app.rs:1241
+#: crates/nd-gui/src/app.rs:1368
 msgid "Miracast unavailable"
 msgstr "Miracast ótiltækt"
 
-#: crates/nd-gui/src/app.rs:1239
+#: crates/nd-gui/src/app.rs:1366
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast ótiltækt: þetta Wi-Fi-kort styður ekki Wi-Fi Direct"
 
@@ -407,11 +435,43 @@ msgstr "Blandaðu röddinni þinni inn í það sem sent er"
 msgid "Music"
 msgstr "Tónlist"
 
-#: crates/nd-gui/src/app.rs:1257
+#: crates/nd-gui/src/app.rs:673
+msgid "NDI installation did not finish"
+msgstr "Uppsetningu NDI lauk ekki"
+
+#: crates/nd-gui/src/app.rs:667
+msgid "NDI installed"
+msgstr "NDI hefur verið sett upp"
+
+#: crates/nd-gui/src/app.rs:804
+msgid ""
+"NDI needs a proprietary library that is not included with BigNetScreen. "
+"Install ndi-sdk from the AUR and the required build tools? Your system will "
+"ask for administrator authentication. Other sharing methods work without it."
+msgstr ""
+"NDI krefst lokaðs hugbúnaðarsafns sem fylgir ekki BigNetScreen. Viltu setja "
+"ndi-sdk upp úr AUR og nauðsynleg byggiverkfæri? Kerfið mun biðja um "
+"auðkenningu stjórnanda. Aðrar deiliaðferðir virka án þessa safns."
+
+#: crates/nd-gui/src/app.rs:806
+msgid ""
+"NDI needs a proprietary library that is not included with BigNetScreen. "
+"Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
+"Other sharing methods work without it."
+msgstr ""
+"NDI krefst lokaðs hugbúnaðarsafns sem fylgir ekki BigNetScreen. Settu upp "
+"keyrsluumhverfi fyrir NDI 5 eða 6 fyrir dreifinguna þína og endurræstu "
+"síðan forritið. Aðrar deiliaðferðir virka án þessa safns."
+
+#: crates/nd-gui/src/app.rs:809 crates/nd-gui/src/app.rs:1102
+msgid "NDI runtime required"
+msgstr "NDI-keyrsluumhverfi er nauðsynlegt"
+
+#: crates/nd-gui/src/app.rs:830 crates/nd-gui/src/app.rs:1384
 msgid "NDI setup"
 msgstr "Uppsetning NDI"
 
-#: crates/nd-gui/src/app.rs:503
+#: crates/nd-gui/src/app.rs:521
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI er ekki tiltækt. Sjá leiðbeiningar um uppsetningu NDI."
 
@@ -437,7 +497,7 @@ msgstr "Engin tónlist í Tónlistarmöppunni. Notaðu „Velja skrár“."
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "Engar myndir í Myndamöppunni. Notaðu „Velja skrár“."
 
-#: crates/nd-gui/src/app.rs:903 crates/nd-gui/src/pages/home.rs:925
+#: crates/nd-gui/src/app.rs:1015 crates/nd-gui/src/pages/home.rs:925
 msgid "No receivers found"
 msgstr "Engir móttakendur fundust"
 
@@ -525,6 +585,10 @@ msgstr "Fjarlægja úr biðröð"
 msgid "Resolution limit"
 msgstr "Upplausnarmörk"
 
+#: crates/nd-gui/src/app.rs:668
+msgid "Restart BigNetScreen to use NDI."
+msgstr "Endurræstu BigNetScreen til að nota NDI."
+
 #: crates/nd-gui/src/pages/settings.rs:324
 msgid "Restore defaults"
 msgstr "Endursetja sjálfgefnar stillingar"
@@ -545,8 +609,8 @@ msgstr "Leita aftur"
 msgid "Screen"
 msgstr "Skjár"
 
-#: crates/nd-gui/src/app.rs:406 crates/nd-gui/src/app.rs:523
-#: crates/nd-gui/src/app.rs:901
+#: crates/nd-gui/src/app.rs:411 crates/nd-gui/src/app.rs:560
+#: crates/nd-gui/src/app.rs:1013
 msgid "Searching…"
 msgstr "Leitar…"
 
@@ -578,7 +642,7 @@ msgstr "Senda til tækis"
 msgid "Send whatever this computer is playing"
 msgstr "Senda það sem þessi tölva spilar"
 
-#: crates/nd-gui/src/app.rs:1015
+#: crates/nd-gui/src/app.rs:1142
 msgid "Sending files…"
 msgstr "Sendi skrár…"
 
@@ -594,11 +658,11 @@ msgstr "Ekki er hægt að vista stillingar á þessu kerfi."
 msgid "Share media"
 msgstr "Deila margmiðlun"
 
-#: crates/nd-gui/src/app.rs:224
+#: crates/nd-gui/src/app.rs:229
 msgid "Share your screen wirelessly"
 msgstr "Deildu skjánum þínum þráðlaust"
 
-#: crates/nd-gui/src/app.rs:1254
+#: crates/nd-gui/src/app.rs:1381
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "Deildu skjánum þínum með sjónvarpi, skjávarpa eða Chromecast."
 
@@ -622,7 +686,7 @@ msgstr ""
 msgid "Status"
 msgstr "Staða"
 
-#: crates/nd-gui/src/app.rs:319
+#: crates/nd-gui/src/app.rs:324
 msgid "Stop"
 msgstr "Stöðva"
 
@@ -630,11 +694,11 @@ msgstr "Stöðva"
 msgid "Stop sending"
 msgstr "Hætta sendingu"
 
-#: crates/nd-gui/src/app.rs:1009
+#: crates/nd-gui/src/app.rs:1136
 msgid "Stop sharing your screen before sending files"
 msgstr "Hættu að deila skjánum þínum áður en þú sendir skrár"
 
-#: crates/nd-gui/src/app.rs:935
+#: crates/nd-gui/src/app.rs:1047
 msgid "Stopping…"
 msgstr "Stöðva…"
 
@@ -650,8 +714,8 @@ msgstr "Streymir á"
 msgid "Test"
 msgstr "Próf"
 
-#: crates/nd-gui/src/app.rs:954 crates/nd-gui/src/app.rs:1002
-#: crates/nd-gui/src/app.rs:1019
+#: crates/nd-gui/src/app.rs:1066 crates/nd-gui/src/app.rs:1129
+#: crates/nd-gui/src/app.rs:1146
 msgid "That device is no longer available"
 msgstr "Það tæki er ekki lengur tiltækt"
 
@@ -685,6 +749,10 @@ msgstr "Mjög há (1440p)"
 #: crates/nd-gui/src/pages/media.rs:544
 msgid "Videos"
 msgstr "Myndbönd"
+
+#: crates/nd-gui/src/app.rs:828
+msgid "View ndi-sdk in the AUR"
+msgstr "Skoða ndi-sdk í AUR"
 
 #: crates/nd-gui/src/pages/mod.rs:173
 msgid "Waiting for the receiver…"
@@ -738,7 +806,7 @@ msgstr "ekki birt ennþá"
 msgid "quick response"
 msgstr "hröð svörun"
 
-#: crates/nd-gui/src/app.rs:962
+#: crates/nd-gui/src/app.rs:1074
 msgid "shows up in discovery only"
 msgstr "birtist aðeins í uppgötvun"
 
@@ -748,7 +816,7 @@ msgid_plural "{} files selected"
 msgstr[0] "{} skrá valin"
 msgstr[1] "{} skrár valdar"
 
-#: crates/nd-gui/src/app.rs:906
+#: crates/nd-gui/src/app.rs:1018
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "{} móttakari fannst"

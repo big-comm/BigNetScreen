@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-17 21:51-0300\n"
+"POT-Creation-Date: 2026-09-18 00:47-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Croatian <hr@li.org>\n"
@@ -63,7 +63,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "Novi zaslon"
 
-#: crates/nd-gui/src/app.rs:946
+#: crates/nd-gui/src/app.rs:1058
 msgid "A stream is already running"
 msgstr "Prijenos je već u tijeku"
 
@@ -71,7 +71,7 @@ msgstr "Prijenos je već u tijeku"
 msgid "A window"
 msgstr "Prozor"
 
-#: crates/nd-gui/src/app.rs:293
+#: crates/nd-gui/src/app.rs:298
 msgid "About BigNetScreen"
 msgstr "O programu BigNetScreen"
 
@@ -103,6 +103,15 @@ msgstr ""
 msgid "Audio"
 msgstr "Zvuk"
 
+#: crates/nd-gui/src/app.rs:534
+msgid ""
+"Authenticate when prompted. Downloading and building the package may take a "
+"few minutes. Keep the app open until installation finishes."
+msgstr ""
+"Autentificirajte se kada se to zatraži. Preuzimanje i izgradnja paketa mogu "
+"potrajati nekoliko minuta. Ostavite aplikaciju otvorenom dok instalacija ne "
+"završi."
+
 #: crates/nd-gui/src/pages/settings.rs:98
 msgid "Automatic"
 msgstr "Automatski"
@@ -112,7 +121,7 @@ msgstr "Automatski"
 msgid "Automatic discovery"
 msgstr "Automatsko otkrivanje"
 
-#: crates/nd-gui/src/app.rs:408 crates/nd-gui/src/app.rs:895
+#: crates/nd-gui/src/app.rs:413 crates/nd-gui/src/app.rs:1007
 msgid "Automatic discovery is off"
 msgstr "Automatsko otkrivanje je isključeno"
 
@@ -196,6 +205,10 @@ msgstr ""
 msgid "Clear queue"
 msgstr "Isprazni red čekanja"
 
+#: crates/nd-gui/src/app.rs:693 crates/nd-gui/src/app.rs:810
+msgid "Close"
+msgstr "Zatvori"
+
 #: crates/nd-gui/src/pages/home.rs:444
 msgid "Connect to the same network"
 msgstr "Povežite se na istu mrežu"
@@ -204,11 +217,11 @@ msgstr "Povežite se na istu mrežu"
 msgid "Connected"
 msgstr "Povezano"
 
-#: crates/nd-gui/src/app.rs:258
+#: crates/nd-gui/src/app.rs:263
 msgid "Connected to"
 msgstr "Povezano s"
 
-#: crates/nd-gui/src/app.rs:968 crates/nd-gui/src/pages/mod.rs:171
+#: crates/nd-gui/src/app.rs:1080 crates/nd-gui/src/pages/mod.rs:171
 msgid "Connecting…"
 msgstr "Povezivanje…"
 
@@ -298,7 +311,7 @@ msgstr "Broj sličica u sekundi"
 msgid "Good"
 msgstr "Dobro"
 
-#: crates/nd-gui/src/app.rs:337
+#: crates/nd-gui/src/app.rs:342
 msgid "Got it"
 msgstr "Razumijem"
 
@@ -322,6 +335,22 @@ msgstr "Uključi sistemski zvuk"
 msgid "Include the microphone"
 msgstr "Uključi mikrofon"
 
+#: crates/nd-gui/src/app.rs:813
+msgid "Install"
+msgstr "Instaliraj"
+
+#: crates/nd-gui/src/app.rs:674
+msgid ""
+"Installation failed or authentication was cancelled. You can try again or "
+"install the library manually."
+msgstr ""
+"Instalacija nije uspjela ili je autentifikacija otkazana. Možete pokušati "
+"ponovno ili ručno instalirati biblioteku."
+
+#: crates/nd-gui/src/app.rs:533
+msgid "Installing NDI…"
+msgstr "Instalacija NDI-ja…"
+
 #: crates/nd-gui/src/pages/home.rs:434 crates/nd-gui/src/pages/home.rs:808
 msgid "Keep every device on the same Wi-Fi network for the best results."
 msgstr "Držite sve uređaje na istoj Wi-Fi mreži za najbolje rezultate."
@@ -330,7 +359,7 @@ msgstr "Držite sve uređaje na istoj Wi-Fi mreži za najbolje rezultate."
 msgid "Keep the receiver ready"
 msgstr "Pripremite prijamnik"
 
-#: crates/nd-gui/src/app.rs:1166
+#: crates/nd-gui/src/app.rs:1293
 msgid "Local network discovery unavailable"
 msgstr "Otkrivanje lokalne mreže nije dostupno"
 
@@ -370,14 +399,14 @@ msgstr "Jačina mikrofona"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1225
+#: crates/nd-gui/src/app.rs:1352
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
 msgstr ""
 "Miracast ne radi u Flatpak verziji (potreban je sistemski NetworkManager)"
 
-#: crates/nd-gui/src/app.rs:1233
+#: crates/nd-gui/src/app.rs:1360
 msgid ""
 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
 "network still works."
@@ -389,11 +418,11 @@ msgstr ""
 msgid "Miracast only"
 msgstr "Samo Miracast"
 
-#: crates/nd-gui/src/app.rs:1241
+#: crates/nd-gui/src/app.rs:1368
 msgid "Miracast unavailable"
 msgstr "Miracast nije dostupan"
 
-#: crates/nd-gui/src/app.rs:1239
+#: crates/nd-gui/src/app.rs:1366
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast nije dostupan: ova Wi-Fi kartica ne podržava Wi-Fi Direct"
 
@@ -409,11 +438,44 @@ msgstr "Umiješaj svoj glas u ono što se šalje"
 msgid "Music"
 msgstr "Glazba"
 
-#: crates/nd-gui/src/app.rs:1257
+#: crates/nd-gui/src/app.rs:673
+msgid "NDI installation did not finish"
+msgstr "Instalacija NDI-ja nije dovršena"
+
+#: crates/nd-gui/src/app.rs:667
+msgid "NDI installed"
+msgstr "NDI je instaliran"
+
+#: crates/nd-gui/src/app.rs:804
+msgid ""
+"NDI needs a proprietary library that is not included with BigNetScreen. "
+"Install ndi-sdk from the AUR and the required build tools? Your system will "
+"ask for administrator authentication. Other sharing methods work without it."
+msgstr ""
+"NDI zahtijeva vlasničku biblioteku koja nije uključena u BigNetScreen. "
+"Želite li instalirati ndi-sdk iz AUR-a i potrebne alate za izgradnju? "
+"Sustav će zatražiti administratorsku autentifikaciju. Ostali načini "
+"dijeljenja rade i bez te biblioteke."
+
+#: crates/nd-gui/src/app.rs:806
+msgid ""
+"NDI needs a proprietary library that is not included with BigNetScreen. "
+"Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
+"Other sharing methods work without it."
+msgstr ""
+"NDI zahtijeva vlasničku biblioteku koja nije uključena u BigNetScreen. "
+"Instalirajte runtime NDI 5 ili 6 za svoju distribuciju, a zatim ponovno "
+"pokrenite aplikaciju. Ostali načini dijeljenja rade i bez te biblioteke."
+
+#: crates/nd-gui/src/app.rs:809 crates/nd-gui/src/app.rs:1102
+msgid "NDI runtime required"
+msgstr "Potrebno je NDI izvršno okruženje"
+
+#: crates/nd-gui/src/app.rs:830 crates/nd-gui/src/app.rs:1384
 msgid "NDI setup"
 msgstr "Postavljanje NDI-ja"
 
-#: crates/nd-gui/src/app.rs:503
+#: crates/nd-gui/src/app.rs:521
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI nije dostupan. Pogledajte vodič za postavljanje NDI-ja."
 
@@ -437,7 +499,7 @@ msgstr "Nema glazbe u mapi Glazba. Koristite „Odaberi datoteke”."
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "Nema fotografija u mapi Slike. Koristite „Odaberi datoteke”."
 
-#: crates/nd-gui/src/app.rs:903 crates/nd-gui/src/pages/home.rs:925
+#: crates/nd-gui/src/app.rs:1015 crates/nd-gui/src/pages/home.rs:925
 msgid "No receivers found"
 msgstr "Nisu pronađeni prijamnici"
 
@@ -525,6 +587,10 @@ msgstr "Ukloni iz reda čekanja"
 msgid "Resolution limit"
 msgstr "Maksimalna razlučivost"
 
+#: crates/nd-gui/src/app.rs:668
+msgid "Restart BigNetScreen to use NDI."
+msgstr "Ponovno pokrenite BigNetScreen da biste koristili NDI."
+
 #: crates/nd-gui/src/pages/settings.rs:324
 msgid "Restore defaults"
 msgstr "Vrati zadane postavke"
@@ -545,8 +611,8 @@ msgstr "Ponovno skeniraj"
 msgid "Screen"
 msgstr "Zaslon"
 
-#: crates/nd-gui/src/app.rs:406 crates/nd-gui/src/app.rs:523
-#: crates/nd-gui/src/app.rs:901
+#: crates/nd-gui/src/app.rs:411 crates/nd-gui/src/app.rs:560
+#: crates/nd-gui/src/app.rs:1013
 msgid "Searching…"
 msgstr "Pretraživanje…"
 
@@ -578,7 +644,7 @@ msgstr "Pošalji na uređaj"
 msgid "Send whatever this computer is playing"
 msgstr "Pošalji ono što ovo računalo reproducira"
 
-#: crates/nd-gui/src/app.rs:1015
+#: crates/nd-gui/src/app.rs:1142
 msgid "Sending files…"
 msgstr "Slanje datoteka…"
 
@@ -594,11 +660,11 @@ msgstr "Postavke se ne mogu spremiti na ovom sustavu."
 msgid "Share media"
 msgstr "Dijeli medije"
 
-#: crates/nd-gui/src/app.rs:224
+#: crates/nd-gui/src/app.rs:229
 msgid "Share your screen wirelessly"
 msgstr "Dijelite svoj zaslon bežično"
 
-#: crates/nd-gui/src/app.rs:1254
+#: crates/nd-gui/src/app.rs:1381
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "Dijelite svoj zaslon s TV-om, projektorom ili Chromecastom."
 
@@ -622,7 +688,7 @@ msgstr ""
 msgid "Status"
 msgstr "Status"
 
-#: crates/nd-gui/src/app.rs:319
+#: crates/nd-gui/src/app.rs:324
 msgid "Stop"
 msgstr "Zaustavi"
 
@@ -630,11 +696,11 @@ msgstr "Zaustavi"
 msgid "Stop sending"
 msgstr "Zaustavi slanje"
 
-#: crates/nd-gui/src/app.rs:1009
+#: crates/nd-gui/src/app.rs:1136
 msgid "Stop sharing your screen before sending files"
 msgstr "Prestanite dijeliti zaslon prije slanja datoteka"
 
-#: crates/nd-gui/src/app.rs:935
+#: crates/nd-gui/src/app.rs:1047
 msgid "Stopping…"
 msgstr "Zaustavljanje…"
 
@@ -650,8 +716,8 @@ msgstr "Prijenos uživo na"
 msgid "Test"
 msgstr "Test"
 
-#: crates/nd-gui/src/app.rs:954 crates/nd-gui/src/app.rs:1002
-#: crates/nd-gui/src/app.rs:1019
+#: crates/nd-gui/src/app.rs:1066 crates/nd-gui/src/app.rs:1129
+#: crates/nd-gui/src/app.rs:1146
 msgid "That device is no longer available"
 msgstr "Taj uređaj više nije dostupan"
 
@@ -685,6 +751,10 @@ msgstr "Vrlo visoko (1440p)"
 #: crates/nd-gui/src/pages/media.rs:544
 msgid "Videos"
 msgstr "Videozapisi"
+
+#: crates/nd-gui/src/app.rs:828
+msgid "View ndi-sdk in the AUR"
+msgstr "Prikaži ndi-sdk u AUR-u"
 
 #: crates/nd-gui/src/pages/mod.rs:173
 msgid "Waiting for the receiver…"
@@ -738,7 +808,7 @@ msgstr "još nije objavljeno"
 msgid "quick response"
 msgstr "brz odgovor"
 
-#: crates/nd-gui/src/app.rs:962
+#: crates/nd-gui/src/app.rs:1074
 msgid "shows up in discovery only"
 msgstr "prikazuje se samo u otkrivanju"
 
@@ -749,7 +819,7 @@ msgstr[0] "Odabrana je {} datoteka"
 msgstr[1] "Odabrane su {} datoteke"
 msgstr[2] "Odabrano je {} datoteka"
 
-#: crates/nd-gui/src/app.rs:906
+#: crates/nd-gui/src/app.rs:1018
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "Pronađen je {} prijamnik"

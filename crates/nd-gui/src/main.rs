@@ -2,6 +2,7 @@
 
 mod app;
 mod i18n;
+mod ndi_setup;
 mod pages;
 
 use app::AppModel;

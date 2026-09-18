@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-17 21:51-0300\n"
+"POT-Creation-Date: 2026-09-18 00:47-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Italian <it@li.org>\n"
@@ -62,7 +62,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "Un nuovo schermo"
 
-#: crates/nd-gui/src/app.rs:946
+#: crates/nd-gui/src/app.rs:1058
 msgid "A stream is already running"
 msgstr "Uno streaming è già in esecuzione"
 
@@ -70,7 +70,7 @@ msgstr "Uno streaming è già in esecuzione"
 msgid "A window"
 msgstr "Una finestra"
 
-#: crates/nd-gui/src/app.rs:293
+#: crates/nd-gui/src/app.rs:298
 msgid "About BigNetScreen"
 msgstr "Informazioni su BigNetScreen"
 
@@ -102,6 +102,15 @@ msgstr ""
 msgid "Audio"
 msgstr "Audio"
 
+#: crates/nd-gui/src/app.rs:534
+msgid ""
+"Authenticate when prompted. Downloading and building the package may take a "
+"few minutes. Keep the app open until installation finishes."
+msgstr ""
+"Autenticati quando richiesto. Il download e la compilazione del pacchetto "
+"possono richiedere alcuni minuti. Tieni aperta l’app finché l’installazione "
+"non è terminata."
+
 #: crates/nd-gui/src/pages/settings.rs:98
 msgid "Automatic"
 msgstr "Automatico"
@@ -111,7 +120,7 @@ msgstr "Automatico"
 msgid "Automatic discovery"
 msgstr "Rilevamento automatico"
 
-#: crates/nd-gui/src/app.rs:408 crates/nd-gui/src/app.rs:895
+#: crates/nd-gui/src/app.rs:413 crates/nd-gui/src/app.rs:1007
 msgid "Automatic discovery is off"
 msgstr "Il rilevamento automatico è disattivato"
 
@@ -195,6 +204,10 @@ msgstr ""
 msgid "Clear queue"
 msgstr "Svuota la coda"
 
+#: crates/nd-gui/src/app.rs:693 crates/nd-gui/src/app.rs:810
+msgid "Close"
+msgstr "Chiudi"
+
 #: crates/nd-gui/src/pages/home.rs:444
 msgid "Connect to the same network"
 msgstr "Connettiti alla stessa rete"
@@ -203,11 +216,11 @@ msgstr "Connettiti alla stessa rete"
 msgid "Connected"
 msgstr "Connesso"
 
-#: crates/nd-gui/src/app.rs:258
+#: crates/nd-gui/src/app.rs:263
 msgid "Connected to"
 msgstr "Connesso a"
 
-#: crates/nd-gui/src/app.rs:968 crates/nd-gui/src/pages/mod.rs:171
+#: crates/nd-gui/src/app.rs:1080 crates/nd-gui/src/pages/mod.rs:171
 msgid "Connecting…"
 msgstr "Connessione…"
 
@@ -298,7 +311,7 @@ msgstr "Frequenza fotogrammi"
 msgid "Good"
 msgstr "Buona"
 
-#: crates/nd-gui/src/app.rs:337
+#: crates/nd-gui/src/app.rs:342
 msgid "Got it"
 msgstr "Ho capito"
 
@@ -322,6 +335,22 @@ msgstr "Includi audio di sistema"
 msgid "Include the microphone"
 msgstr "Includi il microfono"
 
+#: crates/nd-gui/src/app.rs:813
+msgid "Install"
+msgstr "Installa"
+
+#: crates/nd-gui/src/app.rs:674
+msgid ""
+"Installation failed or authentication was cancelled. You can try again or "
+"install the library manually."
+msgstr ""
+"L’installazione non è riuscita oppure l’autenticazione è stata annullata. "
+"Puoi riprovare o installare la libreria manualmente."
+
+#: crates/nd-gui/src/app.rs:533
+msgid "Installing NDI…"
+msgstr "Installazione di NDI…"
+
 #: crates/nd-gui/src/pages/home.rs:434 crates/nd-gui/src/pages/home.rs:808
 msgid "Keep every device on the same Wi-Fi network for the best results."
 msgstr ""
@@ -332,7 +361,7 @@ msgstr ""
 msgid "Keep the receiver ready"
 msgstr "Tieni pronto il ricevitore"
 
-#: crates/nd-gui/src/app.rs:1166
+#: crates/nd-gui/src/app.rs:1293
 msgid "Local network discovery unavailable"
 msgstr "Scoperta della rete locale non disponibile"
 
@@ -372,7 +401,7 @@ msgstr "Volume del microfono"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1225
+#: crates/nd-gui/src/app.rs:1352
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
@@ -380,7 +409,7 @@ msgstr ""
 "Miracast non funziona nella build Flatpak (richiede il NetworkManager di "
 "sistema)"
 
-#: crates/nd-gui/src/app.rs:1233
+#: crates/nd-gui/src/app.rs:1360
 msgid ""
 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
 "network still works."
@@ -392,11 +421,11 @@ msgstr ""
 msgid "Miracast only"
 msgstr "Solo Miracast"
 
-#: crates/nd-gui/src/app.rs:1241
+#: crates/nd-gui/src/app.rs:1368
 msgid "Miracast unavailable"
 msgstr "Miracast non disponibile"
 
-#: crates/nd-gui/src/app.rs:1239
+#: crates/nd-gui/src/app.rs:1366
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr ""
 "Miracast non disponibile: questa scheda Wi-Fi non supporta Wi-Fi Direct"
@@ -413,11 +442,44 @@ msgstr "Mescola la tua voce in ciò che viene inviato"
 msgid "Music"
 msgstr "Musica"
 
-#: crates/nd-gui/src/app.rs:1257
+#: crates/nd-gui/src/app.rs:673
+msgid "NDI installation did not finish"
+msgstr "L’installazione di NDI non è terminata"
+
+#: crates/nd-gui/src/app.rs:667
+msgid "NDI installed"
+msgstr "NDI installato"
+
+#: crates/nd-gui/src/app.rs:804
+msgid ""
+"NDI needs a proprietary library that is not included with BigNetScreen. "
+"Install ndi-sdk from the AUR and the required build tools? Your system will "
+"ask for administrator authentication. Other sharing methods work without it."
+msgstr ""
+"NDI richiede una libreria proprietaria non inclusa in BigNetScreen. Vuoi "
+"installare ndi-sdk dall’AUR e gli strumenti di compilazione necessari? Il "
+"sistema chiederà l’autenticazione di un amministratore. Gli altri metodi di "
+"condivisione funzionano anche senza questa libreria."
+
+#: crates/nd-gui/src/app.rs:806
+msgid ""
+"NDI needs a proprietary library that is not included with BigNetScreen. "
+"Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
+"Other sharing methods work without it."
+msgstr ""
+"NDI richiede una libreria proprietaria non inclusa in BigNetScreen. "
+"Installa il runtime NDI 5 o 6 per la tua distribuzione, poi riavvia l’app. "
+"Gli altri metodi di condivisione funzionano anche senza questa libreria."
+
+#: crates/nd-gui/src/app.rs:809 crates/nd-gui/src/app.rs:1102
+msgid "NDI runtime required"
+msgstr "È necessario il runtime NDI"
+
+#: crates/nd-gui/src/app.rs:830 crates/nd-gui/src/app.rs:1384
 msgid "NDI setup"
 msgstr "Configurazione NDI"
 
-#: crates/nd-gui/src/app.rs:503
+#: crates/nd-gui/src/app.rs:521
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI non è disponibile. Consulta la guida alla configurazione di NDI."
 
@@ -441,7 +503,7 @@ msgstr "Nessuna musica nella cartella Musica. Usa \"Seleziona file\"."
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "Nessuna foto nella cartella Immagini. Usa \"Seleziona file\"."
 
-#: crates/nd-gui/src/app.rs:903 crates/nd-gui/src/pages/home.rs:925
+#: crates/nd-gui/src/app.rs:1015 crates/nd-gui/src/pages/home.rs:925
 msgid "No receivers found"
 msgstr "Nessun ricevitore trovato"
 
@@ -530,6 +592,10 @@ msgstr "Rimuovi dalla coda"
 msgid "Resolution limit"
 msgstr "Risoluzione massima"
 
+#: crates/nd-gui/src/app.rs:668
+msgid "Restart BigNetScreen to use NDI."
+msgstr "Riavvia BigNetScreen per usare NDI."
+
 #: crates/nd-gui/src/pages/settings.rs:324
 msgid "Restore defaults"
 msgstr "Ripristina impostazioni predefinite"
@@ -550,8 +616,8 @@ msgstr "Scansiona di nuovo"
 msgid "Screen"
 msgstr "Schermo"
 
-#: crates/nd-gui/src/app.rs:406 crates/nd-gui/src/app.rs:523
-#: crates/nd-gui/src/app.rs:901
+#: crates/nd-gui/src/app.rs:411 crates/nd-gui/src/app.rs:560
+#: crates/nd-gui/src/app.rs:1013
 msgid "Searching…"
 msgstr "Ricerca…"
 
@@ -583,7 +649,7 @@ msgstr "Invia al dispositivo"
 msgid "Send whatever this computer is playing"
 msgstr "Invia ciò che questo computer sta riproducendo"
 
-#: crates/nd-gui/src/app.rs:1015
+#: crates/nd-gui/src/app.rs:1142
 msgid "Sending files…"
 msgstr "Invio di file in corso…"
 
@@ -599,11 +665,11 @@ msgstr "Impossibile salvare le impostazioni su questo sistema."
 msgid "Share media"
 msgstr "Condividi contenuti multimediali"
 
-#: crates/nd-gui/src/app.rs:224
+#: crates/nd-gui/src/app.rs:229
 msgid "Share your screen wirelessly"
 msgstr "Condividi lo schermo in wireless"
 
-#: crates/nd-gui/src/app.rs:1254
+#: crates/nd-gui/src/app.rs:1381
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "Condividi lo schermo con una TV, un proiettore o un Chromecast."
 
@@ -627,7 +693,7 @@ msgstr ""
 msgid "Status"
 msgstr "Stato"
 
-#: crates/nd-gui/src/app.rs:319
+#: crates/nd-gui/src/app.rs:324
 msgid "Stop"
 msgstr "Interrompi"
 
@@ -635,11 +701,11 @@ msgstr "Interrompi"
 msgid "Stop sending"
 msgstr "Interrompi invio"
 
-#: crates/nd-gui/src/app.rs:1009
+#: crates/nd-gui/src/app.rs:1136
 msgid "Stop sharing your screen before sending files"
 msgstr "Interrompi la condivisione dello schermo prima di inviare file"
 
-#: crates/nd-gui/src/app.rs:935
+#: crates/nd-gui/src/app.rs:1047
 msgid "Stopping…"
 msgstr "Arresto…"
 
@@ -655,8 +721,8 @@ msgstr "Streaming a"
 msgid "Test"
 msgstr "Test"
 
-#: crates/nd-gui/src/app.rs:954 crates/nd-gui/src/app.rs:1002
-#: crates/nd-gui/src/app.rs:1019
+#: crates/nd-gui/src/app.rs:1066 crates/nd-gui/src/app.rs:1129
+#: crates/nd-gui/src/app.rs:1146
 msgid "That device is no longer available"
 msgstr "Il dispositivo non è più disponibile"
 
@@ -690,6 +756,10 @@ msgstr "Molto alta (1440p)"
 #: crates/nd-gui/src/pages/media.rs:544
 msgid "Videos"
 msgstr "Video"
+
+#: crates/nd-gui/src/app.rs:828
+msgid "View ndi-sdk in the AUR"
+msgstr "Visualizza ndi-sdk nell’AUR"
 
 #: crates/nd-gui/src/pages/mod.rs:173
 msgid "Waiting for the receiver…"
@@ -743,7 +813,7 @@ msgstr "non ancora pubblicato"
 msgid "quick response"
 msgstr "risposta rapida"
 
-#: crates/nd-gui/src/app.rs:962
+#: crates/nd-gui/src/app.rs:1074
 msgid "shows up in discovery only"
 msgstr "compare solo nella scoperta"
 
@@ -753,7 +823,7 @@ msgid_plural "{} files selected"
 msgstr[0] "{} file selezionato"
 msgstr[1] "{} file selezionati"
 
-#: crates/nd-gui/src/app.rs:906
+#: crates/nd-gui/src/app.rs:1018
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "{} ricevitore trovato"

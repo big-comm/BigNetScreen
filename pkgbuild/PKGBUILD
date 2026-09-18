@@ -21,10 +21,10 @@ depends=(
   'pipewire'
   'xdg-desktop-portal'
   'libpulse'            # pactl audio diagnostics
-  'libndi'              # vendor runtime; GStreamer NDI plugin is built in
   'avahi'               # NDI discovery
 )
 optdepends=(
+  'libndi: optional proprietary NDI runtime (ndi-sdk in the AUR)'
   'networkmanager: Miracast discovery and connection (Wi-Fi Direct)'
   'firewalld: automatically opens RTSP port 7236 on the P2P link'
   'intel-media-driver: VA-API hardware encoding on Intel GPUs'

@@ -1,34 +1,47 @@
 # NDI publishing
 
-NDI is included in every native BigNetScreen build. The maintained GStreamer
-NDI plugin is compiled into the executable; users do not install `gst-plugin-ndi`.
-The vendor NDI runtime remains a separate shared library, loaded only when NDI
-is used. Opening the application does not start an NDI publication.
+The open-source GStreamer NDI plugin (MPL-2.0) is compiled into native
+BigNetScreen builds; users do not install `gst-plugin-ndi`. No proprietary
+runtime or SDK is bundled or downloaded during the application build.
+NDI publishing requires a separately installed proprietary runtime, loaded only
+when NDI is used. Opening the application does not start an NDI publication.
 
 ## Native packages
 
-The BigNetScreen package requires `libndi` and `avahi`. Installing it through a
-repository that supplies both dependencies installs NDI support automatically.
+The BigNetScreen package lists `libndi` as an optional dependency. Miracast,
+Chromecast and the rest of the application work without it. On Arch Linux and
+derivatives, the [AUR package ndi-sdk](https://aur.archlinux.org/packages/ndi-sdk)
+provides `libndi`. It contains proprietary software; installation is the user's
+choice.
+
+When NDI is selected without a usable runtime, a modal explains the proprietary
+dependency before requesting screen capture. Native x86_64 Arch-family installations
+offer an explicit Install button and a link to the AUR recipe. Installation:
+
+1. Requests Polkit authentication through `pkexec` to install `base-devel` and
+   `git` with `pacman --needed --noconfirm`.
+2. Downloads the external `ndi-sdk` recipe into a private temporary directory.
+3. Runs `makepkg --syncdeps --install --noconfirm` as the user. Its `PACMAN_AUTH`
+   uses `pkexec` for dependency and package installation only.
+4. Removes temporary build/download files and asks the user to restart the app.
+   The GStreamer plugin caches failed runtime loads until process exit.
+
+The app remains open during installation and reports authentication cancellation
+or build errors. No application build or startup installs the runtime. Other
+distributions, sandboxed apps and systems without Polkit/pacman receive manual
+installation guidance and a link to the official NDI SDK page instead.
+
+Avahi is used for discovery.
 The package install/upgrade hook enables and starts `avahi-daemon.service` for
 network discovery. A masked service is not unmasked; installation reports a
 warning if service configuration fails.
 
-`pkgbuild/ndi-runtime/PKGBUILD` supplies the `libndi` dependency for x86_64 and
-aarch64. It packages only the official shared library and license notices,
-with a fixed checksum. Build and publish this runtime package before the new
-BigNetScreen package. An existing compatible `libndi` provider can also satisfy
-the dependency; the runtime package conflicts with other providers.
+This repository maintains only the application package recipe,
+`pkgbuild/PKGBUILD`. Building and installing it does not require `libndi`.
 
-For a local runtime package build, without publishing a repository:
-
-```sh
-cd pkgbuild/ndi-runtime
-makepkg -si
-```
-
-Build the application normally afterwards. Copying only the executable does not
-install the runtime. Source builds and unsupported package formats require an
-NDI 5/6 runtime and Avahi. For source builds, enable discovery explicitly:
+Copying only the executable does not install the runtime. To use NDI with source
+builds or other package formats, install an NDI 5/6 runtime and Avahi separately.
+For source builds, enable discovery explicitly:
 
 ```sh
 sudo systemctl enable --now avahi-daemon.service
@@ -90,7 +103,7 @@ audio, A/V synchronization, receiver join/leave, repeated Start/Stop, capture
 cancellation, CPU/RSS/network use.
 
 The bundled GStreamer plugin uses MPL-2.0; the vendor runtime retains its own
-license. The runtime package includes the SDK license and third-party notices.
+license. Runtime distributors must retain the required license and third-party notices.
 Distribution requirements remain those of the selected SDK.
 NDI® is a registered trademark of Vizrt NDI AB.
 

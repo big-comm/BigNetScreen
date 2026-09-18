@@ -112,6 +112,8 @@ pub struct AppModel {
     /// accepts few.
     probing: bool,
     operation_generation: u64,
+    ndi_installing: std::rc::Rc<std::cell::Cell<bool>>,
+    ndi_install_dialog: Option<adw::AlertDialog>,
 }
 
 #[derive(Debug)]
@@ -120,6 +122,7 @@ pub enum AppMsg {
     /// Start streaming to this receiver.
     Cast(String),
     PublishNdi(SourceType),
+    InstallNdi,
     /// Start streaming this to this receiver, in one step.
     CastWith(String, SourceType),
     Stop,
@@ -138,6 +141,7 @@ pub enum AppMsg {
 
 #[derive(Debug)]
 pub enum AppCmd {
+    NdiInstalled(std::result::Result<(), String>),
     Added(DiscoveredSink, u64),
     Updated(DiscoveredSink, u64),
     Removed(String, u64),
@@ -161,6 +165,7 @@ pub enum AppCmd {
     CastFinished {
         id: String,
         error: Option<String>,
+        ndi_runtime_unavailable: bool,
     },
     /// The measured round trip to the receiver, or `None` for no answer.
     LinkMeasured(u64, Option<Duration>),
@@ -421,9 +426,20 @@ impl Component for AppModel {
             measured: None,
             probing: false,
             operation_generation: 0,
+            ndi_installing: Default::default(),
+            ndi_install_dialog: None,
         };
 
         let widgets = view_output!();
+
+        let ndi_installing = model.ndi_installing.clone();
+        root.connect_close_request(move |_| {
+            if ndi_installing.get() {
+                gtk::glib::Propagation::Stop
+            } else {
+                gtk::glib::Propagation::Proceed
+            }
+        });
 
         let mapped = std::cell::Cell::new(false);
         root.connect_map(move |window| {
@@ -499,12 +515,33 @@ impl Component for AppModel {
             AppMsg::Navigate(page) => self.page = page,
             AppMsg::Cast(id) => self.begin_cast(id, &sender),
             AppMsg::PublishNdi(source) => {
-                if !nd_ndi::available() {
+                if self.ndi_installing.get() {
+                    return;
+                } else if !nd_ndi::available() {
                     self.status = tr!("NDI unavailable. See the NDI setup guide.");
                 } else {
                     self.source_type = source;
                     self.begin_cast(nd_ndi::ID.into(), &sender);
                 }
+            }
+            AppMsg::InstallNdi => {
+                if self.ndi_installing.get() || !crate::ndi_setup::can_install() {
+                    return;
+                }
+                self.ndi_installing.set(true);
+                let dialog = adw::AlertDialog::new(
+                    Some(&tr!("Installing NDI…")),
+                    Some(&tr!("Authenticate when prompted. Downloading and building the package may take a few minutes. Keep the app open until installation finishes.")),
+                );
+                dialog.set_can_close(false);
+                let spinner = gtk::Spinner::new();
+                spinner.start();
+                dialog.set_extra_child(Some(&spinner));
+                dialog.present(Some(root));
+                self.ndi_install_dialog = Some(dialog);
+                sender.oneshot_command(async {
+                    AppCmd::NdiInstalled(crate::ndi_setup::install().await)
+                });
             }
             AppMsg::CastWith(id, source) => {
                 self.source_type = source;
@@ -617,9 +654,46 @@ impl Component for AppModel {
         widgets: &mut Self::Widgets,
         message: Self::CommandOutput,
         sender: ComponentSender<Self>,
-        _root: &Self::Root,
+        root: &Self::Root,
     ) {
         match message {
+            AppCmd::NdiInstalled(result) => {
+                self.ndi_installing.set(false);
+                if let Some(dialog) = self.ndi_install_dialog.take() {
+                    dialog.force_close();
+                }
+                let dialog = match result {
+                    Ok(()) => adw::AlertDialog::new(
+                        Some(&tr!("NDI installed")),
+                        Some(&tr!("Restart BigNetScreen to use NDI.")),
+                    ),
+                    Err(error) => {
+                        tracing::warn!(%error, "NDI installation failed or was cancelled");
+                        let dialog = adw::AlertDialog::new(
+                            Some(&tr!("NDI installation did not finish")),
+                            Some(&tr!("Installation failed or authentication was cancelled. You can try again or install the library manually.")),
+                        );
+                        let details = gtk::TextView::builder()
+                            .editable(false)
+                            .cursor_visible(false)
+                            .monospace(true)
+                            .wrap_mode(gtk::WrapMode::WordChar)
+                            .build();
+                        details.buffer().set_text(&error);
+                        let scroll = gtk::ScrolledWindow::builder()
+                            .min_content_height(140)
+                            .max_content_height(200)
+                            .hscrollbar_policy(gtk::PolicyType::Never)
+                            .child(&details)
+                            .build();
+                        dialog.set_extra_child(Some(&scroll));
+                        dialog
+                    }
+                };
+                dialog.add_response("close", &tr!("Close"));
+                dialog.set_close_response("close");
+                dialog.present(Some(root));
+            }
             AppCmd::Added(handle, generation) => {
                 if generation != self.generation {
                     return;
@@ -710,7 +784,11 @@ impl Component for AppModel {
                 self.probing = false;
                 self.measured = Some(round_trip);
             }
-            AppCmd::CastFinished { id, error } => {
+            AppCmd::CastFinished {
+                id,
+                error,
+                ndi_runtime_unavailable,
+            } => {
                 if self.active_cast.as_deref() == Some(id.as_str()) {
                     self.active_cast = None;
                     self.active_sink = None;
@@ -720,6 +798,40 @@ impl Component for AppModel {
                 }
                 // The measurement belonged to that session.
                 self.measured = None;
+                if ndi_runtime_unavailable {
+                    let can_install = crate::ndi_setup::can_install();
+                    let body = if can_install {
+                        tr!("NDI needs a proprietary library that is not included with BigNetScreen. Install ndi-sdk from the AUR and the required build tools? Your system will ask for administrator authentication. Other sharing methods work without it.")
+                    } else {
+                        tr!("NDI needs a proprietary library that is not included with BigNetScreen. Install the NDI 5 or 6 runtime for your distribution, then restart the app. Other sharing methods work without it.")
+                    };
+                    let dialog =
+                        adw::AlertDialog::new(Some(&tr!("NDI runtime required")), Some(&body));
+                    dialog.add_response("close", &tr!("Close"));
+                    dialog.set_close_response("close");
+                    if can_install {
+                        dialog.add_response("install", &tr!("Install"));
+                        dialog
+                            .set_response_appearance("install", adw::ResponseAppearance::Suggested);
+                        let input = sender.input_sender().clone();
+                        dialog.connect_response(Some("install"), move |_, _| {
+                            input.emit(AppMsg::InstallNdi);
+                        });
+                    }
+                    dialog.set_extra_child(Some(&gtk::LinkButton::with_label(
+                        if can_install {
+                            crate::ndi_setup::AUR_URL
+                        } else {
+                            crate::ndi_setup::GUIDE_URL
+                        },
+                        &if can_install {
+                            tr!("View ndi-sdk in the AUR")
+                        } else {
+                            tr!("NDI setup")
+                        },
+                    )));
+                    dialog.present(Some(root));
+                }
                 match error {
                     Some(err) => {
                         tracing::warn!(%id, %err, "cast session ended with an error");
@@ -971,14 +1083,29 @@ impl AppModel {
         self.measured = None;
         self.active_cast = Some(id.clone());
         self.active_sink = Some(sink.clone());
-        let (cancel, cancelled) = tokio::sync::watch::channel(false);
+        let (cancel, mut cancelled) = tokio::sync::watch::channel(false);
         self.cast_cancel = Some(cancel);
         self.page = Page::Home;
 
         let source_type = self.source_type;
         sender.oneshot_command(async move {
+            if id == nd_ndi::ID {
+                let ready = tokio::select! {
+                    result = tokio::task::spawn_blocking(nd_ndi::runtime_available) => result.unwrap_or(false),
+                    _ = cancelled.changed() => return AppCmd::CastFinished {
+                        id, error: None, ndi_runtime_unavailable: false,
+                    },
+                };
+                if !*cancelled.borrow() && !ready {
+                    return AppCmd::CastFinished {
+                        id,
+                        error: Some(tr!("NDI runtime required")),
+                        ndi_runtime_unavailable: true,
+                    };
+                }
+            }
             let error = run_cast(sink, source_type, cancelled).await.err();
-            AppCmd::CastFinished { id, error }
+            AppCmd::CastFinished { id, error, ndi_runtime_unavailable: false }
         });
     }
 

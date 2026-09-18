@@ -1,5 +1,22 @@
 # Built-in NDI validation
 
+## Optional installation, 2026-09-18
+
+- Auxiliary runtime recipe removed from all local Git history. No SDK or vendor
+  binary found in tracked history. Remote history has not been replaced.
+- `libndi` is optional; the x86_64 Arch-family consent dialog offers installation
+  from the external AUR recipe. Other systems get manual setup guidance.
+- Missing-runtime and installed-runtime preflight tests pass without capture or
+  publishing. The installed-runtime test uses an external library under `/tmp`.
+- Installer mock checks cover success, cancelled authentication, failed clone,
+  failed build, unprivileged build execution and temporary directory cleanup.
+  ShellCheck, strict Clippy and 16 GUI tests pass.
+- Real consent dialog checked in isolated Broadway. No installation performed
+  on the host; live Polkit/AUR installation remains untested.
+- All 12 dialog messages checked in 29 compiled catalogs. Local release rebuilt.
+
+## Earlier streaming validation
+
 2026-09-17, Linux x86_64, GStreamer 1.28.7.
 
 - GStreamer NDI 0.15.3 compiled statically into `nd-ndi`.

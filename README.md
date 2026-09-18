@@ -150,8 +150,8 @@ scanning pauses for the duration of a session — see
 
 **No vendor binaries are embedded in the executable.** Native dependencies follow
 [`deny.toml`](deny.toml); CI runs the RustSec dependency audit. The open-source
-NDI plugin is built in; native packages require the separate vendor runtime and
-Avahi. See the
+NDI plugin is built in; its proprietary runtime is optional and installed
+separately by users who choose NDI (Arch: `ndi-sdk` from the AUR). See the
 [NDI setup and distribution notes](docs/ndi.md). The Cast protocol was implemented using Google's own
 open-source [Open Screen](https://chromium.googlesource.com/openscreen/) as a
 specification reference, with none of its code linked in.
