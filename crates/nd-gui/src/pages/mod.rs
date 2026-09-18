@@ -13,6 +13,7 @@
 pub mod devices;
 pub mod home;
 pub mod media;
+mod preview;
 pub mod settings;
 
 use nd_core::sink::{SinkInfo, SinkKind, SinkState};
@@ -301,3 +302,6 @@ mod tests {
         assert_eq!(entry.badge(), tr!("Discovery only"));
     }
 }
+
+#[cfg(test)]
+mod layout_tests;

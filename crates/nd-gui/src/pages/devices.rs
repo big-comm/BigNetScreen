@@ -84,7 +84,11 @@ impl Component for DevicesPage {
     type CommandOutput = ();
 
     view! {
-        gtk::ScrolledWindow {
+        adw::BreakpointBin {
+            set_width_request: 320,
+            set_height_request: 360,
+        #[wrap(Some)]
+        set_child = &gtk::ScrolledWindow {
             set_hscrollbar_policy: gtk::PolicyType::Never,
 
             gtk::Box {
@@ -93,24 +97,19 @@ impl Component for DevicesPage {
                 set_spacing: 6,
 
                 gtk::Box {
-                    set_spacing: 12,
-
+                    add_css_class: "page-heading",
+                    set_spacing: 18,
+                    gtk::Image { set_icon_name: Some("video-display-symbolic"), set_pixel_size: 32, add_css_class: "page-icon", set_valign: gtk::Align::Center },
                     gtk::Box {
-                        set_orientation: gtk::Orientation::Vertical,
-                        set_hexpand: true,
-
-                        gtk::Label {
-                            set_label: &tr!("Devices"),
-                            set_xalign: 0.0,
-                            add_css_class: "page-title",
-                        },
-                        gtk::Label {
-                            set_label: &tr!("Find and connect to nearby wireless receivers."),
-                            set_xalign: 0.0,
-                            add_css_class: "page-subtitle",
-                        },
+                        set_orientation: gtk::Orientation::Vertical, set_spacing: 6, set_valign: gtk::Align::Center,
+                        gtk::Label { set_label: &tr!("Devices"), set_xalign: 0.0, add_css_class: "page-title" },
+                        gtk::Label { set_label: &tr!("Find and connect to nearby wireless receivers."), set_xalign: 0.0, set_wrap: true, add_css_class: "page-subtitle" },
                     },
-
+                },
+                #[name = "filters"]
+                gtk::Box {
+                    set_spacing: 12,
+                    set_halign: gtk::Align::End,
                     gtk::Button {
                         set_valign: gtk::Align::Center,
                         set_tooltip_text: Some(&tr!("Scan again")),
@@ -137,6 +136,7 @@ impl Component for DevicesPage {
                     },
                 },
 
+                #[name = "columns"]
                 gtk::Box {
                     set_spacing: 18,
                     set_margin_top: 18,
@@ -151,6 +151,7 @@ impl Component for DevicesPage {
                             set_selection_mode: gtk::SelectionMode::None,
                             set_valign: gtk::Align::Start,
                             add_css_class: "boxed-list",
+                            add_css_class: "device-list",
                         },
 
                         gtk::Box {
@@ -291,6 +292,7 @@ impl Component for DevicesPage {
                     },
                 },
             },
+        },
         }
     }
 
@@ -317,6 +319,20 @@ impl Component for DevicesPage {
 
         let device_list = model.devices.widget();
         let widgets = view_output!();
+        let compact = adw::Breakpoint::new(
+            adw::BreakpointCondition::parse("max-width: 720px").expect("valid breakpoint"),
+        );
+        compact.add_setter(
+            &widgets.columns,
+            "orientation",
+            Some(&gtk::Orientation::Vertical.to_value()),
+        );
+        compact.add_setter(
+            &widgets.filters,
+            "orientation",
+            Some(&gtk::Orientation::Vertical.to_value()),
+        );
+        root.add_breakpoint(compact);
 
         for label in [
             tr!("All protocols"),

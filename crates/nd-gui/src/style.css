@@ -1,216 +1,123 @@
-/* BigNetScreen — the look of the application.
- *
- * Written against libadwaita's named colours rather than fixed values wherever
- * one exists, so the window follows the desktop's theme and accent instead of
- * insisting on its own. The exceptions are the parts of the design that *are*
- * a colour: the hero card's gradient and the badges.
- */
-
-/* The identity block at the top of the sidebar. */
-.app-identity {
-  padding: 14px 12px 8px 12px;
-}
-
-.app-identity .title {
-  font-size: 1.15rem;
-  font-weight: 800;
-}
-
-.app-identity .subtitle {
-  font-size: 0.8rem;
-  opacity: 0.6;
-}
-
-/* The application's mark: a rounded square in the accent colour. */
+/* Desktop colors and accent; no application palette overrides. */
+.app-identity { padding: 24px 18px 22px; }
+.app-identity .title { font-size: 1.15rem; font-weight: 800; }
+.app-identity .subtitle { font-size: 0.8rem; opacity: 0.65; }
 .app-mark {
-  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
-  border-radius: 12px;
-  min-width: 38px;
-  min-height: 38px;
-  color: #ffffff;
+  background: linear-gradient(135deg, @accent_bg_color, shade(@accent_bg_color, 0.8));
+  border-radius: 14px;
+  min-width: 46px;
+  min-height: 46px;
+  color: @accent_fg_color;
 }
-
-/* The card at the foot of the sidebar, showing what is connected. */
+.bns-sidebar { background: linear-gradient(155deg, alpha(@accent_bg_color, 0.06), transparent); }
+.navigation-sidebar > row { min-height: 54px; border-radius: 12px; margin: 4px 2px; }
+.navigation-sidebar > row:selected {
+  background-color: alpha(@accent_bg_color, 0.22);
+  box-shadow: inset 0 0 0 1px alpha(@accent_color, 0.3);
+}
+.navigation-sidebar > row image { -gtk-icon-size: 22px; margin-right: 8px; }
+.navigation-sidebar:dir(rtl) > row image { margin-right: 0; margin-left: 8px; }
+.sidebar-footer { padding: 16px; }
+.sidebar-footer button { min-width: 32px; min-height: 32px; border-radius: 12px; }
 .connected-card {
   background-color: alpha(currentColor, 0.05);
-  border: 1px solid alpha(currentColor, 0.08);
+  border: 1px solid alpha(currentColor, 0.1);
   border-radius: 12px;
   padding: 10px 12px;
   margin: 6px;
 }
+.connected-card .caption { font-size: 0.78rem; opacity: 0.65; }
+.live-dot { color: @success_color; font-size: 0.7rem; }
 
-.connected-card .caption {
-  font-size: 0.78rem;
-  opacity: 0.6;
+.page-heading { margin-bottom: 20px; }
+.page-title { font-size: 1.9rem; font-weight: 800; }
+.page-subtitle { font-size: 1.02rem; opacity: 0.72; }
+.page-icon {
+  min-width: 66px;
+  min-height: 66px;
+  border-radius: 19px;
+  background: linear-gradient(140deg, @accent_bg_color, shade(@accent_bg_color, 0.8));
+  color: @accent_fg_color;
 }
-
-/* The green dot next to a live connection. */
-.live-dot {
-  color: @success_color;
-  font-size: 0.7rem;
+.section-heading { font-weight: 700; opacity: 0.75; margin-bottom: 2px; }
+.info-card {
+  padding: 20px;
+  border: 1px solid alpha(currentColor, 0.12);
+  border-radius: 14px;
+  background: linear-gradient(145deg, alpha(@accent_bg_color, 0.035), alpha(currentColor, 0.045));
 }
-
-/* Page headings. */
-.page-title {
-  font-size: 1.7rem;
-  font-weight: 800;
-}
-
-.page-subtitle {
-  opacity: 0.65;
-}
-
-.section-heading {
-  font-weight: 700;
-  opacity: 0.75;
-  margin-bottom: 2px;
-}
-
-/* The panel showing the receiver currently in use. The gradient is the one
- * part of the design that is a colour rather than a role, so it is written
- * out; the text on it is forced white because the gradient is dark in both
- * light and dark themes. */
 .hero-card {
-  background: linear-gradient(160deg, #7c3aed 0%, #5b21b6 55%, #4c1d95 100%);
+  background: linear-gradient(160deg, @accent_bg_color, shade(@accent_bg_color, 0.72));
   border-radius: 16px;
   padding: 22px 18px;
-  color: #ffffff;
+  color: @accent_fg_color;
 }
-
-.hero-card .hero-name {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #ffffff;
-}
-
-.hero-card .hero-detail {
-  color: alpha(#ffffff, 0.75);
-}
-
-.hero-card .hero-chip {
-  background-color: alpha(#ffffff, 0.15);
-  border-radius: 999px;
-  padding: 3px 12px;
-  color: #ffffff;
-}
-
-/* A plain information card: connection quality, tips, the media queue. */
-.info-card {
-  background-color: alpha(currentColor, 0.05);
-  border: 1px solid alpha(currentColor, 0.08);
-  border-radius: 14px;
-  padding: 14px 16px;
-}
-
-/* Badges on a device row.
- *
- * `min-height` and a small padding, because a label with no height of its own
- * stretches to the row and the pill comes out as tall as the row is — touching
- * the separators above and below it. */
-.badge {
-  border-radius: 999px;
-  padding: 1px 10px;
-  min-height: 20px;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.badge.connected {
-  background-color: alpha(@success_color, 0.18);
-  color: @success_color;
-}
-
-.badge.available {
-  background-color: alpha(currentColor, 0.1);
-  opacity: 0.85;
-}
-
-.badge.warning {
-  background-color: alpha(@warning_color, 0.18);
-  color: @warning_color;
-}
-
-/* The coloured square in front of each "what to share" option.
- *
- * Square, and big enough to read at a glance: these four are the choice the
- * page exists to offer, so they carry more weight than a list icon would. The
- * width and height are equal on purpose — a rounded rectangle read as a badge
- * rather than as an icon. */
+.hero-card .hero-name { font-size: 1.25rem; font-weight: 800; color: @accent_fg_color; }
+.hero-card .hero-detail { color: alpha(@accent_fg_color, 0.8); }
+.hero-card .hero-chip { background-color: alpha(@accent_fg_color, 0.15); border-radius: 999px; padding: 3px 12px; color: @accent_fg_color; }
+.device-list { border-radius: 16px; }
+.device-row { padding: 10px 14px; }
+.device-row .title { font-weight: 600; }
+.device-row .subtitle { margin-top: 5px; }
+.device-icon { min-width: 46px; min-height: 46px; border-radius: 14px; background-color: alpha(currentColor, 0.045); }
+.badge { border-radius: 999px; padding: 1px 10px; min-height: 20px; font-size: 0.78rem; font-weight: 700; }
+.badge.connected, .badge.available { background-color: alpha(@success_color, 0.12); color: @success_color; }
+.badge.discovery-only { background-color: alpha(currentColor, 0.08); }
+.badge.warning { background-color: alpha(@warning_color, 0.18); color: @warning_color; }
 .share-icon {
-  border-radius: 8px;
-  min-width: 44px;
-  min-height: 44px;
-  margin: 2px 4px 2px 0;
-  color: #ffffff;
-}
-
-.share-icon.screen {
-  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
-}
-
-.share-icon.window {
-  background: linear-gradient(135deg, #6366f1, #4338ca);
-}
-
-.share-icon.virtual {
-  background: linear-gradient(135deg, #b45309, #92400e);
-}
-
-.share-icon.media {
-  background: linear-gradient(135deg, #d97706, #b45309);
-}
-
-/* A thing that can be sent, as a button: the coloured mark, a name and a line
- * saying what it means. Sized so two sit side by side without the text
- * wrapping at the width the window opens at. */
-.action-tile {
-  border-radius: 14px;
-  padding: 14px;
+  border-radius: 18px;
+  min-width: 68px;
   min-height: 68px;
-  background-color: alpha(currentColor, 0.05);
-  border: 1px solid alpha(currentColor, 0.08);
+  color: @accent_fg_color;
+  background: linear-gradient(135deg, @accent_bg_color, shade(@accent_bg_color, 0.8));
 }
+.action-tile { border-radius: 14px; padding: 22px; min-height: 162px; background-color: alpha(currentColor, 0.05); border: 1px solid alpha(currentColor, 0.08); }
+.action-tile:hover { background-color: alpha(currentColor, 0.09); }
+.action-tile .heading { font-size: 1.22rem; }
+.action-tile .caption { font-size: 1rem; }
+.tile-arrow { border-radius: 50%; min-width: 32px; min-height: 32px; background-color: alpha(currentColor, 0.08); }
+.tips-card { min-height: 210px; }
+.tip-icon { color: @accent_color; min-width: 44px; min-height: 44px; border-radius: 50%; background-color: alpha(@accent_bg_color, 0.18); }
+.ndi-card { margin-top: 20px; }
+.ndi-card button { padding: 10px 18px; }
 
-.action-tile:hover {
-  background-color: alpha(currentColor, 0.09);
-}
+.media-toolbar { margin-bottom: 10px; }
+.media-toolbar button, .media-toolbar toggle { min-height: 34px; }
+.media-grid > flowboxchild { padding: 3px; }
+.media-tile { padding: 0; border-radius: 14px; border: 1px solid alpha(currentColor, 0.12); background-color: alpha(currentColor, 0.025); }
+.media-tile:hover { background-color: alpha(@accent_bg_color, 0.08); }
+.media-tile:checked { outline: 2px solid @accent_bg_color; outline-offset: -2px; background-color: alpha(@accent_bg_color, 0.12); }
+.media-tile .thumb { border-radius: 12px; background: linear-gradient(135deg, alpha(@accent_bg_color, 0.3), alpha(currentColor, 0.04)); }
+.thumb-frame { border-radius: 12px; }
+.media-tile.music { padding: 14px; }
+.media-tile.music .thumb { background: linear-gradient(145deg, alpha(@accent_bg_color, 0.5), alpha(@accent_bg_color, 0.18)); }
+.media-name { font-size: 0.93rem; font-weight: 600; padding: 7px 9px 0; }
+.media-detail { font-size: 0.82rem; opacity: 0.68; padding: 0 9px 9px; }
+.selection-mark { min-width: 22px; min-height: 22px; border-radius: 50%; background-color: alpha(@window_bg_color, 0.75); color: @window_fg_color; border: 1px solid alpha(@window_fg_color, 0.9); margin: 9px; }
+.media-tile:checked .selection-mark { background-color: @accent_bg_color; color: @accent_fg_color; }
+.duration-badge { background-color: alpha(@window_bg_color, 0.9); color: @window_fg_color; border-radius: 6px; padding: 3px 6px; margin: 8px; font-size: 0.8rem; font-weight: 600; }
+.thumb-fallback { color: @accent_color; }
+.action-bar { background-color: alpha(currentColor, 0.05); border: 1px solid alpha(currentColor, 0.08); border-radius: 14px; padding: 16px; margin-top: 12px; }
+.action-bar button { min-height: 36px; }
+.action-bar .suggested-action { border-radius: 12px; padding-left: 20px; padding-right: 20px; }
+.queue-thumb { border-radius: 8px; background-color: alpha(@accent_bg_color, 0.12); }
+.settings-page row { padding-top: 9px; padding-bottom: 9px; }
+.settings-page .boxed-list { border-radius: 16px; }
+.settings-page preferencesgroup > box > box > label { font-size: 1.15rem; }
+.settings-icon { min-width: 42px; min-height: 42px; border-radius: 12px; background-color: alpha(currentColor, 0.06); }
+.signal-good { color: @success_color; font-weight: 700; }
+.signal-weak { color: @warning_color; font-weight: 700; }
 
-/* Media tiles. */
-.media-tile {
-  border-radius: 12px;
-  padding: 0;
-}
-
-.media-tile.selected {
-  outline: 2px solid @accent_bg_color;
-  outline-offset: -2px;
-}
-
-.media-tile .thumb {
-  border-radius: 12px;
-  background-color: alpha(currentColor, 0.07);
-}
-
-.media-name {
-  font-size: 0.82rem;
-  padding: 4px 6px;
-}
-
-/* The strip along the bottom of the media page. */
-.action-bar {
-  background-color: alpha(currentColor, 0.05);
-  border: 1px solid alpha(currentColor, 0.08);
-  border-radius: 14px;
-  padding: 10px 14px;
-}
-
-/* Signal strength, drawn as text so it needs no icon theme. */
-.signal-good {
-  color: @success_color;
-  font-weight: 700;
-}
-
-.signal-weak {
-  color: @warning_color;
-  font-weight: 700;
-}
+/* Home dashboard: matched panels, compact NDI actions. */
+.home-page .page-heading { margin-top: 12px; margin-bottom: 26px; }
+.home-columns { min-height: 430px; }
+.receivers-card { padding: 16px; border: 1px solid alpha(currentColor, 0.12); border-radius: 16px; background-color: alpha(currentColor, 0.025); }
+.receivers-card > box { margin: 0 8px; }
+.receiver-count { padding: 3px 11px; border-radius: 999px; background-color: alpha(currentColor, 0.07); }
+.receivers-card .device-row { padding: 4px 8px; }
+.receivers-card .device-icon { min-width: 34px; min-height: 40px; background: none; }
+.home-tips { padding: 24px 20px; }
+.home-tip-hero { border-radius: 50%; background-color: alpha(@accent_bg_color, 0.3); color: @accent_color; }
+.home-tip-symbol { border-radius: 12px; background-color: alpha(@accent_bg_color, 0.12); color: @window_fg_color; }
+.home-page .ndi-card { margin-top: 14px; padding: 20px; }
+.home-page .ndi-card button { min-width: 96px; min-height: 32px; padding: 8px 16px; border-radius: 12px; }

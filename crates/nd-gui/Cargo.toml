@@ -14,6 +14,8 @@ name = "bignetscreen"
 path = "src/main.rs"
 
 [dependencies]
+gstreamer.workspace = true
+gstreamer-video = "0.25"
 nd-core.workspace = true
 nd-capture.workspace = true
 nd-chromecast.workspace = true

@@ -178,15 +178,16 @@ impl Component for AppModel {
             set_title: Some("BigNetScreen"),
             // Room for the sidebar, a list and the panel beside it. Below this
             // the split view folds the sidebar away rather than squeezing it.
-            set_default_width: 1080,
-            set_default_height: 720,
+            add_css_class: "bns-window",
+            set_default_width: 1280,
+            set_default_height: 860,
             set_width_request: 420,
             set_height_request: 480,
 
             #[name = "split"]
             adw::OverlaySplitView {
-                set_max_sidebar_width: 260.0,
-                set_min_sidebar_width: 220.0,
+                set_max_sidebar_width: 270.0,
+                set_min_sidebar_width: 250.0,
 
                 #[wrap(Some)]
                 // No header bar over the sidebar: an empty one only pushed the
@@ -195,6 +196,7 @@ impl Component for AppModel {
                 // `WindowHandle` so that area still drags the window — which is
                 // what the header bar was quietly providing.
                 set_sidebar = &gtk::Box {
+                    add_css_class: "bns-sidebar",
                     set_orientation: gtk::Orientation::Vertical,
 
                     gtk::WindowHandle {
@@ -282,13 +284,19 @@ impl Component for AppModel {
                         },
 
                         gtk::Box {
-                            set_spacing: 6,
-                            set_margin_all: 8,
+                            set_spacing: 12,
+                            add_css_class: "sidebar-footer",
 
                             gtk::Button {
                                 set_icon_name: "help-about-symbolic",
                                 set_tooltip_text: Some(&tr!("About BigNetScreen")),
                                 connect_clicked => AppMsg::About,
+                            },
+                            gtk::Box {
+                                set_orientation: gtk::Orientation::Vertical,
+                                set_valign: gtk::Align::Center,
+                                gtk::Label { set_label: "BigNetScreen", set_xalign: 0.0, add_css_class: "dim-label" },
+                                gtk::Label { set_label: crate::APP_VERSION, set_xalign: 0.0, add_css_class: "caption", add_css_class: "dim-label" },
                             },
                         },
                 },
@@ -433,6 +441,11 @@ impl Component for AppModel {
 
         let widgets = view_output!();
 
+        let compact = adw::Breakpoint::new(
+            adw::BreakpointCondition::parse("max-width: 1000px").expect("valid breakpoint"),
+        );
+        compact.add_setter(&widgets.split, "collapsed", Some(&true.to_value()));
+        root.add_breakpoint(compact);
         let mapped = std::cell::Cell::new(false);
         root.connect_map(move |window| {
             if mapped.replace(true) {
@@ -486,6 +499,7 @@ impl Component for AppModel {
         // second (and GTK from warning that "home" does not exist).
         widgets.stack.set_visible_child_name(model.page.id());
 
+        model.home.emit(HomeMsg::Searching(current.auto_discovery));
         if current.auto_discovery {
             model.discovery = Some(start_discovery(&sender, 0, current.protocol));
         }

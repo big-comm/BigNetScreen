@@ -1,105 +1,31 @@
 //! Sending photos, films and music to a receiver.
-//!
-use std::path::PathBuf;
-
-use relm4::adw::{self, prelude::*};
-use relm4::factory::{DynamicIndex, FactoryComponent, FactorySender, FactoryVecDeque};
-use relm4::gtk;
-use relm4::gtk::gdk;
-use relm4::gtk::gdk_pixbuf::Pixbuf;
-use relm4::gtk::glib;
-use relm4::prelude::*;
-
+use super::preview::{self, Preview};
+use crate::{tr, tr_n};
 use nd_chromecast::file_server::{MediaFile, MediaKind};
 use nd_chromecast::media::MediaStatus;
 use nd_core::media::MediaCommand;
+use relm4::adw::{self, prelude::*};
+use relm4::factory::{DynamicIndex, FactoryComponent, FactorySender, FactoryVecDeque};
+use relm4::gtk;
+use relm4::gtk::glib;
+use relm4::prelude::*;
+use std::path::PathBuf;
 
-use crate::{tr, tr_n};
-
-/// How many files a tab shows.
-///
-/// A cap, not a page size: a picture folder of several thousand images would
-/// spend seconds building tiles nobody scrolls to. The most recent ones are the
-/// ones a person came here to send.
 const GRID_LIMIT: usize = 60;
-
-/// The size a thumbnail is decoded at.
-///
-/// Decoding at this size rather than shrinking afterwards is what keeps a grid
-/// of photos from holding hundreds of megabytes of full-resolution pixels.
-const THUMB: (i32, i32) = (260, 180);
-static THUMBNAIL_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
-
-/// Pixel data crosses threads; GTK objects stay on the UI thread.
-#[derive(Debug)]
-pub struct Thumbnail {
-    pixels: glib::Bytes,
-    width: i32,
-    height: i32,
-    stride: i32,
-    alpha: bool,
-}
-
-impl Thumbnail {
-    fn decode(path: &std::path::Path) -> Result<Self, String> {
-        let pixbuf = Pixbuf::from_file_at_scale(path, THUMB.0, THUMB.1, true)
-            .map_err(|err| err.to_string())?;
-        Ok(Self {
-            pixels: pixbuf.read_pixel_bytes(),
-            width: pixbuf.width(),
-            height: pixbuf.height(),
-            stride: pixbuf.rowstride(),
-            alpha: pixbuf.has_alpha(),
-        })
-    }
-
-    fn texture(&self) -> gdk::Texture {
-        let pixbuf = Pixbuf::from_bytes(
-            &self.pixels,
-            gtk::gdk_pixbuf::Colorspace::Rgb,
-            self.alpha,
-            8,
-            self.width,
-            self.height,
-            self.stride,
-        );
-        gdk::Texture::for_pixbuf(&pixbuf)
-    }
-}
-
-async fn load_thumbnail(path: PathBuf) -> Result<Thumbnail, String> {
-    let permit = THUMBNAIL_SLOTS
-        .acquire()
-        .await
-        .map_err(|err| err.to_string())?;
-    tokio::task::spawn_blocking(move || {
-        // Keep the permit until decoding ends, even if the tile is removed.
-        let _permit = permit;
-        Thumbnail::decode(&path)
-    })
-    .await
-    .map_err(|err| err.to_string())?
-}
-
-// ----------------------------------------------------------------------------
-// One tile
-// ----------------------------------------------------------------------------
 
 #[derive(Debug)]
 pub struct MediaTile {
     file: MediaFile,
     selected: bool,
+    preview: Preview,
 }
-
 #[derive(Debug)]
 pub enum TileMsg {
     Toggled(bool),
     SetSelected(bool),
 }
-
 #[derive(Debug)]
 pub enum TileOutput {
-    /// This file was selected, or unselected.
     Selected(PathBuf, bool),
 }
 
@@ -108,7 +34,7 @@ impl FactoryComponent for MediaTile {
     type Init = MediaFile;
     type Input = TileMsg;
     type Output = TileOutput;
-    type CommandOutput = Result<Thumbnail, String>;
+    type CommandOutput = Result<Preview, String>;
     type ParentWidget = gtk::FlowBox;
 
     view! {
@@ -118,43 +44,82 @@ impl FactoryComponent for MediaTile {
             #[block_signal(toggle_handler)]
             set_active: self.selected,
             set_tooltip_text: Some(&self.file.path.to_string_lossy()),
-
             connect_toggled[sender] => move |button| {
                 sender.input(TileMsg::Toggled(button.is_active()));
             } @toggle_handler,
-
             gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
                 set_spacing: 2,
-
-                #[name = "thumb"]
-                gtk::Picture {
-                    // Fills the tile and crops the overflow, so a portrait and
-                    // a landscape photo make a tidy grid instead of one tall
-                    // row.
-                    set_content_fit: relm4::gtk::ContentFit::Cover,
-                    set_width_request: 150,
-                    set_height_request: 104,
-                    add_css_class: "thumb",
+                gtk::Overlay {
+                    add_css_class: "thumb-frame",
+                    set_overflow: gtk::Overflow::Hidden,
+                    gtk::Box {
+                        set_width_request: 170,
+                        set_height_request: if self.file.kind == MediaKind::Video { 110 } else { 170 },
+                    },
+                    #[name = "thumb"]
+                    add_overlay = &gtk::Picture {
+                        set_content_fit: gtk::ContentFit::Cover,
+                        set_can_shrink: true,
+                        set_halign: gtk::Align::Fill,
+                        set_valign: gtk::Align::Fill,
+                        add_css_class: "thumb",
+                        set_can_target: false,
+                    },
+                    add_overlay = &gtk::Image {
+                        set_icon_name: Some(match self.file.kind { MediaKind::Photo => "image-x-generic-symbolic", MediaKind::Video => "video-x-generic-symbolic", MediaKind::Music => "audio-x-generic-symbolic" }),
+                        set_pixel_size: 48,
+                        set_halign: gtk::Align::Center,
+                        set_valign: gtk::Align::Center,
+                        add_css_class: "thumb-fallback",
+                        #[watch]
+                        set_visible: self.preview.image.is_none(),
+                        set_can_target: false,
+                    },
+                    add_overlay = &gtk::Image {
+                        #[watch]
+                        set_icon_name: if self.selected { Some("object-select-symbolic") } else { None },
+                        set_halign: gtk::Align::Start,
+                        set_valign: gtk::Align::Start,
+                        add_css_class: "selection-mark",
+                        set_can_target: false,
+                    },
+                    add_overlay = &gtk::Label {
+                        #[watch]
+                        set_label: &self.preview.duration.map(format_time).unwrap_or_default(),
+                        #[watch]
+                        set_visible: self.preview.duration.is_some(),
+                        set_halign: gtk::Align::End,
+                        set_valign: gtk::Align::End,
+                        add_css_class: "duration-badge",
+                        set_can_target: false,
+                    },
                 },
-
                 gtk::Label {
                     set_label: &self.file.title(),
+                    set_xalign: 0.0,
                     set_ellipsize: gtk::pango::EllipsizeMode::Middle,
-                    set_max_width_chars: 16,
+                    set_max_width_chars: 20,
                     add_css_class: "media-name",
+                },
+                gtk::Label {
+                    #[watch]
+                    set_label: &self.preview.artist.clone().unwrap_or_else(|| format!("{} · {}", glib::format_size(self.file.size), self.file.path.extension().unwrap_or_default().to_string_lossy().to_uppercase())),
+                    set_xalign: 0.0,
+                    set_ellipsize: gtk::pango::EllipsizeMode::End,
+                    set_max_width_chars: 20,
+                    add_css_class: "media-detail",
                 },
             },
         }
     }
-
     fn init_model(file: Self::Init, _index: &DynamicIndex, _sender: FactorySender<Self>) -> Self {
         Self {
             file,
             selected: false,
+            preview: Preview::default(),
         }
     }
-
     fn init_widgets(
         &mut self,
         _index: &DynamicIndex,
@@ -163,37 +128,29 @@ impl FactoryComponent for MediaTile {
         sender: FactorySender<Self>,
     ) -> Self::Widgets {
         let widgets = view_output!();
-
-        match self.file.kind {
-            MediaKind::Photo => {
-                widgets
-                    .thumb
-                    .set_paintable(icon_paintable("image-x-generic-symbolic").as_ref());
-                sender.oneshot_command(load_thumbnail(self.file.path.clone()));
-            }
-            MediaKind::Video => widgets
-                .thumb
-                .set_paintable(icon_paintable("video-x-generic-symbolic").as_ref()),
-            MediaKind::Music => widgets
-                .thumb
-                .set_paintable(icon_paintable("audio-x-generic-symbolic").as_ref()),
+        if self.file.kind == MediaKind::Music {
+            root.add_css_class("music");
         }
-
+        sender.oneshot_command(preview::load(self.file.path.clone(), self.file.kind));
         widgets
     }
-
     fn update_cmd_with_view(
         &mut self,
         widgets: &mut Self::Widgets,
         message: Self::CommandOutput,
-        _sender: FactorySender<Self>,
+        sender: FactorySender<Self>,
     ) {
         match message {
-            Ok(thumbnail) => widgets.thumb.set_paintable(Some(&thumbnail.texture())),
-            Err(err) => tracing::debug!(%err, "no thumbnail"),
+            Ok(preview) => {
+                if let Some(image) = &preview.image {
+                    widgets.thumb.set_paintable(Some(&image.texture()));
+                }
+                self.preview = preview;
+                self.update_view(widgets, sender);
+            }
+            Err(err) => tracing::debug!(%err, "no preview"),
         }
     }
-
     fn update(&mut self, message: Self::Input, sender: FactorySender<Self>) {
         match message {
             TileMsg::SetSelected(selected) => self.selected = selected,
@@ -206,28 +163,6 @@ impl FactoryComponent for MediaTile {
         }
     }
 }
-
-/// An icon, sized for a tile, for files that have no picture to show.
-fn icon_paintable(name: &str) -> Option<gdk::Paintable> {
-    let display = gdk::Display::default()?;
-    let theme = gtk::IconTheme::for_display(&display);
-    Some(
-        theme
-            .lookup_icon(
-                name,
-                &[],
-                64,
-                1,
-                gtk::TextDirection::None,
-                gtk::IconLookupFlags::empty(),
-            )
-            .upcast(),
-    )
-}
-
-// ----------------------------------------------------------------------------
-// The page
-// ----------------------------------------------------------------------------
 
 pub struct MediaPage {
     tiles: FactoryVecDeque<MediaTile>,
@@ -251,6 +186,7 @@ pub struct MediaPage {
     scan_generation: u64,
     inspection_generation: u64,
     rendered_queue: Vec<PathBuf>,
+    queue_thumbnails: std::collections::HashMap<PathBuf, gtk::Image>,
     scan_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -293,27 +229,38 @@ impl Component for MediaPage {
     type Init = ();
     type Input = MediaMsg;
     type Output = MediaOutput;
-    type CommandOutput = ();
+    type CommandOutput = (PathBuf, Result<Preview, String>);
 
     view! {
-        gtk::Box {
+        adw::BreakpointBin {
+            set_width_request: 320,
+            set_height_request: 360,
+        #[wrap(Some)]
+        set_child = &gtk::ScrolledWindow {
+            set_hscrollbar_policy: gtk::PolicyType::Never,
+            gtk::Box {
             set_orientation: gtk::Orientation::Vertical,
             set_margin_all: 24,
             set_spacing: 6,
 
-            gtk::Label {
-                set_label: &tr!("Share media"),
-                set_xalign: 0.0,
-                add_css_class: "page-title",
-            },
-            gtk::Label {
-                set_label: &tr!("Pick files and choose where to play them."),
-                set_xalign: 0.0,
-                set_margin_bottom: 18,
-                add_css_class: "page-subtitle",
+            gtk::Box {
+                add_css_class: "page-heading",
+                set_spacing: 18,
+                gtk::Image {
+                    #[watch]
+                    set_icon_name: Some(if model.kind == MediaKind::Music { "audio-x-generic-symbolic" } else { "folder-videos-symbolic" }),
+                    set_pixel_size: 32, add_css_class: "page-icon", set_valign: gtk::Align::Center,
+                },
+                gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical, set_valign: gtk::Align::Center, set_spacing: 6,
+                    gtk::Label { set_label: &tr!("Share media"), set_xalign: 0.0, add_css_class: "page-title" },
+                    gtk::Label { set_label: &tr!("Pick files and choose where to play them."), set_xalign: 0.0, set_wrap: true, add_css_class: "page-subtitle" },
+                },
             },
 
+            #[name = "toolbar"]
             gtk::Box {
+                add_css_class: "media-toolbar",
                 set_spacing: 8,
 
                 #[name = "kind_group"]
@@ -351,6 +298,7 @@ impl Component for MediaPage {
 
             gtk::ScrolledWindow {
                 set_vexpand: true,
+                set_min_content_height: 220,
                 set_margin_top: 12,
                 set_hscrollbar_policy: gtk::PolicyType::Never,
 
@@ -363,7 +311,9 @@ impl Component for MediaPage {
                     set_column_spacing: 10,
                     set_row_spacing: 10,
                     set_homogeneous: true,
-                    set_max_children_per_line: 8,
+                    set_max_children_per_line: 6,
+                    set_min_children_per_line: 1,
+                    add_css_class: "media-grid",
                 },
             },
 
@@ -419,6 +369,7 @@ impl Component for MediaPage {
                 add_css_class: "warning",
             },
 
+            #[name = "send_bar"]
             gtk::Box {
                 set_spacing: 12,
                 set_margin_top: 12,
@@ -539,6 +490,8 @@ impl Component for MediaPage {
                     connect_clicked => MediaMsg::Cancel,
                 },
             },
+            },
+        },
         }
     }
 
@@ -567,11 +520,26 @@ impl Component for MediaPage {
             scan_generation: 0,
             inspection_generation: 0,
             rendered_queue: Vec::new(),
+            queue_thumbnails: Default::default(),
             scan_cancel: Default::default(),
         };
 
         let grid = model.tiles.widget();
         let widgets = view_output!();
+        let compact = adw::Breakpoint::new(
+            adw::BreakpointCondition::parse("max-width: 720px").expect("valid breakpoint"),
+        );
+        compact.add_setter(
+            &widgets.toolbar,
+            "orientation",
+            Some(&gtk::Orientation::Vertical.to_value()),
+        );
+        compact.add_setter(
+            &widgets.send_bar,
+            "orientation",
+            Some(&gtk::Orientation::Vertical.to_value()),
+        );
+        root.add_breakpoint(compact);
 
         for label in [tr!("Photos"), tr!("Videos"), tr!("Music")] {
             widgets
@@ -582,6 +550,20 @@ impl Component for MediaPage {
         root.connect_map(move |_| sender.input(MediaMsg::EnsureLoaded));
 
         ComponentParts { model, widgets }
+    }
+
+    fn update_cmd_with_view(
+        &mut self,
+        _widgets: &mut Self::Widgets,
+        (path, preview): Self::CommandOutput,
+        _sender: ComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        if let (Some(picture), Ok(preview)) = (self.queue_thumbnails.get(&path), preview) {
+            if let Some(image) = preview.image {
+                picture.set_paintable(Some(&image.texture()));
+            }
+        }
     }
 
     fn update_with_view(
@@ -764,12 +746,31 @@ impl MediaPage {
         while let Some(row) = widgets.queue_list.first_child() {
             widgets.queue_list.remove(&row);
         }
+        self.queue_thumbnails.clear();
         for file in &self.chosen {
             let row = adw::ActionRow::builder()
                 .title(file.title())
                 .use_markup(false)
                 .subtitle(glib::markup_escape_text(&file.path.to_string_lossy()))
                 .build();
+            let picture = gtk::Image::builder()
+                .icon_name(match file.kind {
+                    MediaKind::Photo => "image-x-generic-symbolic",
+                    MediaKind::Video => "video-x-generic-symbolic",
+                    MediaKind::Music => "audio-x-generic-symbolic",
+                })
+                .pixel_size(48)
+                .valign(gtk::Align::Center)
+                .css_classes(["queue-thumb"])
+                .build();
+            row.add_prefix(&picture);
+            self.queue_thumbnails.insert(file.path.clone(), picture);
+            let path = file.path.clone();
+            let kind = file.kind;
+            sender.oneshot_command(async move {
+                let preview = preview::load(path.clone(), kind).await;
+                (path, preview)
+            });
             let remove = gtk::Button::from_icon_name("list-remove-symbolic");
             remove.set_valign(gtk::Align::Center);
             remove.set_tooltip_text(Some(&tr!("Remove from queue")));
@@ -1000,7 +1001,7 @@ fn user_directory(kind: MediaKind) -> Option<PathBuf> {
 }
 
 /// Opens the desktop's file chooser.
-fn open_file_dialog(root: &gtk::Box, sender: relm4::Sender<MediaMsg>, folder: bool) {
+fn open_file_dialog(root: &impl IsA<gtk::Widget>, sender: relm4::Sender<MediaMsg>, folder: bool) {
     let window = root.root().and_downcast::<gtk::Window>();
     let dialog = gtk::FileDialog::builder()
         .title(if folder {
@@ -1063,11 +1064,13 @@ fn human_size(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gtk::{gdk, gdk_pixbuf::Pixbuf};
 
     #[test]
     #[ignore = "requires a graphical GTK session and image loader"]
     fn media_library_is_lazy_and_background_thumbnails_preserve_pixels() {
         adw::init().expect("GTK session");
+        relm4::set_global_css(include_str!("../style.css"));
         let context = glib::MainContext::default();
         let page = MediaPage::builder().launch(()).detach();
         context.block_on(glib::timeout_future(std::time::Duration::from_millis(50)));
@@ -1081,26 +1084,28 @@ mod tests {
         pixbuf.fill(0x12345680);
         pixbuf.savev(&path, "png", &[]).expect("fixture PNG");
         context.block_on(async {
-            let permits = THUMBNAIL_SLOTS
+            let permits = preview::SLOTS
                 .acquire_many(2)
                 .await
                 .expect("thumbnail slots");
-            let job = relm4::spawn(load_thumbnail(path.clone()));
+            let job = relm4::spawn(preview::load(path.clone(), MediaKind::Photo));
             glib::timeout_future(std::time::Duration::from_millis(50)).await;
             assert!(!job.is_finished(), "decoder concurrency must be bounded");
             drop(permits);
             let thumbnail = job
                 .await
                 .expect("worker completed")
-                .expect("thumbnail decoded");
-            assert_eq!((thumbnail.width, thumbnail.height), (260, 130));
+                .expect("thumbnail decoded")
+                .image
+                .expect("photo preview");
+            assert_eq!((thumbnail.width, thumbnail.height), (360, 180));
             assert!(thumbnail.alpha);
             assert_eq!(&thumbnail.pixels.as_ref()[..4], &[0x12, 0x34, 0x56, 0x80]);
             let texture = thumbnail.texture();
-            assert_eq!((texture.width(), texture.height()), (260, 130));
+            assert_eq!((texture.width(), texture.height()), (360, 180));
 
             std::fs::write(&path, b"invalid image").expect("invalid fixture");
-            assert!(relm4::spawn(load_thumbnail(path.clone()))
+            assert!(relm4::spawn(preview::load(path.clone(), MediaKind::Photo))
                 .await
                 .expect("worker completed")
                 .is_err());
@@ -1127,6 +1132,7 @@ mod tests {
     #[ignore = "requires a graphical GTK session"]
     fn media_queue_edits_sync_tiles_and_discard_stale_picker_results() {
         adw::init().expect("GTK session");
+        relm4::set_global_css(include_str!("../style.css"));
         let context = glib::MainContext::default();
         let page = MediaPage::builder().launch(()).detach();
         let flush = || context.block_on(glib::timeout_future(std::time::Duration::from_millis(60)));

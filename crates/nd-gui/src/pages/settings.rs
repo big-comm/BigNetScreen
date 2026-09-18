@@ -64,24 +64,26 @@ impl Component for SettingsPage {
             set_hscrollbar_policy: gtk::PolicyType::Never,
 
             adw::Clamp {
-                set_maximum_size: 760,
+                set_maximum_size: 1100,
 
                 gtk::Box {
                     set_orientation: gtk::Orientation::Vertical,
-                    set_margin_all: 24,
+                    set_margin_all: 28,
+                    add_css_class: "settings-page",
                     set_spacing: 6,
 
-                    gtk::Label {
-                        set_label: &tr!("Settings"),
-                        set_xalign: 0.0,
-                        add_css_class: "page-title",
-                    },
-                    gtk::Label {
-                        set_label: &tr!("These apply to your next session."),
-                        set_xalign: 0.0,
-                        set_margin_bottom: 12,
-                        add_css_class: "page-subtitle",
-                    },
+            gtk::Box {
+                add_css_class: "page-heading",
+                set_spacing: 18,
+                gtk::Image { set_icon_name: Some("preferences-system-symbolic"), set_pixel_size: 32, add_css_class: "page-icon", set_valign: gtk::Align::Center },
+                gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical,
+                    set_valign: gtk::Align::Center,
+                    set_spacing: 6,
+                    gtk::Label { set_label: &tr!("Settings"), set_xalign: 0.0, add_css_class: "page-title" },
+                    gtk::Label { set_label: &tr!("These apply to your next session."), set_xalign: 0.0, set_wrap: true, add_css_class: "page-subtitle" },
+                },
+            },
 
                     adw::PreferencesGroup {
                         set_title: &tr!("Streaming"),
@@ -90,6 +92,7 @@ impl Component for SettingsPage {
                         #[name = "protocol"]
                         adw::ComboRow {
                             set_title: &tr!("Preferred protocol"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("video-display-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
                             set_subtitle: &tr!("Which kind of receiver to look for"),
                             set_model: Some(&string_list(&[
                                 tr!("Automatic"),
@@ -108,6 +111,7 @@ impl Component for SettingsPage {
                         #[name = "quality"]
                         adw::ComboRow {
                             set_title: &tr!("Resolution limit"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("view-fullscreen-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
                             set_subtitle: &tr!(
                                 "A ceiling: a smaller screen is sent as it is. Above 1080p \
                                  not every receiver will accept it."
@@ -171,6 +175,7 @@ impl Component for SettingsPage {
                         #[name = "fps"]
                         adw::ComboRow {
                             set_title: &tr!("Frame rate"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("view-list-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
                             set_subtitle: &tr!(
                                 "60 is smoother and costs about half as much again in bandwidth"
                             ),
@@ -185,6 +190,7 @@ impl Component for SettingsPage {
                         #[name = "film_mode"]
                         adw::SwitchRow {
                             set_title: &tr!("Film mode"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("video-x-generic-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
                             set_subtitle: &tr!(
                                 "Buffers the picture so video plays smoothly, at the cost of \
                                  delay. On Miracast it is applied here; on Chromecast it is a \
@@ -203,6 +209,7 @@ impl Component for SettingsPage {
                         #[name = "system_audio"]
                         adw::SwitchRow {
                             set_title: &tr!("Include system audio"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("audio-volume-high-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
                             set_subtitle: &tr!("Send whatever this computer is playing"),
                             connect_active_notify[sender] => move |row| {
                                 sender.input(SettingsMsg::SetSystemAudio(row.is_active()));
@@ -212,6 +219,7 @@ impl Component for SettingsPage {
                         #[name = "microphone"]
                         adw::SwitchRow {
                             set_title: &tr!("Include the microphone"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("audio-input-microphone-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
                             set_subtitle: &tr!("Mix your voice into what is sent"),
                             connect_active_notify[sender] => move |row| {
                                 sender.input(SettingsMsg::SetMicrophone(row.is_active()));
@@ -220,6 +228,7 @@ impl Component for SettingsPage {
 
                         adw::ActionRow {
                             set_title: &tr!("Microphone volume"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("audio-volume-low-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
                             #[watch]
                             set_sensitive: model.settings.microphone,
 
@@ -247,6 +256,7 @@ impl Component for SettingsPage {
                         #[name = "auto_discovery"]
                         adw::SwitchRow {
                             set_title: &tr!("Automatic discovery"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("network-wireless-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
                             set_subtitle: &tr!("Look for receivers as soon as the app starts"),
                             connect_active_notify[sender] => move |row| {
                                 sender.input(SettingsMsg::SetAutoDiscovery(row.is_active()));
@@ -256,6 +266,7 @@ impl Component for SettingsPage {
                         #[name = "device_name"]
                         adw::EntryRow {
                             set_title: &tr!("This computer's name"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("computer-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
                             connect_changed[sender] => move |row| {
                                 sender.input(SettingsMsg::SetDeviceName(row.text().to_string()));
                             } @device_name_handler,
@@ -263,6 +274,7 @@ impl Component for SettingsPage {
 
                         adw::ActionRow {
                             set_title: &tr!("Fixed port"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("network-wired-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
                             set_subtitle: &tr!(
                                 "0 lets the system choose. Set one only if you opened a \
                                  port on your firewall by hand."

@@ -1314,6 +1314,8 @@ dependencies = [
  "async-trait",
  "futures",
  "gettext-rs",
+ "gstreamer",
+ "gstreamer-video",
  "gtk4",
  "libadwaita",
  "nd-capture",

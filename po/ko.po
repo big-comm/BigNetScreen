@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-17 20:43-0300\n"
+"POT-Creation-Date: 2026-09-17 21:39-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Korean <ko@li.org>\n"
@@ -14,7 +14,7 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 "X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/pages/settings.rs:266
+#: crates/nd-gui/src/pages/settings.rs:278
 msgid ""
 "0 lets the system choose. Set one only if you opened a port on your firewall "
 "by hand."
@@ -22,35 +22,35 @@ msgstr ""
 "0이면 시스템이 선택합니다. 방화벽에서 포트를 직접 열어 놓은 경우에만 설정하세"
 "요."
 
-#: crates/nd-gui/src/pages/devices.rs:456
+#: crates/nd-gui/src/pages/devices.rs:472
 msgid "1 device found"
 msgstr "기기 1개 발견"
 
-#: crates/nd-gui/src/pages/settings.rs:177
+#: crates/nd-gui/src/pages/settings.rs:182
 msgid "24 FPS"
 msgstr "24 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:177
+#: crates/nd-gui/src/pages/settings.rs:182
 msgid "25 FPS"
 msgstr "25 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:177
+#: crates/nd-gui/src/pages/settings.rs:182
 msgid "30 FPS"
 msgstr "30 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:177
+#: crates/nd-gui/src/pages/settings.rs:182
 msgid "50 FPS"
 msgstr "50 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:177
+#: crates/nd-gui/src/pages/settings.rs:182
 msgid "60 FPS"
 msgstr "60 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:174
+#: crates/nd-gui/src/pages/settings.rs:179
 msgid "60 is smoother and costs about half as much again in bandwidth"
 msgstr "60이 더 부드럽지만 대역폭은 약 1.5배가 필요합니다"
 
-#: crates/nd-gui/src/pages/settings.rs:111
+#: crates/nd-gui/src/pages/settings.rs:115
 msgid ""
 "A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver "
 "will accept it."
@@ -58,75 +58,75 @@ msgstr ""
 "상한선: 더 작은 화면은 그대로 전송됩니다. 1080p를 초과하면 모든 수신기가 이"
 "를 수락하지 않을 수 있습니다."
 
-#: crates/nd-gui/src/pages/home.rs:472
+#: crates/nd-gui/src/pages/home.rs:536
 msgid "A new screen"
 msgstr "새 화면"
 
-#: crates/nd-gui/src/app.rs:953
+#: crates/nd-gui/src/app.rs:967
 msgid "A stream is already running"
 msgstr "이미 스트리밍이 실행 중입니다"
 
-#: crates/nd-gui/src/pages/home.rs:465
+#: crates/nd-gui/src/pages/home.rs:529
 msgid "A window"
 msgstr "창"
 
-#: crates/nd-gui/src/app.rs:290
+#: crates/nd-gui/src/app.rs:292
 msgid "About BigNetScreen"
 msgstr "BigNetScreen 정보"
 
-#: crates/nd-gui/src/pages/devices.rs:265
+#: crates/nd-gui/src/pages/devices.rs:266
 msgid "Address"
 msgstr "주소"
 
-#: crates/nd-gui/src/pages/mod.rs:151
+#: crates/nd-gui/src/pages/mod.rs:152
 msgid "AirPlay"
 msgstr "AirPlay"
 
-#: crates/nd-gui/src/pages/devices.rs:322
+#: crates/nd-gui/src/pages/devices.rs:338
 msgid "All protocols"
 msgstr "모든 프로토콜"
 
-#: crates/nd-gui/src/pages/home.rs:473
+#: crates/nd-gui/src/pages/home.rs:537
 msgid "An extra desktop, just for this"
 msgstr "이 작업만을 위한 추가 바탕 화면"
 
-#: crates/nd-gui/src/pages/settings.rs:159
+#: crates/nd-gui/src/pages/settings.rs:163
 msgid ""
 "Aspect ratio is preserved. Miracast uses a supported mode within these "
 "limits."
 msgstr ""
 "화면 비율이 유지됩니다. Miracast는 이 범위에서 지원되는 모드를 사용합니다."
 
-#: crates/nd-gui/src/pages/settings.rs:200
+#: crates/nd-gui/src/pages/settings.rs:206
 msgid "Audio"
 msgstr "오디오"
 
-#: crates/nd-gui/src/pages/settings.rs:95
+#: crates/nd-gui/src/pages/settings.rs:98
 msgid "Automatic"
 msgstr "자동"
 
-#: crates/nd-gui/src/pages/devices.rs:169
-#: crates/nd-gui/src/pages/settings.rs:249
+#: crates/nd-gui/src/pages/devices.rs:170
+#: crates/nd-gui/src/pages/settings.rs:258
 msgid "Automatic discovery"
 msgstr "자동 검색"
 
-#: crates/nd-gui/src/app.rs:416 crates/nd-gui/src/app.rs:902
+#: crates/nd-gui/src/app.rs:424 crates/nd-gui/src/app.rs:916
 msgid "Automatic discovery is off"
 msgstr "자동 검색이 꺼져 있습니다"
 
-#: crates/nd-gui/src/pages/mod.rs:128
+#: crates/nd-gui/src/pages/mod.rs:129
 msgid "Available"
 msgstr "사용 가능"
 
-#: crates/nd-gui/src/pages/home.rs:281
+#: crates/nd-gui/src/pages/home.rs:271
 msgid "Back"
 msgstr "뒤로"
 
-#: crates/nd-gui/src/pages/media.rs:507 crates/nd-gui/src/pages/media.rs:1209
+#: crates/nd-gui/src/pages/media.rs:458 crates/nd-gui/src/pages/media.rs:1215
 msgid "Back 10 seconds"
 msgstr "10초 뒤로"
 
-#: crates/nd-gui/src/pages/settings.rs:188
+#: crates/nd-gui/src/pages/settings.rs:194
 msgid ""
 "Buffers the picture so video plays smoothly, at the cost of delay. On "
 "Miracast it is applied here; on Chromecast it is a request the receiver may "
@@ -136,23 +136,27 @@ msgstr ""
 "Miracast에서는 여기에 적용되고, Chromecast에서는 수신기가 무시할 수 있는 요청"
 "입니다."
 
-#: crates/nd-gui/src/pages/media.rs:794
+#: crates/nd-gui/src/pages/home.rs:447
+msgid "Can't find your device?"
+msgstr "기기를 찾을 수 없나요?"
+
+#: crates/nd-gui/src/pages/media.rs:795
 msgid "Choose a device…"
 msgstr "기기 선택…"
 
-#: crates/nd-gui/src/pages/media.rs:1007
+#: crates/nd-gui/src/pages/media.rs:1008
 msgid "Choose a folder"
 msgstr "폴더 선택"
 
-#: crates/nd-gui/src/pages/media.rs:1009
+#: crates/nd-gui/src/pages/media.rs:1010
 msgid "Choose files"
 msgstr "파일 선택"
 
-#: crates/nd-gui/src/pages/home.rs:616
+#: crates/nd-gui/src/pages/home.rs:714
 msgid "Choose the device to send to."
 msgstr "보낼 기기를 선택하세요."
 
-#: crates/nd-gui/src/pages/home.rs:244
+#: crates/nd-gui/src/pages/home.rs:472
 msgid ""
 "Choose this computer in OBS or another NDI receiver. Uses the name and audio "
 "options in Settings."
@@ -160,23 +164,23 @@ msgstr ""
 "OBS 또는 다른 NDI 수신 장치나 소프트웨어에서 이 컴퓨터를 선택하세요. 설정에"
 "서 지정한 이름과 오디오 옵션이 적용됩니다."
 
-#: crates/nd-gui/src/pages/media.rs:819
+#: crates/nd-gui/src/pages/media.rs:820
 msgid "Choose which device to send to."
 msgstr "보낼 기기를 선택하세요."
 
-#: crates/nd-gui/src/pages/mod.rs:149
+#: crates/nd-gui/src/pages/mod.rs:150
 msgid "Chromecast"
 msgstr "Chromecast"
 
-#: crates/nd-gui/src/pages/devices.rs:323
+#: crates/nd-gui/src/pages/devices.rs:339
 msgid "Chromecast / AirPlay"
 msgstr "Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/settings.rs:97
+#: crates/nd-gui/src/pages/settings.rs:100
 msgid "Chromecast / AirPlay only"
 msgstr "Chromecast / AirPlay 전용"
 
-#: crates/nd-gui/src/pages/home.rs:677 crates/nd-gui/src/pages/home.rs:789
+#: crates/nd-gui/src/pages/home.rs:775 crates/nd-gui/src/pages/home.rs:902
 msgid ""
 "Chromecasts show up on their own. A TV or projector only appears while it is "
 "in screen mirroring mode — on Fire TV, under Settings › Display and Sounds › "
@@ -186,171 +190,187 @@ msgstr ""
 "만 표시됩니다. Fire TV에서는 설정 › 디스플레이 및 사운드 › 디스플레이 미러링"
 "에서 확인하세요."
 
-#: crates/nd-gui/src/pages/media.rs:392
+#: crates/nd-gui/src/pages/media.rs:342
 msgid "Clear queue"
 msgstr "재생 대기열 비우기"
 
-#: crates/nd-gui/src/pages/mod.rs:125
+#: crates/nd-gui/src/pages/home.rs:427
+msgid "Connect to the same network"
+msgstr "같은 네트워크에 연결하세요"
+
+#: crates/nd-gui/src/pages/mod.rs:126
 msgid "Connected"
 msgstr "연결됨"
 
-#: crates/nd-gui/src/app.rs:255
+#: crates/nd-gui/src/app.rs:257
 msgid "Connected to"
 msgstr "연결됨"
 
-#: crates/nd-gui/src/app.rs:975 crates/nd-gui/src/pages/mod.rs:170
+#: crates/nd-gui/src/app.rs:989 crates/nd-gui/src/pages/mod.rs:171
 msgid "Connecting…"
 msgstr "연결 중…"
 
-#: crates/nd-gui/src/pages/home.rs:387
+#: crates/nd-gui/src/pages/home.rs:378
 msgid "Connection"
 msgstr "연결"
 
-#: crates/nd-gui/src/pages/home.rs:385
+#: crates/nd-gui/src/pages/home.rs:376
 msgid "Connection quality"
 msgstr "연결 품질"
 
-#: crates/nd-gui/src/pages/settings.rs:126
+#: crates/nd-gui/src/pages/settings.rs:130
 msgid "Custom resolution"
 msgstr "사용자 지정 해상도"
 
-#: crates/nd-gui/src/pages/mod.rs:47 crates/nd-gui/src/pages/devices.rs:103
+#: crates/nd-gui/src/pages/mod.rs:48 crates/nd-gui/src/pages/devices.rs:105
 msgid "Devices"
 msgstr "기기"
 
-#: crates/nd-gui/src/pages/home.rs:364 crates/nd-gui/src/pages/devices.rs:235
+#: crates/nd-gui/src/pages/home.rs:355 crates/nd-gui/src/pages/devices.rs:236
 msgid "Disconnect"
 msgstr "연결 끊기"
 
-#: crates/nd-gui/src/pages/settings.rs:244
+#: crates/nd-gui/src/pages/settings.rs:253
 msgid "Discovery and devices"
 msgstr "기기 검색 및 설정"
 
-#: crates/nd-gui/src/pages/mod.rs:129 crates/nd-gui/src/pages/mod.rs:301
-#: crates/nd-gui/src/pages/devices.rs:443
+#: crates/nd-gui/src/pages/mod.rs:130 crates/nd-gui/src/pages/mod.rs:302
+#: crates/nd-gui/src/pages/devices.rs:459
 msgid "Discovery only"
 msgstr "검색 전용"
 
-#: crates/nd-gui/src/pages/home.rs:459
+#: crates/nd-gui/src/pages/home.rs:438
+msgid "Enable screen mirroring on your TV or projector before connecting."
+msgstr "연결하기 전에 TV 또는 프로젝터에서 화면 미러링을 켜세요."
+
+#: crates/nd-gui/src/pages/home.rs:523
 msgid "Everything on your screen"
 msgstr "화면의 모든 내용"
 
-#: crates/nd-gui/src/pages/mod.rs:225
+#: crates/nd-gui/src/pages/mod.rs:226
 msgid "Excellent"
 msgstr "우수"
 
-#: crates/nd-gui/src/pages/home.rs:258
+#: crates/nd-gui/src/pages/home.rs:488
 msgid "Extra screen"
 msgstr "추가 화면"
 
-#: crates/nd-gui/src/pages/mod.rs:126 crates/nd-gui/src/pages/mod.rs:175
+#: crates/nd-gui/src/pages/mod.rs:127 crates/nd-gui/src/pages/mod.rs:176
 msgid "Failed"
 msgstr "실패"
 
-#: crates/nd-gui/src/pages/settings.rs:187
+#: crates/nd-gui/src/pages/settings.rs:192
 msgid "Film mode"
 msgstr "영화 모드"
 
-#: crates/nd-gui/src/pages/devices.rs:108
+#: crates/nd-gui/src/pages/devices.rs:106
 msgid "Find and connect to nearby wireless receivers."
 msgstr "주변 무선 수신 기기를 찾아 연결하세요."
 
-#: crates/nd-gui/src/pages/media.rs:874
+#: crates/nd-gui/src/pages/media.rs:875
 msgid "Finished"
 msgstr "완료"
 
-#: crates/nd-gui/src/pages/settings.rs:265
+#: crates/nd-gui/src/pages/settings.rs:276
 msgid "Fixed port"
 msgstr "고정 포트"
 
-#: crates/nd-gui/src/pages/media.rs:523 crates/nd-gui/src/pages/media.rs:1210
+#: crates/nd-gui/src/pages/home.rs:428
+msgid "For Chromecast, connect both devices to the same Wi-Fi network."
+msgstr "Chromecast를 사용하려면 두 기기를 같은 Wi-Fi 네트워크에 연결하세요."
+
+#: crates/nd-gui/src/pages/media.rs:474 crates/nd-gui/src/pages/media.rs:1216
 msgid "Forward 10 seconds"
 msgstr "10초 앞으로"
 
-#: crates/nd-gui/src/pages/settings.rs:173
+#: crates/nd-gui/src/pages/settings.rs:177
 msgid "Frame rate"
 msgstr "프레임 속도"
 
-#: crates/nd-gui/src/pages/mod.rs:226
+#: crates/nd-gui/src/pages/mod.rs:227
 msgid "Good"
 msgstr "좋음"
 
-#: crates/nd-gui/src/app.rs:346
+#: crates/nd-gui/src/app.rs:354
 msgid "Got it"
 msgstr "알겠습니다"
 
-#: crates/nd-gui/src/pages/settings.rs:158
+#: crates/nd-gui/src/pages/settings.rs:162
 msgid "Height (pixels)"
 msgstr "높이(픽셀)"
 
-#: crates/nd-gui/src/pages/settings.rs:118
+#: crates/nd-gui/src/pages/settings.rs:122
 msgid "High (1080p)"
 msgstr "높음(1080p)"
 
-#: crates/nd-gui/src/pages/mod.rs:46
+#: crates/nd-gui/src/pages/mod.rs:47
 msgid "Home"
 msgstr "홈"
 
-#: crates/nd-gui/src/pages/settings.rs:205
+#: crates/nd-gui/src/pages/settings.rs:211
 msgid "Include system audio"
 msgstr "시스템 오디오 포함"
 
-#: crates/nd-gui/src/pages/settings.rs:214
+#: crates/nd-gui/src/pages/settings.rs:221
 msgid "Include the microphone"
 msgstr "마이크 포함"
 
-#: crates/nd-gui/src/pages/home.rs:683
+#: crates/nd-gui/src/pages/home.rs:417 crates/nd-gui/src/pages/home.rs:781
 msgid "Keep every device on the same Wi-Fi network for the best results."
 msgstr "최상의 결과를 얻으려면 모든 장치를 동일한 Wi-Fi 네트워크에 유지하세요."
 
-#: crates/nd-gui/src/app.rs:1173
+#: crates/nd-gui/src/pages/home.rs:437
+msgid "Keep the receiver ready"
+msgstr "수신기를 준비해 두세요"
+
+#: crates/nd-gui/src/app.rs:1187
 msgid "Local network discovery unavailable"
 msgstr "로컬 네트워크 검색을 사용할 수 없음"
 
-#: crates/nd-gui/src/pages/settings.rs:250
+#: crates/nd-gui/src/pages/settings.rs:260
 msgid "Look for receivers as soon as the app starts"
 msgstr "앱 시작 시 수신기 자동 검색"
 
-#: crates/nd-gui/src/pages/home.rs:776
+#: crates/nd-gui/src/pages/home.rs:889
 msgid "Looking for receivers…"
 msgstr "수신기를 찾는 중…"
 
-#: crates/nd-gui/src/pages/settings.rs:120
+#: crates/nd-gui/src/pages/settings.rs:124
 msgid "Low (480p)"
 msgstr "낮음(480p)"
 
-#: crates/nd-gui/src/pages/settings.rs:116
+#: crates/nd-gui/src/pages/settings.rs:120
 msgid "Maximum (2160p)"
 msgstr "최대 (2160p)"
 
-#: crates/nd-gui/src/pages/mod.rs:222
+#: crates/nd-gui/src/pages/mod.rs:223
 msgid "Measuring…"
 msgstr "측정 중…"
 
-#: crates/nd-gui/src/pages/mod.rs:48
+#: crates/nd-gui/src/pages/mod.rs:49
 msgid "Media"
 msgstr "미디어"
 
-#: crates/nd-gui/src/pages/settings.rs:119
+#: crates/nd-gui/src/pages/settings.rs:123
 msgid "Medium (720p)"
 msgstr "중간(720p)"
 
-#: crates/nd-gui/src/pages/settings.rs:222
+#: crates/nd-gui/src/pages/settings.rs:230
 msgid "Microphone volume"
 msgstr "마이크 음량"
 
-#: crates/nd-gui/src/pages/mod.rs:152 crates/nd-gui/src/pages/devices.rs:324
+#: crates/nd-gui/src/pages/mod.rs:153 crates/nd-gui/src/pages/devices.rs:340
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1232
+#: crates/nd-gui/src/app.rs:1246
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
 msgstr ""
 "Miracast는 Flatpak 빌드에서 작동하지 않습니다(시스템 NetworkManager가 필요함)"
 
-#: crates/nd-gui/src/app.rs:1240
+#: crates/nd-gui/src/app.rs:1254
 msgid ""
 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
 "network still works."
@@ -358,228 +378,236 @@ msgstr ""
 "Miracast에는 Wi-Fi 어댑터가 필요하지만 이 컴퓨터에는 어댑터가 없습니다. 네트"
 "워크를 통한 캐스팅은 계속 작동합니다."
 
-#: crates/nd-gui/src/pages/settings.rs:96
+#: crates/nd-gui/src/pages/settings.rs:99
 msgid "Miracast only"
 msgstr "Miracast만"
 
-#: crates/nd-gui/src/app.rs:1248
+#: crates/nd-gui/src/app.rs:1262
 msgid "Miracast unavailable"
 msgstr "Miracast를 사용할 수 없음"
 
-#: crates/nd-gui/src/app.rs:1246
+#: crates/nd-gui/src/app.rs:1260
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr ""
 "Miracast를 사용할 수 없음: 이 Wi-Fi 카드는 Wi-Fi Direct를 지원하지 않습니다"
 
-#: crates/nd-gui/src/pages/devices.rs:224
+#: crates/nd-gui/src/pages/devices.rs:225
 msgid "Mirror screen"
 msgstr "화면 미러링"
 
-#: crates/nd-gui/src/pages/settings.rs:215
+#: crates/nd-gui/src/pages/settings.rs:223
 msgid "Mix your voice into what is sent"
 msgstr "보내는 내용에 내 목소리 섞기"
 
-#: crates/nd-gui/src/pages/media.rs:576
+#: crates/nd-gui/src/pages/media.rs:544
 msgid "Music"
 msgstr "음악"
 
-#: crates/nd-gui/src/app.rs:1264
+#: crates/nd-gui/src/app.rs:1278
 msgid "NDI setup"
 msgstr "NDI 설정"
 
-#: crates/nd-gui/src/app.rs:510
+#: crates/nd-gui/src/app.rs:524
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI를 사용할 수 없습니다. NDI 설정 가이드를 참조하세요."
 
-#: crates/nd-gui/src/pages/media.rs:530 crates/nd-gui/src/pages/media.rs:1211
+#: crates/nd-gui/src/pages/media.rs:481 crates/nd-gui/src/pages/media.rs:1217
 msgid "Next file"
 msgstr "다음 파일"
 
-#: crates/nd-gui/src/pages/media.rs:816
+#: crates/nd-gui/src/pages/media.rs:817
 msgid "No device found yet. Turn your TV, projector or Chromecast on."
 msgstr "아직 기기를 찾지 못했습니다. TV, 프로젝터 또는 Chromecast를 켜세요."
 
-#: crates/nd-gui/src/pages/devices.rs:455
+#: crates/nd-gui/src/pages/devices.rs:471
 msgid "No devices found"
 msgstr "기기를 찾을 수 없음"
 
-#: crates/nd-gui/src/pages/media.rs:847
+#: crates/nd-gui/src/pages/media.rs:848
 msgid "No music in your Music folder. Use “Select files”."
 msgstr "음악 폴더에 음악이 없습니다. “파일 선택”을 사용하세요."
 
-#: crates/nd-gui/src/pages/media.rs:845
+#: crates/nd-gui/src/pages/media.rs:846
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "사진 폴더에 사진이 없습니다. “파일 선택”을 사용하세요."
 
-#: crates/nd-gui/src/app.rs:910 crates/nd-gui/src/pages/home.rs:785
+#: crates/nd-gui/src/app.rs:924 crates/nd-gui/src/pages/home.rs:898
 msgid "No receivers found"
 msgstr "수신기를 찾을 수 없음"
 
-#: crates/nd-gui/src/pages/media.rs:846
+#: crates/nd-gui/src/pages/media.rs:847
 msgid "No videos in your Videos folder. Use “Select files”."
 msgstr "동영상 폴더에 동영상이 없습니다. “파일 선택”을 사용하세요."
 
-#: crates/nd-gui/src/pages/media.rs:853
+#: crates/nd-gui/src/pages/media.rs:854
 msgid "Nothing selected"
 msgstr "선택된 항목 없음"
 
-#: crates/nd-gui/src/pages/media.rs:493
+#: crates/nd-gui/src/pages/media.rs:444
 msgid "Now playing"
 msgstr "지금 재생 중"
 
-#: crates/nd-gui/src/pages/home.rs:466
+#: crates/nd-gui/src/pages/home.rs:530
 msgid "One window only"
 msgstr "창 하나만"
 
-#: crates/nd-gui/src/pages/mod.rs:171
+#: crates/nd-gui/src/pages/mod.rs:172
 msgid "Opening the firewall port…"
 msgstr "방화벽 포트를 여는 중…"
 
-#: crates/nd-gui/src/pages/media.rs:516
+#: crates/nd-gui/src/pages/media.rs:467
 msgid "Pause"
 msgstr "일시 정지"
 
-#: crates/nd-gui/src/pages/media.rs:576
+#: crates/nd-gui/src/pages/media.rs:544
 msgid "Photos"
 msgstr "사진"
 
-#: crates/nd-gui/src/pages/home.rs:480
+#: crates/nd-gui/src/pages/home.rs:544
 msgid "Photos, videos and music"
 msgstr "사진, 동영상 및 음악"
 
-#: crates/nd-gui/src/pages/media.rs:310
+#: crates/nd-gui/src/pages/media.rs:257
 msgid "Pick files and choose where to play them."
 msgstr "파일을 선택하고 재생할 위치를 지정하세요."
 
-#: crates/nd-gui/src/pages/settings.rs:92
+#: crates/nd-gui/src/pages/settings.rs:94
 msgid "Preferred protocol"
 msgstr "선호 프로토콜"
 
-#: crates/nd-gui/src/pages/mod.rs:173
+#: crates/nd-gui/src/pages/mod.rs:174
 msgid "Preparing the video…"
 msgstr "비디오를 준비하는 중…"
 
-#: crates/nd-gui/src/pages/devices.rs:260
+#: crates/nd-gui/src/pages/devices.rs:261
 msgid "Protocol"
 msgstr "프로토콜"
 
-#: crates/nd-gui/src/pages/home.rs:243
+#: crates/nd-gui/src/pages/home.rs:471
 msgid "Publish with NDI"
 msgstr "NDI로 송출"
 
-#: crates/nd-gui/src/pages/media.rs:386
+#: crates/nd-gui/src/pages/media.rs:336
 msgid "Queue"
 msgstr "재생 대기열"
 
-#: crates/nd-gui/src/pages/devices.rs:442
+#: crates/nd-gui/src/pages/devices.rs:458
 msgid "Ready"
 msgstr "준비됨"
 
-#: crates/nd-gui/src/pages/home.rs:609
+#: crates/nd-gui/src/pages/home.rs:707
 msgid "Ready to share"
 msgstr "공유 준비 완료"
 
-#: crates/nd-gui/src/pages/devices.rs:121
+#: crates/nd-gui/src/pages/home.rs:243
+msgid "Receivers found"
+msgstr "수신기를 찾았습니다"
+
+#: crates/nd-gui/src/pages/devices.rs:120
 msgid "Refresh"
 msgstr "새로 고침"
 
-#: crates/nd-gui/src/pages/media.rs:775
+#: crates/nd-gui/src/pages/home.rs:448
+msgid "Refresh the device list and check that your receiver is turned on."
+msgstr "기기 목록을 새로고침하고 수신기가 켜져 있는지 확인하세요."
+
+#: crates/nd-gui/src/pages/media.rs:776
 msgid "Remove from queue"
 msgstr "재생 대기열에서 제거"
 
-#: crates/nd-gui/src/pages/settings.rs:110
+#: crates/nd-gui/src/pages/settings.rs:113
 msgid "Resolution limit"
 msgstr "해상도 상한"
 
-#: crates/nd-gui/src/pages/settings.rs:312
+#: crates/nd-gui/src/pages/settings.rs:324
 msgid "Restore defaults"
 msgstr "기본값 복원"
 
-#: crates/nd-gui/src/pages/media.rs:516 crates/nd-gui/src/pages/media.rs:1208
+#: crates/nd-gui/src/pages/media.rs:467 crates/nd-gui/src/pages/media.rs:1214
 msgid "Resume"
 msgstr "재생 재개"
 
-#: crates/nd-gui/src/pages/settings.rs:295
+#: crates/nd-gui/src/pages/settings.rs:307
 msgid "Saved as you change them"
 msgstr "변경 시 자동 저장됨"
 
-#: crates/nd-gui/src/app.rs:321 crates/nd-gui/src/pages/devices.rs:116
+#: crates/nd-gui/src/app.rs:329 crates/nd-gui/src/pages/devices.rs:115
 msgid "Scan again"
 msgstr "다시 스캔"
 
-#: crates/nd-gui/src/pages/home.rs:250
+#: crates/nd-gui/src/pages/home.rs:480
 msgid "Screen"
 msgstr "화면"
 
-#: crates/nd-gui/src/app.rs:414 crates/nd-gui/src/app.rs:530
-#: crates/nd-gui/src/app.rs:908
+#: crates/nd-gui/src/app.rs:422 crates/nd-gui/src/app.rs:544
+#: crates/nd-gui/src/app.rs:922
 msgid "Searching…"
 msgstr "검색 중…"
 
-#: crates/nd-gui/src/pages/media.rs:338
+#: crates/nd-gui/src/pages/media.rs:285
 msgid "Select files"
 msgstr "파일 선택"
 
-#: crates/nd-gui/src/pages/media.rs:942
+#: crates/nd-gui/src/pages/media.rs:943
 msgid "Select up to 1000 files at a time."
 msgstr "한 번에 최대 1000개 파일을 선택할 수 있습니다."
 
-#: crates/nd-gui/src/pages/media.rs:347
+#: crates/nd-gui/src/pages/media.rs:294
 msgid "Send a folder"
 msgstr "폴더 전송"
 
-#: crates/nd-gui/src/pages/home.rs:479 crates/nd-gui/src/pages/devices.rs:249
+#: crates/nd-gui/src/pages/home.rs:543 crates/nd-gui/src/pages/devices.rs:250
 msgid "Send media"
 msgstr "미디어 전송"
 
-#: crates/nd-gui/src/pages/media.rs:440
+#: crates/nd-gui/src/pages/media.rs:391
 msgid "Send to"
 msgstr "보내기 대상"
 
-#: crates/nd-gui/src/pages/media.rs:465
+#: crates/nd-gui/src/pages/media.rs:416
 msgid "Send to device"
 msgstr "기기로 보내기"
 
-#: crates/nd-gui/src/pages/settings.rs:206
+#: crates/nd-gui/src/pages/settings.rs:213
 msgid "Send whatever this computer is playing"
 msgstr "이 컴퓨터에서 재생 중인 콘텐츠 전송"
 
-#: crates/nd-gui/src/app.rs:1022
+#: crates/nd-gui/src/app.rs:1036
 msgid "Sending files…"
 msgstr "파일 전송 중…"
 
-#: crates/nd-gui/src/pages/mod.rs:49 crates/nd-gui/src/pages/settings.rs:75
+#: crates/nd-gui/src/pages/mod.rs:50 crates/nd-gui/src/pages/settings.rs:83
 msgid "Settings"
 msgstr "설정"
 
-#: crates/nd-gui/src/pages/settings.rs:498
+#: crates/nd-gui/src/pages/settings.rs:510
 msgid "Settings cannot be saved on this system."
 msgstr "이 시스템에서는 설정을 저장할 수 없습니다."
 
-#: crates/nd-gui/src/pages/media.rs:305
+#: crates/nd-gui/src/pages/media.rs:256
 msgid "Share media"
 msgstr "미디어 공유"
 
-#: crates/nd-gui/src/app.rs:221
+#: crates/nd-gui/src/app.rs:223
 msgid "Share your screen wirelessly"
 msgstr "화면을 무선으로 공유하세요"
 
-#: crates/nd-gui/src/app.rs:1261
+#: crates/nd-gui/src/app.rs:1275
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "TV, 프로젝터 또는 Chromecast로 화면을 공유하세요."
 
-#: crates/nd-gui/src/pages/home.rs:306
+#: crates/nd-gui/src/pages/home.rs:296
 msgid ""
 "Sharing a window opens your desktop’s own picker. Only visible windows can "
 "be shared."
 msgstr ""
 "창 공유는 바탕 화면의 자체 선택기를 엽니다. 표시되는 창만 공유할 수 있습니다."
 
-#: crates/nd-gui/src/app.rs:311
+#: crates/nd-gui/src/app.rs:319
 msgid "Show the sidebar"
 msgstr "사이드바 표시"
 
-#: crates/nd-gui/src/pages/home.rs:671
+#: crates/nd-gui/src/pages/home.rs:769
 msgid ""
 "Sound goes to the receiver and to this computer. Mute this computer if you "
 "hear an echo."
@@ -587,136 +615,136 @@ msgstr ""
 "소리는 수신 기기와 이 컴퓨터로 나갑니다. 메아리가 들리면 이 컴퓨터를 음소거하"
 "세요."
 
-#: crates/nd-gui/src/pages/devices.rs:276
+#: crates/nd-gui/src/pages/devices.rs:277
 msgid "Status"
 msgstr "상태"
 
-#: crates/nd-gui/src/app.rs:328
+#: crates/nd-gui/src/app.rs:336
 msgid "Stop"
 msgstr "중지"
 
-#: crates/nd-gui/src/pages/media.rs:538
+#: crates/nd-gui/src/pages/media.rs:489
 msgid "Stop sending"
 msgstr "전송 중지"
 
-#: crates/nd-gui/src/app.rs:1016
+#: crates/nd-gui/src/app.rs:1030
 msgid "Stop sharing your screen before sending files"
 msgstr "파일을 보내기 전에 화면 공유를 중지하세요"
 
-#: crates/nd-gui/src/app.rs:942
+#: crates/nd-gui/src/app.rs:956
 msgid "Stopping…"
 msgstr "중지 중…"
 
-#: crates/nd-gui/src/pages/mod.rs:174 crates/nd-gui/src/pages/settings.rs:87
+#: crates/nd-gui/src/pages/mod.rs:175 crates/nd-gui/src/pages/settings.rs:89
 msgid "Streaming"
 msgstr "스트리밍 중"
 
-#: crates/nd-gui/src/pages/devices.rs:281
+#: crates/nd-gui/src/pages/devices.rs:282
 msgid "Streaming at"
 msgstr "스트리밍 중"
 
-#: crates/nd-gui/src/pages/mod.rs:153
+#: crates/nd-gui/src/pages/mod.rs:154
 msgid "Test"
 msgstr "테스트"
 
-#: crates/nd-gui/src/app.rs:961 crates/nd-gui/src/app.rs:1009
-#: crates/nd-gui/src/app.rs:1026
+#: crates/nd-gui/src/app.rs:975 crates/nd-gui/src/app.rs:1023
+#: crates/nd-gui/src/app.rs:1040
 msgid "That device is no longer available"
 msgstr "해당 기기를 더 이상 사용할 수 없습니다"
 
-#: crates/nd-gui/src/pages/mod.rs:228
+#: crates/nd-gui/src/pages/mod.rs:229
 msgid "The receiver is not answering"
 msgstr "수신 기기가 응답하지 않습니다"
 
-#: crates/nd-gui/src/pages/settings.rs:80
+#: crates/nd-gui/src/pages/settings.rs:84
 msgid "These apply to your next session."
 msgstr "다음 세션에 적용됩니다."
 
-#: crates/nd-gui/src/pages/settings.rs:258
+#: crates/nd-gui/src/pages/settings.rs:268
 msgid "This computer's name"
 msgstr "이 컴퓨터의 이름"
 
-#: crates/nd-gui/src/pages/home.rs:555
+#: crates/nd-gui/src/pages/home.rs:653
 msgid ""
 "This desktop cannot create an extra screen (it needs GNOME running natively)"
 msgstr ""
 "이 데스크톱에서는 추가 화면을 만들 수 없습니다(GNOME이 기본으로 실행되어야 "
 "함)"
 
-#: crates/nd-gui/src/pages/home.rs:419
+#: crates/nd-gui/src/pages/home.rs:416
 msgid "Tips"
 msgstr "팁"
 
-#: crates/nd-gui/src/pages/settings.rs:117
+#: crates/nd-gui/src/pages/settings.rs:121
 msgid "Very high (1440p)"
 msgstr "매우 높음 (1440p)"
 
-#: crates/nd-gui/src/pages/media.rs:576
+#: crates/nd-gui/src/pages/media.rs:544
 msgid "Videos"
 msgstr "비디오"
 
-#: crates/nd-gui/src/pages/mod.rs:172
+#: crates/nd-gui/src/pages/mod.rs:173
 msgid "Waiting for the receiver…"
 msgstr "수신기를 기다리는 중…"
 
-#: crates/nd-gui/src/pages/mod.rs:227
+#: crates/nd-gui/src/pages/mod.rs:228
 msgid "Weak signal"
 msgstr "약한 신호"
 
-#: crates/nd-gui/src/pages/home.rs:610
+#: crates/nd-gui/src/pages/home.rs:708
 msgid "What do you want to share?"
 msgstr "무엇을 공유하시겠습니까?"
 
-#: crates/nd-gui/src/pages/settings.rs:93
+#: crates/nd-gui/src/pages/settings.rs:96
 msgid "Which kind of receiver to look for"
 msgstr "어떤 종류의 수신기를 찾을지"
 
-#: crates/nd-gui/src/pages/home.rs:458
+#: crates/nd-gui/src/pages/home.rs:522
 msgid "Whole screen"
 msgstr "전체 화면"
 
-#: crates/nd-gui/src/pages/settings.rs:146
+#: crates/nd-gui/src/pages/settings.rs:150
 msgid "Width (pixels)"
 msgstr "너비(픽셀)"
 
-#: crates/nd-gui/src/pages/home.rs:254
+#: crates/nd-gui/src/pages/home.rs:484
 msgid "Window"
 msgstr "창"
 
-#: crates/nd-gui/src/pages/devices.rs:457
+#: crates/nd-gui/src/pages/devices.rs:473
 msgid "devices found"
 msgstr "개의 기기 발견"
 
-#: crates/nd-gui/src/pages/mod.rs:186
+#: crates/nd-gui/src/pages/mod.rs:187
 msgid "instant response"
 msgstr "즉시 응답"
 
-#: crates/nd-gui/src/pages/media.rs:887
+#: crates/nd-gui/src/pages/media.rs:888
 msgid "item"
 msgstr "항목"
 
-#: crates/nd-gui/src/pages/mod.rs:231
+#: crates/nd-gui/src/pages/mod.rs:232
 msgid "ms round trip"
 msgstr "ms 왕복"
 
-#: crates/nd-gui/src/pages/devices.rs:269
+#: crates/nd-gui/src/pages/devices.rs:270
 msgid "not published yet"
 msgstr "아직 게시되지 않음"
 
-#: crates/nd-gui/src/pages/mod.rs:187
+#: crates/nd-gui/src/pages/mod.rs:188
 msgid "quick response"
 msgstr "빠른 응답"
 
-#: crates/nd-gui/src/app.rs:969
+#: crates/nd-gui/src/app.rs:983
 msgid "shows up in discovery only"
 msgstr "검색 전용으로 표시됨"
 
-#: crates/nd-gui/src/pages/media.rs:854
+#: crates/nd-gui/src/pages/media.rs:855
 msgid "{} file selected"
 msgid_plural "{} files selected"
 msgstr[0] "{}개 파일 선택됨"
 
-#: crates/nd-gui/src/app.rs:913
+#: crates/nd-gui/src/app.rs:927
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "수신기 {}개를 찾았습니다"
