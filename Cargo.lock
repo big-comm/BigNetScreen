@@ -730,8 +730,6 @@ dependencies = [
 [[package]]
 name = "gst-plugin-ndi"
 version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51186fe8502df0a1c0a5c9320235a55a33eb78ae389bceddc6a71b8fc12450f5"
 dependencies = [
  "anyhow",
  "byte-slice-cast",
@@ -1340,6 +1338,7 @@ dependencies = [
  "gstreamer",
  "nd-core",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -380,6 +380,7 @@ pub async fn run_with_video(
         height: cfg.height,
         fps: cfg.fps,
         endpoint: Some(std::net::SocketAddr::new(receiver_ip, receiver_port)),
+        receivers: None,
     });
 
     let desc = pipeline::chromecast_pipeline_description(&cfg, &video);

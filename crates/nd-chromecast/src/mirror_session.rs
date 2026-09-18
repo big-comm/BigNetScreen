@@ -519,6 +519,7 @@ pub async fn run(
             height: cfg.height,
             fps: cfg.fps,
             endpoint: Some(std::net::SocketAddr::new(receiver_ip, receiver_port)),
+            receivers: None,
         });
         let result = {
             let streaming = stream(&cfg, &video, &session, status, &mut cancel);

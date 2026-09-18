@@ -35,6 +35,9 @@ finish-args:
   - --socket=pulseaudio
   # Screen capture through the ScreenCast portal (no --talk-name for Mutter).
   - --talk-name=org.freedesktop.portal.Desktop
+  # NDI announces and discovers sources through Avahi on the system bus; without
+  # this a published stream is invisible to every receiver on the network.
+  - --system-talk-name=org.freedesktop.Avahi
   # PipeWire: the portal hands over the fd, but the remote is still opened here.
   - --filesystem=xdg-run/pipewire-0:ro
 

@@ -9,7 +9,10 @@ rust-version.workspace = true
 [dependencies]
 nd-core.workspace = true
 gstreamer.workspace = true
-gst-plugin-ndi = { version = "0.15.3", features = ["static"] }
+# Local copy with the connection-count and runtime-info additions (see
+# vendor/gst-plugin-ndi/PATCHES.md).
+gst-plugin-ndi = { path = "../../vendor/gst-plugin-ndi", features = ["static"] }
 async-trait.workspace = true
+tracing.workspace = true
 futures.workspace = true
 tokio.workspace = true

@@ -942,7 +942,7 @@ impl AppModel {
             // when it settles it. Empty until then: printing the preference
             // instead would show "1920 × 1080" for a link that came out at
             // 1280 × 720.
-            mode: link.map(|l| l.describe()).unwrap_or_default(),
+            mode: link.map(crate::pages::describe_link).unwrap_or_default(),
             state: sink.state(),
             measurable: link.and_then(|l| l.endpoint).is_some(),
             quality: self.measured.map(nd_net::probe::Quality::of),
@@ -1103,18 +1103,34 @@ impl AppModel {
         let source_type = self.source_type;
         sender.oneshot_command(async move {
             if id == nd_ndi::ID {
-                let ready = tokio::select! {
-                    result = tokio::task::spawn_blocking(nd_ndi::runtime_available) => result.unwrap_or(false),
+                let check = tokio::select! {
+                    result = tokio::task::spawn_blocking(nd_ndi::runtime_check) => result.ok(),
                     _ = cancelled.changed() => return AppCmd::CastFinished {
                         id, error: None, ndi_runtime_unavailable: false,
                     },
                 };
-                if !*cancelled.borrow() && !ready {
-                    return AppCmd::CastFinished {
-                        id,
-                        error: Some(tr!("NDI runtime required")),
-                        ndi_runtime_unavailable: true,
-                    };
+                if !*cancelled.borrow() {
+                    match check {
+                        Some(nd_ndi::RuntimeCheck::Ready { .. }) => {}
+                        Some(nd_ndi::RuntimeCheck::CpuUnsupported { .. }) => {
+                            // Installing it again would change nothing, so
+                            // this is a plain error rather than the offer.
+                            return AppCmd::CastFinished {
+                                id,
+                                error: Some(tr!(
+                                    "The NDI runtime is installed but does not support this processor."
+                                )),
+                                ndi_runtime_unavailable: false,
+                            };
+                        }
+                        Some(nd_ndi::RuntimeCheck::Missing) | None => {
+                            return AppCmd::CastFinished {
+                                id,
+                                error: Some(tr!("NDI runtime required")),
+                                ndi_runtime_unavailable: true,
+                            };
+                        }
+                    }
                 }
             }
             let error = run_cast(sink, source_type, cancelled).await.err();

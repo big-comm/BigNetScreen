@@ -1,0 +1,109 @@
+# Local copy of gst-plugin-ndi 0.15.3 (MPL-2.0) from gst-plugins-rs, with the
+# additions listed in PATCHES.md. Keep this file in sync with upstream when
+# updating; the patches are meant to be proposed upstream.
+[package]
+edition = "2024"
+rust-version = "1.92"
+name = "gst-plugin-ndi"
+version = "0.15.3"
+authors = [
+    "Ruben Gonzalez <rubenrua@teltek.es>",
+    "Daniel Vilar <daniel.peiteado@teltek.es>",
+    "Sebastian Dröge <sebastian@centricular.com>",
+]
+build = "build.rs"
+autolib = false
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+description = "GStreamer NewTek NDI Plugin (BigNetScreen local copy with connection-count and runtime-info additions)"
+license = "MPL-2.0"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+
+[package.metadata.capi]
+min_version = "0.9.21"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+import_library = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-audio-1.0, gstreamer-video-1.0, gobject-2.0, glib-2.0, gmodule-2.0"
+
+[package.metadata.gstreamer]
+release_date = "2026-06-30"
+
+[features]
+advanced-sdk = []
+capi = []
+default = ["sink"]
+doc = ["gst/v1_18"]
+sink = [
+    "gst/v1_18",
+    "gst-base/v1_18",
+]
+static = []
+
+[lib]
+name = "gstndi"
+crate-type = [
+    "cdylib",
+    "rlib",
+]
+path = "src/lib.rs"
+
+[dependencies.anyhow]
+version = "1.0"
+
+[dependencies.byte-slice-cast]
+version = "1"
+
+[dependencies.byteorder]
+version = "1.0"
+
+[dependencies.data-encoding]
+version = "2.4.0"
+
+[dependencies.glib]
+version = "0.22.0"
+
+[dependencies.gst]
+version = "0.25.0"
+features = ["v1_16"]
+package = "gstreamer"
+
+[dependencies.gst-audio]
+version = "0.25.0"
+features = ["v1_16"]
+package = "gstreamer-audio"
+
+[dependencies.gst-base]
+version = "0.25.0"
+features = ["v1_16"]
+package = "gstreamer-base"
+
+[dependencies.gst-video]
+version = "0.25.0"
+features = ["v1_16"]
+package = "gstreamer-video"
+
+[dependencies.libloading]
+version = "0.9"
+
+[dependencies.quick-xml]
+version = "0.40"
+
+[dependencies.smallvec]
+version = "1.11"
+features = ["const_generics"]
+
+[dependencies.thiserror]
+version = "2"
+
+[build-dependencies.gst-plugin-version-helper]
+version = "0.8"

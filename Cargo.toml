@@ -11,6 +11,9 @@ members = [
     "crates/nd-gui",
     "crates/nd-ndi",
 ]
+# A dependency, not a member: it keeps upstream's own lint and format
+# settings, and `--workspace` commands must not touch it.
+exclude = ["vendor/gst-plugin-ndi"]
 
 [workspace.package]
 version = "0.1.0"

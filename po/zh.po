@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bignetscreen 0.1.0\n"
 "Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\n"
-"POT-Creation-Date: 2026-09-18 14:58-0300\n"
+"POT-Creation-Date: 2026-09-18 15:29-0300\n"
 "PO-Revision-Date: 2026-09-17 00:44-0300\n"
 "Last-Translator: Translation Automator <auto@translator.ai>\n"
 "Language-Team: Chinese <zh@li.org>\n"
@@ -70,7 +70,7 @@ msgstr "关于 BigNetScreen"
 msgid "Address"
 msgstr "地址"
 
-#: crates/nd-gui/src/pages/mod.rs:152
+#: crates/nd-gui/src/pages/mod.rs:168
 msgid "AirPlay"
 msgstr "AirPlay"
 
@@ -165,7 +165,7 @@ msgstr ""
 msgid "Choose which device to send to."
 msgstr "选择要发送到的设备。"
 
-#: crates/nd-gui/src/pages/mod.rs:150
+#: crates/nd-gui/src/pages/mod.rs:166
 msgid "Chromecast"
 msgstr "Chromecast"
 
@@ -206,7 +206,7 @@ msgstr "已连接"
 msgid "Connected to"
 msgstr "已连接到"
 
-#: crates/nd-gui/src/app.rs:1093 crates/nd-gui/src/pages/mod.rs:171
+#: crates/nd-gui/src/app.rs:1093 crates/nd-gui/src/pages/mod.rs:187
 msgid "Connecting…"
 msgstr "正在连接…"
 
@@ -234,7 +234,7 @@ msgstr "断开连接"
 msgid "Discovery and devices"
 msgstr "发现和设备"
 
-#: crates/nd-gui/src/pages/mod.rs:130 crates/nd-gui/src/pages/mod.rs:302
+#: crates/nd-gui/src/pages/mod.rs:130 crates/nd-gui/src/pages/mod.rs:318
 #: crates/nd-gui/src/pages/devices.rs:459
 msgid "Discovery only"
 msgstr "仅发现"
@@ -247,7 +247,7 @@ msgstr "连接前，请在电视或投影仪上启用屏幕镜像。"
 msgid "Everything on your screen"
 msgstr "您屏幕上的所有内容"
 
-#: crates/nd-gui/src/pages/mod.rs:226
+#: crates/nd-gui/src/pages/mod.rs:242
 msgid "Excellent"
 msgstr "出色"
 
@@ -255,7 +255,7 @@ msgstr "出色"
 msgid "Extra screen"
 msgstr "额外屏幕"
 
-#: crates/nd-gui/src/pages/mod.rs:127 crates/nd-gui/src/pages/mod.rs:176
+#: crates/nd-gui/src/pages/mod.rs:127 crates/nd-gui/src/pages/mod.rs:192
 msgid "Failed"
 msgstr "失败"
 
@@ -291,7 +291,7 @@ msgstr "前进 10 秒"
 msgid "Frame rate"
 msgstr "帧率"
 
-#: crates/nd-gui/src/pages/mod.rs:227
+#: crates/nd-gui/src/pages/mod.rs:243
 msgid "Good"
 msgstr "良好"
 
@@ -341,7 +341,7 @@ msgstr "将所有设备保持在同一 Wi-Fi 网络中以获得最佳效果。"
 msgid "Keep the receiver ready"
 msgstr "准备好接收设备"
 
-#: crates/nd-gui/src/app.rs:1306
+#: crates/nd-gui/src/app.rs:1322
 msgid "Local network discovery unavailable"
 msgstr "本地网络发现不可用"
 
@@ -361,7 +361,7 @@ msgstr "低（480p）"
 msgid "Maximum (2160p)"
 msgstr "最大（2160p）"
 
-#: crates/nd-gui/src/pages/mod.rs:223
+#: crates/nd-gui/src/pages/mod.rs:239
 msgid "Measuring…"
 msgstr "测量中…"
 
@@ -377,17 +377,17 @@ msgstr "中（720p）"
 msgid "Microphone volume"
 msgstr "麦克风音量"
 
-#: crates/nd-gui/src/pages/mod.rs:153 crates/nd-gui/src/pages/devices.rs:340
+#: crates/nd-gui/src/pages/mod.rs:169 crates/nd-gui/src/pages/devices.rs:340
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1365
+#: crates/nd-gui/src/app.rs:1381
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
 msgstr "Miracast 在 Flatpak 版本中无法工作（需要系统 NetworkManager）"
 
-#: crates/nd-gui/src/app.rs:1373
+#: crates/nd-gui/src/app.rs:1389
 msgid ""
 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
 "network still works."
@@ -397,11 +397,11 @@ msgstr "Miracast需要Wi-Fi适配器，但此计算机没有。通过网络投�
 msgid "Miracast only"
 msgstr "仅 Miracast"
 
-#: crates/nd-gui/src/app.rs:1381
+#: crates/nd-gui/src/app.rs:1397
 msgid "Miracast unavailable"
 msgstr "Miracast 不可用"
 
-#: crates/nd-gui/src/app.rs:1379
+#: crates/nd-gui/src/app.rs:1395
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast 不可用：此 Wi-Fi 网卡不支持 Wi-Fi Direct"
 
@@ -443,11 +443,11 @@ msgstr ""
 "NDI 需要一个专有库，而 BigNetScreen 未附带该库。请为你的发行版安装 NDI 5 或 "
 "6 运行时，然后重启应用。其他共享方式无需此库也能使用。"
 
-#: crates/nd-gui/src/app.rs:821 crates/nd-gui/src/app.rs:1115
+#: crates/nd-gui/src/app.rs:821 crates/nd-gui/src/app.rs:1129
 msgid "NDI runtime required"
 msgstr "需要 NDI 运行时"
 
-#: crates/nd-gui/src/app.rs:842 crates/nd-gui/src/app.rs:1397
+#: crates/nd-gui/src/app.rs:842 crates/nd-gui/src/app.rs:1413
 msgid "NDI setup"
 msgstr "NDI 设置"
 
@@ -479,6 +479,11 @@ msgstr "您的图片文件夹中没有照片。请使用“选择文件”。"
 msgid "No receivers found"
 msgstr "未找到接收设备"
 
+#: crates/nd-gui/src/pages/mod.rs:155
+#, fuzzy
+msgid "No receivers yet"
+msgstr "未找到接收设备"
+
 #: crates/nd-gui/src/pages/media.rs:851
 msgid "No videos in your Videos folder. Use “Select files”."
 msgstr "您的视频文件夹中没有视频。请使用“选择文件”。"
@@ -495,7 +500,7 @@ msgstr "正在播放"
 msgid "One window only"
 msgstr "仅一个窗口"
 
-#: crates/nd-gui/src/pages/mod.rs:172
+#: crates/nd-gui/src/pages/mod.rs:188
 msgid "Opening the firewall port…"
 msgstr "正在打开防火墙端口…"
 
@@ -519,7 +524,7 @@ msgstr "选择文件并指定播放位置。"
 msgid "Preferred protocol"
 msgstr "首选协议"
 
-#: crates/nd-gui/src/pages/mod.rs:174
+#: crates/nd-gui/src/pages/mod.rs:190
 msgid "Preparing the video…"
 msgstr "正在准备视频…"
 
@@ -620,7 +625,7 @@ msgstr "发送到设备"
 msgid "Send whatever this computer is playing"
 msgstr "发送这台计算机正在播放的内容"
 
-#: crates/nd-gui/src/app.rs:1155
+#: crates/nd-gui/src/app.rs:1171
 msgid "Sending files…"
 msgstr "正在发送文件…"
 
@@ -640,7 +645,7 @@ msgstr "共享媒体"
 msgid "Share your screen wirelessly"
 msgstr "无线共享屏幕"
 
-#: crates/nd-gui/src/app.rs:1394
+#: crates/nd-gui/src/app.rs:1410
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "将你的屏幕共享到电视、投影仪或Chromecast。"
 
@@ -668,7 +673,7 @@ msgstr "停止"
 msgid "Stop sending"
 msgstr "停止发送"
 
-#: crates/nd-gui/src/app.rs:1149
+#: crates/nd-gui/src/app.rs:1165
 msgid "Stop sharing your screen before sending files"
 msgstr "发送文件前请先停止共享屏幕"
 
@@ -676,7 +681,7 @@ msgstr "发送文件前请先停止共享屏幕"
 msgid "Stopping…"
 msgstr "正在停止…"
 
-#: crates/nd-gui/src/pages/mod.rs:175 crates/nd-gui/src/pages/settings.rs:98
+#: crates/nd-gui/src/pages/mod.rs:191 crates/nd-gui/src/pages/settings.rs:98
 msgid "Streaming"
 msgstr "正在投屏"
 
@@ -684,16 +689,20 @@ msgstr "正在投屏"
 msgid "Streaming at"
 msgstr "流媒体传输于"
 
-#: crates/nd-gui/src/pages/mod.rs:154
+#: crates/nd-gui/src/pages/mod.rs:170
 msgid "Test"
 msgstr "测试"
 
-#: crates/nd-gui/src/app.rs:1079 crates/nd-gui/src/app.rs:1142
-#: crates/nd-gui/src/app.rs:1159
+#: crates/nd-gui/src/app.rs:1079 crates/nd-gui/src/app.rs:1158
+#: crates/nd-gui/src/app.rs:1175
 msgid "That device is no longer available"
 msgstr "该设备已不可用"
 
-#: crates/nd-gui/src/pages/mod.rs:229
+#: crates/nd-gui/src/app.rs:1120
+msgid "The NDI runtime is installed but does not support this processor."
+msgstr ""
+
+#: crates/nd-gui/src/pages/mod.rs:245
 msgid "The receiver is not answering"
 msgstr "接收设备无响应"
 
@@ -726,11 +735,11 @@ msgstr "视频"
 msgid "View ndi-sdk in the AUR"
 msgstr "在 AUR 中查看 ndi-sdk"
 
-#: crates/nd-gui/src/pages/mod.rs:173
+#: crates/nd-gui/src/pages/mod.rs:189
 msgid "Waiting for the receiver…"
 msgstr "正在等待接收端…"
 
-#: crates/nd-gui/src/pages/mod.rs:228
+#: crates/nd-gui/src/pages/mod.rs:244
 msgid "Weak signal"
 msgstr "信号弱"
 
@@ -754,7 +763,7 @@ msgstr "宽度（像素）"
 msgid "Window"
 msgstr "窗口"
 
-#: crates/nd-gui/src/pages/mod.rs:187
+#: crates/nd-gui/src/pages/mod.rs:203
 msgid "instant response"
 msgstr "即时响应"
 
@@ -762,7 +771,7 @@ msgstr "即时响应"
 msgid "item"
 msgstr "项"
 
-#: crates/nd-gui/src/pages/mod.rs:232
+#: crates/nd-gui/src/pages/mod.rs:248
 msgid "ms round trip"
 msgstr "毫秒往返"
 
@@ -770,7 +779,7 @@ msgstr "毫秒往返"
 msgid "not published yet"
 msgstr "尚未发布"
 
-#: crates/nd-gui/src/pages/mod.rs:188
+#: crates/nd-gui/src/pages/mod.rs:204
 msgid "quick response"
 msgstr "快速响应"
 
@@ -787,6 +796,12 @@ msgstr[0] "{} 找到的设备"
 msgid "{} file selected"
 msgid_plural "{} files selected"
 msgstr[0] "已选择 {} 个文件"
+
+#: crates/nd-gui/src/pages/mod.rs:158
+#, fuzzy
+msgid "{} receiver"
+msgid_plural "{} receivers"
+msgstr[0] "找到 {} 个接收端"
 
 #: crates/nd-gui/src/app.rs:1031
 msgid "{} receiver found"

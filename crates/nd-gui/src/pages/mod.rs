@@ -107,7 +107,7 @@ impl DeviceEntry {
             castable: info.kind.is_castable(),
             state,
             detail: detail.unwrap_or_default(),
-            mode: link.map(|l| l.describe()).unwrap_or_default(),
+            mode: link.map(describe_link).unwrap_or_default(),
         }
     }
 
@@ -142,6 +142,22 @@ impl DeviceEntry {
 
     pub fn icon(&self) -> &'static str {
         icon_for(self.kind)
+    }
+}
+
+/// "1920 × 1080 · 60 Hz", plus how many receivers are watching when the
+/// protocol can tell (NDI publishes to whoever asks, so that number is the
+/// difference between sharing and sharing with nobody).
+pub fn describe_link(link: nd_core::sink::StreamLink) -> String {
+    let mode = link.describe();
+    match link.receivers {
+        None => mode,
+        Some(0) => format!("{mode} · {}", tr!("No receivers yet")),
+        Some(count) => format!(
+            "{mode} · {}",
+            crate::tr_n!("{} receiver", "{} receivers", count as usize)
+                .replace("{}", &count.to_string())
+        ),
     }
 }
 

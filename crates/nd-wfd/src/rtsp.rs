@@ -1058,6 +1058,7 @@ async fn start_pipeline(
             // the interface say "the receiver is not answering" all through a
             // perfectly healthy session.
             endpoint: None,
+            receivers: None,
         });
 
         let desc = pipeline::wfd_pipeline_description(&stream_cfg, &cfg.video, &transport);

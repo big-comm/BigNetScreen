@@ -25,19 +25,53 @@ pub fn available() -> bool {
             .all(|name| gst::ElementFactory::find(name).is_some())
 }
 
-/// Check the optional runtime without creating a sender or starting capture.
-/// A source in READY only loads symbols. A sink would already create a sender.
-pub fn runtime_available() -> bool {
-    if !available() {
-        return false;
-    }
-    let Ok(probe) = gst::ElementFactory::make("ndisrc").build() else {
-        return false;
-    };
-    let ready = probe.set_state(gst::State::Ready).is_ok();
-    let reset = probe.set_state(gst::State::Null).is_ok();
-    ready && reset
+/// What was found out about the vendor runtime, for telling the user the
+/// right thing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuntimeCheck {
+    /// No `libndi` on this system (or the plugin failed to register).
+    Missing,
+    /// The library is there but refuses to initialise on this processor.
+    ///
+    /// Installing it again would not help; the message must say so.
+    CpuUnsupported { version: Option<String> },
+    /// Ready, with the version string the runtime reports about itself.
+    Ready { version: Option<String> },
 }
+
+/// Checks the optional runtime without creating a sender or starting capture.
+///
+/// Three outcomes, because they call for three different messages: the
+/// library is absent (offer to install it), it is present but this CPU is not
+/// supported (do not offer to install it), or it works (log its version so a
+/// bug report says which one).
+pub fn runtime_check() -> RuntimeCheck {
+    if !available() {
+        return RuntimeCheck::Missing;
+    }
+    match gstndi::runtime_info() {
+        gstndi::RuntimeInfo::Missing(reason) => {
+            tracing::info!(%reason, "NDI runtime not found");
+            RuntimeCheck::Missing
+        }
+        gstndi::RuntimeInfo::CpuUnsupported { version } => {
+            tracing::warn!(?version, "the NDI runtime does not support this CPU");
+            RuntimeCheck::CpuUnsupported { version }
+        }
+        gstndi::RuntimeInfo::Ready { version } => {
+            tracing::info!(?version, "NDI runtime ready");
+            RuntimeCheck::Ready { version }
+        }
+    }
+}
+
+/// `true` when publishing can be attempted (see [`runtime_check`]).
+pub fn runtime_available() -> bool {
+    matches!(runtime_check(), RuntimeCheck::Ready { .. })
+}
+
+/// How often the sink is asked how many receivers are connected.
+const RECEIVERS_POLL: std::time::Duration = std::time::Duration::from_secs(1);
 
 pub struct NdiPublisher {
     name: String,
@@ -69,7 +103,14 @@ impl NdiPublisher {
         let size =
             StreamConfig::fit_within(source.size_or((1920, 1080)), preferences.resolution_limit());
         let fps = preferences.fps;
-        let description = description(&source.video_source(), source.audio_source(), size, fps);
+        let audio = match source.audio_source() {
+            // No audio was asked for: the video goes straight to the sink and
+            // skips the combiner, which would add two frames of delay only
+            // to line the picture up with silence.
+            pipeline::AudioSource::Silence => None,
+            audio => Some(audio),
+        };
+        let description = description(&source.video_source(), audio, size, fps);
         let (pipeline, mut events) =
             pipeline::build_configured_pipeline(&description, 0, |pipeline| {
                 let sink = pipeline
@@ -95,11 +136,24 @@ impl NdiPublisher {
             height: size.1,
             fps,
             endpoint: None,
+            receivers: Some(0),
         });
         self.status.set(SinkState::Streaming);
+        // NDI publishes to whoever asks, so "streaming" alone does not mean
+        // anyone is watching. The sink counts its receivers; that count is
+        // what the interface shows.
+        let sink = pipeline.by_name("ndi-output");
+        let mut poll = tokio::time::interval(RECEIVERS_POLL);
         let outcome = loop {
             tokio::select! {
                 _ = cancelled.changed() => break Ok(()),
+                _ = poll.tick() => {
+                    if let Some(count) = sink.as_ref().map(|sink| sink.property::<i32>("connections")) {
+                        if count >= 0 {
+                            self.status.set_receivers(count as u32);
+                        }
+                    }
+                }
                 event = events.next() => match event {
                     Some(PipelineEvent::Error { message, .. }) => break Err(NdError::Gst(message)),
                     Some(PipelineEvent::Eos) | None => break Ok(()),
@@ -113,21 +167,51 @@ impl NdiPublisher {
     }
 }
 
+/// The pixel formats the sink hands to the runtime as they are.
+///
+/// Listing them all lets `videoconvert` pass the captured frames through
+/// untouched: the screen arrives as BGRx and the runtime takes BGRx, so
+/// converting it to UYVY first only spent a full pass over every frame on the
+/// CPU. The runtime folds whatever conversion it still needs into its own
+/// compression step. UYVY leads the list so that a format outside it is
+/// converted to the runtime's native one.
+const NATIVE_FORMATS: &str = "{ UYVY, BGRx, BGRA, RGBx, RGBA, NV12, I420 }";
+
+fn video_branch(video: &pipeline::VideoSource, size: (u32, u32), fps: u32) -> String {
+    format!(
+        "{} ! videorate ! videoscale add-borders=true ! videoconvert ! \
+         video/x-raw,format={NATIVE_FORMATS},width={},height={},framerate={}/1 ! \
+         queue max-size-buffers=2 max-size-bytes=0 max-size-time=0 leaky=downstream",
+        video.description(),
+        size.0,
+        size.1,
+        fps
+    )
+}
+
+/// The pipeline for publishing.
+///
+/// With audio, video and sound meet in `ndisinkcombiner`, which holds the
+/// picture back until the matching sound has arrived (two frames). Without
+/// audio the picture goes straight into the sink and pays none of that.
 fn description(
     video: &pipeline::VideoSource,
-    audio: pipeline::AudioSource,
+    audio: Option<pipeline::AudioSource>,
     size: (u32, u32),
     fps: u32,
 ) -> String {
-    format!(
-        "ndisinkcombiner name=ndi-combine ! ndisink name=ndi-output sync=true \
-         {} ! videorate ! videoscale add-borders=true ! videoconvert ! \
-         video/x-raw,format=UYVY,width={},height={},framerate={}/1 ! \
-         queue max-size-buffers=2 max-size-bytes=0 max-size-time=0 leaky=downstream ! ndi-combine.video \
-         {} ! audioconvert ! audioresample ! audio/x-raw,format=F32LE,layout=interleaved,rate=48000,channels=2 ! \
-         queue max-size-buffers=0 max-size-bytes=0 max-size-time=200000000 ! ndi-combine.audio",
-        video.description(), size.0, size.1, fps, audio.description()
-    )
+    let video = video_branch(video, size, fps);
+    match audio {
+        None => format!("{video} ! ndisink name=ndi-output sync=true"),
+        Some(audio) => format!(
+            "ndisinkcombiner name=ndi-combine ! ndisink name=ndi-output sync=true \
+             {video} ! ndi-combine.video \
+             {} ! audioconvert ! audioresample ! \
+             audio/x-raw,format=F32LE,layout=interleaved,rate=48000,channels=2 ! \
+             queue max-size-buffers=0 max-size-bytes=0 max-size-time=200000000 ! ndi-combine.audio",
+            audio.description()
+        ),
+    }
 }
 
 #[async_trait]
@@ -225,7 +309,7 @@ mod tests {
         let name = format!("BigNetScreen test {}", std::process::id());
         let sender = gst::parse::launch(&description(
             &pipeline::VideoSource::Test,
-            pipeline::AudioSource::Silence,
+            Some(pipeline::AudioSource::Silence),
             (1280, 720),
             30,
         ))
@@ -323,6 +407,134 @@ mod tests {
             "received video/audio buffers: {received:?}"
         );
         eprintln!("NDI loopback received video/audio buffers: {received:?}");
+
+        // The sender must have noticed its receiver: this is what the
+        // interface shows as "1 receiver". The count refreshes once a second
+        // while frames are rendered, so allow it a moment.
+        let output = sender.by_name("ndi-output").unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let connections = loop {
+            let count = output.property::<i32>("connections");
+            if count >= 1 || Instant::now() >= deadline {
+                break count;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        };
+        assert!(connections >= 1, "sender saw {connections} receiver(s)");
+        eprintln!("NDI sender reports {connections} receiver(s) connected");
+    }
+
+    #[test]
+    fn without_audio_the_video_skips_the_combiner() {
+        let silent = description(&pipeline::VideoSource::Test, None, (1280, 720), 30);
+        assert!(!silent.contains("ndisinkcombiner"), "{silent}");
+        assert!(silent.contains("! ndisink name=ndi-output"), "{silent}");
+
+        let with_audio = description(
+            &pipeline::VideoSource::Test,
+            Some(pipeline::AudioSource::Silence),
+            (1280, 720),
+            30,
+        );
+        assert!(with_audio.contains("ndisinkcombiner"), "{with_audio}");
+        assert!(with_audio.contains("ndi-combine.audio"), "{with_audio}");
+    }
+
+    #[test]
+    fn captured_frames_pass_through_in_their_own_format() {
+        // The screen arrives as BGRx; forcing UYVY cost a conversion pass per
+        // frame. With the sink's formats listed, `videoconvert` must leave a
+        // BGRx stream alone and only convert what the sink cannot take.
+        pipeline::init().unwrap();
+        for (source_format, expected) in [("BGRx", "BGRx"), ("NV12", "NV12"), ("YUY2", "UYVY")] {
+            let description = video_branch(&pipeline::VideoSource::Test, (320, 240), 30).replace(
+                "videotestsrc is-live=true",
+                &format!("videotestsrc num-buffers=2 ! video/x-raw,format={source_format}"),
+            ) + " ! fakesink name=out sync=false";
+            let pipeline = gst::parse::launch(&description)
+                .unwrap()
+                .downcast::<gst::Pipeline>()
+                .unwrap();
+            let _guard = PipelineGuard::new(pipeline.clone());
+            pipeline.set_state(gst::State::Playing).unwrap();
+            let message = pipeline
+                .bus()
+                .unwrap()
+                .timed_pop_filtered(
+                    gst::ClockTime::from_seconds(5),
+                    &[gst::MessageType::Error, gst::MessageType::Eos],
+                )
+                .expect("the finite branch finishes");
+            assert_eq!(message.type_(), gst::MessageType::Eos, "{message:?}");
+            let caps = pipeline
+                .by_name("out")
+                .unwrap()
+                .static_pad("sink")
+                .unwrap()
+                .current_caps()
+                .unwrap();
+            let format = caps.structure(0).unwrap().get::<&str>("format").unwrap();
+            assert_eq!(format, expected, "source {source_format}: {caps}");
+        }
+    }
+
+    /// CPU spent per frame with the old forced-UYVY branch versus the native
+    /// pass-through, both feeding a real NDI sender (so the runtime's own
+    /// compression is part of the measurement). Prints the numbers; run with
+    /// `--ignored --nocapture`.
+    #[test]
+    #[ignore = "Requires the NDI runtime; prints a measurement"]
+    fn bench_native_vs_forced_uyvy() {
+        fn cpu_seconds() -> f64 {
+            let stat = std::fs::read_to_string("/proc/self/stat").unwrap();
+            let after_comm = stat.rsplit(')').next().unwrap();
+            let fields: Vec<&str> = after_comm.split_whitespace().collect();
+            // Fields after the command: state is index 0, utime 11, stime 12.
+            let ticks: f64 =
+                fields[11].parse::<f64>().unwrap() + fields[12].parse::<f64>().unwrap();
+            ticks / 100.0
+        }
+        fn run(label: &str, caps_format: &str, frames: u32) {
+            let description = format!(
+                "videotestsrc num-buffers={frames} pattern=smpte ! \
+                 video/x-raw,format=BGRx,width=1920,height=1080,framerate=60/1 ! \
+                 videoconvert ! video/x-raw,format={caps_format} ! \
+                 ndisink name=ndi-output sync=false"
+            );
+            let pipeline = gst::parse::launch(&description)
+                .unwrap()
+                .downcast::<gst::Pipeline>()
+                .unwrap();
+            pipeline.by_name("ndi-output").unwrap().set_property(
+                "ndi-name",
+                format!("BigNetScreen bench {}", std::process::id()),
+            );
+            let _guard = PipelineGuard::new(pipeline.clone());
+            let cpu_before = cpu_seconds();
+            let wall = std::time::Instant::now();
+            pipeline.set_state(gst::State::Playing).unwrap();
+            let message = pipeline
+                .bus()
+                .unwrap()
+                .timed_pop_filtered(
+                    gst::ClockTime::from_seconds(120),
+                    &[gst::MessageType::Error, gst::MessageType::Eos],
+                )
+                .expect("finite run finishes");
+            assert_eq!(message.type_(), gst::MessageType::Eos, "{message:?}");
+            let wall = wall.elapsed().as_secs_f64();
+            let cpu = cpu_seconds() - cpu_before;
+            eprintln!(
+                "{label:<28} frames={frames} wall={wall:.2}s cpu={cpu:.2}s cpu/frame={:.2}ms",
+                cpu * 1000.0 / frames as f64
+            );
+        }
+        assert!(available());
+        let frames = 600;
+        for _ in 0..2 {
+            run("forced UYVY (old)", "UYVY", frames);
+            run("native BGRx (new)", NATIVE_FORMATS, frames);
+        }
     }
 
     #[test]
@@ -330,7 +542,7 @@ mod tests {
         pipeline::init().unwrap();
         let description = description(
             &pipeline::VideoSource::Test,
-            pipeline::AudioSource::Silence,
+            Some(pipeline::AudioSource::Silence),
             (1280, 720),
             30,
         )

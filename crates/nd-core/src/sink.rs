@@ -119,6 +119,12 @@ pub struct StreamLink {
     /// Miracast receiver is announced by MAC and only acquires an IP once the
     /// Wi-Fi Direct group exists.
     pub endpoint: Option<SocketAddr>,
+    /// How many receivers are pulling the stream, when the protocol can tell.
+    ///
+    /// Only NDI publishes to whoever asks, so only NDI knows this. `None` on
+    /// the point-to-point protocols, where "streaming" already means one
+    /// receiver is on the other end.
+    pub receivers: Option<u32>,
 }
 
 impl StreamLink {
@@ -187,6 +193,19 @@ impl SinkStatus {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .link = Some(link);
+    }
+
+    /// Updates how many receivers are connected, once the session is running.
+    ///
+    /// Quiet unless the number changes: the poll behind it runs every second.
+    pub fn set_receivers(&self, receivers: u32) {
+        let mut guard = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(link) = guard.link.as_mut() {
+            if link.receivers != Some(receivers) {
+                tracing::info!(receivers, "receiver count changed");
+                link.receivers = Some(receivers);
+            }
+        }
     }
 
     /// Changes the state.
