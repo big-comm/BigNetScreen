@@ -48,6 +48,7 @@ sink = [
     "gst-base/v1_18",
 ]
 static = []
+v1_30 = ["gst/v1_30"]
 
 [lib]
 name = "gstndi"

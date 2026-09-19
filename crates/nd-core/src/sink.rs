@@ -17,6 +17,8 @@ use crate::Result;
 pub enum SinkKind {
     /// Local source published to NDI receivers.
     Ndi,
+    /// Local source published to web browsers over WebRTC (WHEP).
+    WebRtc,
     /// Google Chromecast (mDNS + Cast + HTTP).
     Chromecast,
     /// Apple AirPlay (mDNS). Discovered, but casting is out of scope.
@@ -36,7 +38,11 @@ impl SinkKind {
     /// receivers that are merely discovered still show up, but disabled.
     pub fn is_castable(self) -> bool {
         match self {
-            SinkKind::Ndi | SinkKind::Chromecast | SinkKind::WfdP2p | SinkKind::WfdMice => true,
+            SinkKind::Ndi
+            | SinkKind::WebRtc
+            | SinkKind::Chromecast
+            | SinkKind::WfdP2p
+            | SinkKind::WfdMice => true,
             // AirPlay requires FairPlay/SAP; streaming is out of scope.
             SinkKind::AirPlay => false,
             SinkKind::Dummy => false,
@@ -48,6 +54,7 @@ impl SinkKind {
         match self {
             SinkKind::Chromecast => "chromecast",
             SinkKind::Ndi => "ndi",
+            SinkKind::WebRtc => "webrtc",
             SinkKind::AirPlay => "airplay",
             SinkKind::WfdP2p => "wfd-p2p",
             SinkKind::WfdMice => "wfd-mice",
@@ -260,6 +267,19 @@ pub struct SinkInfo {
     pub address: Option<String>,
 }
 
+/// How a receiver joins a session that **we** host.
+///
+/// Most protocols push to a receiver the person picked. A published stream
+/// works the other way round: the receiver comes to us, and needs an address
+/// to come to and a code to be let in. Both are per session.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SinkAccess {
+    /// Where to point the receiver, e.g. `http://192.168.1.20:8080`.
+    pub url: String,
+    /// The code the receiver types in to be let in.
+    pub pin: String,
+}
+
 /// A connectable receiver. Implementations must be thread-safe.
 #[async_trait]
 pub trait Sink: Send + Sync {
@@ -284,6 +304,14 @@ pub trait Sink: Send + Sync {
     /// `None` for a receiver that is idle, still connecting, or of a protocol
     /// that does not report it.
     fn link(&self) -> Option<StreamLink> {
+        None
+    }
+
+    /// How a receiver joins this session, for sinks that host it themselves.
+    ///
+    /// `None` for protocols that push to a receiver, and until the session is
+    /// ready to be joined.
+    fn access(&self) -> Option<SinkAccess> {
         None
     }
 

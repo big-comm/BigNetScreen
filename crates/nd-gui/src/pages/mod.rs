@@ -14,6 +14,7 @@ pub mod devices;
 pub mod home;
 pub mod media;
 mod preview;
+pub mod qr;
 pub mod settings;
 
 use nd_core::sink::{SinkInfo, SinkKind, SinkState};
@@ -165,6 +166,7 @@ pub fn protocol_label(kind: SinkKind) -> String {
     match kind {
         SinkKind::Chromecast => tr!("Chromecast"),
         SinkKind::Ndi => "NDI".into(),
+        SinkKind::WebRtc => tr!("Web browser"),
         SinkKind::AirPlay => tr!("AirPlay"),
         SinkKind::WfdP2p | SinkKind::WfdMice => tr!("Miracast"),
         SinkKind::Dummy => tr!("Test"),
@@ -175,6 +177,7 @@ pub fn icon_for(kind: SinkKind) -> &'static str {
     match kind {
         SinkKind::Chromecast => "tv-symbolic",
         SinkKind::Ndi => "network-transmit-symbolic",
+        SinkKind::WebRtc => "web-browser-symbolic",
         SinkKind::AirPlay => "display-projector-symbolic",
         SinkKind::WfdP2p | SinkKind::WfdMice => "video-display-symbolic",
         SinkKind::Dummy => "applications-system-symbolic",
@@ -201,7 +204,7 @@ pub fn state_label(state: SinkState) -> String {
 pub fn latency_hint(kind: SinkKind) -> Option<String> {
     match kind {
         SinkKind::WfdP2p | SinkKind::WfdMice => Some(tr!("instant response")),
-        SinkKind::Chromecast => Some(tr!("quick response")),
+        SinkKind::Chromecast | SinkKind::WebRtc => Some(tr!("quick response")),
         _ => None,
     }
 }
@@ -227,6 +230,8 @@ pub struct SessionInfo {
     pub quality: Option<nd_net::probe::Quality>,
     /// The measured round trip to the receiver, in milliseconds.
     pub round_trip_ms: Option<u64>,
+    /// How receivers join, when this session is hosted here (web browsers).
+    pub access: Option<nd_core::sink::SinkAccess>,
 }
 
 /// The quality in words, with the number that produced it.

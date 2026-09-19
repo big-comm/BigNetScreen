@@ -173,6 +173,17 @@ and next file. Cast uses receiver-reported capabilities; Miracast controls the
 local file pipeline while retaining the RTSP session. Playback stays on the media
 page. Photos retain timed advance and can be skipped.
 
+## Sharing with a web browser
+
+Home offers **Share with a web browser**: any TV, phone or computer on the same
+network opens the short address shown (or scans the QR code), types the
+four-digit PIN and sees the screen, with no app to install. OBS receives it
+through a *Browser Source* pointed at the same address. The stream is WebRTC
+(H.264 by hardware when available, VP8 as fallback) with adaptive bitrate and
+retransmission; expect a delay similar to Chromecast, higher than Miracast.
+The page is served on port 8080 (or the next free one up to 8085), plain HTTP
+on the local network, and the PIN changes every session.
+
 ## NDI and resolutions
 
 Home offers **Publish with NDI** for a screen, window or supported extra screen.

@@ -122,6 +122,8 @@ pub enum AppMsg {
     /// Start streaming to this receiver.
     Cast(String),
     PublishNdi(SourceType),
+    /// Share to web browsers on the network.
+    PublishWeb(SourceType),
     InstallNdi,
     /// Start streaming this to this receiver, in one step.
     CastWith(String, SourceType),
@@ -377,6 +379,7 @@ impl Component for AppModel {
                 // The home page now names both halves of the decision in one
                 // message: who receives, and what they receive.
                 HomeOutput::PublishNdi(source) => AppMsg::PublishNdi(source),
+                HomeOutput::PublishWeb(source) => AppMsg::PublishWeb(source),
                 HomeOutput::Cast { id, source } => AppMsg::CastWith(id, source),
                 HomeOutput::SendMedia(id) => AppMsg::MediaTarget(id),
                 HomeOutput::Stop => AppMsg::Stop,
@@ -528,6 +531,17 @@ impl Component for AppModel {
                 } else {
                     self.source_type = source;
                     self.begin_cast(nd_ndi::ID.into(), &sender);
+                }
+            }
+            AppMsg::PublishWeb(source) => {
+                if !nd_webrtc::available() {
+                    self.status = tr!(
+                        "Sharing with a web browser needs GStreamer's WebRTC plugins, which \
+                         this system does not have."
+                    );
+                } else {
+                    self.source_type = source;
+                    self.begin_cast(nd_webrtc::ID.into(), &sender);
                 }
             }
             AppMsg::InstallNdi => {
@@ -947,6 +961,7 @@ impl AppModel {
             measurable: link.and_then(|l| l.endpoint).is_some(),
             quality: self.measured.map(nd_net::probe::Quality::of),
             round_trip_ms: self.measured.flatten().map(|rtt| rtt.as_millis() as u64),
+            access: sink.access(),
         })
     }
 
@@ -1073,6 +1088,13 @@ impl AppModel {
         }
         let sink: Arc<dyn Sink> = if id == nd_ndi::ID {
             Arc::new(nd_ndi::NdiPublisher::new(self.settings.display_name()))
+        } else if id == nd_webrtc::ID {
+            let name = self.settings.display_name();
+            Arc::new(nd_webrtc::WebRtcPublisher::new(
+                name.clone(),
+                nd_net::detect_gpu_driver(),
+                web_page_text(name),
+            ))
         } else if let Some(sink) = self.registry.get(&id).cloned() {
             sink
         } else {
@@ -1236,6 +1258,21 @@ async fn stream_until_cancelled(
     }
     let _ = sink.stop_stream().await;
     playing.await.map_err(|e| e.to_string())
+}
+
+/// What the web page says, in the application's language.
+fn web_page_text(title: String) -> nd_webrtc::PageText {
+    nd_webrtc::PageText {
+        title,
+        prompt: tr!("Enter the PIN shown on the computer that is sharing."),
+        join: tr!("Watch"),
+        wrong_pin: tr!("That PIN is not right. Check the computer's screen."),
+        locked: tr!("Too many attempts. Wait half a minute and try again."),
+        connecting: tr!("Connecting…"),
+        failed: tr!("Could not connect. Make sure both devices are on the same network."),
+        ended: tr!("The sharing has ended."),
+        fullscreen_hint: tr!("Tap or click the picture for full screen."),
+    }
 }
 
 async fn run_cast(

@@ -151,6 +151,9 @@ pub struct HomePage {
     /// Still worth saying "searching"?
     searching: bool,
     virtual_available: bool,
+    /// The address the QR code on screen encodes, so it is only redrawn when
+    /// it changes and not on every status poll.
+    qr_for: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -168,6 +171,10 @@ pub enum HomeMsg {
     /// Send this to the receiver already chosen.
     Act(SourceType),
     PublishNdi(SourceType),
+    /// Share to web browsers on the network.
+    PublishWeb(SourceType),
+    /// Put the session's address on the clipboard (for OBS, a chat, a mail).
+    CopyUrl,
     /// Go to the media page with the chosen receiver.
     SendMedia,
     Rescan,
@@ -177,6 +184,7 @@ pub enum HomeMsg {
 #[derive(Debug)]
 pub enum HomeOutput {
     PublishNdi(SourceType),
+    PublishWeb(SourceType),
     /// Start streaming this to this receiver.
     Cast {
         id: String,
@@ -368,6 +376,61 @@ impl Component for HomePage {
                                 set_halign: gtk::Align::Center,
                                 set_margin_top: 4,
                             },
+
+                            // How a receiver joins, for the sessions hosted here.
+                            gtk::Box {
+                                set_orientation: gtk::Orientation::Vertical,
+                                set_spacing: 4,
+                                set_margin_top: 12,
+                                #[watch]
+                                set_visible: model.access().is_some(),
+
+                                gtk::Label {
+                                    set_label: &tr!("On the TV, phone or computer, open:"),
+                                    add_css_class: "hero-detail",
+                                    set_wrap: true,
+                                    set_justify: gtk::Justification::Center,
+                                },
+                                gtk::Box {
+                                    set_spacing: 6,
+                                    set_halign: gtk::Align::Center,
+                                    gtk::Label {
+                                        #[watch]
+                                        set_label: &model.access_field(|a| a.url.clone()),
+                                        add_css_class: "access-url",
+                                        set_selectable: true,
+                                        set_wrap: true,
+                                        set_justify: gtk::Justification::Center,
+                                    },
+                                    gtk::Button {
+                                        set_icon_name: "edit-copy-symbolic",
+                                        add_css_class: "flat",
+                                        set_valign: gtk::Align::Center,
+                                        set_tooltip_text: Some(&tr!("Copy the address")),
+                                        connect_clicked => HomeMsg::CopyUrl,
+                                    },
+                                },
+                                gtk::Label {
+                                    set_label: &tr!("and enter the PIN"),
+                                    add_css_class: "hero-detail",
+                                    set_margin_top: 6,
+                                },
+                                gtk::Label {
+                                    #[watch]
+                                    set_label: &model.access_field(|a| a.pin.clone()),
+                                    add_css_class: "access-pin",
+                                },
+                                gtk::Box {
+                                    add_css_class: "qr-frame",
+                                    set_halign: gtk::Align::Center,
+                                    set_margin_top: 8,
+                                    #[name = "qr_picture"]
+                                    gtk::Picture {
+                                        set_size_request: (168, 168),
+                                        set_can_shrink: true,
+                                    },
+                                },
+                            },
                             gtk::Button {
                                 set_label: &tr!("Disconnect"),
                                 add_css_class: "destructive-action",
@@ -473,6 +536,42 @@ impl Component for HomePage {
                         },
                     },
                 },
+                #[name = "web_card"]
+                gtk::Box {
+                    set_spacing: 20,
+                    add_css_class: "info-card",
+                    add_css_class: "ndi-card",
+                    #[watch] set_visible: model.step == Step::Device,
+                    gtk::Image { set_icon_name: Some("web-browser-symbolic"), set_pixel_size: 52, set_valign: gtk::Align::Start, add_css_class: "page-icon" },
+                    gtk::Box {
+                        set_orientation: gtk::Orientation::Vertical,
+                        set_spacing: 8,
+                        set_hexpand: true,
+                        gtk::Label { set_label: &tr!("Share with a web browser"), set_xalign: 0.0, add_css_class: "title-3" },
+                        gtk::Label { set_label: &tr!("No app needed: a TV, phone or computer on this network opens a short address, types the PIN shown here and sees your screen. Works in OBS as a browser source."), set_xalign: 0.0, set_wrap: true, set_max_width_chars: 80, add_css_class: "dim-label" },
+                        #[name = "web_buttons"]
+                        gtk::Box {
+                            set_spacing: 12,
+                            set_halign: gtk::Align::Start,
+                            set_margin_top: 6,
+                            gtk::Button {
+                                add_css_class: "suggested-action",
+                                adw::ButtonContent { set_icon_name: "video-display-symbolic", set_label: &tr!("Screen") },
+                                connect_clicked => HomeMsg::PublishWeb(SourceType::Monitor),
+                            },
+                            gtk::Button {
+                                adw::ButtonContent { set_icon_name: "window-new-symbolic", set_label: &tr!("Window") },
+                                connect_clicked => HomeMsg::PublishWeb(SourceType::Window),
+                            },
+                            gtk::Button {
+                                adw::ButtonContent { set_icon_name: "video-joined-displays-symbolic", set_label: &tr!("Extra screen") },
+                                #[watch] set_sensitive: model.virtual_available,
+                                connect_clicked => HomeMsg::PublishWeb(SourceType::Virtual),
+                            },
+                        },
+                    },
+                },
+
                 #[name = "ndi_card"]
                 gtk::Box {
                     set_spacing: 20,
@@ -509,7 +608,6 @@ impl Component for HomePage {
                         },
                     },
                 },
-
             },
         },
         }
@@ -581,6 +679,7 @@ impl Component for HomePage {
             empty: true,
             searching: true,
             virtual_available: false,
+            qr_for: None,
         };
         model
             .devices
@@ -615,6 +714,16 @@ impl Component for HomePage {
         );
         compact.add_setter(
             &widgets.ndi_buttons,
+            "orientation",
+            Some(&gtk::Orientation::Vertical.to_value()),
+        );
+        compact.add_setter(
+            &widgets.web_card,
+            "orientation",
+            Some(&gtk::Orientation::Vertical.to_value()),
+        );
+        compact.add_setter(
+            &widgets.web_buttons,
             "orientation",
             Some(&gtk::Orientation::Vertical.to_value()),
         );
@@ -657,7 +766,20 @@ impl Component for HomePage {
                 }
                 sync_rows(&mut self.devices, entries);
             }
-            HomeMsg::Session(session) => self.session = session,
+            HomeMsg::Session(session) => {
+                // The QR code only changes with the address, not with every
+                // poll of the session's state.
+                let url = session
+                    .as_ref()
+                    .and_then(|s| s.access.as_ref())
+                    .map(|a| a.url.clone());
+                if url != self.qr_for {
+                    let texture = url.as_deref().and_then(super::qr::texture);
+                    widgets.qr_picture.set_paintable(texture.as_ref());
+                    self.qr_for = url;
+                }
+                self.session = session;
+            }
             HomeMsg::Searching(searching) => {
                 self.searching = searching;
                 self.devices.widget().set_placeholder(Some(&if searching {
@@ -694,6 +816,14 @@ impl Component for HomePage {
             }
             HomeMsg::PublishNdi(source) => {
                 sender.output(HomeOutput::PublishNdi(source)).ok();
+            }
+            HomeMsg::PublishWeb(source) => {
+                sender.output(HomeOutput::PublishWeb(source)).ok();
+            }
+            HomeMsg::CopyUrl => {
+                if let Some(access) = self.access() {
+                    widgets.qr_picture.clipboard().set_text(&access.url);
+                }
             }
             HomeMsg::Act(source) => {
                 if let Some(chosen) = &self.chosen {
@@ -756,6 +886,14 @@ impl HomePage {
 
     fn session_field<F: Fn(&SessionInfo) -> String>(&self, f: F) -> String {
         self.session.as_ref().map(f).unwrap_or_default()
+    }
+
+    fn access(&self) -> Option<&nd_core::sink::SinkAccess> {
+        self.session.as_ref().and_then(|s| s.access.as_ref())
+    }
+
+    fn access_field<F: Fn(&nd_core::sink::SinkAccess) -> String>(&self, f: F) -> String {
+        self.access().map(f).unwrap_or_default()
     }
 
     /// Is there a measurement to show for this session’s protocol?

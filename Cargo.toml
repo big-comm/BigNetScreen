@@ -10,6 +10,7 @@ members = [
     "crates/nd-wfd",
     "crates/nd-gui",
     "crates/nd-ndi",
+    "crates/nd-webrtc",
 ]
 # A dependency, not a member: it keeps upstream's own lint and format
 # settings, and `--workspace` commands must not touch it.
@@ -31,6 +32,7 @@ nd-net = { path = "crates/nd-net" }
 nd-chromecast = { path = "crates/nd-chromecast" }
 nd-wfd = { path = "crates/nd-wfd" }
 nd-ndi = { path = "crates/nd-ndi" }
+nd-webrtc = { path = "crates/nd-webrtc" }
 
 # comuns
 thiserror = "2"

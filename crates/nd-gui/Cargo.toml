@@ -21,9 +21,12 @@ nd-capture.workspace = true
 nd-chromecast.workspace = true
 nd-wfd.workspace = true
 nd-ndi.workspace = true
+nd-webrtc.workspace = true
 nd-net.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+# The QR code with the page's address; only the matrix, drawn by hand into a texture.
+qrcode = { version = "0.14", default-features = false }
 futures.workspace = true
 tokio.workspace = true
 gettext-rs = { version = "0.8", features = ["gettext-system"] }

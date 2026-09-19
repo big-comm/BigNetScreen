@@ -25,6 +25,7 @@ nd-core         traits + types + pipeline.rs (GStreamer tuning)   ← the heart
   ├── nd-net       NetworkManager + firewalld + GPU driver (native only)
   ├── nd-chromecast  mDNS + Cast (protobuf/TLS) + mirroring + HTTP stream server
   ├── nd-wfd       RTSP(7236) + WFD M1–M7 negotiation + P2P (uses nd-net)
+  ├── nd-webrtc    WHEP publisher for web browsers: PIN front door + QR (bundles gst-plugin-webrtc)
   └── nd-gui       relm4 + libadwaita  → the `bignetscreen` binary
 vendor/gst-plugin-ndi  local copy of the upstream NDI plugin (MPL-2.0) with two
                 small additions — see its PATCHES.md — until they land upstream

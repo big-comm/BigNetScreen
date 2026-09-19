@@ -54,6 +54,9 @@
 }
 .hero-card .hero-name { font-size: 1.25rem; font-weight: 800; color: @accent_fg_color; }
 .hero-card .hero-detail { color: alpha(@accent_fg_color, 0.8); }
+.hero-card .access-url { font-size: 1.2rem; font-weight: 700; color: @accent_fg_color; }
+.hero-card .access-pin { font-size: 2.6rem; font-weight: 800; letter-spacing: 0.25em; color: @accent_fg_color; }
+.hero-card .qr-frame { background-color: white; border-radius: 10px; padding: 6px; }
 .hero-card .hero-chip { background-color: alpha(@accent_fg_color, 0.15); border-radius: 999px; padding: 3px 12px; color: @accent_fg_color; }
 .device-list { border-radius: 16px; }
 .device-row { padding: 10px 14px; }
