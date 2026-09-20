@@ -105,9 +105,16 @@ impl FirewallLease {
             .filter(|line| !line.trim().is_empty())
             .map(|line| {
                 let mut parts = line.split_whitespace();
-                Some((parts.next()?.to_string(), parts.next()?.to_string()))
+                let port = parts.next()?;
+                let protocol = parts.next()?;
+                if parts.next().is_some()
+                    || !matches!((port, protocol), ("7236", "tcp") | ("16384-16385", "udp")) {
+                    return None;
+                }
+                Some((port.to_string(), protocol.to_string()))
             })
             .collect::<Option<Vec<_>>>()?;
+        if ports.len() > 2 || (ports.len() == 2 && ports[0] == ports[1]) { return None; }
         Some(Self {
             zone: zone.to_string(),
             ports,
@@ -252,6 +259,9 @@ pub async fn ensure_ports_open(interface: Option<&str>) -> Result<FirewallLease>
             Ok(_) => {
                 tracing::info!(%zone, %port, %proto, "port opened in firewalld");
                 applied.push((port, proto));
+                // Record each successful mutation, including a failure/crash
+                // between opening the first and second port.
+                remember(&FirewallLease { zone: zone.clone(), ports: applied.clone() });
             }
             Err(err) => {
                 release(FirewallLease {
@@ -298,31 +308,50 @@ async fn default_zone(conn: &Connection) -> Result<Option<String>> {
 
 /// Removes exactly the rules [`ensure_ports_open`] applied.
 ///
-/// Idempotent and forgiving: an error here is logged, never propagated —
-/// failing to *close* a port must not break the session teardown.
+/// Errors are logged and the journal is retained for retry. A failed D-Bus
+/// cleanup must never erase the only record of a port this process opened.
 pub async fn release(lease: FirewallLease) {
     if lease.is_noop() {
         return;
     }
-    // Forgotten before the attempt rather than after: a record that keeps
-    // pointing at ports firewalld already dropped would only make the next
-    // run log spurious failures.
-    forget();
     let Some(conn) = connect().await else {
-        return;
+        return; // Keep the on-disk lease for the next run.
     };
     let Ok(zone_proxy) = FirewallZoneProxy::new(&conn).await else {
         return;
     };
 
+    let mut complete = true;
     for (port, proto) in &lease.ports {
+        // A reload may already have removed the runtime rule. Absence is a
+        // successful cleanup, unlike a failed query or permission denial.
+        match zone_proxy.query_port(&lease.zone, port, proto).await {
+            Ok(false) => continue,
+            Ok(true) => {},
+            Err(err) => {
+                complete = false;
+                tracing::warn!(zone = %lease.zone, %port, %proto, %err, "could not verify firewall cleanup");
+                continue;
+            }
+        }
         match zone_proxy.remove_port(&lease.zone, port, proto).await {
             Ok(_) => tracing::info!(zone = %lease.zone, %port, %proto, "port closed"),
             Err(err) => {
-                tracing::warn!(zone = %lease.zone, %port, %proto, %err, "failed to close the port")
+                complete = false;
+                tracing::warn!(zone = %lease.zone, %port, %proto, %err, "failed to close the port; retaining lease");
             }
         }
     }
+    if complete {
+        // Do not erase a different lease that another operation has written.
+        if let Some(path) = lease_path() {
+            if std::fs::read_to_string(path).ok().as_deref()
+                .and_then(FirewallLease::from_file).as_ref() == Some(&lease) {
+                forget();
+            }
+        }
+    }
+
 }
 
 #[cfg(test)]
@@ -367,4 +396,12 @@ mod tests {
         let lease = result.expect("firewall integration");
         release(lease).await;
     }
+    #[test]
+    fn lease_cannot_authorize_cleanup_of_unrelated_ports() {
+        for text in ["public\n22 tcp\n", "public\n7236 udp\n", "public\n7236 tcp extra\n",
+            "public\n7236 tcp\n7236 tcp\n"] {
+            assert!(FirewallLease::from_file(text).is_none(), "accepted {text:?}");
+        }
+    }
+
 }

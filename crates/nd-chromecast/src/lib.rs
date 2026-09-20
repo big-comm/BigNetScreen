@@ -9,6 +9,7 @@
 pub mod cast;
 pub mod file_server;
 pub mod http;
+mod flow;
 pub mod media;
 pub mod mirror;
 pub mod mirror_session;
@@ -216,6 +217,28 @@ pub struct MdnsSink {
     session: Mutex<Option<session::SessionHandle>>,
 }
 
+/// A cancelled session still owns its slot until remote/local teardown completes.
+struct SessionReservation<'a>(&'a Mutex<Option<session::SessionHandle>>);
+
+impl<'a> SessionReservation<'a> {
+    fn acquire(slot: &'a Mutex<Option<session::SessionHandle>>, handle: session::SessionHandle) -> Result<Self> {
+        let mut active = slot.lock().unwrap_or_else(PoisonError::into_inner);
+        if active.is_some() {
+            return Err(NdError::Protocol("a Cast session is still active or disconnecting".into()));
+        }
+        *active = Some(handle);
+        Ok(Self(slot))
+    }
+}
+
+impl Drop for SessionReservation<'_> {
+    fn drop(&mut self) {
+        if let Some(handle) = self.0.lock().unwrap_or_else(PoisonError::into_inner).take() {
+            handle.stop();
+        }
+    }
+}
+
 impl MdnsSink {
     fn from_service(service: &ResolvedService, kind: SinkKind) -> Self {
         let fullname = service.get_fullname().to_string();
@@ -294,7 +317,8 @@ impl Sink for MdnsSink {
         })?;
 
         let (handle, cancel) = session::cancellation();
-        *self.session.lock().unwrap_or_else(PoisonError::into_inner) = Some(handle);
+        let _reservation = SessionReservation::acquire(&self.session, handle)?;
+        self.status.reset();
 
         // Mirroring first: direct RTP, no media player in the middle, with a
         // delay of hundreds of milliseconds rather than seconds.
@@ -310,6 +334,7 @@ impl Sink for MdnsSink {
             match mirror_session::run(ip, self.port, video, size, &self.status, cancel.clone())
                 .await
             {
+                Err(err) if mirror_session::is_unsupported(&err) && *cancel.borrow() => Ok(()),
                 Err(err) if mirror_session::is_unsupported(&err) => {
                     tracing::info!(
                         %err,
@@ -324,7 +349,6 @@ impl Sink for MdnsSink {
                 }
             };
 
-        *self.session.lock().unwrap_or_else(PoisonError::into_inner) = None;
         match result {
             Ok(()) => {
                 self.status.set(SinkState::Disconnected);
@@ -338,22 +362,36 @@ impl Sink for MdnsSink {
     }
 
     async fn stop_stream(&self) -> Result<()> {
-        // Signals the running session; `start_stream` returns on its own.
+        // Signal only. Do not publish an idle slot/status before STOP completes.
         if let Some(handle) = self
             .session
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .take()
+            .as_ref()
         {
             handle.stop();
         }
-        self.status.reset();
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cancellation_does_not_release_session_reservation() {
+        use super::*;
+        let slot = Mutex::new(None);
+        let (handle, cancelled) = session::cancellation();
+        let reservation = SessionReservation::acquire(&slot, handle).unwrap();
+        slot.lock().unwrap().as_ref().unwrap().stop();
+        assert!(*cancelled.borrow());
+        let (other, _) = session::cancellation();
+        assert!(SessionReservation::acquire(&slot, other).is_err());
+        drop(reservation);
+        let (other, _) = session::cancellation();
+        assert!(SessionReservation::acquire(&slot, other).is_ok());
+    }
+
     #[test]
     fn link_local_addresses_are_never_chosen() {
         use std::net::{Ipv4Addr, Ipv6Addr};

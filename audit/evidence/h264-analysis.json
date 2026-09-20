@@ -1,0 +1,83 @@
+{
+  "warning": "These files were supplied, not encoded by the patched Rust program.",
+  "streams": {
+    "atual.h264": {
+      "bytes": 6340320,
+      "sha256": "3c71cf205bd456a833bcbf81806e786973ae5986bba1cd55642707c6596ecc7d",
+      "access_units": 120,
+      "keyframes": 4,
+      "mean_I_bytes": 483512.25,
+      "max_I_bytes": 908116,
+      "packets_at_current_1181_byte_chunk": 769,
+      "ffprobe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "profile": "Constrained Baseline",
+            "width": 1920,
+            "height": 1080,
+            "r_frame_rate": "60/1",
+            "nb_read_frames": "120"
+          }
+        ]
+      }
+    },
+    "novo.h264": {
+      "bytes": 5055074,
+      "sha256": "e61fe907fda23011effa0df3dccb4c82ae8e026535b04f5ba85a472e1bce6e0c",
+      "access_units": 120,
+      "keyframes": 4,
+      "mean_I_bytes": 54288.5,
+      "max_I_bytes": 66105,
+      "packets_at_current_1181_byte_chunk": 56,
+      "ffprobe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "profile": "High",
+            "width": 1920,
+            "height": 1080,
+            "r_frame_rate": "60/1",
+            "nb_read_frames": "120"
+          }
+        ]
+      }
+    }
+  },
+  "qp_sizes": {
+    "ui": {
+      "base": {
+        "bytes": 4969299,
+        "change_percent": 0.0,
+        "sha256": "d96575845263f94082d7eae59d7344598a7f633ec1ac877c1eadb5a75aa7f35d"
+      },
+      "cabac": {
+        "bytes": 4298169,
+        "change_percent": -13.50552663464203,
+        "sha256": "1a0ee7389a876916b161bc6e2533fd7b089e7f82979452fc8865358383166976"
+      },
+      "p5": {
+        "bytes": 4423229,
+        "change_percent": -10.98887388341897,
+        "sha256": "3b78f7004d25efd1de7aa458d1c0ec7bfc1e7009fb996ed0cc1da8ee368041ab"
+      }
+    },
+    "src": {
+      "base": {
+        "bytes": 7982737,
+        "change_percent": 0.0,
+        "sha256": "7fab5ac0a76fde5a9e0daf40abff376ca112159051f782ab94ec3b87f1bb629b"
+      },
+      "cabac": {
+        "bytes": 6976796,
+        "change_percent": -12.601454864415551,
+        "sha256": "e515908ab994733fb8eea4638619350b440215a03a74c84202b03b7f18b183f2"
+      },
+      "p5": "NOT_SUPPLIED"
+    }
+  }
+}

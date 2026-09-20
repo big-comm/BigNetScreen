@@ -336,17 +336,6 @@ pub async fn run_with_video(
     let url = server.url();
     tracing::debug!("stream URL ready");
 
-    // Prove encoder startup at the requested mode before opening capture flow.
-    let driver = detect_gpu_driver();
-    let encoder = pipeline::working_encoder(
-        driver,
-        StreamConfig::fit_within(
-            size,
-            StreamConfig::preferred_or(pipeline::CHROMECAST_MAX_RESOLUTION),
-        ),
-        StreamConfig::capped_fps(60),
-    )
-    .await?;
     // The user's screen rarely has the receiver's aspect ratio. Shrinking to
     // fit while preserving that ratio avoids sending 1920x1200 to a 1080p
     // panel (which would rescale) and avoids stretching the picture.
@@ -361,17 +350,19 @@ pub async fn run_with_video(
             "resolution adjusted for the receiver"
         );
     }
-    let cfg = StreamConfig {
+    let mut cfg = StreamConfig {
         width,
         height,
-        // The Cast paths have no frame rate to negotiate against, so the
-        // preference is the whole answer, capped at what H.264 mirroring
-        // receivers accept.
-        fps: StreamConfig::capped_fps(60),
-        encoder,
+        // Default Media Receiver has no mirroring ANSWER negotiation. Use
+        // a compatibility ceiling; the direct mirroring path negotiates separately.
+        fps: StreamConfig::capped_fps(30),
         audio: pipeline::AudioSource::detect(),
         ..Default::default()
     };
+    // Prove encoder startup at the requested mode before opening capture flow,
+    // building exactly the encoder this session will stream with.
+    let driver = detect_gpu_driver();
+    cfg.encoder = pipeline::working_encoder(driver, cfg).await?;
     // What the session settled on, for the interface to show. The receiver's
     // control port is the one it is reached on, so the same value doubles as
     // the address to measure the link against.
@@ -406,9 +397,15 @@ pub async fn run_with_video(
 
     // 3. Control channel: start the receiver app and tell it to fetch the URL.
     status.set(SinkState::WaitSocket);
+    if *cancel.borrow() { return Ok(()); }
     let channel = CastChannel::connect_to(receiver_ip, receiver_port).await?;
-    let app = channel.launch(DEFAULT_MEDIA_RECEIVER).await?;
+    if *cancel.borrow() { channel.close().await; return Ok(()); }
+    let app = match channel.launch(DEFAULT_MEDIA_RECEIVER).await {
+        Ok(app) => app,
+        Err(err) => { channel.close().await; return Err(err); }
+    };
     let result = async {
+        if *cancel.borrow() { return Ok(()); }
         channel.load_media(&app, &url, CONTENT_TYPE).await?;
         tracing::info!("LOAD sent; waiting for the receiver to fetch the stream");
 
@@ -501,7 +498,7 @@ pub async fn run_with_video(
                         Some(pipeline::PipelineEvent::Eos) => break Ok(()),
                         // Warnings do not kill the session.
                         Some(_) => continue,
-                        None => continue,
+                        None => break Err(NdError::Gst("the Chromecast pipeline event stream closed".into())),
                     }
                 }
 
@@ -511,6 +508,10 @@ pub async fn run_with_video(
                 event = channel.next_event() => {
                     match event {
                         Some(event) => {
+                            if event.closes(&app) { break Ok(()); }
+                            if event.source_id != app.transport_id || event.namespace != NS_MEDIA {
+                                continue;
+                            }
                             if event.payload.get("type").and_then(Value::as_str) == Some("MEDIA_STATUS")
                             {
                                 lag.observe(&event.payload);
@@ -615,10 +616,7 @@ pub async fn run_with_video(
         outcome
     }.await;
 
-    let _ = channel.stop_app(&app).await;
-    // And the platform connection, so the receiver is free for the next sender
-    // rather than holding this one.
-    channel.close().await;
+    let result = channel.finish_app(&app, result).await;
     drop(guard);
 
     result
@@ -997,6 +995,15 @@ mod tests {
 
     #[test]
     fn smooth_preference_disables_draining() {
+        // The film profile answers this question on its own (see
+        // `latency_preference`), so it has to be pinned here too. Reading the
+        // settings file sets that profile process-wide the first time anything
+        // asks for a preference, so on a machine with film mode switched on
+        // this test used to assert against the developer's own configuration
+        // rather than against the code, and failed with nothing wrong.
+        let restore = nd_core::latency::current();
+        nd_core::latency::set(nd_core::latency::Profile::Responsive);
+
         set_latency_preference(LatencyPreference::Smooth);
         let drain = DrainController::new();
         assert!(
@@ -1007,6 +1014,8 @@ mod tests {
         set_latency_preference(LatencyPreference::Responsive);
         let drain = DrainController::new();
         assert!(drain.enabled);
+
+        nd_core::latency::set(restore);
     }
 
     #[test]
@@ -1057,6 +1066,7 @@ mod tests {
     #[test]
     fn load_failure_is_reported_as_an_error() {
         let event = crate::cast::CastEvent {
+            source_id: "transport-test".into(),
             namespace: NS_MEDIA.to_string(),
             payload: json!({"type": "LOAD_FAILED", "reason": "MEDIA_UNSUPPORTED"}),
         };
@@ -1067,6 +1077,7 @@ mod tests {
     #[test]
     fn ordinary_media_status_is_not_an_error() {
         let event = crate::cast::CastEvent {
+            source_id: "transport-test".into(),
             namespace: NS_MEDIA.to_string(),
             payload: json!({"type": "MEDIA_STATUS", "status": [{"playerState": "PLAYING"}]}),
         };

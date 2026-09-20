@@ -1,0 +1,11 @@
+test_477120_wrapping_windows (__main__.ModelTests.test_477120_wrapping_windows) ... ok
+test_burst_units_and_packet_ceilings (__main__.ModelTests.test_burst_units_and_packet_ceilings) ... ok
+test_media_time_and_release (__main__.ModelTests.test_media_time_and_release) ... ok
+test_resync_never_advances_dropped_ids (__main__.ModelTests.test_resync_never_advances_dropped_ids) ... ok
+test_startup_and_first_ack (__main__.ModelTests.test_startup_and_first_ack) ... ok
+test_xr_rejects_previous_wire_cycle (__main__.ModelTests.test_xr_rejects_previous_wire_cycle) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.330s
+
+OK

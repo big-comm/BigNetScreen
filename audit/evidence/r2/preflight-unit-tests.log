@@ -1,0 +1,18 @@
+test_caller_compiler_and_wrapper_overrides_are_not_used (__main__.PreflightTests.test_caller_compiler_and_wrapper_overrides_are_not_used) ... ok
+test_component_execution_failure_not_success (__main__.PreflightTests.test_component_execution_failure_not_success) ... ok
+test_exact_versions_and_stable_rustfmt_suffix (__main__.PreflightTests.test_exact_versions_and_stable_rustfmt_suffix) ... ok
+test_external_symlink_rejected_before_execution (__main__.PreflightTests.test_external_symlink_rejected_before_execution) ... ok
+test_missing_components_rejected_before_execution (__main__.PreflightTests.test_missing_components_rejected_before_execution) ... ok
+test_missing_prefix_never_invokes_path_tools (__main__.PreflightTests.test_missing_prefix_never_invokes_path_tools) ... ok
+test_nonexecutable_rejected (__main__.PreflightTests.test_nonexecutable_rejected) ... ok
+test_nonstable_verbose_release_rejected (__main__.PreflightTests.test_nonstable_verbose_release_rejected) ... ok
+test_real_cli_missing_prefix_exit_78_and_json (__main__.PreflightTests.test_real_cli_missing_prefix_exit_78_and_json) ... ok
+test_rustup_symlink_rejected_even_inside_prefix (__main__.PreflightTests.test_rustup_symlink_rejected_even_inside_prefix) ... ok
+test_timeout_not_success (__main__.PreflightTests.test_timeout_not_success) ... ok
+test_wrong_host_rejected (__main__.PreflightTests.test_wrong_host_rejected) ... ok
+test_wrong_patch_and_prerelease_versions_rejected (__main__.PreflightTests.test_wrong_patch_and_prerelease_versions_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 1.450s
+
+OK

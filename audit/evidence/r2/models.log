@@ -1,0 +1,22 @@
+test_477120_wrapping_windows (__main__.ModelTests.test_477120_wrapping_windows) ... ok
+test_burst_units_and_packet_ceilings (__main__.ModelTests.test_burst_units_and_packet_ceilings) ... ok
+test_media_time_and_release (__main__.ModelTests.test_media_time_and_release) ... ok
+test_resync_never_advances_dropped_ids (__main__.ModelTests.test_resync_never_advances_dropped_ids) ... ok
+test_startup_and_first_ack (__main__.ModelTests.test_startup_and_first_ack) ... ok
+test_xr_rejects_previous_wire_cycle (__main__.ModelTests.test_xr_rejects_previous_wire_cycle) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.553s
+
+OK
+{
+  "toml_files_parsed": 12,
+  "rust_execution": "NOT_RUN_NO_TOOLCHAIN",
+  "rust_delimiters": {
+    "files": 86,
+    "status": "PASS_LEXICAL_ONLY_NOT_TYPECHECK"
+  },
+  "python_model_tests": 6,
+  "python_model_failures": 0,
+  "warning": "Python models/static checks are not Rust build or regression-test execution."
+}

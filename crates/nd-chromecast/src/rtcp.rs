@@ -195,72 +195,104 @@ pub enum ReceiverPacket {
 /// key-frame request, feedback with NACKs, log). Looking only at the first one
 /// hides precisely what matters.
 pub fn parse_compound(packet: &[u8]) -> Vec<ReceiverPacket> {
-    let mut blocks = Vec::new();
-    let mut offset = 0usize;
-
-    while offset + 4 <= packet.len() {
-        let first = packet[offset];
-        if first >> 6 != 2 {
-            break;
-        }
-        let payload_type = packet[offset + 1];
-        let words = u16::from_be_bytes([packet[offset + 2], packet[offset + 3]]) as usize;
-        let block_len = (words + 1) * 4;
-        if block_len == 0 || offset + block_len > packet.len() {
-            break;
-        }
-
-        let subtype = first & 0b0001_1111;
-        blocks.push(match payload_type {
-            PT_SENDER_REPORT => ReceiverPacket::Other(PT_SENDER_REPORT),
-            PT_RECEIVER_REPORT => ReceiverPacket::ReceiverReport,
-            PT_EXTENDED_REPORTS => ReceiverPacket::ExtendedReport,
-            PT_APPLICATION_DEFINED => ReceiverPacket::ReceiverLog,
-            PT_PAYLOAD_SPECIFIC if subtype == 1 => ReceiverPacket::PictureLossIndication,
-            PT_PAYLOAD_SPECIFIC => ReceiverPacket::CastFeedback,
-            other => ReceiverPacket::Other(other),
-        });
-
-        offset += block_len;
-    }
-
-    blocks
+    validated_blocks(packet)
+        .unwrap_or_default()
+        .into_iter()
+        .map(classify_block)
+        .collect()
 }
 
-/// Classifies a datagram received on the session socket.
-///
-/// Returns `None` when the packet is not valid RTCP — the same socket carries
-/// RTP, so the two have to be told apart.
-pub fn classify_receiver_packet(packet: &[u8]) -> Option<ReceiverPacket> {
-    if packet.len() < 8 {
+/// Validate the WHOLE datagram before publishing any state. A valid prefix
+/// followed by a truncated block must not acknowledge frames or request IDRs.
+/// Returned slices exclude RTCP padding (only legal on the last block).
+fn validated_blocks(packet: &[u8]) -> Option<Vec<&[u8]>> {
+    if packet.is_empty() {
         return None;
     }
-    // Version 2 in the top two bits.
-    if packet[0] >> 6 != 2 {
-        return None;
+    let mut blocks = Vec::new();
+    let mut offset = 0;
+    while offset < packet.len() {
+        let header = packet.get(offset..offset + 4)?;
+        if header[0] >> 6 != 2 || !(200..=207).contains(&header[1]) {
+            return None;
+        }
+        let words = usize::from(u16::from_be_bytes([header[2], header[3]]));
+        let end = offset.checked_add((words + 1) * 4)?;
+        let mut block = packet.get(offset..end)?;
+        if header[0] & 0x20 != 0 {
+            if end != packet.len() {
+                return None;
+            }
+            let padding = usize::from(*block.last()?);
+            if padding == 0 || padding > block.len().saturating_sub(4) {
+                return None;
+            }
+            block = &block[..block.len() - padding];
+        }
+        let count = usize::from(header[0] & 0x1f);
+        let minimum = match header[1] {
+            PT_SENDER_REPORT => 28 + 24 * count,
+            PT_RECEIVER_REPORT => 8 + 24 * count,
+            PT_APPLICATION_DEFINED => 12,
+            PT_PAYLOAD_SPECIFIC | 205 => 12,
+            PT_EXTENDED_REPORTS => 8,
+            _ => 4,
+        };
+        if block.len() < minimum {
+            return None;
+        }
+        if header[1] == PT_PAYLOAD_SPECIFIC && count == 1 && block.len() != 12 {
+            return None;
+        }
+        if header[1] == PT_PAYLOAD_SPECIFIC && count == 15
+            && block.get(12..16) == Some(CAST_IDENTIFIER.as_slice())
+            && (block.len() < 20 || block.len() < 20 + usize::from(block[17]) * 4)
+        {
+            return None;
+        }
+        if header[1] == PT_EXTENDED_REPORTS {
+            let mut pos = 8;
+            while pos < block.len() {
+                let xr = block.get(pos..pos + 4)?;
+                let size = (usize::from(u16::from_be_bytes([xr[2], xr[3]])) + 1) * 4;
+                block.get(pos..pos + size)?;
+                if xr[0] == 4 && size != 12 { // Receiver Reference Time Report
+                    return None;
+                }
+                pos += size;
+            }
+        }
+        blocks.push(block);
+        offset = end;
     }
-    let payload_type = packet[1];
-    // The range reserved for RTCP; outside it, this is RTP.
-    if !(200..=207).contains(&payload_type) {
-        return None;
-    }
-    // The declared length has to match the size received.
-    let words = u16::from_be_bytes([packet[2], packet[3]]) as usize;
-    if (words + 1) * 4 > packet.len() {
-        return None;
-    }
+    Some(blocks)
+}
 
-    // The subtype lives in the low 5 bits of the first byte.
-    let subtype = packet[0] & 0b0001_1111;
-    Some(match payload_type {
-        PT_RECEIVER_REPORT => ReceiverPacket::ReceiverReport,
-        PT_EXTENDED_REPORTS => ReceiverPacket::ExtendedReport,
-        PT_APPLICATION_DEFINED => ReceiverPacket::ReceiverLog,
-        // 1 = picture loss indication, 15 = Cast-specific feedback.
-        PT_PAYLOAD_SPECIFIC if subtype == 1 => ReceiverPacket::PictureLossIndication,
-        PT_PAYLOAD_SPECIFIC => ReceiverPacket::CastFeedback,
-        other => ReceiverPacket::Other(other),
-    })
+fn classify_block(block: &[u8]) -> ReceiverPacket {
+    match (block[1], block[0] & 0x1f) {
+        (PT_RECEIVER_REPORT, _) => ReceiverPacket::ReceiverReport,
+        (PT_EXTENDED_REPORTS, _) => ReceiverPacket::ExtendedReport,
+        (PT_APPLICATION_DEFINED, _) => ReceiverPacket::ReceiverLog,
+        (PT_PAYLOAD_SPECIFIC, 1) => ReceiverPacket::PictureLossIndication,
+        (PT_PAYLOAD_SPECIFIC, 15) if block.get(12..16) == Some(CAST_IDENTIFIER.as_slice()) => {
+            ReceiverPacket::CastFeedback
+        }
+        (other, _) => ReceiverPacket::Other(other),
+    }
+}
+
+/// Classifies a fully validated RTCP datagram; RTP and malformed tails fail.
+pub fn classify_receiver_packet(packet: &[u8]) -> Option<ReceiverPacket> {
+    validated_blocks(packet)?.first().map(|block| classify_block(block))
+}
+
+/// PLI must address a negotiated pair, not merely arrive on the right socket.
+pub fn picture_loss_for(packet: &[u8], receiver_ssrc: u32, sender_ssrc: u32) -> bool {
+    validated_blocks(packet).is_some_and(|blocks| blocks.into_iter().any(|block| {
+        classify_block(block) == ReceiverPacket::PictureLossIndication
+            && block[4..8] == receiver_ssrc.to_be_bytes()
+            && block[8..12] == sender_ssrc.to_be_bytes()
+    }))
 }
 
 #[cfg(test)]
@@ -296,7 +328,8 @@ mod incoming_tests {
     #[test]
     fn recognises_cast_feedback() {
         // Subtype 15 = Cast feedback (NACKs, checkpoint).
-        let p = packet(0x8F, PT_PAYLOAD_SPECIFIC, 4, 16);
+        let mut p = packet(0x8F, PT_PAYLOAD_SPECIFIC, 4, 16);
+        p[12..16].copy_from_slice(CAST_IDENTIFIER);
         assert_eq!(
             classify_receiver_packet(&p),
             Some(ReceiverPacket::CastFeedback)
@@ -341,7 +374,9 @@ mod compound_tests {
         let mut packet = block(0x81, PT_RECEIVER_REPORT, 7);
         packet.extend(block(0x80, PT_EXTENDED_REPORTS, 4));
         packet.extend(block(0x81, PT_PAYLOAD_SPECIFIC, 2)); // PLI
-        packet.extend(block(0x8F, PT_PAYLOAD_SPECIFIC, 5)); // feedback do Cast
+        let mut feedback = block(0x8F, PT_PAYLOAD_SPECIFIC, 5);
+        feedback[12..16].copy_from_slice(CAST_IDENTIFIER);
+        packet.extend(feedback);
         packet.extend(block(0x82, PT_APPLICATION_DEFINED, 6));
 
         let blocks = parse_compound(&packet);
@@ -358,12 +393,12 @@ mod compound_tests {
     }
 
     #[test]
-    fn stops_at_a_truncated_block_instead_of_reading_past_the_end() {
-        let mut packet = block(0x81, PT_RECEIVER_REPORT, 1);
+    fn rejects_a_valid_prefix_followed_by_a_truncated_block() {
+        let mut packet = block(0x80, PT_RECEIVER_REPORT, 1);
         // A block that declares more than exists.
         packet.extend_from_slice(&[0x80, PT_PAYLOAD_SPECIFIC, 0xFF, 0xFF]);
         let blocks = parse_compound(&packet);
-        assert_eq!(blocks, vec![ReceiverPacket::ReceiverReport]);
+        assert!(blocks.is_empty());
     }
 
     #[test]
@@ -403,7 +438,9 @@ impl Nack {
         let mut ids = vec![self.packet_id];
         for bit in 0..8u16 {
             if self.bitmask & (1 << bit) != 0 {
-                ids.push(self.packet_id.wrapping_add(bit + 1));
+                if let Some(id) = self.packet_id.checked_add(bit + 1).filter(|id| *id != 0xFFFF) {
+                    ids.push(id);
+                }
             }
         }
         Some(ids)
@@ -413,6 +450,10 @@ impl Nack {
 /// The contents of a Cast feedback block.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CastFeedback {
+    /// The receiver that sent this report (must match ANSWER.ssrcs).
+    pub receiver_ssrc: u32,
+    /// Optional XR reference timestamp used to discard reordered feedback.
+    pub reference_time: Option<u64>,
     /// The **sender** SSRC this feedback refers to.
     ///
     /// Video and audio are separate streams, each with its own SSRC; without
@@ -430,57 +471,52 @@ pub struct CastFeedback {
 /// is missing. Ignoring them freezes the picture: it waits forever for a packet
 /// that is never resent.
 pub fn parse_cast_feedback(packet: &[u8]) -> Option<CastFeedback> {
-    let mut offset = 0usize;
+    parse_cast_feedbacks(packet).into_iter().next()
+}
 
-    while offset + 4 <= packet.len() {
-        let first = packet[offset];
-        if first >> 6 != 2 {
-            break;
-        }
-        let payload_type = packet[offset + 1];
-        let words = u16::from_be_bytes([packet[offset + 2], packet[offset + 3]]) as usize;
-        let block_len = (words + 1) * 4;
-        if block_len == 0 || offset + block_len > packet.len() {
-            break;
-        }
-        let block = &packet[offset..offset + block_len];
-        offset += block_len;
-
-        if payload_type != PT_PAYLOAD_SPECIFIC {
+/// A compound packet can contain feedback for more than one negotiated track.
+pub fn parse_cast_feedbacks(packet: &[u8]) -> Vec<CastFeedback> {
+    let Some(blocks) = validated_blocks(packet) else {
+        return Vec::new();
+    };
+    let mut feedbacks = Vec::new();
+    for block in &blocks {
+        if classify_block(block) != ReceiverPacket::CastFeedback || block.len() < 20 {
             continue;
         }
-        // Header(4) + receiver SSRC(4) + sender SSRC(4) + "CAST"(4)
-        // + checkpoint(1) + count(1) + delay(2) = 20 bytes.
-        if block.len() < 20 || &block[12..16] != CAST_IDENTIFIER {
-            continue;
-        }
-
-        let sender_ssrc = u32::from_be_bytes([block[8], block[9], block[10], block[11]]);
-        let checkpoint_frame_id = block[16];
-        let loss_count = block[17] as usize;
-
-        let mut nacks = Vec::with_capacity(loss_count);
-        // Each loss takes 4 bytes right after the block header.
-        for index in 0..loss_count {
-            let start = 20 + index * 4;
-            if start + 4 > block.len() {
-                break;
+        let receiver_ssrc = u32::from_be_bytes(block[4..8].try_into().unwrap());
+        let sender_ssrc = u32::from_be_bytes(block[8..12].try_into().unwrap());
+        let mut reference_time = None;
+        for xr in &blocks {
+            if xr[1] != PT_EXTENDED_REPORTS || xr[4..8] != receiver_ssrc.to_be_bytes() {
+                continue;
             }
+            let mut pos = 8;
+            while pos < xr.len() {
+                let size = (usize::from(u16::from_be_bytes([xr[pos + 2], xr[pos + 3]])) + 1) * 4;
+                if xr[pos] == 4 {
+                    reference_time = Some(u64::from_be_bytes(xr[pos + 4..pos + 12].try_into().unwrap()));
+                }
+                pos += size;
+            }
+        }
+        let mut nacks = Vec::with_capacity(usize::from(block[17]));
+        for loss in block[20..20 + usize::from(block[17]) * 4].chunks_exact(4) {
             nacks.push(Nack {
-                frame_id: block[start],
-                packet_id: u16::from_be_bytes([block[start + 1], block[start + 2]]),
-                bitmask: block[start + 3],
+                frame_id: loss[0],
+                packet_id: u16::from_be_bytes([loss[1], loss[2]]),
+                bitmask: loss[3],
             });
         }
-
-        return Some(CastFeedback {
+        feedbacks.push(CastFeedback {
+            receiver_ssrc,
+            reference_time,
             sender_ssrc,
-            checkpoint_frame_id,
+            checkpoint_frame_id: block[16],
             nacks,
         });
     }
-
-    None
+    feedbacks
 }
 
 #[cfg(test)]
@@ -570,7 +606,67 @@ mod feedback_tests {
     fn a_truncated_loss_list_does_not_panic() {
         let mut block = feedback_block(1, &[(2, 0, 0)]);
         block.truncate(block.len() - 2);
-        // It must not run off the end; it simply reads what it can.
-        let _ = parse_cast_feedback(&block);
+        // No partial ACK/NACK state may escape a malformed packet.
+        assert!(parse_cast_feedback(&block).is_none());
     }
+    #[test]
+    fn every_truncation_and_malformed_tail_is_rejected_atomically() {
+        let valid = feedback_block(42, &[(43, 1, 3)]);
+        for end in 0..valid.len() {
+            assert!(parse_cast_feedback(&valid[..end]).is_none(), "prefix {end}");
+        }
+        let mut packet = valid.clone();
+        packet.push(0);
+        assert!(parse_cast_feedback(&packet).is_none());
+        let mut packet = valid;
+        packet[17] = 255;
+        assert!(parse_cast_feedback(&packet).is_none());
+    }
+
+    #[test]
+    fn only_fmt_fifteen_is_cast_feedback() {
+        let mut packet = feedback_block(42, &[]);
+        packet[0] = 0x82;
+        assert!(parse_cast_feedback(&packet).is_none());
+    }
+
+    #[test]
+    fn padding_is_removed_and_must_be_final_and_nonzero() {
+        let mut packet = feedback_block(42, &[]);
+        packet[0] |= 0x20;
+        packet[3] += 1;
+        packet.extend_from_slice(&[0, 0, 0, 4]);
+        assert_eq!(parse_cast_feedback(&packet).unwrap().checkpoint_frame_id, 42);
+        let mut bad = packet.clone();
+        *bad.last_mut().unwrap() = 0;
+        assert!(parse_cast_feedback(&bad).is_none());
+        packet.extend(feedback_block(43, &[]));
+        assert!(parse_cast_feedback(&packet).is_none());
+    }
+
+    #[test]
+    fn feedback_keeps_receiver_identity_and_multiple_tracks() {
+        let mut packet = feedback_block(42, &[]);
+        packet.extend(feedback_block(43, &[]));
+        let reports = parse_cast_feedbacks(&packet);
+        assert_eq!(reports.len(), 2);
+        assert_eq!(reports[0].receiver_ssrc, 100_002);
+    }
+
+    #[test]
+    fn nack_bitmap_never_wraps_packet_numbers_or_requests_the_sentinel() {
+        let nack = Nack { frame_id: 0, packet_id: 0xfffe, bitmask: 0xff };
+        assert_eq!(nack.packet_ids(), Some(vec![0xfffe]));
+    }
+
+    #[test]
+    fn pli_is_scoped_to_both_ssrcs() {
+        let mut packet = vec![0x81, PT_PAYLOAD_SPECIFIC, 0, 2];
+        packet.extend_from_slice(&100_002u32.to_be_bytes());
+        packet.extend_from_slice(&100_001u32.to_be_bytes());
+        assert!(picture_loss_for(&packet, 100_002, 100_001));
+        assert!(!picture_loss_for(&packet, 100_004, 100_001));
+        assert!(!picture_loss_for(&packet, 100_002, 100_003));
+    }
+
 }

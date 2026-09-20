@@ -1,0 +1,30 @@
+{
+  "BIGNETSCREEN-REVIEW-20260920.tar.gz": {
+    "bytes": 42477923,
+    "sha256": "a7fd267f2422191a4dda052725f3a78e10e5218d430fe185a1f1b2631ee2decc"
+  },
+  "bignetscreen-buildenv-2026-09-20.tar.gz": {
+    "bytes": 75008880,
+    "sha256": "c8effb481d6a4a48d8c44a1e3e47d59cc956a0f8afc57701c9cabb4948456781"
+  },
+  "BIGNETSCREEN-PATCHES-20260920.tar.gz": {
+    "bytes": 210243,
+    "sha256": "54b34fbc692889cdbecc88f27658afab07cd3b11cc4102924ea3edc0e92ce529"
+  },
+  "BIGNETSCREEN-CHECKPOINT-VALIDATION.json": {
+    "bytes": 1232,
+    "sha256": "37b1998363eb6707845842a8b52c7d27885a27dfc8f20a26afaf2d4e069ec9cf"
+  },
+  "BIGNETSCREEN-REVIEW-20260920.md": {
+    "bytes": 18669,
+    "sha256": "a16c8333c71c3af711e42ed98495b4a444f83d0ed5da0aa1733c778403439749"
+  },
+  "BIGNETSCREEN-SHA256SUMS.txt": {
+    "bytes": 513,
+    "sha256": "ed9cbc34dd983a6d38ce5732529c4c570c62a9943eb676fc77ff6df009d8b0ce"
+  },
+  "bignetscreen-source-2026-09-20.tar.gz": {
+    "bytes": 41822553,
+    "sha256": "0e708e3d76ebd1fe18dd239f0af8e917d850f6960a0c4792c45ee9e3df3d1270"
+  }
+}

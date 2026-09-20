@@ -1,0 +1,72 @@
+{
+  "status": "PASS_NATIVE_PROBES_ONLY",
+  "scope": "core",
+  "probes": {
+    "core": {
+      "pkg_config": {
+        "command": [
+          "pkg-config",
+          "--modversion",
+          "gstreamer-1.0",
+          "gstreamer-app-1.0",
+          "gstreamer-video-1.0",
+          "gstreamer-audio-1.0"
+        ],
+        "exit_code": 0,
+        "stdout": "1.26.2\n1.26.2\n1.26.2\n1.26.2",
+        "stderr": ""
+      },
+      "link_flags": {
+        "command": [
+          "pkg-config",
+          "--libs",
+          "gstreamer-1.0",
+          "gstreamer-app-1.0",
+          "gstreamer-video-1.0",
+          "gstreamer-audio-1.0"
+        ],
+        "exit_code": 0,
+        "stdout": "-lgstapp-1.0 -lgstvideo-1.0 -lgstaudio-1.0 -lgstbase-1.0 -lgstreamer-1.0 -lgobject-2.0 -lglib-2.0",
+        "stderr": ""
+      },
+      "link": {
+        "command": [
+          "cc",
+          "/mnt/data/bignetscreen-r2/native-probe-9tg7ow9j/core.c",
+          "-o",
+          "/mnt/data/bignetscreen-r2/native-probe-9tg7ow9j/core",
+          "-lgstapp-1.0",
+          "-lgstvideo-1.0",
+          "-lgstaudio-1.0",
+          "-lgstbase-1.0",
+          "-lgstreamer-1.0",
+          "-lgobject-2.0",
+          "-lglib-2.0"
+        ],
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "run": {
+        "command": [
+          "/mnt/data/bignetscreen-r2/native-probe-9tg7ow9j/core"
+        ],
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "status": "PASS"
+    }
+  },
+  "warning": "This checks selected native prerequisites, not Rust compilation or the GUI.",
+  "glibconfig_header": {
+    "present": false,
+    "include_dirs": [
+      "/mnt/data/bignetscreen-r2/bignetscreen-audit/sysroot/usr/include/glib-2.0",
+      "/mnt/data/bignetscreen-r2/bignetscreen-audit/sysroot/usr/lib/x86_64-linux-gnu/glib-2.0/include",
+      "/mnt/data/bignetscreen-r2/bignetscreen-audit/sysroot/usr/include/sysprof-6",
+      "/mnt/data/bignetscreen-r2/bignetscreen-audit/sysroot/usr/include"
+    ],
+    "required_for": "C code including glib.h; not automatically a Rust build blocker"
+  }
+}

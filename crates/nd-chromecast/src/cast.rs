@@ -23,7 +23,7 @@
 
 use std::collections::HashMap;
 use std::net::IpAddr;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -33,7 +33,7 @@ use rustls::crypto::{verify_tls12_signature, verify_tls13_signature, CryptoProvi
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{DigitallySignedStruct, SignatureScheme};
 use serde_json::{json, Value};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc, oneshot};
 use tokio_rustls::client::TlsStream;
@@ -67,6 +67,8 @@ const MAX_MESSAGE_BYTES: usize = 64 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(8);
 /// How long to wait for an ordinary request's reply.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+const WRITE_TIMEOUT: Duration = Duration::from_secs(2);
+const STOP_TIMEOUT: Duration = Duration::from_secs(3);
 /// How long to allow the receiver to **start an application**.
 ///
 /// Far more generous than an ordinary request: bringing the Default Media
@@ -125,12 +127,80 @@ enum PayloadType {
 /// A spontaneous message from the receiver (not a reply to anything we asked).
 #[derive(Clone, Debug)]
 pub struct CastEvent {
+    pub source_id: String,
     pub namespace: String,
     pub payload: Value,
 }
 
-type Pending = Arc<Mutex<HashMap<i32, oneshot::Sender<Value>>>>;
-type Writer = Arc<tokio::sync::Mutex<WriteHalf<TlsStream<TcpStream>>>>;
+impl CastEvent {
+    pub fn closes(&self, app: &LaunchedApp) -> bool {
+        self.namespace == NS_CONNECTION
+            && (self.source_id == PLATFORM_DEST || self.source_id == app.transport_id)
+            && self.payload.get("type").and_then(Value::as_str) == Some("CLOSE")
+    }
+}
+
+struct PendingReply {
+    namespace: String,
+    source_id: String,
+    sender: oneshot::Sender<Value>,
+}
+type Pending = Arc<Mutex<HashMap<i32, PendingReply>>>;
+
+struct ControlWriter {
+    stream: tokio::sync::Mutex<WriteHalf<TlsStream<TcpStream>>>,
+    closed: AtomicBool,
+    closing: AtomicBool,
+}
+type Writer = Arc<ControlWriter>;
+
+/// Dropping a partial length-prefixed write must permanently poison framing.
+/// `write_all` is not cancellation safe; a later STOP/CLOSE must never be
+/// appended halfway through the payload of the abandoned message.
+struct FrameWrite<'a> {
+    closed: &'a AtomicBool,
+    complete: bool,
+}
+impl Drop for FrameWrite<'_> {
+    fn drop(&mut self) {
+        if !self.complete {
+            self.closed.store(true, Ordering::Release);
+        }
+    }
+}
+
+async fn write_frame<W: AsyncWrite + Unpin>(
+    stream: &tokio::sync::Mutex<W>,
+    closed: &AtomicBool,
+    closing: &AtomicBool,
+    frame: &[u8],
+    heartbeat: bool,
+    terminal: bool,
+    timeout: Duration,
+) -> Result<()> {
+    let deadline = tokio::time::Instant::now() + timeout;
+    let mut stream = tokio::time::timeout_at(deadline, stream.lock()).await
+        .map_err(|_| NdError::Network("Cast writer lock timed out".into()))?;
+    if closed.load(Ordering::Acquire) {
+        return Err(NdError::Network("Cast channel is closed".into()));
+    }
+    if heartbeat && closing.load(Ordering::Acquire) {
+        return Ok(());
+    }
+    let mut transaction = FrameWrite { closed, complete: false };
+    tokio::time::timeout_at(deadline, async {
+        stream.write_all(frame).await?;
+        stream.flush().await
+    }).await
+        .map_err(|_| NdError::Network("Cast frame write timed out; channel closed".into()))?
+        .map_err(net_err)?;
+    transaction.complete = true;
+    if terminal {
+        // Still holding the writer lock: no request can race after CLOSE.
+        closed.store(true, Ordering::Release);
+    }
+    Ok(())
+}
 
 /// A control connection to a Cast receiver.
 pub struct CastChannel {
@@ -208,7 +278,11 @@ impl CastChannel {
             .map_err(net_err)?;
 
         let (read_half, write_half) = tokio::io::split(stream);
-        let writer: Writer = Arc::new(tokio::sync::Mutex::new(write_half));
+        let writer: Writer = Arc::new(ControlWriter {
+            stream: tokio::sync::Mutex::new(write_half),
+            closed: AtomicBool::new(false),
+            closing: AtomicBool::new(false),
+        });
         let pending: Pending = Arc::new(Mutex::new(HashMap::new()));
         let (event_tx, event_rx) = mpsc::channel(128);
 
@@ -307,31 +381,23 @@ impl CastChannel {
         self.pending
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(id, tx);
+            .insert(id, PendingReply {
+                namespace: namespace.to_string(),
+                source_id: destination.to_string(),
+                sender: tx,
+            });
         let _request = PendingRequest {
             pending: self.pending.clone(),
             id,
         };
 
-        self.send(namespace, destination, &payload.to_string())
-            .await?;
-
-        match tokio::time::timeout(timeout, rx).await {
-            Ok(Ok(response)) => Ok(response),
-            Ok(Err(_)) => Err(NdError::Protocol(
-                "the Cast channel closed before the reply".into(),
-            )),
-            Err(_) => {
-                self.pending
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .remove(&id);
-                Err(NdError::Protocol(format!(
-                    "the receiver did not reply within {}s",
-                    timeout.as_secs()
-                )))
-            }
-        }
+        let deadline = tokio::time::Instant::now() + timeout;
+        tokio::time::timeout_at(deadline, async {
+            self.send(namespace, destination, &payload.to_string()).await?;
+            rx.await.map_err(|_| NdError::Protocol("the Cast channel closed before the reply".into()))
+        }).await.map_err(|_| NdError::Protocol(format!(
+            "the receiver did not reply within {}s", timeout.as_secs()
+        )))?
     }
 
     /// Asks for the receiver's status (running apps, volume, and so on).
@@ -384,23 +450,26 @@ impl CastChannel {
         let transport_id = app
             .get("transportId")
             .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
             .ok_or_else(|| NdError::Protocol("reply without a transportId".into()))?
             .to_string();
         let session_id = app
             .get("sessionId")
             .and_then(Value::as_str)
-            .unwrap_or_default()
+            .filter(|id| !id.is_empty())
+            .ok_or_else(|| NdError::Protocol("reply without a sessionId".into()))?
             .to_string();
 
-        // An explicit CONNECT to the app is required before talking to it.
-        self.send(NS_CONNECTION, &transport_id, r#"{"type":"CONNECT"}"#)
-            .await?;
-
-        tracing::info!(%app_id, %transport_id, "receiver app started");
-        Ok(LaunchedApp {
-            transport_id,
-            session_id,
-        })
+        let app = LaunchedApp { transport_id, session_id };
+        // If the app launched but its CONNECT fails, still attempt STOP for
+        // exactly that session before dropping the platform connection.
+        if let Err(err) = self.send(NS_CONNECTION, &app.transport_id, r#"{"type":"CONNECT"}"#).await {
+            let _ = self.stop_app(&app).await;
+            self.close().await;
+            return Err(err);
+        }
+        tracing::info!(%app_id, transport_id = %app.transport_id, "receiver app started");
+        Ok(app)
     }
 
     /// Tells the receiver app to load a media URL (our HTTP stream).
@@ -410,7 +479,7 @@ impl CastChannel {
         url: &str,
         content_type: &str,
     ) -> Result<Value> {
-        self.request(
+        let response = self.request(
             NS_MEDIA,
             &app.transport_id,
             json!({
@@ -427,7 +496,11 @@ impl CastChannel {
                 },
             }),
         )
-        .await
+        .await?;
+        if response.get("type").and_then(Value::as_str) != Some("MEDIA_STATUS") {
+            return Err(NdError::Protocol("receiver did not acknowledge the live media LOAD".into()));
+        }
+        Ok(response)
     }
 
     /// Tells the receiver app to play a **file** from this computer.
@@ -490,42 +563,67 @@ impl CastChannel {
         Ok(response)
     }
 
-    /// Shuts down the app running on the receiver.
+    /// STOP only the session we launched, then CLOSE its virtual connection.
+    /// A transport-level reply is not sufficient: verify the app is gone.
     pub async fn stop_app(&self, app: &LaunchedApp) -> Result<()> {
-        let stopped = self
-            .request(
-                NS_RECEIVER,
-                PLATFORM_DEST,
-                json!({"type": "STOP", "sessionId": app.session_id}),
-            )
-            .await
-            .map(|_| ());
-
-        // Closing the **virtual connection** to the app, and not only stopping
-        // the app, is what the protocol asks for. Every CONNECT opens a
-        // connection the receiver tracks by itself, and dropping the socket
-        // does not end it: the device goes on holding a sender that is no
-        // longer there, and refuses the next one. Reported from the field as
-        // "after disconnecting, the stick will not accept a new connection".
+        self.writer.closing.store(true, Ordering::Release);
+        let response = self.request_with_timeout(
+            NS_RECEIVER, PLATFORM_DEST,
+            json!({"type": "STOP", "sessionId": app.session_id}), STOP_TIMEOUT,
+        ).await;
+        let mut stopped = response.as_ref().is_ok_and(|reply| session_absent(reply, &app.session_id));
+        if !stopped && !self.writer.closed.load(Ordering::Acquire) {
+            // STOP may race a receiver-initiated shutdown. GET_STATUS can
+            // confirm that specific session is already absent without ever
+            // stopping another sender's application.
+            stopped = self.request_with_timeout(
+                NS_RECEIVER, PLATFORM_DEST, json!({"type": "GET_STATUS"}), STOP_TIMEOUT,
+            ).await.is_ok_and(|reply| session_absent(&reply, &app.session_id));
+        }
         self.close_to(&app.transport_id).await;
-        stopped
+        if stopped {
+            Ok(())
+        } else {
+            Err(NdError::Protocol("receiver did not confirm that the Cast session stopped".into()))
+        }
     }
 
-    /// Ends the session politely: closes the virtual connections it opened.
-    ///
-    /// Best effort by design. It runs while a session is being torn down —
-    /// often *because* something already went wrong — and a receiver that will
-    /// not take the goodbye must not turn a finished cast into an error.
+    /// Terminal and idempotent: no heartbeat/request is sent after platform
+    /// CLOSE. Bound the TLS shutdown too, including a receiver that stops reading.
     pub async fn close(&self) {
-        self.close_to(PLATFORM_DEST).await;
+        self.writer.closing.store(true, Ordering::Release);
+        if !self.writer.closed.load(Ordering::Acquire) {
+            let _ = send_raw_kind(&self.writer, NS_CONNECTION, PLATFORM_DEST,
+                r#"{"type":"CLOSE"}"#, true).await;
+        }
+        self.writer.closed.store(true, Ordering::Release);
+        self.ping_task.abort();
+        self.reader_task.abort();
+        self.pending.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clear();
+        let _ = tokio::time::timeout(WRITE_TIMEOUT, async {
+            self.writer.stream.lock().await.shutdown().await
+        }).await;
     }
 
     async fn close_to(&self, destination: &str) {
-        if let Err(err) = self
-            .send(NS_CONNECTION, destination, r#"{"type":"CLOSE"}"#)
-            .await
-        {
+        if let Err(err) = self.send(NS_CONNECTION, destination, r#"{"type":"CLOSE"}"#).await {
             tracing::debug!(%destination, %err, "the receiver did not take the CLOSE");
+        }
+    }
+
+    /// Preserve the original failure; do not call an unconfirmed disconnect a
+    /// success. Explicit callers keep the channel alive until this completes.
+    pub async fn finish_app(&self, app: &LaunchedApp, result: Result<()>) -> Result<()> {
+        let stopped = self.stop_app(app).await;
+        self.close().await;
+        if let Err(err) = &stopped {
+            tracing::warn!(%err, "Cast teardown was not confirmed");
+        }
+        match (result, stopped) {
+            (Ok(()), stopped) => stopped,
+            // HTTP fallback must not replace an app whose STOP failed.
+            (Err(NdError::Unsupported(_)), Err(stop_error)) => Err(stop_error),
+            (Err(original), _) => Err(original),
         }
     }
 
@@ -552,6 +650,16 @@ async fn send_raw(
     destination: &str,
     payload: &str,
 ) -> Result<()> {
+    send_raw_kind(writer, namespace, destination, payload, false).await
+}
+
+async fn send_raw_kind(
+    writer: &Writer,
+    namespace: &str,
+    destination: &str,
+    payload: &str,
+    terminal: bool,
+) -> Result<()> {
     let msg = CastMessage {
         protocol_version: ProtocolVersion::Castv210 as i32,
         source_id: SOURCE_ID.to_string(),
@@ -567,17 +675,29 @@ async fn send_raw(
         return Err(NdError::Protocol("Cast message too large".into()));
     }
 
-    let mut guard = writer.lock().await;
-    guard
-        .write_all(&(buf.len() as u32).to_be_bytes())
-        .await
-        .map_err(net_err)?;
-    guard.write_all(&buf).await.map_err(net_err)?;
-    guard.flush().await.map_err(net_err)?;
-    Ok(())
+    let mut frame = Vec::with_capacity(4 + buf.len());
+    frame.extend_from_slice(&(buf.len() as u32).to_be_bytes());
+    frame.extend_from_slice(&buf);
+    write_frame(&writer.stream, &writer.closed, &writer.closing, &frame,
+        namespace == NS_HEARTBEAT, terminal, WRITE_TIMEOUT).await
 }
 
-async fn read_message(reader: &mut ReadHalf<TlsStream<TcpStream>>) -> Result<(String, Value)> {
+fn session_absent(response: &Value, session_id: &str) -> bool {
+    if response.get("type").and_then(Value::as_str) != Some("RECEIVER_STATUS") {
+        return false;
+    }
+    let Some(status) = response.get("status").and_then(Value::as_object) else { return false; };
+    match status.get("applications") {
+        None | Some(Value::Null) => true,
+        Some(Value::Array(apps)) => apps.iter().all(|app| {
+            app.get("sessionId").and_then(Value::as_str)
+                .is_some_and(|id| !id.is_empty() && id != session_id)
+        }),
+        _ => false,
+    }
+}
+
+async fn read_message<R: AsyncRead + Unpin>(reader: &mut R) -> Result<CastEvent> {
     let mut len_buf = [0u8; 4];
     reader.read_exact(&mut len_buf).await.map_err(net_err)?;
     let len = u32::from_be_bytes(len_buf) as usize;
@@ -600,12 +720,23 @@ async fn read_message(reader: &mut ReadHalf<TlsStream<TcpStream>>) -> Result<(St
         bytes = msg.payload_utf8.as_ref().map_or(0, String::len),
         "<<< Cast received"
     );
-    let payload = msg
-        .payload_utf8
-        .as_deref()
-        .and_then(|s| serde_json::from_str(s).ok())
-        .unwrap_or(Value::Null);
-    Ok((msg.namespace, payload))
+    if msg.protocol_version != ProtocolVersion::Castv210 as i32
+        || (msg.destination_id != SOURCE_ID && msg.destination_id != "*")
+        || msg.source_id.is_empty()
+    {
+        return Err(NdError::Protocol("invalid Cast message envelope".into()));
+    }
+    let payload = if msg.payload_type == PayloadType::Str as i32 {
+        let text = msg.payload_utf8.as_deref()
+            .ok_or_else(|| NdError::Protocol("Cast UTF-8 payload missing".into()))?;
+        serde_json::from_str(text).map_err(proto_err)?
+    } else if msg.payload_type == PayloadType::Bin as i32 {
+        // DeviceAuth is a separate binary protocol, not a JSON reply.
+        Value::Null
+    } else {
+        return Err(NdError::Protocol("unknown Cast payload type".into()));
+    };
+    Ok(CastEvent { source_id: msg.source_id, namespace: msg.namespace, payload })
 }
 
 /// The read task: answers PINGs, resolves pending requests and forwards the
@@ -617,17 +748,24 @@ async fn reader_loop(
     events: mpsc::Sender<CastEvent>,
 ) {
     loop {
-        let (namespace, payload) = match read_message(&mut reader).await {
+        let read = tokio::time::timeout(Duration::from_secs(40), read_message(&mut reader)).await;
+        let CastEvent { source_id, namespace, payload } = match read {
+            Err(_) => {
+                tracing::warn!("Cast receiver/control frame timed out");
+                break;
+            }
+            Ok(result) => match result {
             Ok(msg) => msg,
             Err(err) => {
                 tracing::debug!(%err, "Cast channel closed");
                 break;
             }
+            },
         };
 
         if namespace == NS_HEARTBEAT {
             if payload.get("type").and_then(Value::as_str) == Some("PING")
-                && send_raw(&writer, NS_HEARTBEAT, PLATFORM_DEST, r#"{"type":"PONG"}"#)
+                && send_raw(&writer, NS_HEARTBEAT, &source_id, r#"{"type":"PONG"}"#)
                     .await
                     .is_err()
             {
@@ -636,28 +774,32 @@ async fn reader_loop(
             continue;
         }
 
-        // A reply to one of our requests?
-        if let Some(id) = payload.get("requestId").and_then(Value::as_i64) {
-            let waiting = pending
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .remove(&(id as i32));
-            if let Some(tx) = waiting {
-                let _ = tx.send(payload);
+        // Correlate all three fields; another app/namespace must not satisfy
+        // a STOP/LAUNCH waiter by copying or overflowing its requestId.
+        if let Some(id) = payload.get("requestId").and_then(Value::as_i64)
+            .and_then(|id| i32::try_from(id).ok())
+        {
+            let waiting = {
+                let mut requests = pending.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                if requests.get(&id).is_some_and(|reply| {
+                    reply.namespace == namespace && reply.source_id == source_id
+                }) {
+                    requests.remove(&id)
+                } else { None }
+            };
+            if let Some(reply) = waiting {
+                let _ = reply.sender.send(payload);
                 continue;
             }
         }
-
-        if matches!(
-            events.try_send(CastEvent { namespace, payload }),
-            Err(mpsc::error::TrySendError::Closed(_))
-        ) {
+        if let Err(err) = events.try_send(CastEvent { source_id, namespace, payload }) {
+            // Do not silently discard a CLOSE or ANSWER when the consumer is
+            // behind. Terminating is bounded and releases all pending requests.
+            tracing::warn!(%err, "Cast event queue unavailable; closing channel");
             break;
         }
     }
-
-    // On close, release anyone waiting for a reply (the `oneshot`s are
-    // dropped and each `request()` returns an error instead of hanging).
+    writer.closed.store(true, Ordering::Release);
     pending
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -682,11 +824,11 @@ async fn reader_loop(
 /// signature, the **validity period** and the key usage all keep being
 /// checked; only the anchor's provenance and the host name are waived.
 ///
-/// A known limit: whoever controls the network can present their own
-/// self-signed chain — the unavoidable consequence of accepting `UNKNOWN_CA`,
-/// and the same trust model every other Cast client uses. The real gain over
-/// the previous code is rejecting certificates that are expired, out of date
-/// or structurally invalid.
+/// SECURITY LIMIT: this validates syntax/signatures but does not authenticate
+/// the device's identity. A LAN attacker can present their own chain. Open
+/// Screen separately verifies Cast DeviceAuth against trusted device roots;
+/// this implementation does NOT implement that challenge/response yet. Use
+/// only on a trusted network; certificate validity is not receiver identity.
 #[derive(Debug)]
 struct CastCertVerifier(Arc<CryptoProvider>);
 
@@ -783,9 +925,8 @@ mod tests {
     }
 
     #[test]
-    fn expired_certificate_is_rejected() {
-        // A self-signed certificate whose validity is in the past must be
-        // refused — exactly what the C code's `return TRUE` let through.
+    fn malformed_certificate_is_rejected() {
+        // This fixture tests malformed DER, not certificate expiry.
         let provider = Arc::new(rustls::crypto::ring::default_provider());
         let verifier = CastCertVerifier(provider);
 
@@ -808,4 +949,68 @@ mod tests {
         let b = counter.fetch_add(1, Ordering::Relaxed);
         assert!(b > a);
     }
+    #[test]
+    fn stop_confirmation_is_scoped_and_structurally_valid() {
+        let stopped = json!({"type":"RECEIVER_STATUS", "status":{"applications":[]}});
+        assert!(session_absent(&stopped, "ours"));
+        let other = json!({"type":"RECEIVER_STATUS", "status":{"applications":[{"sessionId":"other"}]}});
+        assert!(session_absent(&other, "ours"));
+        assert!(!session_absent(&other, "other"));
+        for malformed in [json!({"type":"INVALID_REQUEST"}),
+            json!({"type":"RECEIVER_STATUS", "status":{"applications":[{}]}})] {
+            assert!(!session_absent(&malformed, "ours"));
+        }
+    }
+
+    #[tokio::test]
+    async fn interrupted_partial_write_permanently_closes_writer() {
+        let (stream, mut peer) = tokio::io::duplex(4);
+        let stream = tokio::sync::Mutex::new(stream);
+        let closed = AtomicBool::new(false);
+        let closing = AtomicBool::new(false);
+        // The peer never reads until the timeout: four bytes fit, the rest block.
+        let result = tokio::time::timeout(Duration::from_millis(20), write_frame(
+            &stream, &closed, &closing, b"partial message", false, false, Duration::from_secs(1),
+        )).await;
+        assert!(result.is_err());
+        assert!(closed.load(Ordering::Acquire));
+        let mut prefix = [0; 4];
+        peer.read_exact(&mut prefix).await.unwrap();
+        assert_eq!(&prefix, b"part");
+        assert!(write_frame(&stream, &closed, &closing, b"STOP", false, false,
+            Duration::from_secs(1)).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn terminal_close_suppresses_following_writes() {
+        let (stream, mut peer) = tokio::io::duplex(64);
+        let stream = tokio::sync::Mutex::new(stream);
+        let closed = AtomicBool::new(false);
+        let closing = AtomicBool::new(true);
+        write_frame(&stream, &closed, &closing, b"PING", true, false,
+            Duration::from_secs(1)).await.unwrap();
+        write_frame(&stream, &closed, &closing, b"CLOSE", false, true,
+            Duration::from_secs(1)).await.unwrap();
+        let mut received = [0; 5];
+        peer.read_exact(&mut received).await.unwrap();
+        assert_eq!(&received, b"CLOSE"); // PING was not written.
+        assert!(write_frame(&stream, &closed, &closing, b"LOAD", false, false,
+            Duration::from_secs(1)).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn parser_rejects_bad_envelopes_and_json() {
+        for (destination, text) in [("wrong-sender", "{}"), (SOURCE_ID, "{")] {
+            let message = CastMessage {
+                protocol_version: ProtocolVersion::Castv210 as i32,
+                source_id: PLATFORM_DEST.into(), destination_id: destination.into(),
+                namespace: NS_RECEIVER.into(), payload_type: PayloadType::Str as i32,
+                payload_utf8: Some(text.into()), payload_binary: None,
+            }.encode_to_vec();
+            let mut bytes = (message.len() as u32).to_be_bytes().to_vec();
+            bytes.extend(message);
+            assert!(read_message(&mut bytes.as_slice()).await.is_err());
+        }
+    }
+
 }

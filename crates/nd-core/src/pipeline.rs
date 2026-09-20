@@ -460,6 +460,39 @@ pub const WFD_AUDIO_PID: u16 = 0x1100;
 // Encoders
 // ------------------------------------------------------------------------
 
+/// The H.264 feature set a path's receiver is known to decode.
+///
+/// One decision with two consequences — the profile written into the caps and
+/// whether the encoder may use CABAC — so it is one value rather than two that
+/// can disagree.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum H264Profile {
+    /// No CABAC, no 8x8 transform. Required by the Wi-Fi Display profile, and
+    /// the safe assumption for a receiver that declared nothing.
+    #[default]
+    ConstrainedBaseline,
+    /// CABAC and the 8x8 transform. Measured at a fixed QP 26 against
+    /// constrained baseline, on the same NVENC and the same two clips:
+    /// **13.5% fewer bits** on screen-like content, **12.6%** on dense detail.
+    /// At a fixed bitrate that is the same 13% spent on the picture instead.
+    High,
+}
+
+impl H264Profile {
+    /// The name `video/x-h264,profile=…` expects.
+    pub fn caps_name(self) -> &'static str {
+        match self {
+            H264Profile::ConstrainedBaseline => "constrained-baseline",
+            H264Profile::High => "high",
+        }
+    }
+
+    /// May the encoder use CABAC? Constrained baseline forbids it.
+    pub fn cabac(self) -> bool {
+        matches!(self, H264Profile::High)
+    }
+}
+
 /// Candidate H.264 encoders, in order of preference.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum H264Encoder {
@@ -548,9 +581,17 @@ impl H264Encoder {
     pub fn encoder_description(self, cfg: &StreamConfig) -> String {
         let kbps = cfg.scaled_bitrate_kbps();
         let gop = cfg.gop();
+        let cabac = cfg.profile.cabac();
         match self {
             H264Encoder::X264 => {
                 let intra = if cfg.intra_refresh { "true" } else { "false" };
+                // x264 asks for the buffer in milliseconds. The 50 ms this
+                // path has always used is a little under two frames at 30 Hz,
+                // which is why the oversized key frame never showed up here.
+                let vbv = match cfg.vbv_ms() {
+                    0 => 50,
+                    ms => ms,
+                };
                 format!(
                     // No `sliced-threads`: it splits each frame into several
                     // slices, and the hardware decoders in TVs and projectors
@@ -559,8 +600,8 @@ impl H264Encoder {
                     // parallelism, but it is an interoperability requirement.
                     "x264enc name=enc tune=zerolatency speed-preset=ultrafast \
                      rc-lookahead=0 sync-lookahead=0 bframes=0 b-adapt=false \
-                     threads=0 aud=true cabac=false ref=1 \
-                     pass=cbr vbv-buf-capacity=50 intra-refresh={intra} \
+                     threads=0 aud=true cabac={cabac} ref=1 \
+                     pass=cbr vbv-buf-capacity={vbv} intra-refresh={intra} \
                      key-int-max={gop} bitrate={kbps}"
                 )
             }
@@ -570,22 +611,43 @@ impl H264Encoder {
             H264Encoder::VaH264 => format!(
                 "vah264enc name=enc rate-control=cbr bitrate={kbps} key-int-max={gop} \
                  b-frames=0 ref-frames=1 num-slices=1 target-usage=6 \
-                 aud=true cabac=false"
+                 aud=true cabac={cabac}"
             ),
             H264Encoder::VaapiH264 => format!(
                 "vaapih264enc name=enc rate-control=cbr bitrate={kbps} keyframe-period={gop} \
-                 max-bframes=0 refs=1 num-slices=1 quality-level=7 cabac=false aud=true"
+                 max-bframes=0 refs=1 num-slices=1 quality-level=7 cabac={cabac} aud=true"
             ),
-            H264Encoder::NvH264 => format!(
-                "nvh264enc name=enc preset=low-latency-hq rc-mode=cbr bitrate={kbps} \
-                 gop-size={gop} bframes=0 zerolatency=true aud=true"
-            ),
+            // NVENC asks for the buffer in kbits. Its own default is a whole
+            // second, which is what let a key frame reach 908 KB on a 10 Mbit
+            // stream (see [`StreamConfig::vbv_frames`]).
+            //
+            // The property is only written when a path asks for it: it is
+            // "conditionally available" on this element, so a GPU that does
+            // not offer it would fail to build — and a path that never needed
+            // the limit should not lose its hardware encoder over it.
+            H264Encoder::NvH264 => {
+                let vbv = match cfg.vbv_frames {
+                    0 => String::new(),
+                    frames => format!(
+                        "vbv-buffer-size={} ",
+                        (u64::from(kbps) * u64::from(frames) / u64::from(cfg.fps.max(1))).max(1)
+                    ),
+                };
+                format!(
+                    "nvh264enc name=enc preset=low-latency-hq rc-mode=cbr bitrate={kbps} \
+                     {vbv}gop-size={gop} bframes=0 zerolatency=true aud=true"
+                )
+            }
             // V4L2 stateful: as propriedades ficam em `extra-controls`.
             H264Encoder::V4l2H264 => format!(
-                "v4l2h264enc name=enc extra-controls=\"controls,h264_profile=0,\
+                "v4l2h264enc name=enc extra-controls=\"controls,h264_profile={v4l2_profile},\
                  h264_i_frame_period={gop},video_bitrate={bps},\
                  repeat_sequence_header=1\"",
-                bps = kbps as u64 * 1000
+                bps = kbps as u64 * 1000,
+                v4l2_profile = match cfg.profile {
+                    H264Profile::ConstrainedBaseline => 0, // Preserve the legacy WFD control.
+                    H264Profile::High => 4, // V4L2_MPEG_VIDEO_H264_PROFILE_HIGH.
+                },
             ),
             // CAREFUL: `openh264enc` measures `bitrate` in **bit/s**, not kbit/s.
             H264Encoder::OpenH264 => format!(
@@ -820,15 +882,17 @@ pub fn build_monitored(
 }
 
 /// Select an encoder that produces frames at the requested mode.
-pub async fn working_encoder(driver: GpuDriver, size: (u32, u32), fps: u32) -> Result<H264Encoder> {
+///
+/// `session` is the configuration the caller is about to stream with, its
+/// `encoder` field ignored — this replaces it with each candidate in turn. It
+/// takes the whole thing rather than a size and a frame rate because the probe
+/// is only worth anything if it builds the *same* encoder the session will:
+/// with a partial configuration it once validated a pipeline that differed
+/// from the real one in every property but two, so a property the hardware
+/// rejects would have passed here and failed on the screen.
+pub async fn working_encoder(driver: GpuDriver, session: StreamConfig) -> Result<H264Encoder> {
     for encoder in encoder_candidates(driver) {
-        let cfg = StreamConfig {
-            width: size.0,
-            height: size.1,
-            fps,
-            encoder,
-            ..Default::default()
-        };
+        let cfg = StreamConfig { encoder, ..session };
         let description = format!(
             "videotestsrc is-live=true num-buffers=2 ! {} ! {} ! fakesink sync=false",
             cfg.convert_scale(),
@@ -1180,6 +1244,36 @@ pub struct StreamConfig {
     /// from loss). Off by default: without periodic IDRs, older receivers
     /// cannot join the stream after it has started.
     pub intra_refresh: bool,
+    /// How many frames of slack the rate control gets, or `0` to leave the
+    /// encoder's own default alone.
+    ///
+    /// This is the VBV (the "leaky bucket" H.264 rate control drains into),
+    /// expressed in frames because that is what bounds the size of a single
+    /// one; each encoder is told in whatever unit it wants.
+    ///
+    /// It matters on a packet network and almost nowhere else. Measured at
+    /// 1080p30, CBR 10 Mbit, `videotestsrc pattern=snow`:
+    ///
+    /// | VBV | key frame, mean | key frame, largest | delivered |
+    /// | --- | --- | --- | --- |
+    /// | NVENC default | 483 KB | 908 KB | 12.7 Mbit/s |
+    /// | 1 frame | 403 KB | 1414 KB | 12.5 Mbit/s |
+    /// | **2 frames** | **92 KB** | **154 KB** | **10.3 Mbit/s** |
+    /// | 3 frames | 116 KB | 175 KB | 10.1 Mbit/s |
+    ///
+    /// Two lessons in that table. NVENC's default buffer holds a whole second,
+    /// so a key frame is free to eat most of the second's budget — and the
+    /// stream then overran the CBR ceiling it was given by 27%. And one frame
+    /// is *worse* than no limit at all: the rate control cannot fit an IDR in
+    /// that bucket and overshoots wildly instead.
+    pub vbv_frames: u32,
+    /// The H.264 feature set the receiver on this path is known to decode.
+    ///
+    /// Constrained baseline by default, which is what every path assumed
+    /// before there was a choice — and what the Wi-Fi Display profile
+    /// requires. Raising it is a per-path statement about the device on the
+    /// other end, never a global default.
+    pub profile: H264Profile,
 }
 
 impl Default for StreamConfig {
@@ -1192,6 +1286,8 @@ impl Default for StreamConfig {
             encoder: H264Encoder::X264,
             audio: AudioSource::Silence,
             intra_refresh: false,
+            vbv_frames: 0,
+            profile: H264Profile::ConstrainedBaseline,
         }
     }
 }
@@ -1228,11 +1324,13 @@ impl StreamConfig {
     /// screen smaller than the cap is streamed at its original size, without
     /// spending bits on upscaling the receiver would undo.
     pub fn fit_within(source: (u32, u32), max: (u32, u32)) -> (u32, u32) {
-        let (w, h) = source;
-        let (max_w, max_h) = max;
-        if w == 0 || h == 0 {
-            return max;
+        // A valid H.264 image has at least two pixels on each axis. Sanitise
+        // degenerate portal/preference values before division or even rounding.
+        let (max_w, max_h) = (max.0.max(2) & !1, max.1.max(2) & !1);
+        if source.0 == 0 || source.1 == 0 {
+            return (max_w, max_h);
         }
+        let (w, h) = (source.0.max(2), source.1.max(2));
         if w <= max_w && h <= max_h {
             return (w & !1, h & !1);
         }
@@ -1283,6 +1381,17 @@ impl StreamConfig {
     /// because the other end would be sent frames it never asked for.
     pub fn capped_fps(negotiated: u32) -> u32 {
         negotiated.min(crate::settings::current().fps).max(1)
+    }
+
+    /// [`Self::vbv_frames`] in milliseconds, for encoders that ask in time.
+    ///
+    /// `0` stays `0` — it means "leave the encoder's default alone", and a
+    /// frame count that rounds to nothing must not turn into a real limit.
+    pub fn vbv_ms(&self) -> u32 {
+        match self.vbv_frames {
+            0 => 0,
+            frames => (frames * 1000 / self.fps.max(1)).max(1),
+        }
     }
 
     /// The maximum distance between keyframes.
@@ -1568,12 +1677,17 @@ pub fn mirror_pipeline_description(cfg: &StreamConfig, source: &VideoSource) -> 
     };
 
     format!(
+        // The profile comes from the configuration here, unlike the WFD path
+        // where the specification pins it: a Cast receiver decodes H.264 High
+        // (it is what every streaming service sends it), and constrained
+        // baseline was inherited from Miracast rather than required.
         "{src} ! {convert} ! {vqueue} ! \
-         {enc} ! video/x-h264,profile=constrained-baseline,stream-format=byte-stream,\
+         {enc} ! video/x-h264,profile={profile},stream-format=byte-stream,\
 alignment=au ! \
          h264parse config-interval=-1 ! \
          appsink name={video_sink} emit-signals=false sync=false \
          max-buffers=1 drop=false{audio}",
+        profile = cfg.profile.caps_name(),
         src = source.description(),
         convert = cfg.convert_scale(),
         vqueue = if source.is_file() {
@@ -1593,6 +1707,34 @@ alignment=au ! \
 /// need VP9/HEVC, which this pipeline does not produce. Sending the raw screen
 /// (a 16:10 1920x1200 one, say) makes the device rescale — or refuse.
 pub const CHROMECAST_MAX_RESOLUTION: (u32, u32) = (1920, 1080);
+
+/// The video bitrate ceiling on the Cast paths, in kbit/s.
+///
+/// Open Screen calibrates its own ceiling (`kDefaultVideoMaxBitRate`) at
+/// "1080P @ 30FPS, which can be played back at good quality around 10mbps",
+/// and that number describes the receiver's decoder and the last Wi-Fi hop to
+/// it — neither of which grows because the shared screen is bigger.
+///
+/// [`StreamConfig::scaled_bitrate_kbps`] scales with resolution **and** frame
+/// rate, which is right for a direct Miracast link and wrong here: a 1440p60
+/// desktop asked for 21 Mbit/s. Measured in the field against a Google TV
+/// Stick, the picture lost frames from the first second and the backlog grew
+/// until the device ended the session.
+pub const CAST_MAX_BITRATE_KBPS: u32 = 10_000;
+
+/// The rate-control slack given to the Cast **mirroring** encoder, in frames.
+///
+/// Separate from every other path on purpose. Mirroring is the only one that
+/// puts each frame on the wire as its own burst of UDP datagrams, so the size
+/// of a single frame is a property the network sees directly: at NVENC's
+/// default a key frame reached 756 packets, which is 29 burst windows — about
+/// 290 ms of pacing, once per second, at 30 fps. Miracast, NDI and the browser
+/// path each hand their frames to a muxer or to a stack that paces on their
+/// behalf, and none of them were measured here, so none of them change.
+///
+/// Two is the measured optimum; the table in [`StreamConfig::vbv_frames`]
+/// shows why one is worse than no limit at all.
+pub const CAST_VBV_FRAMES: u32 = 2;
 
 /// The `multisocketsink`'s name in the Chromecast pipeline description.
 ///
@@ -1807,18 +1949,156 @@ mod tests {
         // Cast: 1080p is our own safe guess, so a person who chooses 1440p
         // gets 1440p. Miracast: the sink listed the modes it accepts, and
         // exceeding them is not ours to decide.
+        //
+        // The preference is set here rather than read from the machine running
+        // the tests. It used to be read, and the assertion then only held for
+        // someone whose `settings.conf` still said "high": choosing any other
+        // quality failed a test about a code path that was working correctly.
+        let restore = crate::settings::current();
+
+        let mut chosen = restore.clone();
+        chosen.quality = crate::settings::Quality::Ultra;
+        crate::settings::set_in_memory(&chosen);
+        assert_eq!(
+            StreamConfig::preferred_or(CHROMECAST_MAX_RESOLUTION),
+            crate::settings::Quality::Ultra.resolution(),
+            "the Cast default is our guess, and a stated preference outranks it"
+        );
         let sink_mode = (1280, 720);
         assert_eq!(
-            StreamConfig::capped_by_preference(sink_mode).0.min(1280),
-            1280,
+            StreamConfig::capped_by_preference(sink_mode),
+            sink_mode,
             "a negotiated mode is never exceeded"
         );
-        // With the default preference, the Cast path keeps its safe default.
+
+        let mut untouched = restore.clone();
+        untouched.quality = crate::settings::Quality::default();
+        crate::settings::set_in_memory(&untouched);
         assert_eq!(
             StreamConfig::preferred_or(CHROMECAST_MAX_RESOLUTION),
             CHROMECAST_MAX_RESOLUTION,
             "an untouched preference must not change what was sent before"
         );
+
+        crate::settings::set_in_memory(&restore);
+    }
+
+    #[test]
+    fn the_profile_travels_with_the_path_and_takes_cabac_with_it() {
+        // Constrained baseline forbids CABAC, so the two must never be set
+        // apart: a "high" profile encoded without CABAC would throw away most
+        // of what raising it was for, and nothing would report the mistake.
+        for encoder in [
+            H264Encoder::X264,
+            H264Encoder::VaH264,
+            H264Encoder::VaapiH264,
+        ] {
+            let base = StreamConfig {
+                encoder,
+                ..Default::default()
+            };
+            assert!(
+                encoder.encoder_description(&base).contains("cabac=false"),
+                "{encoder:?} must not use CABAC on constrained baseline"
+            );
+            let high = StreamConfig {
+                profile: H264Profile::High,
+                ..base
+            };
+            assert!(
+                encoder.encoder_description(&high).contains("cabac=true"),
+                "{encoder:?} should use CABAC once the profile allows it"
+            );
+        }
+
+        // Miracast pins the profile itself: the Wi-Fi Display specification
+        // requires it, so it is not the caller's to raise.
+        let high = StreamConfig {
+            profile: H264Profile::High,
+            ..Default::default()
+        };
+        let wfd = wfd_pipeline_description(
+            &high,
+            &VideoSource::Test,
+            &WfdTransport::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 19000),
+        );
+        assert!(wfd.contains("profile=constrained-baseline"), "{wfd}");
+
+        // Cast mirroring takes whatever the session decided.
+        assert!(
+            mirror_pipeline_description(&high, &VideoSource::Test).contains("profile=high"),
+            "the mirroring caps have to follow the configuration"
+        );
+        let base = StreamConfig::default();
+        assert!(
+            mirror_pipeline_description(&base, &VideoSource::Test)
+                .contains("profile=constrained-baseline"),
+            "and default to what every path assumed before there was a choice"
+        );
+    }
+
+    #[test]
+    fn only_the_path_that_asks_for_a_vbv_limit_gets_one() {
+        // The whole point of the setting being per-path: Miracast, NDI and the
+        // browser path were never measured here, so their encoder line has to
+        // come out exactly as it did before.
+        let untouched = StreamConfig {
+            encoder: H264Encoder::NvH264,
+            ..Default::default()
+        };
+        let desc = untouched.encoder.encoder_description(&untouched);
+        assert!(!desc.contains("vbv-buffer-size"), "{desc}");
+        // Not even as an explicit zero: the property is conditionally
+        // available, and naming it can cost a GPU its hardware encoder.
+        assert!(
+            desc.contains("rc-mode=cbr bitrate=10000 gop-size=30"),
+            "{desc}"
+        );
+
+        let x264 = StreamConfig::default();
+        assert!(
+            x264.encoder
+                .encoder_description(&x264)
+                .contains("vbv-buf-capacity=50"),
+            "x264 keeps the buffer it has always used"
+        );
+    }
+
+    #[test]
+    fn the_mirroring_encoder_gets_two_frames_of_rate_control_slack() {
+        // 10 Mbit at 30 fps, two frames: the 667 kbit that measured a key
+        // frame down from 908 KB to 154 KB. Pinned because the arithmetic
+        // crosses two units and an error here is only visible as "the picture
+        // stutters when there is movement".
+        let cfg = StreamConfig {
+            fps: 30,
+            bitrate_kbps: CAST_MAX_BITRATE_KBPS,
+            encoder: H264Encoder::NvH264,
+            vbv_frames: CAST_VBV_FRAMES,
+            ..Default::default()
+        };
+        assert_eq!(cfg.vbv_ms(), 66);
+        assert!(
+            cfg.encoder
+                .encoder_description(&cfg)
+                .contains("vbv-buffer-size=666"),
+            "{}",
+            cfg.encoder.encoder_description(&cfg)
+        );
+
+        // And at 60 fps it is still two frames, not twice as much buffer.
+        let fast = StreamConfig { fps: 60, ..cfg };
+        assert_eq!(fast.vbv_ms(), 33);
+        assert!(
+            fast.encoder
+                .encoder_description(&fast)
+                .contains("vbv-buffer-size=333"),
+            "{}",
+            fast.encoder.encoder_description(&fast)
+        );
+
+        // One frame measured worse than no limit at all; never ship it.
+        const _: () = assert!(CAST_VBV_FRAMES >= 2);
     }
 
     #[test]
@@ -2491,4 +2771,21 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn degenerate_dimensions_never_make_zero_sized_h264_caps() {
+        for source in [(0, 0), (1, 1), (1, 1080), (1920, 1)] {
+            for cap in [(0, 0), (1, 1), (1919, 1079)] {
+                let (w, h) = StreamConfig::fit_within(source, cap);
+                assert!(w >= 2 && h >= 2 && w % 2 == 0 && h % 2 == 0);
+            }
+        }
+    }
+
+    #[test]
+    fn cast_high_selects_v4l2_high_without_changing_default_wfd_control() {
+        let cfg = StreamConfig { profile: H264Profile::High, ..Default::default() };
+        assert!(H264Encoder::V4l2H264.encoder_description(&cfg).contains("h264_profile=4,"));
+        assert!(H264Encoder::V4l2H264.encoder_description(&StreamConfig::default()).contains("h264_profile=0,"));
+    }
+
 }

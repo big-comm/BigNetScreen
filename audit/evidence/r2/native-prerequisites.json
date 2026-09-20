@@ -1,0 +1,123 @@
+{
+  "status": "PREREQUISITE_CHECK_FAILED",
+  "scope": "workspace",
+  "probes": {
+    "core": {
+      "pkg_config": {
+        "command": [
+          "pkg-config",
+          "--modversion",
+          "gstreamer-1.0",
+          "gstreamer-app-1.0",
+          "gstreamer-video-1.0",
+          "gstreamer-audio-1.0"
+        ],
+        "exit_code": 0,
+        "stdout": "1.26.2\n1.26.2\n1.26.2\n1.26.2",
+        "stderr": ""
+      },
+      "link_flags": {
+        "command": [
+          "pkg-config",
+          "--libs",
+          "gstreamer-1.0",
+          "gstreamer-app-1.0",
+          "gstreamer-video-1.0",
+          "gstreamer-audio-1.0"
+        ],
+        "exit_code": 0,
+        "stdout": "-lgstapp-1.0 -lgstvideo-1.0 -lgstaudio-1.0 -lgstbase-1.0 -lgstreamer-1.0 -lgobject-2.0 -lglib-2.0",
+        "stderr": ""
+      },
+      "link": {
+        "command": [
+          "cc",
+          "/mnt/data/bignetscreen-r2/native-probe-ckskxxss/core.c",
+          "-o",
+          "/mnt/data/bignetscreen-r2/native-probe-ckskxxss/core",
+          "-lgstapp-1.0",
+          "-lgstvideo-1.0",
+          "-lgstaudio-1.0",
+          "-lgstbase-1.0",
+          "-lgstreamer-1.0",
+          "-lgobject-2.0",
+          "-lglib-2.0"
+        ],
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "run": {
+        "command": [
+          "/mnt/data/bignetscreen-r2/native-probe-ckskxxss/core"
+        ],
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "status": "PASS"
+    },
+    "gui": {
+      "pkg_config": {
+        "command": [
+          "pkg-config",
+          "--modversion",
+          "gtk4",
+          "libadwaita-1",
+          "graphene-1.0"
+        ],
+        "exit_code": 0,
+        "stdout": "4.18.6\n1.7.6\n1.10.8",
+        "stderr": ""
+      },
+      "link_flags": {
+        "command": [
+          "pkg-config",
+          "--libs",
+          "gtk4",
+          "libadwaita-1",
+          "graphene-1.0"
+        ],
+        "exit_code": 0,
+        "stdout": "-ladwaita-1 -lgtk-4 -lpangocairo-1.0 -lpango-1.0 -lharfbuzz -lgdk_pixbuf-2.0 -lcairo-gobject -lcairo -lvulkan -lgio-2.0 -lgobject-2.0 -lglib-2.0 -lgraphene-1.0",
+        "stderr": ""
+      },
+      "link": {
+        "command": [
+          "cc",
+          "/mnt/data/bignetscreen-r2/native-probe-ckskxxss/gui.c",
+          "-o",
+          "/mnt/data/bignetscreen-r2/native-probe-ckskxxss/gui",
+          "-ladwaita-1",
+          "-lgtk-4",
+          "-lpangocairo-1.0",
+          "-lpango-1.0",
+          "-lharfbuzz",
+          "-lgdk_pixbuf-2.0",
+          "-lcairo-gobject",
+          "-lcairo",
+          "-lvulkan",
+          "-lgio-2.0",
+          "-lgobject-2.0",
+          "-lglib-2.0",
+          "-lgraphene-1.0"
+        ],
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "/usr/bin/ld: cannot find -ladwaita-1: No such file or directory\n/usr/bin/ld: cannot find -lgtk-4: No such file or directory\n/usr/bin/ld: cannot find -lgraphene-1.0: No such file or directory\ncollect2: error: ld returned 1 exit status"
+      },
+      "status": "NATIVE_LINK_FAILED_SEE_LOG"
+    }
+  },
+  "warning": "This checks selected native prerequisites, not Rust compilation or the GUI.",
+  "glibconfig_header": {
+    "present": false,
+    "include_dirs": [
+      "/mnt/data/bignetscreen-r2/bignetscreen-audit/sysroot/usr/include/glib-2.0",
+      "/mnt/data/bignetscreen-r2/bignetscreen-audit/sysroot/usr/lib/x86_64-linux-gnu/glib-2.0/include",
+      "/mnt/data/bignetscreen-r2/bignetscreen-audit/sysroot/usr/include/sysprof-6",
+      "/mnt/data/bignetscreen-r2/bignetscreen-audit/sysroot/usr/include"
+    ],
+    "required_for": "C code including glib.h; not automatically a Rust build blocker"
+  }
+}

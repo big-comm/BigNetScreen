@@ -147,7 +147,10 @@ impl MediaSession {
                     _ = cancelled.changed() => return Ok(()),
                 };
                 // Finish LAUNCH so cancellation can explicitly STOP its result.
-                let app = channel.launch(DEFAULT_MEDIA_RECEIVER).await?;
+                let app = match channel.launch(DEFAULT_MEDIA_RECEIVER).await {
+                    Ok(app) => app,
+                    Err(err) => { channel.close().await; return Err(err); }
+                };
                 let outcome = if shared.stopping.load(Ordering::SeqCst) { Ok(()) } else {
                     tokio::select! {
                         result = play_queue(&channel, &app, &server, &shared, &sender_name, files, commands) => result,
@@ -155,11 +158,7 @@ impl MediaSession {
                     }
                 };
                 drop(server);
-                let _ = tokio::time::timeout(Duration::from_secs(5), async {
-                    let _ = channel.stop_app(&app).await;
-                    channel.close().await;
-                }).await;
-                outcome
+                channel.finish_app(&app, outcome).await
             }.await;
                 shared.finish(outcome);
             },

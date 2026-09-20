@@ -3,6 +3,19 @@
 A clean rewrite of BigNetScreen. The original C project was treated as a
 **reference specification / test oracle** during the port.
 
+## Review status — 2026-09-20
+
+The current tree includes an offline source review. See
+[`audit/REVIEW-20260920.md`](audit/REVIEW-20260920.md) for scope, evidence,
+protocol changes and unresolved issues. **This revision has not been compiled
+or tested against a receiver in the review environment: no Rust toolchain was
+available.** The test counts and hardware measurements below describe earlier
+development work, not validation of these patches.
+
+The workspace currently contains **eight** crates, including `nd-ndi` and
+`nd-webrtc`. Device identity authentication is still missing; accepting a chain
+root presented by the peer does not authenticate a genuine Cast receiver.
+
 ## Principles
 
 1. **A GUI-free, testable core** (`nd-core`). Protocol and tuning do not depend
@@ -25,6 +38,7 @@ nd-core         traits + types + pipeline.rs (GStreamer tuning)   ← the heart
   ├── nd-net       NetworkManager + firewalld + GPU driver (native only)
   ├── nd-chromecast  mDNS + Cast (protobuf/TLS) + mirroring + HTTP stream server
   ├── nd-wfd       RTSP(7236) + WFD M1–M7 negotiation + P2P (uses nd-net)
+  ├── nd-ndi       NDI publishing using the vendored plugin
   ├── nd-webrtc    WHEP publisher for web browsers: PIN front door + QR (bundles gst-plugin-webrtc)
   └── nd-gui       relm4 + libadwaita  → the `bignetscreen` binary
 vendor/gst-plugin-ndi  local copy of the upstream NDI plugin (MPL-2.0) with two
@@ -77,9 +91,9 @@ WFD/Miracast needs NetworkManager (Wi-Fi Direct) plus firewalld on the
 build.** The app detects the environment (`nd_capture::is_sandboxed`) and says
 so in the interface, rather than simply showing nothing.
 
-## Current state
+## Historical development status (not review validation)
 
-### Done
+### Previously reported done
 - [x] A Cargo workspace with 6 crates, `clippy -D warnings` and `fmt` clean,
       173 tests (including an integration test that downloads the stream from
       the real server).
@@ -117,7 +131,7 @@ so in the interface, rather than simply showing nothing.
 - [ ] Identity-based cross-protocol grouping. Names alone are not identity;
       separate receivers and protocol alternatives remain visible.
 - [x] Virtual monitor controls; hardware/compositor validation remains separate.
-- [ ] The Cast RTCP sender report (see the debt below).
+- [ ] Validate the corrected Cast clock mapping and enabled sender reports on real receivers.
 
 ## WFD conformance — what separates a picture from a black screen
 
@@ -194,11 +208,13 @@ receiver:
 | on | one per stream | the receiver closes the app |
 | on | shared | the receiver closes the app |
 
-Sender reports remain disabled by default (`BIGNETSCREEN_CAST_RTCP=1` enables
-experimental reports). The observed disconnect is not sufficient to attribute
-the failure solely to compound formatting. Clock mapping and compound packets
-need comparison with Open Screen and real receivers. Retransmission does not
-replace clock synchronization.
+The matrix above predates this review. The current code converts encoded PTS
+through the sample's SEGMENT before forming RTP timestamps, aligns the RTCP
+clock mapping, and enables reports by default. `BIGNETSCREEN_CAST_RTCP=0` is a
+diagnostic opt-out. Open Screen emits a simple 28-byte sender report, so missing
+compound formatting alone does not explain the old failure. The x264 timestamp
+offset was reproduced locally, but the revised sender still requires real
+receiver validation. Retransmission does not replace clock synchronization.
 
 ## Radio silence while streaming
 
@@ -237,7 +253,7 @@ choice manually.
 | `videorate` required between source and the fixed capsfilter | done (and moved ahead of scaling) |
 | Intel `xe` driver: VAAPI hangs → software | **removed**: it does not hold on current hardware; replaced by runtime detection |
 | 500 ms latency only makes sense for openh264 | confirmed in the field: a real minimum of 41 ms; the default became automatic, and the fixed headroom stayed only on openh264 |
-| Chromecast TLS needs real validation | done (chain + validity period; `UNKNOWN_CA`/`BAD_IDENTITY` accepted by design) |
+| Chromecast TLS needs real validation | **incomplete**: peer-supplied trust root is not device identity authentication; Cast DeviceAuth remains pending |
 | Names arriving over mDNS must be sanitised | done (`sink::sanitize_name`) |
 | A 100000-buffer audio queue | done (`AUDIO_QUEUE_BUFFERS = 4` on the muxed path) |
 | Aspect ratio when scaling | `add-borders=true` made explicit: `vapostproc` defaults to `false` and a 16:10 screen came out stretched on a 16:9 panel |

@@ -1,0 +1,95 @@
+[
+  {
+    "pipeline": "videotestsrc num-buffers=6 ! video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! x264enc tune=zerolatency speed-preset=ultrafast threads=2 bframes=0 cabac=true ! video/x-h264,profile=high,stream-format=byte-stream,alignment=au ! appsink name=probe sync=false",
+    "parse_error": false,
+    "frames": [
+      {
+        "pts_ns": 3600000000000000,
+        "running_ns": 0
+      },
+      {
+        "pts_ns": 3600000033333333,
+        "running_ns": 33333333
+      },
+      {
+        "pts_ns": 3600000066666666,
+        "running_ns": 66666666
+      },
+      {
+        "pts_ns": 3600000100000000,
+        "running_ns": 100000000
+      },
+      {
+        "pts_ns": 3600000133333333,
+        "running_ns": 133333333
+      },
+      {
+        "pts_ns": 3600000166666666,
+        "running_ns": 166666666
+      }
+    ],
+    "state_result": 2
+  },
+  {
+    "pipeline": "videotestsrc num-buffers=6 ! video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! openh264enc ! video/x-h264,profile=high,stream-format=byte-stream,alignment=au ! appsink name=probe sync=false",
+    "parse_error": false,
+    "frames": [
+      {
+        "pts_ns": 0,
+        "running_ns": 0
+      },
+      {
+        "pts_ns": 33333333,
+        "running_ns": 33333333
+      },
+      {
+        "pts_ns": 66666666,
+        "running_ns": 66666666
+      },
+      {
+        "pts_ns": 100000000,
+        "running_ns": 100000000
+      },
+      {
+        "pts_ns": 133333333,
+        "running_ns": 133333333
+      },
+      {
+        "pts_ns": 166666666,
+        "running_ns": 166666666
+      }
+    ],
+    "state_result": 2
+  },
+  {
+    "pipeline": "videotestsrc num-buffers=6 ! video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! openh264enc ! video/x-h264,profile=constrained-baseline,stream-format=byte-stream,alignment=au ! appsink name=probe sync=false",
+    "parse_error": false,
+    "frames": [
+      {
+        "pts_ns": 0,
+        "running_ns": 0
+      },
+      {
+        "pts_ns": 33333333,
+        "running_ns": 33333333
+      },
+      {
+        "pts_ns": 66666666,
+        "running_ns": 66666666
+      },
+      {
+        "pts_ns": 100000000,
+        "running_ns": 100000000
+      },
+      {
+        "pts_ns": 133333333,
+        "running_ns": 133333333
+      },
+      {
+        "pts_ns": 166666666,
+        "running_ns": 166666666
+      }
+    ],
+    "state_result": 2
+  }
+]

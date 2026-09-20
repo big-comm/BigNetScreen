@@ -1,0 +1,93 @@
+               total        used        free      shared  buff/cache   available
+Mem:           5.8Gi       1.1Gi       3.7Gi        12Ki       1.3Gi       4.7Gi
+Swap:             0B          0B          0B
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          32G  734M   30G   3% /
+5
+
+memory.max
+4294967296
+
+memory.current
+1613615104
+
+memory.events
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+
+Isolated test data and logs: /mnt/data/bignetscreen-r2/bignetscreen-audit/repo/../review-run.5QC9N9M6
+
+== toolchain ==
+{
+  "status": "ENV",
+  "prefix": "/mnt/data/toolchains/rust-1.98.1",
+  "required_version": "1.98.1",
+  "required_host": "x86_64-unknown-linux-gnu",
+  "tools": {
+    "rustc": {
+      "path": "/mnt/data/toolchains/rust-1.98.1/bin/rustc",
+      "status": "MISSING",
+      "detail": "[Errno 2] No such file or directory: '/mnt/data/toolchains'"
+    },
+    "cargo": {
+      "path": "/mnt/data/toolchains/rust-1.98.1/bin/cargo",
+      "status": "MISSING",
+      "detail": "[Errno 2] No such file or directory: '/mnt/data/toolchains'"
+    },
+    "rustdoc": {
+      "path": "/mnt/data/toolchains/rust-1.98.1/bin/rustdoc",
+      "status": "MISSING",
+      "detail": "[Errno 2] No such file or directory: '/mnt/data/toolchains'"
+    },
+    "cargo-clippy": {
+      "path": "/mnt/data/toolchains/rust-1.98.1/bin/cargo-clippy",
+      "status": "MISSING",
+      "detail": "[Errno 2] No such file or directory: '/mnt/data/toolchains'"
+    },
+    "clippy-driver": {
+      "path": "/mnt/data/toolchains/rust-1.98.1/bin/clippy-driver",
+      "status": "MISSING",
+      "detail": "[Errno 2] No such file or directory: '/mnt/data/toolchains'"
+    },
+    "rustfmt": {
+      "path": "/mnt/data/toolchains/rust-1.98.1/bin/rustfmt",
+      "status": "MISSING",
+      "detail": "[Errno 2] No such file or directory: '/mnt/data/toolchains'"
+    },
+    "cargo-fmt": {
+      "path": "/mnt/data/toolchains/rust-1.98.1/bin/cargo-fmt",
+      "status": "MISSING",
+      "detail": "[Errno 2] No such file or directory: '/mnt/data/toolchains'"
+    }
+  },
+  "commands": [],
+  "errors": [
+    "rustc: MISSING",
+    "cargo: MISSING",
+    "rustdoc: MISSING",
+    "cargo-clippy: MISSING",
+    "clippy-driver: MISSING",
+    "rustfmt: MISSING",
+    "cargo-fmt: MISSING"
+  ],
+  "warning": "Version checks are not compilation or project tests."
+}
+
+memory.max
+4294967296
+
+memory.current
+1613885440
+
+memory.events
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+Gate toolchain failed (exit 78); classify from its log before changing project code.

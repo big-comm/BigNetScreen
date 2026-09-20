@@ -34,17 +34,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use nd_core::{NdError, Result};
 
-use crate::http::{local_ip_towards, random_token};
+use crate::http::{local_ip_towards, random_token, read_request, request_line, write_bounded};
 
-/// Cap on a request's header size.
-const MAX_REQUEST_BYTES: usize = 8 * 1024;
-/// How long the receiver gets to finish sending its request.
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// Copy buffer. Large enough that a film is not sent in tiny writes, small
 /// enough not to hold a megabyte per connection.
 const CHUNK: usize = 64 * 1024;
@@ -209,34 +205,24 @@ impl FileServer {
 
 /// Reads one request and answers it.
 async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> Result<()> {
-    let request = match tokio::time::timeout(REQUEST_TIMEOUT, read_request(&mut stream)).await {
-        Ok(request) => request?,
-        Err(_) => return Err(NdError::Network("the request timed out".into())),
-    };
+    let request = read_request(&mut stream).await?;
+    let (method, target) = request_line(&request)
+        .ok_or_else(|| NdError::Protocol("malformed HTTP request".into()))?;
+    let mut lines = request.lines().skip(1);
 
-    let mut lines = request.lines();
-    let start_line = lines.next().unwrap_or_default();
-    let mut parts = start_line.split_whitespace();
-    let method = parts.next().unwrap_or_default();
-    let target = parts.next().unwrap_or_default();
-
-    // A wrong token gets 404, not 403: a 403 would confirm that the server is
-    // here and that only the token is missing.
+    // A wrong token gets 404, without distinguishing a protected file from
+    // an unknown resource. A response does not conceal the listening server.
     let Some(index) = parse_target(target, token) else {
-        let _ = stream
-            .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n")
-            .await;
+        let _ = write_bounded(&mut stream, b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await;
         return Ok(());
     };
     let Some(file) = files.get(index) else {
-        let _ = stream
-            .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n")
-            .await;
+        let _ = write_bounded(&mut stream, b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await;
         return Ok(());
     };
 
     if method != "GET" && method != "HEAD" {
-        stream.write_all(b"HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, HEAD\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.map_err(|e| NdError::Network(e.to_string()))?;
+        write_bounded(&mut stream, b"HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, HEAD\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await?;
         return Ok(());
     }
     let mut handle = tokio::fs::File::open(&file.path)
@@ -259,10 +245,7 @@ async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> R
     let range = requested.and_then(|value| parse_range(value, total));
     if requested.is_some() && range.is_none() {
         let header = format!("HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */{total}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-        stream
-            .write_all(header.as_bytes())
-            .await
-            .map_err(|e| NdError::Network(e.to_string()))?;
+        write_bounded(&mut stream, header.as_bytes()).await?;
         return Ok(());
     }
     let (start, end) = range.unwrap_or((0, total.saturating_sub(1)));
@@ -288,10 +271,7 @@ async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> R
             file.content_type
         )
     };
-    stream
-        .write_all(header.as_bytes())
-        .await
-        .map_err(|e| NdError::Network(e.to_string()))?;
+    write_bounded(&mut stream, header.as_bytes()).await?;
 
     // A HEAD asks what the file is, not for the file. Some firmware sends one
     // before deciding whether it can play the item.
@@ -313,39 +293,16 @@ async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> R
             .await
             .map_err(|e| NdError::Network(e.to_string()))?;
         if read == 0 {
-            break;
+            return Err(NdError::Network("file truncated during HTTP transfer".into()));
         }
         // A receiver that stops watching closes the socket; that is an ordinary
         // end of transfer, not a fault to report.
-        if stream.write_all(&buffer[..read]).await.is_err() {
+        if write_bounded(&mut stream, &buffer[..read]).await.is_err() {
             break;
         }
         remaining -= read as u64;
     }
     Ok(())
-}
-
-/// Reads until the end of the headers.
-async fn read_request(stream: &mut TcpStream) -> Result<String> {
-    let mut buffer = Vec::new();
-    let mut chunk = [0u8; 1024];
-    loop {
-        let read = stream
-            .read(&mut chunk)
-            .await
-            .map_err(|e| NdError::Network(e.to_string()))?;
-        if read == 0 {
-            return Err(NdError::Network("incomplete request headers".into()));
-        }
-        buffer.extend_from_slice(&chunk[..read]);
-        if buffer.len() > MAX_REQUEST_BYTES {
-            return Err(NdError::Network("request headers too large".into()));
-        }
-        if buffer.windows(4).any(|w| w == b"\r\n\r\n") {
-            break;
-        }
-    }
-    Ok(String::from_utf8_lossy(&buffer).to_string())
 }
 
 /// Extracts the file's index from `/<token>/<index>`.
@@ -390,6 +347,7 @@ fn parse_range(value: &str, size: u64) -> Option<(u64, u64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::io::AsyncWriteExt;
 
     fn inspect_fixture(path: &Path) -> std::result::Result<MediaFile, String> {
         let dir = std::env::temp_dir().join(format!("nd-file-test-{}", std::process::id()));
@@ -496,8 +454,7 @@ mod tests {
         assert_eq!(parse_range("bytes=-2000", 1000), Some((0, 999)));
         assert_eq!(parse_range("bytes=-0", 1000), None);
         // Beyond the end, backwards, or against an unknown size: no range,
-        // which makes the server answer 200 with the whole file rather than
-        // a nonsensical 206.
+        // which makes the server answer 416 rather than a nonsensical 206.
         assert_eq!(parse_range("bytes=2000-3000", 1000), None);
         assert_eq!(parse_range("bytes=900-100", 1000), None);
         assert_eq!(parse_range("bytes=0-10", 0), None);
