@@ -46,9 +46,9 @@ impl Shared {
     fn finish(&self, outcome: Result<()>) {
         self.update(|status| {
             status.finished = true;
-            if !self.stopping.load(Ordering::SeqCst) {
-                status.error = outcome.err().map(|err| err.to_string());
-            }
+            // User cancellation is already represented by Ok in orchestration.
+            // A failed STOP is still an error and must not be hidden by Stop.
+            status.error = outcome.err().map(|err| err.to_string());
         });
     }
 }
@@ -480,6 +480,18 @@ mod tests {
             content_type: "video/mp4",
             size: 1,
         }
+    }
+
+    #[test]
+    fn stop_failure_is_not_reported_as_success_after_user_cancellation() {
+        let shared = Shared {
+            status: Mutex::new(MediaStatus::default()),
+            stopping: AtomicBool::new(true),
+        };
+        shared.finish(Err(NdError::Protocol("STOP unconfirmed".into())));
+        let status = shared.status.lock().unwrap();
+        assert!(status.finished);
+        assert!(status.error.as_ref().unwrap().contains("STOP unconfirmed"));
     }
 
     #[test]

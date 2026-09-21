@@ -2060,7 +2060,7 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
 name = "nd-capture"
-version = "0.1.0"
+version = "0.1.4"
 dependencies = [
  "ashpd",
  "async-trait",
@@ -2077,7 +2077,7 @@ dependencies = [
 
 [[package]]
 name = "nd-chromecast"
-version = "0.1.0"
+version = "0.1.4"
 dependencies = [
  "aes",
  "async-trait",
@@ -2101,7 +2101,7 @@ dependencies = [
 
 [[package]]
 name = "nd-core"
-version = "0.1.0"
+version = "0.1.4"
 dependencies = [
  "async-trait",
  "futures",
@@ -2114,7 +2114,7 @@ dependencies = [
 
 [[package]]
 name = "nd-gui"
-version = "0.1.0"
+version = "0.1.4"
 dependencies = [
  "async-trait",
  "futures",
@@ -2139,7 +2139,7 @@ dependencies = [
 
 [[package]]
 name = "nd-ndi"
-version = "0.1.0"
+version = "0.1.4"
 dependencies = [
  "async-trait",
  "futures",
@@ -2152,9 +2152,8 @@ dependencies = [
 
 [[package]]
 name = "nd-net"
-version = "0.1.0"
+version = "0.1.4"
 dependencies = [
- "async-trait",
  "futures",
  "nd-core",
  "tokio",
@@ -2165,7 +2164,7 @@ dependencies = [
 
 [[package]]
 name = "nd-webrtc"
-version = "0.1.0"
+version = "0.1.4"
 dependencies = [
  "async-trait",
  "bytes",
@@ -2184,7 +2183,7 @@ dependencies = [
 
 [[package]]
 name = "nd-wfd"
-version = "0.1.0"
+version = "0.1.4"
 dependencies = [
  "async-trait",
  "futures",

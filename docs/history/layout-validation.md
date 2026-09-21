@@ -1,3 +1,5 @@
+> Historical experiment report. This describes earlier development work, not validation of the current tree. Use [the current test plan](../testing.md) and the delivered gate logs for release decisions.
+
 # Layout and media previews
 
 2026-09-17. Based on the eight supplied desktop mockups.

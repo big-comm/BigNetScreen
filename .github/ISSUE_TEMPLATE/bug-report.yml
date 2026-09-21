@@ -1,0 +1,25 @@
+name: Bug report
+description: Report a reproducible problem without sharing private screen content.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: "For vulnerabilities, follow SECURITY.md rather than opening a public issue."
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: BigNetScreen version/commit, distribution, desktop/session, GPU/driver and transport.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps, expected result and actual result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Remove PINs, stream URLs/tokens, network identifiers and private screen content.

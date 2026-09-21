@@ -6,7 +6,7 @@
 //! bytes**. No unit test could see that — only running the whole path could.
 //!
 //! Here the complete path is exercised: HTTP server → request triage → handing
-//! the descriptor to GStreamer → real Matroska bytes on the connection.
+//! the descriptor to GStreamer → real MPEG-TS bytes on the connection.
 
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
@@ -19,20 +19,15 @@ use tokio::net::TcpStream;
 use nd_chromecast::http::StreamServer;
 use nd_core::pipeline::{self, StreamConfig, VideoSource, CHROMECAST_SINK_NAME};
 
-/// The EBML signature that opens every Matroska/WebM file.
-const EBML_MAGIC: [u8; 4] = [0x1A, 0x45, 0xDF, 0xA3];
+/// Standard transport-stream packets are 188 bytes with a sync byte.
+const TS_PACKET_BYTES: usize = 188;
 
 /// Are the required plugins present on this machine?
 fn media_stack_available() -> bool {
     if pipeline::init().is_err() {
         return false;
     }
-    let needed = [
-        "matroskamux",
-        "multisocketsink",
-        "avenc_aac",
-        "videotestsrc",
-    ];
+    let needed = ["mpegtsmux", "multisocketsink", "avenc_aac", "videotestsrc"];
     needed
         .iter()
         .all(|name| gst::ElementFactory::find(name).is_some())
@@ -73,11 +68,11 @@ async fn read_http_response(stream: &mut TcpStream, want: usize) -> (String, Vec
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn serves_real_matroska_bytes_to_the_receiver() {
-    if !media_stack_available() {
-        eprintln!("media plugins missing; test skipped");
-        return;
-    }
+async fn serves_real_mpegts_bytes_to_the_receiver() {
+    assert!(
+        media_stack_available(),
+        "DEPENDENCY: GStreamer Cast media plugins are required"
+    );
 
     let loopback = IpAddr::V4(Ipv4Addr::LOCALHOST);
     let server = StreamServer::bind(loopback)
@@ -137,7 +132,7 @@ async fn serves_real_matroska_bytes_to_the_receiver() {
     let (headers, body) = read_http_response(&mut client, 8192).await;
 
     assert!(headers.starts_with("HTTP/1.1 200 OK"), "{headers}");
-    assert!(headers.contains("video/x-matroska"), "{headers}");
+    assert!(headers.contains("video/mp2t"), "{headers}");
     // A body terminated by EOF: with no declared length the stream can run
     // forever.
     assert!(!headers.contains("Content-Length"), "{headers}");
@@ -147,11 +142,10 @@ async fn serves_real_matroska_bytes_to_the_receiver() {
         "only {} bytes of media received (the Null-pipeline bug gave 0)",
         body.len()
     );
-    assert_eq!(
-        &body[..4],
-        &EBML_MAGIC,
-        "the body should start with Matroska's EBML signature"
-    );
+    for packet in body.as_chunks::<TS_PACKET_BYTES>().0 {
+        assert_eq!(packet[0], 0x47, "MPEG-TS packet sync is broken");
+        assert_eq!(packet[1] & 0x80, 0, "transport error flag is set");
+    }
 
     let _ = cancel_tx.send(true);
     drop(client);
@@ -161,9 +155,10 @@ async fn serves_real_matroska_bytes_to_the_receiver() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_wrong_token_gets_nothing() {
-    if !media_stack_available() {
-        return;
-    }
+    assert!(
+        media_stack_available(),
+        "DEPENDENCY: GStreamer Cast media plugins are required"
+    );
 
     let loopback = IpAddr::V4(Ipv4Addr::LOCALHOST);
     let server = StreamServer::bind(loopback).await.expect("servidor");

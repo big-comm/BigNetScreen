@@ -19,6 +19,7 @@ depends=(
   'gst-libav'            # avenc_aac
   'gst-plugin-pipewire'  # pipewiresrc
   'pipewire'
+  'libnice'             # nicesink/nicesrc for WebRTC ICE
   'xdg-desktop-portal'
   'libpulse'            # pactl audio diagnostics
   'avahi'               # NDI discovery

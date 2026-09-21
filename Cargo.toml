@@ -17,7 +17,7 @@ members = [
 exclude = ["vendor/gst-plugin-ndi"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.4"
 edition = "2021"
 license = "GPL-3.0-or-later"
 authors = ["Tales A. Mendonça", "BigCommunity"]
@@ -25,7 +25,7 @@ repository = "https://github.com/big-comm/BigNetScreen"
 rust-version = "1.93"
 
 [workspace.dependencies]
-# crates internos
+# Internal crates
 nd-core = { path = "crates/nd-core" }
 nd-capture = { path = "crates/nd-capture" }
 nd-net = { path = "crates/nd-net" }
@@ -34,7 +34,7 @@ nd-wfd = { path = "crates/nd-wfd" }
 nd-ndi = { path = "crates/nd-ndi" }
 nd-webrtc = { path = "crates/nd-webrtc" }
 
-# comuns
+# Shared dependencies
 thiserror = "2"
 async-trait = "0.1"
 tracing = "0.1"

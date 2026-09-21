@@ -114,10 +114,13 @@ pub struct AppModel {
     operation_generation: u64,
     ndi_installing: std::rc::Rc<std::cell::Cell<bool>>,
     ndi_install_dialog: Option<adw::AlertDialog>,
+    shutdown: crate::shutdown::Shutdown,
+    allow_close: std::rc::Rc<std::cell::Cell<bool>>,
 }
 
 #[derive(Debug)]
 pub enum AppMsg {
+    CloseRequested,
     Navigate(Page),
     /// Start streaming to this receiver.
     Cast(String),
@@ -437,17 +440,23 @@ impl Component for AppModel {
             operation_generation: 0,
             ndi_installing: Default::default(),
             ndi_install_dialog: None,
+            shutdown: Default::default(),
+            allow_close: Default::default(),
         };
 
         let widgets = view_output!();
 
         let ndi_installing = model.ndi_installing.clone();
+        let allow_close = model.allow_close.clone();
+        let close_input = sender.input_sender().clone();
         root.connect_close_request(move |_| {
-            if ndi_installing.get() {
-                gtk::glib::Propagation::Stop
-            } else {
-                gtk::glib::Propagation::Proceed
+            if allow_close.get() {
+                return gtk::glib::Propagation::Proceed;
             }
+            if !ndi_installing.get() {
+                close_input.emit(AppMsg::CloseRequested);
+            }
+            gtk::glib::Propagation::Stop
         });
 
         let mapped = std::cell::Cell::new(false);
@@ -520,7 +529,15 @@ impl Component for AppModel {
         sender: ComponentSender<Self>,
         root: &Self::Root,
     ) {
+        if self.shutdown.is_pending() && !matches!(&message, AppMsg::Stop | AppMsg::CloseRequested)
+        {
+            return;
+        }
         match message {
+            AppMsg::CloseRequested => {
+                self.shutdown.request(std::time::Instant::now());
+                self.stop_everything(&sender);
+            }
             AppMsg::Navigate(page) => self.page = page,
             AppMsg::Cast(id) => self.begin_cast(id, &sender),
             AppMsg::PublishNdi(source) => {
@@ -658,6 +675,7 @@ impl Component for AppModel {
             }
         }
 
+        self.update_close_state(root);
         self.update_view(widgets, sender);
     }
 
@@ -723,7 +741,9 @@ impl Component for AppModel {
                 if !self.order.contains(&id) {
                     self.order.push(id.clone());
                 }
-                self.registry.insert(id, handle.0);
+                if self.active_cast.as_ref() != Some(&id) {
+                    self.registry.insert(id, handle.0);
+                }
                 self.searching = false;
                 self.refresh_status();
                 self.push_devices();
@@ -736,7 +756,9 @@ impl Component for AppModel {
                 if !self.order.contains(&id) {
                     self.order.push(id.clone());
                 }
-                self.registry.insert(id, handle.0);
+                if self.active_cast.as_ref() != Some(&id) {
+                    self.registry.insert(id, handle.0);
+                }
                 self.push_devices();
             }
             AppCmd::Removed(id, generation) => {
@@ -861,6 +883,7 @@ impl Component for AppModel {
                 match error {
                     Some(err) => {
                         tracing::warn!(%id, %err, "cast session ended with an error");
+                        self.shutdown.cancel();
                         self.status = err;
                     }
                     None => {
@@ -873,11 +896,27 @@ impl Component for AppModel {
         }
 
         // Repaint. Everything above only changed the model.
+        self.update_close_state(root);
         self.update_view(widgets, sender);
     }
 }
 
 impl AppModel {
+    fn update_close_state(&mut self, root: &adw::ApplicationWindow) {
+        let busy = self.active_cast.is_some() || self.media_session.is_some();
+        match self.shutdown.poll(std::time::Instant::now(), busy) {
+            crate::shutdown::Action::Close => {
+                self.allow_close.set(true);
+                root.close();
+            }
+            crate::shutdown::Action::TimedOut => {
+                self.status = tr!("The receiver has not finished disconnecting. The window will stay open; check the connection and try Stop again.");
+            }
+            crate::shutdown::Action::Wait => {}
+        }
+        root.set_sensitive(!self.shutdown.is_pending());
+    }
+
     /// The receivers, in the order they were found.
     fn entries(&self) -> Vec<DeviceEntry> {
         self.order
@@ -925,6 +964,7 @@ impl AppModel {
                 self.probing = false;
                 self.push_devices();
                 if let Some(error) = &status.error {
+                    self.shutdown.cancel();
                     self.status = error.clone();
                     self.media.emit(MediaMsg::Status(Some(status.clone())));
                     return;

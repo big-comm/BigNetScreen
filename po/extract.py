@@ -6,7 +6,9 @@ This exists because `xgettext` with its C parser reads a Rust lifetime
 """
 from __future__ import annotations
 
+import os
 import re
+import tomllib
 import sys
 from pathlib import Path
 
@@ -23,7 +25,21 @@ def _timestamp() -> str:
     """POT-Creation-Date in the format gettext uses."""
     from datetime import datetime, timezone
 
-    return datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M%z")
+    epoch = os.environ.get("SOURCE_DATE_EPOCH")
+    if epoch is not None:
+        try:
+            value = int(epoch)
+            if value < 0:
+                raise ValueError("negative epoch")
+            return datetime.fromtimestamp(value, timezone.utc).strftime("%Y-%m-%d %H:%M%z")
+        except (ValueError, OverflowError, OSError) as error:
+            raise ValueError("SOURCE_DATE_EPOCH must be a non-negative supported Unix timestamp") from error
+    if OUTPUT.exists():
+        match = re.search(r'POT-Creation-Date: ([^"\\]+)', OUTPUT.read_text(encoding="utf-8"))
+        if match:
+            return match.group(1)
+    # No clock-dependent output: callers making a new template can set the epoch.
+    return "1970-01-01 00:00+0000"
 
 
 def clean(raw: str) -> str:
@@ -38,6 +54,7 @@ def escape(text: str) -> str:
 
 def main() -> int:
     stamp = _timestamp()
+    version = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["workspace"]["package"]["version"]
     if not POTFILES.exists():
         print(f"{POTFILES} not found", file=sys.stderr)
         return 1
@@ -53,8 +70,8 @@ def main() -> int:
 
     for path in sources:
         if not path.exists():
-            print(f"warning: {path} does not exist", file=sys.stderr)
-            continue
+            print(f"error: listed translation source {path} does not exist", file=sys.stderr)
+            return 1
         text = path.read_text(encoding="utf-8")
         rel = path.relative_to(ROOT)
 
@@ -84,7 +101,7 @@ def main() -> int:
         "#",
         'msgid ""',
         'msgstr ""',
-        '"Project-Id-Version: bignetscreen 0.1.0\\n"',
+        f'"Project-Id-Version: bignetscreen {version}\\n"',
         '"Report-Msgid-Bugs-To: https://github.com/big-comm/BigNetScreen/issues\\n"',
         f'"POT-Creation-Date: {stamp}\\n"',
         '"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\\n"',

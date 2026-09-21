@@ -44,7 +44,8 @@
   </supports>
 
   <requires>
-    <display_length compare="ge">360</display_length>
+    <display_length compare="ge" side="shortest">480</display_length>
+    <display_length compare="ge" side="longest">760</display_length>
   </requires>
 
   <content_rating type="oars-1.1" />

@@ -602,6 +602,7 @@ impl CaptureBackend for MutterBackend {
             return Ok(CaptureSource {
                 pipewire_fd: None,
                 node_id: monitor_node,
+                pipewire_serial: None,
                 source_type,
                 size: Some(size),
                 // A real capture, not a file being played.
@@ -624,6 +625,7 @@ impl CaptureBackend for MutterBackend {
             // is no descriptor to hand over.
             pipewire_fd: None,
             node_id,
+            pipewire_serial: None,
             source_type,
             size: (source_type == SourceType::Virtual).then_some(size),
             // A real capture, not a file being played.

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security reporting
+    url: https://github.com/big-comm/BigNetScreen/blob/dev-talesam/SECURITY.md
+    about: Read the private disclosure instructions before posting a vulnerability.

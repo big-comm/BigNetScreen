@@ -8,8 +8,8 @@
 
 pub mod cast;
 pub mod file_server;
-pub mod http;
 mod flow;
+pub mod http;
 pub mod media;
 pub mod mirror;
 pub mod mirror_session;
@@ -221,10 +221,15 @@ pub struct MdnsSink {
 struct SessionReservation<'a>(&'a Mutex<Option<session::SessionHandle>>);
 
 impl<'a> SessionReservation<'a> {
-    fn acquire(slot: &'a Mutex<Option<session::SessionHandle>>, handle: session::SessionHandle) -> Result<Self> {
+    fn acquire(
+        slot: &'a Mutex<Option<session::SessionHandle>>,
+        handle: session::SessionHandle,
+    ) -> Result<Self> {
         let mut active = slot.lock().unwrap_or_else(PoisonError::into_inner);
         if active.is_some() {
-            return Err(NdError::Protocol("a Cast session is still active or disconnecting".into()));
+            return Err(NdError::Protocol(
+                "a Cast session is still active or disconnecting".into(),
+            ));
         }
         *active = Some(handle);
         Ok(Self(slot))

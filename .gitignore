@@ -39,3 +39,14 @@
 
 # Sources generated for Flatpak
 /build-aux/flatpak/cargo-sources.json
+
+# Local verification and source-package output
+.gate-state/
+/dist/
+__pycache__/
+*.pyc
+
+# Incoming review deliveries: bundles, patches and tarballs dropped here to be
+# applied. Their own documents link as if they sat at the repository root, so
+# they fail the link check too. Archive material, never project source.
+/docs/*-DELIVERY/

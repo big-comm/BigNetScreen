@@ -1,3 +1,5 @@
+> Historical R1/R2 audit tooling and evidence, not a current release approval. Use [the maintained test plan](../docs/testing.md) and logs for the exact candidate commit.
+
 # Entrega de revisão — 20/09/2026
 
 **Código candidato, não compilado e não homologado nesta revisão.** Leia `REVIEW-20260920.md` antes de aplicar ou testar. Os testes do agente anterior não aprovam estas alterações.

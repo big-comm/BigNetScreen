@@ -397,12 +397,20 @@ pub async fn run_with_video(
 
     // 3. Control channel: start the receiver app and tell it to fetch the URL.
     status.set(SinkState::WaitSocket);
-    if *cancel.borrow() { return Ok(()); }
+    if *cancel.borrow() {
+        return Ok(());
+    }
     let channel = CastChannel::connect_to(receiver_ip, receiver_port).await?;
-    if *cancel.borrow() { channel.close().await; return Ok(()); }
+    if *cancel.borrow() {
+        channel.close().await;
+        return Ok(());
+    }
     let app = match channel.launch(DEFAULT_MEDIA_RECEIVER).await {
         Ok(app) => app,
-        Err(err) => { channel.close().await; return Err(err); }
+        Err(err) => {
+            channel.close().await;
+            return Err(err);
+        }
     };
     let result = async {
         if *cancel.borrow() { return Ok(()); }
@@ -1099,11 +1107,11 @@ mod tests {
 
     #[test]
     fn content_type_matches_the_muxer() {
-        // The pipeline uses matroskamux; the LOAD has to announce the same container,
+        // The pipeline uses mpegtsmux; LOAD must announce the same container,
         // or the Default Media Receiver refuses the media.
         let cfg = StreamConfig::default();
         let desc = pipeline::chromecast_pipeline_description(&cfg, &pipeline::VideoSource::Test);
-        assert!(desc.contains("matroskamux"), "{desc}");
-        assert_eq!(CONTENT_TYPE, "video/x-matroska");
+        assert!(desc.contains("mpegtsmux"), "{desc}");
+        assert_eq!(CONTENT_TYPE, "video/mp2t");
     }
 }

@@ -4,8 +4,8 @@
 //! `127.0.0.1`, prints the URL and serves it. In another terminal:
 //!
 //! ```sh
-//! curl -s -o /tmp/cc.mkv --max-time 5 '<printed URL>'
-//! ffprobe /tmp/cc.mkv        # should show H.264 + AAC in Matroska
+//! curl -s -o /tmp/cc.ts --max-time 5 '<printed URL>'
+//! ffprobe /tmp/cc.ts        # should show H.264 + AAC in MPEG-TS
 //! ```
 //!
 //! This exercises the riskiest step of the path: handing `multisocketsink` a
@@ -56,10 +56,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nencoder: {encoder:?}");
     println!("URL:     {}", server.url());
     println!(
-        "\nteste:   curl -s -o /tmp/cc.mkv --max-time 5 '{}'",
+        "\nteste:   curl -s -o /tmp/cc.ts --max-time 5 '{}'",
         server.url()
     );
-    println!("         ffprobe /tmp/cc.mkv\n");
+    println!("         ffprobe /tmp/cc.ts\n");
     println!("serving for {secs}s…\n");
 
     let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);

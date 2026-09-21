@@ -11,6 +11,8 @@ LOCALEDIR   := $(DATADIR)/locale
 APPID       := br.com.biglinux.BigNetScreen
 CARGO       ?= cargo
 CARGO_FLAGS ?= --release --locked
+CARGO_TARGET_DIR ?= target
+BINARY ?= $(CARGO_TARGET_DIR)/release/bignetscreen
 
 LANGS := $(shell cat po/LINGUAS 2>/dev/null)
 MOFILES := $(patsubst %,build/locale/%/LC_MESSAGES/bignetscreen.mo,$(LANGS))
@@ -26,7 +28,7 @@ locale: $(MOFILES)
 
 build/locale/%/LC_MESSAGES/bignetscreen.mo: po/%.po
 	@mkdir -p $(dir $@)
-	msgfmt $< -o $@
+	msgfmt --check "$<" -o "$@"
 
 pot:
 	./po/update-pot.sh
@@ -36,7 +38,7 @@ run: locale
 	BIGNETSCREEN_LOCALEDIR=$(CURDIR)/build/locale $(CARGO) run -p nd-gui
 
 install: all
-	install -Dm755 target/release/bignetscreen $(BINDIR)/bignetscreen
+	install -Dm755 "$(BINARY)" "$(BINDIR)/bignetscreen"
 	install -Dm644 data/$(APPID).desktop $(DATADIR)/applications/$(APPID).desktop
 	install -Dm644 data/$(APPID).metainfo.xml $(DATADIR)/metainfo/$(APPID).metainfo.xml
 	install -Dm644 data/icons/$(APPID).svg \
@@ -61,10 +63,10 @@ fmt:
 	$(CARGO) fmt --all -- --check
 
 clippy:
-	$(CARGO) clippy --workspace --all-targets -- -D warnings
+	$(CARGO) clippy --locked --workspace --all-targets -- -D warnings
 
 test:
-	$(CARGO) test --workspace
+	$(CARGO) test --locked --workspace
 
 clean:
 	$(CARGO) clean

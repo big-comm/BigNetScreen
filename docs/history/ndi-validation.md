@@ -1,3 +1,5 @@
+> Historical experiment report. This describes earlier development work, not validation of the current tree. Use [the current test plan](../testing.md) and the delivered gate logs for release decisions.
+
 # Built-in NDI validation
 
 ## Optional installation, 2026-09-18

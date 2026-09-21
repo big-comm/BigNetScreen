@@ -93,15 +93,24 @@ pub(crate) struct MediaWindow {
 
 impl MediaWindow {
     pub(crate) fn new(playout_delay: Duration) -> Self {
-        Self { limit: playout_delay.max(Duration::from_millis(66)), frames: VecDeque::new() }
+        Self {
+            limit: playout_delay.max(Duration::from_millis(66)),
+            frames: VecDeque::new(),
+        }
     }
 
     pub(crate) fn has_room(&mut self, next: Duration, acknowledged: i64) -> bool {
-        while self.frames.front().is_some_and(|(id, _)| i64::from(*id) <= acknowledged) {
+        while self
+            .frames
+            .front()
+            .is_some_and(|(id, _)| i64::from(*id) <= acknowledged)
+        {
             self.frames.pop_front();
         }
-        self.frames.front().is_none_or(|(_, oldest)|
-            next.checked_sub(*oldest).is_some_and(|duration| duration <= self.limit))
+        self.frames.front().is_none_or(|(_, oldest)| {
+            next.checked_sub(*oldest)
+                .is_some_and(|duration| duration <= self.limit)
+        })
     }
 
     pub(crate) fn is_stale(&self, pts: Duration, now: Duration) -> bool {
@@ -209,5 +218,4 @@ mod tests {
         assert!(media.is_stale(Duration::ZERO, Duration::from_millis(151)));
         assert!(!media.is_stale(Duration::from_secs(1), Duration::ZERO));
     }
-
 }

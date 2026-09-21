@@ -1,3 +1,5 @@
+> Historical experiment report. This describes earlier development work, not validation of the current tree. Use [the current test plan](../testing.md) and the delivered gate logs for release decisions.
+
 # Review follow-up
 
 Implemented 2026-09-16. Scope: reviewed defects, optional NDI sender, resolution choices.

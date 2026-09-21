@@ -179,7 +179,8 @@ async fn write_frame<W: AsyncWrite + Unpin>(
     timeout: Duration,
 ) -> Result<()> {
     let deadline = tokio::time::Instant::now() + timeout;
-    let mut stream = tokio::time::timeout_at(deadline, stream.lock()).await
+    let mut stream = tokio::time::timeout_at(deadline, stream.lock())
+        .await
         .map_err(|_| NdError::Network("Cast writer lock timed out".into()))?;
     if closed.load(Ordering::Acquire) {
         return Err(NdError::Network("Cast channel is closed".into()));
@@ -187,13 +188,17 @@ async fn write_frame<W: AsyncWrite + Unpin>(
     if heartbeat && closing.load(Ordering::Acquire) {
         return Ok(());
     }
-    let mut transaction = FrameWrite { closed, complete: false };
+    let mut transaction = FrameWrite {
+        closed,
+        complete: false,
+    };
     tokio::time::timeout_at(deadline, async {
         stream.write_all(frame).await?;
         stream.flush().await
-    }).await
-        .map_err(|_| NdError::Network("Cast frame write timed out; channel closed".into()))?
-        .map_err(net_err)?;
+    })
+    .await
+    .map_err(|_| NdError::Network("Cast frame write timed out; channel closed".into()))?
+    .map_err(net_err)?;
     transaction.complete = true;
     if terminal {
         // Still holding the writer lock: no request can race after CLOSE.
@@ -381,11 +386,14 @@ impl CastChannel {
         self.pending
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(id, PendingReply {
-                namespace: namespace.to_string(),
-                source_id: destination.to_string(),
-                sender: tx,
-            });
+            .insert(
+                id,
+                PendingReply {
+                    namespace: namespace.to_string(),
+                    source_id: destination.to_string(),
+                    sender: tx,
+                },
+            );
         let _request = PendingRequest {
             pending: self.pending.clone(),
             id,
@@ -393,11 +401,18 @@ impl CastChannel {
 
         let deadline = tokio::time::Instant::now() + timeout;
         tokio::time::timeout_at(deadline, async {
-            self.send(namespace, destination, &payload.to_string()).await?;
-            rx.await.map_err(|_| NdError::Protocol("the Cast channel closed before the reply".into()))
-        }).await.map_err(|_| NdError::Protocol(format!(
-            "the receiver did not reply within {}s", timeout.as_secs()
-        )))?
+            self.send(namespace, destination, &payload.to_string())
+                .await?;
+            rx.await
+                .map_err(|_| NdError::Protocol("the Cast channel closed before the reply".into()))
+        })
+        .await
+        .map_err(|_| {
+            NdError::Protocol(format!(
+                "the receiver did not reply within {}s",
+                timeout.as_secs()
+            ))
+        })?
     }
 
     /// Asks for the receiver's status (running apps, volume, and so on).
@@ -460,10 +475,16 @@ impl CastChannel {
             .ok_or_else(|| NdError::Protocol("reply without a sessionId".into()))?
             .to_string();
 
-        let app = LaunchedApp { transport_id, session_id };
+        let app = LaunchedApp {
+            transport_id,
+            session_id,
+        };
         // If the app launched but its CONNECT fails, still attempt STOP for
         // exactly that session before dropping the platform connection.
-        if let Err(err) = self.send(NS_CONNECTION, &app.transport_id, r#"{"type":"CONNECT"}"#).await {
+        if let Err(err) = self
+            .send(NS_CONNECTION, &app.transport_id, r#"{"type":"CONNECT"}"#)
+            .await
+        {
             let _ = self.stop_app(&app).await;
             self.close().await;
             return Err(err);
@@ -479,26 +500,29 @@ impl CastChannel {
         url: &str,
         content_type: &str,
     ) -> Result<Value> {
-        let response = self.request(
-            NS_MEDIA,
-            &app.transport_id,
-            json!({
-                "type": "LOAD",
-                "sessionId": app.session_id,
-                "autoplay": true,
-                "currentTime": 0,
-                "media": {
-                    "contentId": url,
-                    "contentType": content_type,
-                    // Mirroring is live: without this the receiver tries to
-                    // buffer as if it were an on-demand video.
-                    "streamType": "LIVE",
-                },
-            }),
-        )
-        .await?;
+        let response = self
+            .request(
+                NS_MEDIA,
+                &app.transport_id,
+                json!({
+                    "type": "LOAD",
+                    "sessionId": app.session_id,
+                    "autoplay": true,
+                    "currentTime": 0,
+                    "media": {
+                        "contentId": url,
+                        "contentType": content_type,
+                        // Mirroring is live: without this the receiver tries to
+                        // buffer as if it were an on-demand video.
+                        "streamType": "LIVE",
+                    },
+                }),
+            )
+            .await?;
         if response.get("type").and_then(Value::as_str) != Some("MEDIA_STATUS") {
-            return Err(NdError::Protocol("receiver did not acknowledge the live media LOAD".into()));
+            return Err(NdError::Protocol(
+                "receiver did not acknowledge the live media LOAD".into(),
+            ));
         }
         Ok(response)
     }
@@ -566,25 +590,40 @@ impl CastChannel {
     /// STOP only the session we launched, then CLOSE its virtual connection.
     /// A transport-level reply is not sufficient: verify the app is gone.
     pub async fn stop_app(&self, app: &LaunchedApp) -> Result<()> {
-        self.writer.closing.store(true, Ordering::Release);
-        let response = self.request_with_timeout(
-            NS_RECEIVER, PLATFORM_DEST,
-            json!({"type": "STOP", "sessionId": app.session_id}), STOP_TIMEOUT,
-        ).await;
-        let mut stopped = response.as_ref().is_ok_and(|reply| session_absent(reply, &app.session_id));
+        // Keep PING/PONG alive while STOP is awaiting confirmation. Only the
+        // terminal platform CLOSE stops heartbeat traffic under the writer lock.
+        let response = self
+            .request_with_timeout(
+                NS_RECEIVER,
+                PLATFORM_DEST,
+                json!({"type": "STOP", "sessionId": app.session_id}),
+                STOP_TIMEOUT,
+            )
+            .await;
+        let mut stopped = response
+            .as_ref()
+            .is_ok_and(|reply| session_absent(reply, &app.session_id));
         if !stopped && !self.writer.closed.load(Ordering::Acquire) {
             // STOP may race a receiver-initiated shutdown. GET_STATUS can
             // confirm that specific session is already absent without ever
             // stopping another sender's application.
-            stopped = self.request_with_timeout(
-                NS_RECEIVER, PLATFORM_DEST, json!({"type": "GET_STATUS"}), STOP_TIMEOUT,
-            ).await.is_ok_and(|reply| session_absent(&reply, &app.session_id));
+            stopped = self
+                .request_with_timeout(
+                    NS_RECEIVER,
+                    PLATFORM_DEST,
+                    json!({"type": "GET_STATUS"}),
+                    STOP_TIMEOUT,
+                )
+                .await
+                .is_ok_and(|reply| session_absent(&reply, &app.session_id));
         }
         self.close_to(&app.transport_id).await;
         if stopped {
             Ok(())
         } else {
-            Err(NdError::Protocol("receiver did not confirm that the Cast session stopped".into()))
+            Err(NdError::Protocol(
+                "receiver did not confirm that the Cast session stopped".into(),
+            ))
         }
     }
 
@@ -593,20 +632,33 @@ impl CastChannel {
     pub async fn close(&self) {
         self.writer.closing.store(true, Ordering::Release);
         if !self.writer.closed.load(Ordering::Acquire) {
-            let _ = send_raw_kind(&self.writer, NS_CONNECTION, PLATFORM_DEST,
-                r#"{"type":"CLOSE"}"#, true).await;
+            let _ = send_raw_kind(
+                &self.writer,
+                NS_CONNECTION,
+                PLATFORM_DEST,
+                r#"{"type":"CLOSE"}"#,
+                true,
+            )
+            .await;
         }
         self.writer.closed.store(true, Ordering::Release);
         self.ping_task.abort();
         self.reader_task.abort();
-        self.pending.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clear();
+        self.pending
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         let _ = tokio::time::timeout(WRITE_TIMEOUT, async {
             self.writer.stream.lock().await.shutdown().await
-        }).await;
+        })
+        .await;
     }
 
     async fn close_to(&self, destination: &str) {
-        if let Err(err) = self.send(NS_CONNECTION, destination, r#"{"type":"CLOSE"}"#).await {
+        if let Err(err) = self
+            .send(NS_CONNECTION, destination, r#"{"type":"CLOSE"}"#)
+            .await
+        {
             tracing::debug!(%destination, %err, "the receiver did not take the CLOSE");
         }
     }
@@ -678,19 +730,30 @@ async fn send_raw_kind(
     let mut frame = Vec::with_capacity(4 + buf.len());
     frame.extend_from_slice(&(buf.len() as u32).to_be_bytes());
     frame.extend_from_slice(&buf);
-    write_frame(&writer.stream, &writer.closed, &writer.closing, &frame,
-        namespace == NS_HEARTBEAT, terminal, WRITE_TIMEOUT).await
+    write_frame(
+        &writer.stream,
+        &writer.closed,
+        &writer.closing,
+        &frame,
+        namespace == NS_HEARTBEAT,
+        terminal,
+        WRITE_TIMEOUT,
+    )
+    .await
 }
 
 fn session_absent(response: &Value, session_id: &str) -> bool {
     if response.get("type").and_then(Value::as_str) != Some("RECEIVER_STATUS") {
         return false;
     }
-    let Some(status) = response.get("status").and_then(Value::as_object) else { return false; };
+    let Some(status) = response.get("status").and_then(Value::as_object) else {
+        return false;
+    };
     match status.get("applications") {
         None | Some(Value::Null) => true,
         Some(Value::Array(apps)) => apps.iter().all(|app| {
-            app.get("sessionId").and_then(Value::as_str)
+            app.get("sessionId")
+                .and_then(Value::as_str)
                 .is_some_and(|id| !id.is_empty() && id != session_id)
         }),
         _ => false,
@@ -727,7 +790,9 @@ async fn read_message<R: AsyncRead + Unpin>(reader: &mut R) -> Result<CastEvent>
         return Err(NdError::Protocol("invalid Cast message envelope".into()));
     }
     let payload = if msg.payload_type == PayloadType::Str as i32 {
-        let text = msg.payload_utf8.as_deref()
+        let text = msg
+            .payload_utf8
+            .as_deref()
             .ok_or_else(|| NdError::Protocol("Cast UTF-8 payload missing".into()))?;
         serde_json::from_str(text).map_err(proto_err)?
     } else if msg.payload_type == PayloadType::Bin as i32 {
@@ -736,7 +801,11 @@ async fn read_message<R: AsyncRead + Unpin>(reader: &mut R) -> Result<CastEvent>
     } else {
         return Err(NdError::Protocol("unknown Cast payload type".into()));
     };
-    Ok(CastEvent { source_id: msg.source_id, namespace: msg.namespace, payload })
+    Ok(CastEvent {
+        source_id: msg.source_id,
+        namespace: msg.namespace,
+        payload,
+    })
 }
 
 /// The read task: answers PINGs, resolves pending requests and forwards the
@@ -749,17 +818,21 @@ async fn reader_loop(
 ) {
     loop {
         let read = tokio::time::timeout(Duration::from_secs(40), read_message(&mut reader)).await;
-        let CastEvent { source_id, namespace, payload } = match read {
+        let CastEvent {
+            source_id,
+            namespace,
+            payload,
+        } = match read {
             Err(_) => {
                 tracing::warn!("Cast receiver/control frame timed out");
                 break;
             }
             Ok(result) => match result {
-            Ok(msg) => msg,
-            Err(err) => {
-                tracing::debug!(%err, "Cast channel closed");
-                break;
-            }
+                Ok(msg) => msg,
+                Err(err) => {
+                    tracing::debug!(%err, "Cast channel closed");
+                    break;
+                }
             },
         };
 
@@ -776,23 +849,33 @@ async fn reader_loop(
 
         // Correlate all three fields; another app/namespace must not satisfy
         // a STOP/LAUNCH waiter by copying or overflowing its requestId.
-        if let Some(id) = payload.get("requestId").and_then(Value::as_i64)
+        if let Some(id) = payload
+            .get("requestId")
+            .and_then(Value::as_i64)
             .and_then(|id| i32::try_from(id).ok())
         {
             let waiting = {
-                let mut requests = pending.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut requests = pending
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 if requests.get(&id).is_some_and(|reply| {
                     reply.namespace == namespace && reply.source_id == source_id
                 }) {
                     requests.remove(&id)
-                } else { None }
+                } else {
+                    None
+                }
             };
             if let Some(reply) = waiting {
                 let _ = reply.sender.send(payload);
                 continue;
             }
         }
-        if let Err(err) = events.try_send(CastEvent { source_id, namespace, payload }) {
+        if let Err(err) = events.try_send(CastEvent {
+            source_id,
+            namespace,
+            payload,
+        }) {
             // Do not silently discard a CLOSE or ANSWER when the consumer is
             // behind. Terminating is bounded and releases all pending requests.
             tracing::warn!(%err, "Cast event queue unavailable; closing channel");
@@ -953,11 +1036,14 @@ mod tests {
     fn stop_confirmation_is_scoped_and_structurally_valid() {
         let stopped = json!({"type":"RECEIVER_STATUS", "status":{"applications":[]}});
         assert!(session_absent(&stopped, "ours"));
-        let other = json!({"type":"RECEIVER_STATUS", "status":{"applications":[{"sessionId":"other"}]}});
+        let other =
+            json!({"type":"RECEIVER_STATUS", "status":{"applications":[{"sessionId":"other"}]}});
         assert!(session_absent(&other, "ours"));
         assert!(!session_absent(&other, "other"));
-        for malformed in [json!({"type":"INVALID_REQUEST"}),
-            json!({"type":"RECEIVER_STATUS", "status":{"applications":[{}]}})] {
+        for malformed in [
+            json!({"type":"INVALID_REQUEST"}),
+            json!({"type":"RECEIVER_STATUS", "status":{"applications":[{}]}}),
+        ] {
             assert!(!session_absent(&malformed, "ours"));
         }
     }
@@ -969,16 +1055,78 @@ mod tests {
         let closed = AtomicBool::new(false);
         let closing = AtomicBool::new(false);
         // The peer never reads until the timeout: four bytes fit, the rest block.
-        let result = tokio::time::timeout(Duration::from_millis(20), write_frame(
-            &stream, &closed, &closing, b"partial message", false, false, Duration::from_secs(1),
-        )).await;
+        let result = tokio::time::timeout(
+            Duration::from_millis(20),
+            write_frame(
+                &stream,
+                &closed,
+                &closing,
+                b"partial message",
+                false,
+                false,
+                Duration::from_secs(1),
+            ),
+        )
+        .await;
         assert!(result.is_err());
         assert!(closed.load(Ordering::Acquire));
         let mut prefix = [0; 4];
         peer.read_exact(&mut prefix).await.unwrap();
         assert_eq!(&prefix, b"part");
-        assert!(write_frame(&stream, &closed, &closing, b"STOP", false, false,
-            Duration::from_secs(1)).await.is_err());
+        assert!(write_frame(
+            &stream,
+            &closed,
+            &closing,
+            b"STOP",
+            false,
+            false,
+            Duration::from_secs(1)
+        )
+        .await
+        .is_err());
+    }
+
+    #[tokio::test]
+    async fn heartbeat_remains_live_during_stop_until_terminal_close() {
+        for _ in 0..20 {
+            let (stream, mut peer) = tokio::io::duplex(128);
+            let stream = tokio::sync::Mutex::new(stream);
+            let closed = AtomicBool::new(false);
+            let closing = AtomicBool::new(false);
+            for (bytes, heartbeat) in [
+                (b"STOP".as_slice(), false),
+                (b"PING", true),
+                (b"PONG", true),
+            ] {
+                write_frame(
+                    &stream,
+                    &closed,
+                    &closing,
+                    bytes,
+                    heartbeat,
+                    false,
+                    Duration::from_secs(1),
+                )
+                .await
+                .unwrap();
+            }
+            let mut received = [0; 12];
+            peer.read_exact(&mut received).await.unwrap();
+            assert_eq!(&received, b"STOPPINGPONG");
+            closing.store(true, Ordering::Release);
+            write_frame(
+                &stream,
+                &closed,
+                &closing,
+                b"CLOSE",
+                false,
+                true,
+                Duration::from_secs(1),
+            )
+            .await
+            .unwrap();
+            assert!(closed.load(Ordering::Acquire));
+        }
     }
 
     #[tokio::test]
@@ -987,15 +1135,42 @@ mod tests {
         let stream = tokio::sync::Mutex::new(stream);
         let closed = AtomicBool::new(false);
         let closing = AtomicBool::new(true);
-        write_frame(&stream, &closed, &closing, b"PING", true, false,
-            Duration::from_secs(1)).await.unwrap();
-        write_frame(&stream, &closed, &closing, b"CLOSE", false, true,
-            Duration::from_secs(1)).await.unwrap();
+        write_frame(
+            &stream,
+            &closed,
+            &closing,
+            b"PING",
+            true,
+            false,
+            Duration::from_secs(1),
+        )
+        .await
+        .unwrap();
+        write_frame(
+            &stream,
+            &closed,
+            &closing,
+            b"CLOSE",
+            false,
+            true,
+            Duration::from_secs(1),
+        )
+        .await
+        .unwrap();
         let mut received = [0; 5];
         peer.read_exact(&mut received).await.unwrap();
         assert_eq!(&received, b"CLOSE"); // PING was not written.
-        assert!(write_frame(&stream, &closed, &closing, b"LOAD", false, false,
-            Duration::from_secs(1)).await.is_err());
+        assert!(write_frame(
+            &stream,
+            &closed,
+            &closing,
+            b"LOAD",
+            false,
+            false,
+            Duration::from_secs(1)
+        )
+        .await
+        .is_err());
     }
 
     #[tokio::test]
@@ -1003,14 +1178,21 @@ mod tests {
         for (destination, text) in [("wrong-sender", "{}"), (SOURCE_ID, "{")] {
             let message = CastMessage {
                 protocol_version: ProtocolVersion::Castv210 as i32,
-                source_id: PLATFORM_DEST.into(), destination_id: destination.into(),
-                namespace: NS_RECEIVER.into(), payload_type: PayloadType::Str as i32,
-                payload_utf8: Some(text.into()), payload_binary: None,
-            }.encode_to_vec();
+                source_id: PLATFORM_DEST.into(),
+                destination_id: destination.into(),
+                namespace: NS_RECEIVER.into(),
+                payload_type: PayloadType::Str as i32,
+                payload_utf8: Some(text.into()),
+                payload_binary: None,
+            }
+            .encode_to_vec();
             let mut bytes = (message.len() as u32).to_be_bytes().to_vec();
             bytes.extend(message);
             assert!(read_message(&mut bytes.as_slice()).await.is_err());
         }
     }
-
 }
+
+#[cfg(test)]
+#[path = "cast_lifecycle_tests.rs"]
+mod lifecycle_tests;

@@ -4,6 +4,7 @@ mod app;
 mod i18n;
 mod ndi_setup;
 mod pages;
+mod shutdown;
 
 use app::AppModel;
 use relm4::RelmApp;
@@ -12,18 +13,31 @@ const APP_ID: &str = "br.com.biglinux.BigNetScreen";
 static STARTED: std::sync::LazyLock<std::time::Instant> =
     std::sync::LazyLock::new(std::time::Instant::now);
 
-/// The application's version.
+/// The build date, in the `yy.mm.dd` form the package names its releases with.
 ///
-/// A plain literal on purpose: the packaging tool finds this constant by
-/// pattern and rewrites the number when it publishes a release, so the version
-/// in the About dialog is the version that was shipped, with nobody having to
-/// remember to edit it.
-///
-/// That is also why it is not read from the environment. A second source would
-/// win over this one and the tool's increment would never reach the interface.
-pub const APP_VERSION: &str = "0.1.4";
+/// Stamped by `build.rs`. Not Cargo's version: that one is crate metadata and
+/// says nothing about which rolling build someone is running.
+pub const APP_VERSION: &str = env!("BIGNETSCREEN_VERSION");
 
 fn main() {
+    // These diagnostics must work without a display, portal or media plugins.
+    if std::env::args_os().len() == 2 {
+        match std::env::args_os()
+            .nth(1)
+            .as_deref()
+            .and_then(std::ffi::OsStr::to_str)
+        {
+            Some("--version") | Some("-V") => {
+                println!("BigNetScreen {APP_VERSION}");
+                return;
+            }
+            Some("--help") | Some("-h") => {
+                println!("BigNetScreen — share a Linux screen with network receivers.\n\nUsage: bignetscreen [--version | --help]\n\nWithout arguments, opens the graphical application.");
+                return;
+            }
+            _ => {}
+        }
+    }
     std::sync::LazyLock::force(&STARTED);
     tracing_subscriber::fmt()
         .with_env_filter(

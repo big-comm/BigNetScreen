@@ -1,0 +1,17 @@
+name: Receiver compatibility
+description: Share a reproducible result for a receiver and network.
+body:
+  - type: textarea
+    id: device
+    attributes:
+      label: Tested configuration
+      description: Model, firmware, transport, desktop, encoder/driver, resolution and network type.
+    validations:
+      required: true
+  - type: textarea
+    id: results
+    attributes:
+      label: Results and duration
+      description: Include actual measured FPS/latency, session duration and Stop/reconnect/window-close results. State what was not tested.
+    validations:
+      required: true

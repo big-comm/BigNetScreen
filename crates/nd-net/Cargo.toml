@@ -10,7 +10,6 @@ rust-version.workspace = true
 
 [dependencies]
 nd-core.workspace = true
-async-trait.workspace = true
 tracing.workspace = true
 futures.workspace = true
 tokio.workspace = true

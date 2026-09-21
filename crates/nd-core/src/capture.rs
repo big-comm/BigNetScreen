@@ -32,7 +32,8 @@ pub enum SourceType {
 
 /// A PipeWire stream ready to feed the encoding pipeline.
 ///
-/// `node_id` is **always** required: it is what identifies the node to capture.
+/// Prefer `pipewire_serial` when provided by the portal. The legacy node ID
+/// is retained for older portals and the direct Mutter API.
 /// `pipewire_fd` is the remote descriptor handed over by the portal — under
 /// Flatpak there is no other way. Mutter directly hands over no descriptor: the
 /// node lives in the session's own PipeWire daemon, and the field is `None`.
@@ -45,6 +46,8 @@ pub struct CaptureSource {
     pub pipewire_fd: Option<OwnedFd>,
     /// The PipeWire node to consume.
     pub node_id: u32,
+    /// Stable PipeWire object.serial returned by ScreenCast portal v6+.
+    pub pipewire_serial: Option<u64>,
     /// The effective source type.
     pub source_type: SourceType,
     /// Known dimensions, when the backend reports them (None = negotiate).
@@ -75,12 +78,6 @@ impl CaptureSource {
         self.pipewire_fd.as_ref().map(|fd| fd.as_raw_fd())
     }
 
-    /// The matching video source, with `fd` and `path` already filled in.
-    ///
-    /// Always going through this constructor rules out the class of bug where
-    /// the pipeline was assembled without `fd=`/`path=` and captured some
-    /// arbitrary node from the PipeWire daemon instead of the stream the user
-    /// authorised.
     /// A source that plays a file rather than capturing anything.
     ///
     /// `size` is what the file will be scaled to; the receiver's own limit and
@@ -89,6 +86,7 @@ impl CaptureSource {
         Self {
             pipewire_fd: None,
             node_id: 0,
+            pipewire_serial: None,
             source_type: SourceType::Monitor,
             size: Some(size),
             media: Some(playback),
@@ -107,6 +105,8 @@ impl CaptureSource {
         }
     }
 
+    /// Preserve the portal-authorized descriptor and stable stream identity.
+    /// A serial is never truncated or replaced by a reusable node ID.
     pub fn video_source(&self) -> VideoSource {
         if let Some(playback) = &self.media {
             return VideoSource::MediaFile {
@@ -118,6 +118,7 @@ impl CaptureSource {
         VideoSource::PipeWire {
             fd: self.raw_fd(),
             node_id: self.node_id,
+            serial: self.pipewire_serial,
             // A virtual monitor has no panel of its own: whatever the pipeline
             // negotiates *is* the screen's resolution, so it has to be asked
             // for explicitly. A real monitor keeps its own.
@@ -156,4 +157,27 @@ pub trait CaptureBackend: Send + Sync {
 
     /// Ends the capture session and releases resources in the compositor.
     async fn stop(&self) -> Result<()>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stable_serial_reaches_pipeline_without_legacy_node_target() {
+        let source = CaptureSource {
+            pipewire_fd: None,
+            node_id: 42,
+            pipewire_serial: Some(u64::from(u32::MAX) + 123),
+            source_type: SourceType::Monitor,
+            size: Some((1920, 1080)),
+            media: None,
+        };
+        let description = source.video_source().description();
+        assert!(
+            description.contains("target-object=4294967418"),
+            "{description}"
+        );
+        assert!(!description.contains("path="), "{description}");
+    }
 }

@@ -28,40 +28,90 @@ pub fn can_install() -> bool {
         && std::fs::read_to_string("/etc/os-release")
             .or_else(|_| std::fs::read_to_string("/usr/lib/os-release"))
             .is_ok_and(|release| arch_based(&release))
-        && ["/usr/bin/bash", "/usr/bin/pkexec", "/usr/bin/pacman"]
-            .iter()
-            .all(|path| Path::new(path).is_file())
+        && [
+            "/usr/bin/bash",
+            "/usr/bin/pkexec",
+            "/usr/bin/pacman",
+            "/usr/bin/timeout",
+        ]
+        .iter()
+        .all(|path| Path::new(path).is_file())
 }
 
 pub async fn install() -> Result<(), String> {
     if !can_install() {
         return Err("Automatic NDI installation is unavailable on this system".into());
     }
-    let output = tokio::process::Command::new("/usr/bin/bash")
-        .args(["--noprofile", "--norc", "-c", INSTALL_SCRIPT])
+    // GNU timeout bounds the entire subprocess group, not just our wait.
+    // The installer is opt-in; no package-manager command is run by tests.
+    let mut child = tokio::process::Command::new("/usr/bin/timeout")
+        .args([
+            "--signal=TERM",
+            "--kill-after=10s",
+            "30m",
+            "/usr/bin/bash",
+            "--noprofile",
+            "--norc",
+            "-c",
+            INSTALL_SCRIPT,
+        ])
         .stdin(Stdio::null())
-        .output()
-        .await
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
         .map_err(|error| error.to_string())?;
-    if output.status.success() {
+    let stdout = child.stdout.take().ok_or("installer stdout unavailable")?;
+    let stderr = child.stderr.take().ok_or("installer stderr unavailable")?;
+    let outcome = tokio::time::timeout(std::time::Duration::from_secs(31 * 60), async {
+        tokio::join!(child.wait(), read_log_tail(stdout), read_log_tail(stderr))
+    })
+    .await
+    .map_err(|_| "NDI installation exceeded its deadline".to_string())?;
+    let (status, stdout, stderr) = outcome;
+    let status = status.map_err(|error| error.to_string())?;
+    let stdout = stdout.map_err(|error| error.to_string())?;
+    let stderr = stderr.map_err(|error| error.to_string())?;
+    if status.success() {
         Ok(())
     } else {
-        let log = format!(
-            "{}\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr),
-        );
-        let tail: String = log.chars().rev().take(4000).collect();
         Err(format!(
-            "{}\n{}",
-            output.status,
-            tail.chars().rev().collect::<String>()
+            "{}\n{}\n{}",
+            status,
+            String::from_utf8_lossy(&stdout),
+            String::from_utf8_lossy(&stderr)
         ))
+    }
+}
+
+/// Drain both pipes continuously while retaining a bounded diagnostic tail.
+async fn read_log_tail<R: tokio::io::AsyncRead + Unpin>(mut reader: R) -> std::io::Result<Vec<u8>> {
+    use tokio::io::AsyncReadExt;
+    const LIMIT: usize = 4096;
+    let mut tail = Vec::with_capacity(LIMIT);
+    let mut chunk = [0u8; LIMIT];
+    loop {
+        let n = reader.read(&mut chunk).await?;
+        if n == 0 {
+            return Ok(tail);
+        }
+        let discard = (tail.len() + n).saturating_sub(LIMIT);
+        tail.drain(..discard);
+        tail.extend_from_slice(&chunk[..n]);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn installer_output_is_drained_but_retained_memory_is_bounded() {
+        let mut data = vec![b'a'; 1024 * 1024];
+        data.extend_from_slice(b"END");
+        let tail = super::read_log_tail(data.as_slice()).await.unwrap();
+        assert_eq!(tail.len(), 4096);
+        assert!(tail.ends_with(b"END"));
+        assert!(super::read_log_tail(&b""[..]).await.unwrap().is_empty());
+    }
     use super::*;
 
     #[test]

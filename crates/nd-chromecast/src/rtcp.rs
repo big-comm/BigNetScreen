@@ -244,7 +244,8 @@ fn validated_blocks(packet: &[u8]) -> Option<Vec<&[u8]>> {
         if header[1] == PT_PAYLOAD_SPECIFIC && count == 1 && block.len() != 12 {
             return None;
         }
-        if header[1] == PT_PAYLOAD_SPECIFIC && count == 15
+        if header[1] == PT_PAYLOAD_SPECIFIC
+            && count == 15
             && block.get(12..16) == Some(CAST_IDENTIFIER.as_slice())
             && (block.len() < 20 || block.len() < 20 + usize::from(block[17]) * 4)
         {
@@ -256,7 +257,8 @@ fn validated_blocks(packet: &[u8]) -> Option<Vec<&[u8]>> {
                 let xr = block.get(pos..pos + 4)?;
                 let size = (usize::from(u16::from_be_bytes([xr[2], xr[3]])) + 1) * 4;
                 block.get(pos..pos + size)?;
-                if xr[0] == 4 && size != 12 { // Receiver Reference Time Report
+                if xr[0] == 4 && size != 12 {
+                    // Receiver Reference Time Report
                     return None;
                 }
                 pos += size;
@@ -283,16 +285,20 @@ fn classify_block(block: &[u8]) -> ReceiverPacket {
 
 /// Classifies a fully validated RTCP datagram; RTP and malformed tails fail.
 pub fn classify_receiver_packet(packet: &[u8]) -> Option<ReceiverPacket> {
-    validated_blocks(packet)?.first().map(|block| classify_block(block))
+    validated_blocks(packet)?
+        .first()
+        .map(|block| classify_block(block))
 }
 
 /// PLI must address a negotiated pair, not merely arrive on the right socket.
 pub fn picture_loss_for(packet: &[u8], receiver_ssrc: u32, sender_ssrc: u32) -> bool {
-    validated_blocks(packet).is_some_and(|blocks| blocks.into_iter().any(|block| {
-        classify_block(block) == ReceiverPacket::PictureLossIndication
-            && block[4..8] == receiver_ssrc.to_be_bytes()
-            && block[8..12] == sender_ssrc.to_be_bytes()
-    }))
+    validated_blocks(packet).is_some_and(|blocks| {
+        blocks.into_iter().any(|block| {
+            classify_block(block) == ReceiverPacket::PictureLossIndication
+                && block[4..8] == receiver_ssrc.to_be_bytes()
+                && block[8..12] == sender_ssrc.to_be_bytes()
+        })
+    })
 }
 
 #[cfg(test)]
@@ -438,7 +444,11 @@ impl Nack {
         let mut ids = vec![self.packet_id];
         for bit in 0..8u16 {
             if self.bitmask & (1 << bit) != 0 {
-                if let Some(id) = self.packet_id.checked_add(bit + 1).filter(|id| *id != 0xFFFF) {
+                if let Some(id) = self
+                    .packet_id
+                    .checked_add(bit + 1)
+                    .filter(|id| *id != 0xFFFF)
+                {
                     ids.push(id);
                 }
             }
@@ -495,13 +505,18 @@ pub fn parse_cast_feedbacks(packet: &[u8]) -> Vec<CastFeedback> {
             while pos < xr.len() {
                 let size = (usize::from(u16::from_be_bytes([xr[pos + 2], xr[pos + 3]])) + 1) * 4;
                 if xr[pos] == 4 {
-                    reference_time = Some(u64::from_be_bytes(xr[pos + 4..pos + 12].try_into().unwrap()));
+                    reference_time = Some(u64::from_be_bytes(
+                        xr[pos + 4..pos + 12].try_into().unwrap(),
+                    ));
                 }
                 pos += size;
             }
         }
         let mut nacks = Vec::with_capacity(usize::from(block[17]));
-        for loss in block[20..20 + usize::from(block[17]) * 4].chunks_exact(4) {
+        for loss in block[20..20 + usize::from(block[17]) * 4]
+            .as_chunks::<4>()
+            .0
+        {
             nacks.push(Nack {
                 frame_id: loss[0],
                 packet_id: u16::from_be_bytes([loss[1], loss[2]]),
@@ -636,7 +651,10 @@ mod feedback_tests {
         packet[0] |= 0x20;
         packet[3] += 1;
         packet.extend_from_slice(&[0, 0, 0, 4]);
-        assert_eq!(parse_cast_feedback(&packet).unwrap().checkpoint_frame_id, 42);
+        assert_eq!(
+            parse_cast_feedback(&packet).unwrap().checkpoint_frame_id,
+            42
+        );
         let mut bad = packet.clone();
         *bad.last_mut().unwrap() = 0;
         assert!(parse_cast_feedback(&bad).is_none());
@@ -655,7 +673,11 @@ mod feedback_tests {
 
     #[test]
     fn nack_bitmap_never_wraps_packet_numbers_or_requests_the_sentinel() {
-        let nack = Nack { frame_id: 0, packet_id: 0xfffe, bitmask: 0xff };
+        let nack = Nack {
+            frame_id: 0,
+            packet_id: 0xfffe,
+            bitmask: 0xff,
+        };
         assert_eq!(nack.packet_ids(), Some(vec![0xfffe]));
     }
 
@@ -668,5 +690,4 @@ mod feedback_tests {
         assert!(!picture_loss_for(&packet, 100_004, 100_001));
         assert!(!picture_loss_for(&packet, 100_002, 100_003));
     }
-
 }

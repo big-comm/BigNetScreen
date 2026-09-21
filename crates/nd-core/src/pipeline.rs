@@ -90,31 +90,6 @@ pub fn query_min_latency_ms(pipeline: &gst::Pipeline) -> Option<u64> {
     Some(min_ms)
 }
 
-/// Builds and prepares a pipeline from a description.
-///
-/// Unlike a bare `parse::launch`, here:
-/// 1. the **pipeline latency is applied** (`set_latency`) — without it the
-///    tuning constants in this module would have no effect at all;
-/// 2. the bus is watched and errors are delivered to the caller over a
-///    channel, instead of merely being logged and dropped;
-/// 3. the pipeline comes back in the **`Ready`** state, not `Null`.
-///
-/// Item 3 is not cosmetic: elements such as `multisocketsink` refuse to `add`
-/// a client while the pipeline is in `Null` (*"must be set to READY, PAUSED or
-/// PLAYING state before clients can be added"*), and the refusal is only a
-/// `WARNING` on the bus — the cast fails silently, delivering zero bytes.
-/// Returning in `Ready` closes that trap for every caller.
-/// Measures how long a frame spends **inside our own pipeline**.
-///
-/// It exists to answer a question a photo of the two screens cannot separate:
-/// of the milliseconds of delay visible on the projector, how many are ours
-/// and how many are the device's? The probe sits on every element's pad and
-/// compares the frame's running time against the pipeline clock — that is, the
-/// age of the frame at the moment it goes out to the network.
-///
-/// What it does **not** measure: the network, and the receiver's decoding and
-/// image processing. The gap between this number and the photo's is exactly
-/// that.
 /// Counts the frames the encoder actually produces, once a second.
 ///
 /// The question it answers cannot be answered from the other end: a receiver
@@ -160,6 +135,16 @@ pub fn instrument_framerate(pipeline: &gst::Pipeline) {
     });
 }
 
+fn pad_running_time(pad: &gst::Pad, pts: gst::ClockTime) -> Option<gst::ClockTime> {
+    let event = pad.sticky_event::<gst::event::Segment>(0)?;
+    event
+        .segment()
+        .downcast_ref::<gst::ClockTime>()?
+        .to_running_time(pts)
+}
+
+/// Measure sender-side frame age using each pad's SEGMENT, not raw encoder PTS.
+/// This diagnostic excludes network transit and receiver buffering/decoding.
 pub fn instrument_latency(pipeline: &gst::Pipeline) {
     use gst::prelude::*;
 
@@ -195,7 +180,10 @@ pub fn instrument_latency(pipeline: &gst::Pipeline) {
             let Some(now) = clock.time().checked_sub(base) else {
                 return gst::PadProbeReturn::Ok;
             };
-            let Some(age) = now.checked_sub(pts) else {
+            let Some(running_time) = pad_running_time(pad, pts) else {
+                return gst::PadProbeReturn::Ok;
+            };
+            let Some(age) = now.checked_sub(running_time) else {
                 return gst::PadProbeReturn::Ok;
             };
 
@@ -646,7 +634,7 @@ impl H264Encoder {
                 bps = kbps as u64 * 1000,
                 v4l2_profile = match cfg.profile {
                     H264Profile::ConstrainedBaseline => 0, // Preserve the legacy WFD control.
-                    H264Profile::High => 4, // V4L2_MPEG_VIDEO_H264_PROFILE_HIGH.
+                    H264Profile::High => 4,                // V4L2_MPEG_VIDEO_H264_PROFILE_HIGH.
                 },
             ),
             // CAREFUL: `openh264enc` measures `bitrate` in **bit/s**, not kbit/s.
@@ -967,6 +955,8 @@ pub enum VideoSource {
     PipeWire {
         fd: Option<RawFd>,
         node_id: u32,
+        /// Prefer the non-reusable portal serial over the legacy node ID.
+        serial: Option<u64>,
         /// The size to demand from the producer, when it must not be left open.
         ///
         /// A **virtual monitor** has no panel to take a resolution from, so
@@ -1027,7 +1017,12 @@ impl VideoSource {
             // `keepalive-time`/`resend-last` make the source re-emit the last
             // frame when the screen is still. Without them the encoder starves
             // and the receiver drops the session for lack of data.
-            VideoSource::PipeWire { fd, node_id, size } => {
+            VideoSource::PipeWire {
+                fd,
+                node_id,
+                serial,
+                size,
+            } => {
                 let fd_prop = match fd {
                     Some(fd) => format!("fd={fd} "),
                     None => String::new(),
@@ -1046,10 +1041,16 @@ impl VideoSource {
                 // the monitor is never created). So the size stays negotiated,
                 // and sizing the virtual monitor properly is still open.
                 let _ = size;
-                let caps = String::new();
+                // Do not fall back to a node ID when a serial was supplied:
+                // a recycled ID could point at a different producer. A plugin
+                // without target-object must fail, not capture another node.
+                let target = match serial {
+                    Some(serial) => format!("target-object={serial}"),
+                    None => format!("path={node_id}"),
+                };
                 format!(
-                    "pipewiresrc {fd_prop}path={node_id} do-timestamp=true \
-                     keepalive-time=1000 resend-last=true{caps}"
+                    "pipewiresrc {fd_prop}{target} do-timestamp=true \
+                     keepalive-time=1000 resend-last=true"
                 )
             }
             VideoSource::Test => "videotestsrc is-live=true".to_string(),
@@ -1742,31 +1743,18 @@ pub const CAST_VBV_FRAMES: u32 = 2;
 /// receiver's socket with the headers already written.
 pub const CHROMECAST_SINK_NAME: &str = "cc-sink";
 
-/// Builds the Chromecast pipeline description (H.264 + AAC in Matroska).
+/// Builds the Cast HTTP fallback (H.264 + AAC in MPEG-TS).
 ///
-/// Decisions carried over from the reference C project
-/// (`src/cc/cc-media-factory.c`) that matter for time-to-first-picture:
-/// - `matroskamux` with 50–100 ms clusters (the 500 ms default is far too late
-///   for live content);
-/// - a short post-muxer queue (50 ms), so the segment leaves as soon as it
-///   closes;
-/// - **`multisocketsink sync=false`**: the pace already comes from the live
-///   source; synchronising on the clock here adds an entire pipeline latency
-///   before the byte reaches the socket;
-/// - `blocksize=8192`: 8 KiB is enough for TCP packetisation — larger blocks
-///   only accumulate buffer before the segment reaches the receiver;
-/// - `sync-method=latest-keyframe` + `recover-policy=keyframe`: a client that
-///   arrives mid-stream (or falls behind) joins from the most recent keyframe,
-///   rather than receiving garbage or being disconnected.
-///
-/// The audio track is not decorative: the Default Media Receiver rejects
-/// containers without audio.
+/// MP2T is an officially supported Cast container. Explicit byte-stream access
+/// units and short mux/queue batches bound sender buffering; the receiver may
+/// still prebuffer seconds. This is not the raw-RTP mirroring path.
+/// `multisocketsink` takes the receiver socket after HTTP headers are written.
 pub fn chromecast_pipeline_description(cfg: &StreamConfig, source: &VideoSource) -> String {
     format!(
         "{src} ! {convert} ! {vqueue} ! \
          {enc} ! h264parse config-interval=-1 ! \
-         matroskamux name=mux streamable=true min-cluster-duration=20000000 \
-         max-cluster-duration=40000000 ! \
+         video/x-h264,stream-format=byte-stream,alignment=au ! \
+         mpegtsmux name=mux alignment=7 ! \
          queue max-size-buffers=0 max-size-bytes=0 max-size-time=50000000 silent=true ! \
          multisocketsink name={sink} sync=false async=false blocksize=8192 \
          burst-format=buffers sync-method={sync_method} recover-policy=keyframe \
@@ -1792,6 +1780,23 @@ pub fn chromecast_pipeline_description(cfg: &StreamConfig, source: &VideoSource)
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn diagnostics_map_the_encoder_pts_offset_through_its_segment() {
+        use gst::prelude::*;
+        init().unwrap();
+        let pad = gst::Pad::builder(gst::PadDirection::Src).build();
+        pad.set_active(true).unwrap();
+        let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
+        let offset = gst::ClockTime::from_seconds(1000 * 3600);
+        segment.set_start(offset);
+        pad.store_sticky_event(&gst::event::Segment::new(&segment))
+            .unwrap();
+        assert_eq!(pad_running_time(&pad, offset), Some(gst::ClockTime::ZERO));
+        assert_eq!(
+            pad_running_time(&pad, offset + gst::ClockTime::from_mseconds(50)),
+            Some(gst::ClockTime::from_mseconds(50))
+        );
+    }
     #[tokio::test]
     async fn finite_music_ends_synthetic_tracks() {
         use futures::StreamExt;
@@ -2312,6 +2317,7 @@ mod tests {
         let src = VideoSource::PipeWire {
             fd: Some(7),
             node_id: 42,
+            serial: None,
             size: None,
         };
         let transport = WfdTransport::new(IpAddr::V4(Ipv4Addr::new(192, 168, 49, 1)), 19000);
@@ -2326,6 +2332,7 @@ mod tests {
         let src = VideoSource::PipeWire {
             fd: None,
             node_id: 42,
+            serial: None,
             size: None,
         };
         let desc = chromecast_pipeline_description(&cfg, &src);
@@ -2374,7 +2381,7 @@ mod tests {
         let cfg = StreamConfig::default();
         let desc = chromecast_pipeline_description(&cfg, &VideoSource::Test);
         assert!(desc.contains("avenc_aac"), "{desc}");
-        assert!(desc.contains("matroskamux"), "{desc}");
+        assert!(desc.contains("mpegtsmux"), "{desc}");
     }
 
     #[test]
@@ -2492,6 +2499,7 @@ mod tests {
             let desc = VideoSource::PipeWire {
                 fd: None,
                 node_id: 42,
+                serial: None,
                 size,
             }
             .description();
@@ -2571,15 +2579,14 @@ mod tests {
     }
 
     #[test]
-    fn chromecast_clusters_are_short_enough_for_live() {
-        // matroskamux's default (500 ms) delays the first picture far too much.
-        let cfg = StreamConfig::default();
-        let desc = chromecast_pipeline_description(&cfg, &VideoSource::Test);
-        // 20–40 ms: a cluster has to **close** before going out to the
-        // network, and that time enters the latency directly. matroskamux's
-        // default is 500 ms — far too late for live content.
-        assert!(desc.contains("min-cluster-duration=20000000"), "{desc}");
-        assert!(desc.contains("max-cluster-duration=40000000"), "{desc}");
+    fn chromecast_uses_supported_transport_stream_framing() {
+        let desc = chromecast_pipeline_description(&StreamConfig::default(), &VideoSource::Test);
+        assert!(desc.contains("mpegtsmux name=mux alignment=7"), "{desc}");
+        assert!(
+            desc.contains("stream-format=byte-stream,alignment=au"),
+            "{desc}"
+        );
+        assert!(!desc.contains("matroskamux"), "{desc}");
     }
 
     #[test]
@@ -2783,9 +2790,15 @@ mod tests {
 
     #[test]
     fn cast_high_selects_v4l2_high_without_changing_default_wfd_control() {
-        let cfg = StreamConfig { profile: H264Profile::High, ..Default::default() };
-        assert!(H264Encoder::V4l2H264.encoder_description(&cfg).contains("h264_profile=4,"));
-        assert!(H264Encoder::V4l2H264.encoder_description(&StreamConfig::default()).contains("h264_profile=0,"));
+        let cfg = StreamConfig {
+            profile: H264Profile::High,
+            ..Default::default()
+        };
+        assert!(H264Encoder::V4l2H264
+            .encoder_description(&cfg)
+            .contains("h264_profile=4,"));
+        assert!(H264Encoder::V4l2H264
+            .encoder_description(&StreamConfig::default())
+            .contains("h264_profile=0,"));
     }
-
 }

@@ -16,3 +16,7 @@ async-trait.workspace = true
 tracing.workspace = true
 futures.workspace = true
 tokio.workspace = true
+
+# Imported under its library name gstndi for static plugin registration.
+[package.metadata.cargo-machete]
+ignored = ["gst-plugin-ndi"]

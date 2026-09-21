@@ -43,8 +43,8 @@ use tokio::net::{TcpListener, TcpStream};
 
 use nd_core::{NdError, Result};
 
-/// Tipo MIME do container servido (H.264 + AAC em Matroska).
-pub const CONTENT_TYPE: &str = "video/x-matroska";
+/// MIME type of the Cast HTTP fallback (H.264 + AAC in MPEG-TS).
+pub const CONTENT_TYPE: &str = "video/mp2t";
 
 /// Cap on a request's header size.
 const MAX_REQUEST_BYTES: usize = 8 * 1024;
@@ -173,31 +173,49 @@ fn response_headers(verdict: Verdict) -> String {
 /// Kept shared with file serving so both token-protected paths reject the same
 /// malformed syntax. These endpoints intentionally do not implement uploads.
 pub(crate) fn request_line(request: &str) -> Option<(&str, &str)> {
-    if !request.is_ascii() || request.len() > MAX_REQUEST_BYTES { return None; }
+    if !request.is_ascii() || request.len() > MAX_REQUEST_BYTES {
+        return None;
+    }
     let mut lines = request.strip_suffix("\r\n\r\n")?.split("\r\n");
     let mut parts = lines.next()?.split(' ');
     let (method, target, version) = (parts.next()?, parts.next()?, parts.next()?);
-    if parts.next().is_some() || method.is_empty() || !method.bytes().all(token_char)
-        || !target.starts_with('/') || target.bytes().any(|b| b <= 32 || b == 127)
-        || !matches!(version, "HTTP/1.0" | "HTTP/1.1") { return None; }
+    if parts.next().is_some()
+        || method.is_empty()
+        || !method.bytes().all(token_char)
+        || !target.starts_with('/')
+        || target.bytes().any(|b| b <= 32 || b == 127)
+        || !matches!(version, "HTTP/1.0" | "HTTP/1.1")
+    {
+        return None;
+    }
     let mut host = false;
     let mut length = false;
     let mut range = false;
     for line in lines {
         let (name, value) = line.split_once(':')?;
-        if name.is_empty() || !name.bytes().all(token_char)
-            || value.bytes().any(|b| (b < 32 && b != b'\t') || b == 127) { return None; }
+        if name.is_empty()
+            || !name.bytes().all(token_char)
+            || value.bytes().any(|b| (b < 32 && b != b'\t') || b == 127)
+        {
+            return None;
+        }
         let value = value.trim();
         if name.eq_ignore_ascii_case("host") {
-            if host || value.is_empty() { return None; }
+            if host || value.is_empty() {
+                return None;
+            }
             host = true;
         } else if name.eq_ignore_ascii_case("content-length") {
-            if length || value != "0" { return None; }
+            if length || value != "0" {
+                return None;
+            }
             length = true;
         } else if name.eq_ignore_ascii_case("transfer-encoding") {
             return None;
         } else if name.eq_ignore_ascii_case("range") {
-            if range { return None; }
+            if range {
+                return None;
+            }
             range = true;
         }
     }
@@ -213,21 +231,29 @@ pub(crate) async fn read_request<R: AsyncRead + Unpin>(stream: &mut R) -> Result
     read_request_with_timeout(stream, REQUEST_TIMEOUT).await
 }
 
-async fn read_request_with_timeout<R: AsyncRead + Unpin>(stream: &mut R, timeout: Duration) -> Result<String> {
+async fn read_request_with_timeout<R: AsyncRead + Unpin>(
+    stream: &mut R,
+    timeout: Duration,
+) -> Result<String> {
     let deadline = tokio::time::Instant::now() + timeout;
     let mut buffer = Vec::with_capacity(1024);
     let mut chunk = [0u8; 512];
     loop {
-        let read = tokio::time::timeout_at(deadline, stream.read(&mut chunk)).await
+        let read = tokio::time::timeout_at(deadline, stream.read(&mut chunk))
+            .await
             .map_err(|_| NdError::Network("the client did not finish the request in time".into()))?
             .map_err(net_err)?;
-        if read == 0 { return Err(NdError::Network("incomplete HTTP headers".into())); }
+        if read == 0 {
+            return Err(NdError::Network("incomplete HTTP headers".into()));
+        }
         buffer.extend_from_slice(&chunk[..read]);
         // Check BEFORE accepting a terminating delimiter in an oversized last chunk.
         if buffer.len() > MAX_REQUEST_BYTES {
             return Err(NdError::Network("HTTP request too large".into()));
         }
-        if buffer.windows(4).any(|w| w == b"\r\n\r\n") { break; }
+        if buffer.windows(4).any(|w| w == b"\r\n\r\n") {
+            break;
+        }
     }
     let request = String::from_utf8(buffer)
         .map_err(|_| NdError::Protocol("invalid HTTP header encoding".into()))?;
@@ -240,8 +266,10 @@ async fn read_request_with_timeout<R: AsyncRead + Unpin>(stream: &mut R, timeout
 /// Cancelled writes are followed by dropping the connection, never a retry on
 /// the same partially written response. File bodies also have a per-chunk limit.
 pub(crate) async fn write_bounded(stream: &mut TcpStream, bytes: &[u8]) -> Result<()> {
-    tokio::time::timeout(Duration::from_secs(5), stream.write_all(bytes)).await
-        .map_err(|_| NdError::Network("HTTP peer stopped reading".into()))?.map_err(net_err)
+    tokio::time::timeout(Duration::from_secs(5), stream.write_all(bytes))
+        .await
+        .map_err(|_| NdError::Network("HTTP peer stopped reading".into()))?
+        .map_err(net_err)
 }
 
 /// The stream server for one cast session.
@@ -311,7 +339,9 @@ impl StreamServer {
         let mut served_any = false;
 
         loop {
-            if *cancel.borrow() { return Ok(()); }
+            if *cancel.borrow() {
+                return Ok(());
+            }
             let accepted = tokio::select! {
                 result = self.listener.accept() => result,
                 _ = cancel.changed() => {
@@ -329,7 +359,9 @@ impl StreamServer {
             };
 
             // Reject another IP before allowing it to occupy the serial reader.
-            if peer.ip() != self.allowed { continue; }
+            if peer.ip() != self.allowed {
+                continue;
+            }
             let read = tokio::select! {
                 result = read_request(&mut stream) => result,
                 _ = cancel.changed() => return Ok(()),
@@ -338,7 +370,11 @@ impl StreamServer {
                 Ok(request) => request,
                 Err(err) => {
                     tracing::debug!(%peer, %err, "request discarded");
-                    let _ = write_bounded(&mut stream, response_headers(Verdict::BadRequest).as_bytes()).await;
+                    let _ = write_bounded(
+                        &mut stream,
+                        response_headers(Verdict::BadRequest).as_bytes(),
+                    )
+                    .await;
                     continue;
                 }
             };
@@ -368,7 +404,9 @@ impl StreamServer {
                 tracing::warn!(%peer, %err, "failed to write the headers");
                 continue;
             }
-            if *cancel.borrow() { return Ok(()); }
+            if *cancel.borrow() {
+                return Ok(());
+            }
 
             match hand_socket_to_sink(stream, &sink) {
                 Ok(()) => tracing::info!(%peer, "receiver connected to the stream"),
@@ -570,22 +608,34 @@ mod tests {
     }
     #[test]
     fn rejects_ambiguous_or_incomplete_http_framing() {
-        for raw in ["GET /secret\r\n\r\n", "GET /secret HTTP/1.1\r\n\r\n",
+        for raw in [
+            "GET /secret\r\n\r\n",
+            "GET /secret HTTP/1.1\r\n\r\n",
             "GET /secret HTTP/1.1\r\nHost: a\r\nHost: b\r\n\r\n",
             "GET /secret HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n",
             "GET /secret HTTP/1.1\r\nHost: a\r\nContent-Length: 1\r\n\r\n",
             "GET /secret HTTP/1.1\r\nHost: a\r\n folded: bad\r\n\r\n",
-            "GET /secret HTTP/1.1\r\nHost: a\r\nX: \0\r\n\r\n"] {
+            "GET /secret HTTP/1.1\r\nHost: a\r\nX: \0\r\n\r\n",
+        ] {
             assert!(request_line(raw).is_none(), "accepted {raw:?}");
         }
-        assert_eq!(request_line("GET /secret HTTP/1.0\r\n\r\n"), Some(("GET", "/secret")));
+        assert_eq!(
+            request_line("GET /secret HTTP/1.0\r\n\r\n"),
+            Some(("GET", "/secret"))
+        );
     }
 
     #[tokio::test]
     async fn header_reader_rejects_eof_invalid_utf8_and_oversized_final_chunk() {
-        for bytes in [b"GET /secret HTTP/1.1\r\nHost: a\r\n".to_vec(),
+        for bytes in [
+            b"GET /secret HTTP/1.1\r\nHost: a\r\n".to_vec(),
             b"GET /secret HTTP/1.1\r\nHost: \xff\r\n\r\n".to_vec(),
-            format!("GET /secret HTTP/1.1\r\nHost: a\r\nX: {}\r\n\r\n", "x".repeat(MAX_REQUEST_BYTES)).into_bytes()] {
+            format!(
+                "GET /secret HTTP/1.1\r\nHost: a\r\nX: {}\r\n\r\n",
+                "x".repeat(MAX_REQUEST_BYTES)
+            )
+            .into_bytes(),
+        ] {
             assert!(read_request(&mut bytes.as_slice()).await.is_err());
         }
     }
@@ -593,8 +643,14 @@ mod tests {
     #[tokio::test]
     async fn a_partial_header_cannot_hold_the_reader_indefinitely() {
         let (mut writer, mut reader) = tokio::io::duplex(64);
-        writer.write_all(b"GET /secret HTTP/1.1\r\nHost: a").await.unwrap();
-        assert!(read_request_with_timeout(&mut reader, Duration::from_millis(20)).await.is_err());
+        writer
+            .write_all(b"GET /secret HTTP/1.1\r\nHost: a")
+            .await
+            .unwrap();
+        assert!(
+            read_request_with_timeout(&mut reader, Duration::from_millis(20))
+                .await
+                .is_err()
+        );
     }
-
 }

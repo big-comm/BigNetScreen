@@ -28,3 +28,7 @@ bytes = "1"
 [dev-dependencies]
 tracing-subscriber.workspace = true
 tokio = { workspace = true, features = ["signal"] }
+
+# Imported under its library name gstrswebrtc for static plugin registration.
+[package.metadata.cargo-machete]
+ignored = ["gst-plugin-webrtc"]

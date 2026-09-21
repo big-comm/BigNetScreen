@@ -108,13 +108,16 @@ impl FirewallLease {
                 let port = parts.next()?;
                 let protocol = parts.next()?;
                 if parts.next().is_some()
-                    || !matches!((port, protocol), ("7236", "tcp") | ("16384-16385", "udp")) {
+                    || !matches!((port, protocol), ("7236", "tcp") | ("16384-16385", "udp"))
+                {
                     return None;
                 }
                 Some((port.to_string(), protocol.to_string()))
             })
             .collect::<Option<Vec<_>>>()?;
-        if ports.len() > 2 || (ports.len() == 2 && ports[0] == ports[1]) { return None; }
+        if ports.len() > 2 || (ports.len() == 2 && ports[0] == ports[1]) {
+            return None;
+        }
         Some(Self {
             zone: zone.to_string(),
             ports,
@@ -261,7 +264,10 @@ pub async fn ensure_ports_open(interface: Option<&str>) -> Result<FirewallLease>
                 applied.push((port, proto));
                 // Record each successful mutation, including a failure/crash
                 // between opening the first and second port.
-                remember(&FirewallLease { zone: zone.clone(), ports: applied.clone() });
+                remember(&FirewallLease {
+                    zone: zone.clone(),
+                    ports: applied.clone(),
+                });
             }
             Err(err) => {
                 release(FirewallLease {
@@ -327,7 +333,7 @@ pub async fn release(lease: FirewallLease) {
         // successful cleanup, unlike a failed query or permission denial.
         match zone_proxy.query_port(&lease.zone, port, proto).await {
             Ok(false) => continue,
-            Ok(true) => {},
+            Ok(true) => {}
             Err(err) => {
                 complete = false;
                 tracing::warn!(zone = %lease.zone, %port, %proto, %err, "could not verify firewall cleanup");
@@ -345,13 +351,17 @@ pub async fn release(lease: FirewallLease) {
     if complete {
         // Do not erase a different lease that another operation has written.
         if let Some(path) = lease_path() {
-            if std::fs::read_to_string(path).ok().as_deref()
-                .and_then(FirewallLease::from_file).as_ref() == Some(&lease) {
+            if std::fs::read_to_string(path)
+                .ok()
+                .as_deref()
+                .and_then(FirewallLease::from_file)
+                .as_ref()
+                == Some(&lease)
+            {
                 forget();
             }
         }
     }
-
 }
 
 #[cfg(test)]
@@ -398,10 +408,16 @@ mod tests {
     }
     #[test]
     fn lease_cannot_authorize_cleanup_of_unrelated_ports() {
-        for text in ["public\n22 tcp\n", "public\n7236 udp\n", "public\n7236 tcp extra\n",
-            "public\n7236 tcp\n7236 tcp\n"] {
-            assert!(FirewallLease::from_file(text).is_none(), "accepted {text:?}");
+        for text in [
+            "public\n22 tcp\n",
+            "public\n7236 udp\n",
+            "public\n7236 tcp extra\n",
+            "public\n7236 tcp\n7236 tcp\n",
+        ] {
+            assert!(
+                FirewallLease::from_file(text).is_none(),
+                "accepted {text:?}"
+            );
         }
     }
-
 }

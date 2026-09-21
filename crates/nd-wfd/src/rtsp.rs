@@ -518,9 +518,22 @@ async fn send(writer: &mut OwnedWriteHalf, msg: &str) -> Result<()> {
     // The raw RTSP dialogue is the only way to debug interoperability with a
     // real sink: enable it with `RUST_LOG=nd_wfd::rtsp=trace`.
     tracing::trace!("\n>>> SENT >>>\n{}", msg.trim_end());
-    writer.write_all(msg.as_bytes()).await.map_err(proto_err)?;
-    writer.flush().await.map_err(proto_err)?;
-    Ok(())
+    write_message(writer, msg.as_bytes(), Duration::from_secs(5)).await
+}
+
+/// A stalled peer must not keep a session alive forever during RTSP teardown.
+/// On failure the caller ends the connection: a partial frame is never retried.
+async fn write_message<W: tokio::io::AsyncWrite + Unpin>(
+    writer: &mut W,
+    message: &[u8],
+    deadline: Duration,
+) -> Result<()> {
+    tokio::time::timeout(deadline, async {
+        writer.write_all(message).await.map_err(proto_err)?;
+        writer.flush().await.map_err(proto_err)
+    })
+    .await
+    .map_err(|_| NdError::Protocol("RTSP receiver stopped reading control messages".into()))?
 }
 
 /// Parses the `text/parameters` body of the M3 response.
@@ -1114,6 +1127,31 @@ async fn start_pipeline(
 
 #[cfg(test)]
 mod tests {
+
+    #[tokio::test]
+    async fn blocked_control_write_has_a_deadline() {
+        let (mut writer, _receiver) = tokio::io::duplex(1);
+        let result = super::write_message(
+            &mut writer,
+            b"RTSP/1.0 200 OK\r\n\r\n",
+            std::time::Duration::from_millis(20),
+        )
+        .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn control_write_preserves_complete_message() {
+        use tokio::io::AsyncReadExt;
+        let (mut writer, mut receiver) = tokio::io::duplex(128);
+        let message = b"RTSP/1.0 200 OK\r\n\r\n";
+        super::write_message(&mut writer, message, std::time::Duration::from_secs(1))
+            .await
+            .unwrap();
+        let mut actual = vec![0; message.len()];
+        receiver.read_exact(&mut actual).await.unwrap();
+        assert_eq!(actual, message);
+    }
     use super::*;
 
     /// A **real** M3 response, captured from a Samsung Projector LSP3 during

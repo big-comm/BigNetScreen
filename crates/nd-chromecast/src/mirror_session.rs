@@ -44,8 +44,8 @@ use crate::cast::CastChannel;
 use crate::flow::{AckWindow, MediaWindow, MAX_UNACKED_FRAMES};
 use crate::mirror::{self, MirrorConfig, Negotiated, OfferedStream, MIRRORING_APP_ID};
 use crate::rtcp::{
-    build_sender_report, classify_receiver_packet, ntp_timestamp, parse_cast_feedbacks, picture_loss_for, Nack,
-    SenderStats,
+    build_sender_report, classify_receiver_packet, ntp_timestamp, parse_cast_feedbacks,
+    picture_loss_for, Nack, SenderStats,
 };
 use crate::rtp::{encrypt_frame, Frame, Packetizer};
 
@@ -112,7 +112,12 @@ fn rtcp_enabled() -> bool {
 }
 
 fn resolve_rtcp_enabled(value: Option<&str>) -> bool {
-    !value.is_some_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "0" | "false" | "no" | "off"))
+    !value.is_some_and(|v| {
+        matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "0" | "false" | "no" | "off"
+        )
+    })
 }
 
 /// Translate the encoded timestamp into the shared pipeline running-time domain.
@@ -164,7 +169,8 @@ impl BurstPacer {
     fn new(stop: std::sync::Arc<std::sync::atomic::AtomicBool>) -> Self {
         Self {
             budget: std::sync::Arc::new(std::sync::Mutex::new(BurstBudget {
-                started: std::time::Instant::now(), bytes: 0,
+                started: std::time::Instant::now(),
+                bytes: 0,
             })),
             stop,
         }
@@ -172,13 +178,22 @@ impl BurstPacer {
 
     fn send(&self, socket: &UdpSocket, packet: &[u8]) -> std::io::Result<usize> {
         if packet.len() > BURST_BUDGET_BYTES {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "packet exceeds pacing budget"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "packet exceeds pacing budget",
+            ));
         }
         loop {
             if self.stop.load(std::sync::atomic::Ordering::Acquire) {
-                return Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "Cast stopped"));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Interrupted,
+                    "Cast stopped",
+                ));
             }
-            let wait = self.budget.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+            let wait = self
+                .budget
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .reserve(std::time::Instant::now(), packet.len());
             if wait.is_zero() {
                 return socket.send(packet);
@@ -204,6 +219,12 @@ fn video_frame_interval(fps: u32) -> Duration {
 ///
 /// It runs on a thread of its own: `appsink` is a blocking API and the hot
 /// path must not compete for room with the async runtime.
+#[derive(Clone, Copy)]
+struct SenderTiming {
+    fps: u32,
+    playout_delay: Duration,
+}
+
 struct StreamSender {
     sink: gst_app::AppSink,
     packetizer: Packetizer,
@@ -249,6 +270,7 @@ struct StreamSender {
     clock_origin: std::time::SystemTime,
     pipeline: gst::Pipeline,
     last_report: Option<std::time::Instant>,
+    has_media: bool,
     rtcp_enabled: bool,
     last_probe: std::time::Instant,
 }
@@ -262,11 +284,10 @@ impl StreamSender {
         pipeline: &gst::Pipeline,
         stream: &OfferedStream,
         socket: std::sync::Arc<UdpSocket>,
-        fps: u32,
+        timing: SenderTiming,
         checkpoint: std::sync::Arc<std::sync::Mutex<AckWindow>>,
         want_key_frame: std::sync::Arc<std::sync::atomic::AtomicBool>,
         pacer: BurstPacer,
-        playout_delay: Duration,
     ) -> Result<Self> {
         let (element_name, label) = if stream.is_video {
             (MIRROR_VIDEO_SINK, "video")
@@ -293,14 +314,14 @@ impl StreamSender {
                 mirror::AUDIO_TIME_BASE
             },
             expected_frame_interval: if stream.is_video {
-                video_frame_interval(fps)
+                video_frame_interval(timing.fps)
             } else {
                 Duration::from_millis(10)
             },
             frame_id: 0,
             label,
             history: std::collections::VecDeque::new(),
-            media_window: MediaWindow::new(playout_delay),
+            media_window: MediaWindow::new(timing.playout_delay),
             nacks_seen: 0,
             checkpoint,
             want_key_frame,
@@ -312,6 +333,7 @@ impl StreamSender {
             clock_origin: std::time::SystemTime::UNIX_EPOCH,
             pipeline: pipeline.clone(),
             last_report: None,
+            has_media: false,
             rtcp_enabled: rtcp_enabled(),
             last_probe: std::time::Instant::now(),
         })
@@ -331,16 +353,21 @@ impl StreamSender {
             }
         };
 
-        let buffer = sample.buffer()
+        let buffer = sample
+            .buffer()
             .ok_or_else(|| NdError::Gst("encoded Cast sample has no buffer".into()))?;
         let pts = sample_running_time(&sample)?;
         let media_time = Duration::from_nanos(pts.nseconds());
 
         {
-            let window = self.checkpoint.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let window = self
+                .checkpoint
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if window.pending() != 0 && window.last_progress.elapsed() > RECEIVER_SILENCE_TIMEOUT {
                 return Err(NdError::Protocol(format!(
-                    "the receiver stopped acknowledging the {} track", self.label
+                    "the receiver stopped acknowledging the {} track",
+                    self.label
                 )));
             }
         }
@@ -351,19 +378,28 @@ impl StreamSender {
 
         // Before encrypting and packetising: a frame the receiver has no room
         // for costs the same CPU and the same network as one it can use.
-        let acknowledged = self.checkpoint.lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner).checkpoint();
-        let fresh = self.pipeline.current_running_time().is_none_or(|now|
-            !self.media_window.is_stale(media_time, Duration::from_nanos(now.nseconds())));
+        let acknowledged = self
+            .checkpoint
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .checkpoint();
+        let fresh = self.pipeline.current_running_time().is_none_or(|now| {
+            !self
+                .media_window
+                .is_stale(media_time, Duration::from_nanos(now.nseconds()))
+        });
         let within_duration = self.media_window.has_room(media_time, acknowledged);
         if self.skip_while_receiver_catches_up(is_key, fresh && within_duration) {
             return Ok(true);
         }
 
-        let map = buffer.map_readable()
-            .map_err(|_| NdError::Gst("cannot map encoded Cast frame; dependency chain cannot be skipped".into()))?;
+        let map = buffer.map_readable().map_err(|_| {
+            NdError::Gst("cannot map encoded Cast frame; dependency chain cannot be skipped".into())
+        })?;
         if map.len() > MAX_ENCODED_FRAME_BYTES {
-            return Err(NdError::Gst("encoded Cast frame exceeds the 4 MiB safety limit".into()));
+            return Err(NdError::Gst(
+                "encoded Cast frame exceeds the 4 MiB safety limit".into(),
+            ));
         }
         let reference = (!is_key && self.frame_id > 0).then(|| self.frame_id - 1);
 
@@ -379,9 +415,15 @@ impl StreamSender {
             payload: &encrypted,
         });
 
-        self.checkpoint.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.checkpoint
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .sent(self.frame_id);
         self.media_window.sent(self.frame_id, media_time);
+        // Open Screen sends the initial clock mapping before the first RTP
+        // packet, but never before a valid encoded frame establishes a track.
+        self.has_media = true;
+        self.send_report_if_due();
         for packet in &packets {
             match self.pacer.send(&self.socket, packet) {
                 Ok(_) => self.stats.record(packet.len().saturating_sub(12)),
@@ -391,9 +433,12 @@ impl StreamSender {
         }
         // Keep it for a possible retransmission before moving on.
         let now = std::time::Instant::now();
-        self.history
-            .push_back((self.frame_id, now, packets));
-        let acknowledged = self.checkpoint.lock().unwrap_or_else(std::sync::PoisonError::into_inner).checkpoint();
+        self.history.push_back((self.frame_id, now, packets));
+        let acknowledged = self
+            .checkpoint
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .checkpoint();
         prune_history(&mut self.history, now, acknowledged);
 
         self.flow
@@ -410,7 +455,9 @@ impl StreamSender {
         );
 
         self.frame_id = self.frame_id.checked_add(1).ok_or_else(|| {
-            NdError::Protocol("Cast frame counter exhausted; reconnect to rotate encryption keys".into())
+            NdError::Protocol(
+                "Cast frame counter exhausted; reconnect to rotate encryption keys".into(),
+            )
         })?;
         Ok(true)
     }
@@ -420,8 +467,12 @@ impl StreamSender {
     /// After video drops, only an IDR can restart the dependency chain. Request
     /// it when a slot is available, not while the forced IDR would be dropped.
     fn skip_while_receiver_catches_up(&mut self, is_key: bool, within_duration: bool) -> bool {
-        let has_room = within_duration && self.checkpoint.lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner).can_send();
+        let has_room = within_duration
+            && self
+                .checkpoint
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .can_send();
         if !has_room {
             if self.is_video() {
                 self.resyncing = true;
@@ -433,7 +484,8 @@ impl StreamSender {
         if self.resyncing {
             if !is_key {
                 if !self.resync_requested {
-                    self.want_key_frame.store(true, std::sync::atomic::Ordering::Relaxed);
+                    self.want_key_frame
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
                     self.resync_requested = true;
                 }
                 self.frames_dropped += 1;
@@ -446,7 +498,10 @@ impl StreamSender {
     }
 
     fn unacked_frames(&self) -> u32 {
-        self.checkpoint.lock().unwrap_or_else(std::sync::PoisonError::into_inner).pending()
+        self.checkpoint
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .pending()
     }
 
     /// Sends a *sender report* when the interval elapses.
@@ -468,14 +523,19 @@ impl StreamSender {
     /// This is what prevents the freeze: without retransmission, one lost
     /// datagram leaves the frame incomplete and the receiver stops advancing.
     fn retransmit(&mut self, nacks: &[Nack]) -> Retransmission {
-        let acknowledged = self.checkpoint.lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner).checkpoint();
+        let acknowledged = self
+            .checkpoint
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .checkpoint();
         self.nacks_seen += nacks.len() as u64;
         let mut expired = 0;
         // Deduplicate whole-frame and bitmap requests. Keep FULL frame ids in
         // the work queue so delayed work cannot alias a newer eight-bit id.
         for nack in nacks.iter().take(256) {
-            let Some((frame_id, _, packets)) = self.history.iter()
+            let Some((frame_id, _, packets)) = self
+                .history
+                .iter()
                 .find(|(id, _, _)| *id as u8 == nack.frame_id)
             else {
                 expired += 1;
@@ -484,7 +544,9 @@ impl StreamSender {
             if i64::from(*frame_id) <= acknowledged {
                 continue;
             }
-            let ids = nack.packet_ids().map(|ids| ids.into_iter().map(usize::from).collect::<Vec<_>>())
+            let ids = nack
+                .packet_ids()
+                .map(|ids| ids.into_iter().map(usize::from).collect::<Vec<_>>())
                 .unwrap_or_else(|| (0..packets.len()).collect());
             for id in ids {
                 if self.repair_queue.len() >= MAX_REPAIR_QUEUE {
@@ -505,12 +567,17 @@ impl StreamSender {
             && started.elapsed() < BURST_INTERVAL
             && !self.pacer.stop.load(std::sync::atomic::Ordering::Acquire)
         {
-            let Some(key @ (frame_id, id)) = self.repair_queue.pop_front() else { break; };
+            let Some(key @ (frame_id, id)) = self.repair_queue.pop_front() else {
+                break;
+            };
             self.queued_repairs.remove(&key);
             if i64::from(frame_id) <= acknowledged {
                 continue;
             }
-            let Some(packet) = self.history.iter().find(|(frame, _, _)| *frame == frame_id)
+            let Some(packet) = self
+                .history
+                .iter()
+                .find(|(frame, _, _)| *frame == frame_id)
                 .and_then(|(_, _, packets)| packets.get(id))
             else {
                 expired += 1;
@@ -530,12 +597,19 @@ impl StreamSender {
             return;
         }
         let needs_probe = {
-            let window = self.checkpoint.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let window = self
+                .checkpoint
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             window.pending() != 0 && window.last_progress.elapsed() >= RTCP_INTERVAL
         };
         if needs_probe {
             self.last_probe = std::time::Instant::now();
-            if let Some(packet) = self.history.back().and_then(|(_, _, packets)| packets.last()) {
+            if let Some(packet) = self
+                .history
+                .back()
+                .and_then(|(_, _, packets)| packets.last())
+            {
                 if self.pacer.send(&self.socket, packet).is_ok() {
                     self.stats.record(packet.len().saturating_sub(12));
                 }
@@ -546,7 +620,10 @@ impl StreamSender {
     /// Enabled by default; see [`rtcp_enabled`] for the diagnostic opt-out.
     fn send_report_if_due(&mut self) {
         if !self.rtcp_enabled
-            || self.last_report.is_some_and(|last| last.elapsed() < RTCP_INTERVAL)
+            || !self.has_media
+            || self
+                .last_report
+                .is_some_and(|last| last.elapsed() < RTCP_INTERVAL)
         {
             return;
         }
@@ -555,12 +632,15 @@ impl StreamSender {
         };
         // NTP and RTP describe the SAME instant. Anchor NTP once to the
         // pipeline clock, instead of letting a wall-clock step alter RTP.
-        let Some(now) = self.clock_origin.checked_add(Duration::from_nanos(running.nseconds())) else {
+        let Some(now) = self
+            .clock_origin
+            .checked_add(Duration::from_nanos(running.nseconds()))
+        else {
             return;
         };
         self.last_report = Some(std::time::Instant::now());
-        let timestamp = ((u128::from(running.nseconds()) * u128::from(self.time_base))
-            / 1_000_000_000) as u32;
+        let timestamp =
+            ((u128::from(running.nseconds()) * u128::from(self.time_base)) / 1_000_000_000) as u32;
         let report = build_sender_report(
             self.packetizer.ssrc(),
             ntp_timestamp(now),
@@ -645,11 +725,9 @@ impl FlowWatch {
 /// only surface as "the sound stuttered and the projector went back to its
 /// home screen".
 fn prune_history(history: &mut History, now: std::time::Instant, acknowledged: i64) {
-    while history
-        .front()
-        .is_some_and(|(id, sent, _)| i64::from(*id) <= acknowledged
-            && now.duration_since(*sent) > RETRANSMIT_HISTORY)
-        || history.len() > RETRANSMIT_HISTORY_MAX
+    while history.front().is_some_and(|(id, sent, _)| {
+        i64::from(*id) <= acknowledged && now.duration_since(*sent) > RETRANSMIT_HISTORY
+    }) || history.len() > RETRANSMIT_HISTORY_MAX
     {
         history.pop_front();
     }
@@ -697,12 +775,20 @@ pub async fn run(
     let _radio = nd_core::radio::quiet();
 
     // 1. Control channel and mirroring app.
-    if *cancel.borrow() { return Ok(()); }
+    if *cancel.borrow() {
+        return Ok(());
+    }
     let channel = CastChannel::connect_to(receiver_ip, receiver_port).await?;
-    if *cancel.borrow() { channel.close().await; return Ok(()); }
+    if *cancel.borrow() {
+        channel.close().await;
+        return Ok(());
+    }
     let app = match channel.launch(MIRRORING_APP_ID).await {
         Ok(app) => app,
-        Err(err) => { channel.close().await; return Err(err); }
+        Err(err) => {
+            channel.close().await;
+            return Err(err);
+        }
     };
     let result = async {
         if *cancel.borrow() { return Ok(()); }
@@ -864,9 +950,11 @@ async fn stream(
     socket
         .connect(target)
         .map_err(|e| NdError::Network(e.to_string()))?;
-    socket.set_write_timeout(Some(Duration::from_millis(50)))
+    socket
+        .set_write_timeout(Some(Duration::from_millis(50)))
         .map_err(|e| NdError::Network(e.to_string()))?;
-    socket.set_read_timeout(Some(Duration::from_millis(100)))
+    socket
+        .set_read_timeout(Some(Duration::from_millis(100)))
         .map_err(|e| NdError::Network(e.to_string()))?;
     let pacer = BurstPacer::new(workers.stop.clone());
     tracing::debug!(
@@ -882,11 +970,13 @@ async fn stream(
             &gst_pipeline,
             stream,
             socket.clone(),
-            cfg.fps,
+            SenderTiming {
+                fps: cfg.fps,
+                playout_delay,
+            },
             checkpoint,
             want_key_frame.clone(),
             pacer.clone(),
-            playout_delay,
         )?);
     }
     if let Some(stream) = session.audio() {
@@ -896,11 +986,13 @@ async fn stream(
             &gst_pipeline,
             stream,
             socket.clone(),
-            cfg.fps,
+            SenderTiming {
+                fps: cfg.fps,
+                playout_delay,
+            },
             checkpoint,
             want_key_frame.clone(),
             pacer.clone(),
-            playout_delay,
         ) {
             Ok(sender) => senders.push(sender),
             // The session goes on without audio: video is what matters here,
@@ -941,10 +1033,19 @@ async fn stream(
         nack_receivers.push(rx);
     }
 
-    let receiver_ssrcs: std::collections::HashMap<u32, u32> = session.answer.send_indexes.iter()
+    let receiver_ssrcs: std::collections::HashMap<u32, u32> = session
+        .answer
+        .send_indexes
+        .iter()
         .zip(&session.answer.ssrcs)
-        .filter_map(|(index, receiver_ssrc)| session.offer.streams.iter()
-            .find(|stream| stream.index == *index).map(|stream| (stream.ssrc, *receiver_ssrc)))
+        .filter_map(|(index, receiver_ssrc)| {
+            session
+                .offer
+                .streams
+                .iter()
+                .find(|stream| stream.index == *index)
+                .map(|stream| (stream.ssrc, *receiver_ssrc))
+        })
         .collect();
     let video_ssrc = session.video().map(|stream| stream.ssrc);
     let listener = socket.clone();
@@ -981,7 +1082,9 @@ async fn stream(
                     let Some(window) = checkpoints.get(&feedback.sender_ssrc) else {
                         continue;
                     };
-                    if !window.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+                    if !window
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
                         .acknowledge(feedback.checkpoint_frame_id, feedback.reference_time)
                     {
                         continue;
@@ -1112,7 +1215,8 @@ async fn stream(
 
                     // A key-frame request only makes sense for video.
                     if is_video
-                        && last_key_request.is_none_or(|at| at.elapsed() >= Duration::from_millis(500))
+                        && last_key_request
+                            .is_none_or(|at| at.elapsed() >= Duration::from_millis(500))
                         && key_flag.swap(false, std::sync::atomic::Ordering::Relaxed)
                     {
                         last_key_request = Some(std::time::Instant::now());
@@ -1207,7 +1311,8 @@ async fn stream(
     };
 
     // Joining bounded worker threads must not block the async runtime/UI.
-    tokio::task::spawn_blocking(move || drop(workers)).await
+    tokio::task::spawn_blocking(move || drop(workers))
+        .await
         .map_err(|e| NdError::Gst(format!("Cast worker shutdown failed: {e}")))?;
 
     outcome
@@ -1224,9 +1329,18 @@ mod tests {
         let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
         segment.set_start(offset);
         let mut buffer = gst::Buffer::new();
-        buffer.get_mut().unwrap().set_pts(offset + gst::ClockTime::from_mseconds(33));
-        let sample = gst::Sample::builder().buffer(&buffer).segment(&segment).build();
-        assert_eq!(sample_running_time(&sample).unwrap(), gst::ClockTime::from_mseconds(33));
+        buffer
+            .get_mut()
+            .unwrap()
+            .set_pts(offset + gst::ClockTime::from_mseconds(33));
+        let sample = gst::Sample::builder()
+            .buffer(&buffer)
+            .segment(&segment)
+            .build();
+        assert_eq!(
+            sample_running_time(&sample).unwrap(),
+            gst::ClockTime::from_mseconds(33)
+        );
     }
 
     #[test]
@@ -1234,10 +1348,12 @@ mod tests {
         gst::init().unwrap();
         let buffer = gst::Buffer::new();
         let segment = gst::FormattedSegment::<gst::ClockTime>::new();
-        let sample = gst::Sample::builder().buffer(&buffer).segment(&segment).build();
+        let sample = gst::Sample::builder()
+            .buffer(&buffer)
+            .segment(&segment)
+            .build();
         assert!(sample_running_time(&sample).is_err());
     }
-
 
     #[test]
     fn only_negotiation_failures_fall_back_to_http() {
@@ -1307,11 +1423,7 @@ mod tests {
         let start = std::time::Instant::now();
         let mut history = History::new();
         for i in 0..count {
-            history.push_back((
-                i as u32,
-                start + step * i as u32,
-                vec![vec![0u8; 32]],
-            ));
+            history.push_back((i as u32, start + step * i as u32, vec![vec![0u8; 32]]));
         }
         (history, start + step * count.saturating_sub(1) as u32)
     }
@@ -1354,7 +1466,10 @@ mod tests {
     #[test]
     fn burst_budget_resets_by_time_and_never_holds_a_stale_partial_window() {
         let now = std::time::Instant::now();
-        let mut budget = BurstBudget { started: now, bytes: 0 };
+        let mut budget = BurstBudget {
+            started: now,
+            bytes: 0,
+        };
         assert_eq!(budget.reserve(now, BURST_BUDGET_BYTES), Duration::ZERO);
         assert_eq!(budget.reserve(now, 1), BURST_INTERVAL);
         assert_eq!(budget.reserve(now + BURST_INTERVAL, 1), Duration::ZERO);
@@ -1366,7 +1481,10 @@ mod tests {
         let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
         let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
         let pacer = BurstPacer::new(stop);
-        assert_eq!(pacer.send(&socket, &[1]).unwrap_err().kind(), std::io::ErrorKind::Interrupted);
+        assert_eq!(
+            pacer.send(&socket, &[1]).unwrap_err().kind(),
+            std::io::ErrorKind::Interrupted
+        );
     }
 
     #[test]
@@ -1517,5 +1635,4 @@ mod lifecycle_tests {
             assert!(!resolve_rtcp_enabled(Some(value)));
         }
     }
-
 }

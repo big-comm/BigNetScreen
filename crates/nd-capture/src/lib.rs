@@ -17,11 +17,12 @@
 
 pub mod display_config;
 pub mod mutter;
+mod portal_start;
 
 use std::path::PathBuf;
 
 use ashpd::desktop::screencast::{
-    CursorMode, Screencast, SelectSourcesOptions, SourceType as PortalSourceType, StartCastOptions,
+    CursorMode, Screencast, SelectSourcesOptions, SourceType as PortalSourceType,
 };
 use ashpd::desktop::{PersistMode, Session};
 use ashpd::WindowIdentifier;
@@ -256,12 +257,9 @@ impl CaptureBackend for PortalBackend {
             .map_err(cap_err)?;
 
         let identifier = self.parent.identifier();
-        let response = proxy
-            .start(&session, identifier.as_ref(), StartCastOptions::default())
-            .await
-            .map_err(cap_err)?;
-
-        let streams = match response.response() {
+        // ashpd 0.13 drops unknown stream properties during deserialization.
+        // Read Start's documented dictionary so pipewire-serial survives.
+        let streams = match portal_start::start(&proxy, &session, identifier.as_ref()).await {
             Ok(streams) => streams,
             Err(err) => {
                 let _ = session.close().await;
@@ -278,17 +276,14 @@ impl CaptureBackend for PortalBackend {
         // Only keep a token for sources worth restoring. A window token would
         // be handed back on the next cast and skip the picker.
         if restorable {
-            if let Some(token) = streams.restore_token() {
+            if let Some(token) = streams.restore_token.as_deref() {
                 store_restore_token(source_type, token);
             }
         }
 
-        let stream = streams
-            .streams()
-            .first()
-            .ok_or_else(|| NdError::Capture("the portal returned no capture stream".into()))?;
-        let node_id = stream.pipe_wire_node_id();
-        let size = stream.size().map(|(w, h)| (w as u32, h as u32));
+        let node_id = streams.node_id;
+        let pipewire_serial = streams.serial;
+        let size = streams.size;
 
         let pipewire_fd = proxy
             .open_pipe_wire_remote(&session, Default::default())
@@ -298,10 +293,17 @@ impl CaptureBackend for PortalBackend {
         // The session has to outlive the capture; kept for stop().
         *self.session.lock().await = Some(session);
 
-        tracing::info!(node_id, ?size, ?cursor_mode, "portal capture started");
+        tracing::info!(
+            node_id,
+            ?pipewire_serial,
+            ?size,
+            ?cursor_mode,
+            "portal capture started"
+        );
         Ok(CaptureSource {
             pipewire_fd: Some(pipewire_fd),
             node_id,
+            pipewire_serial,
             source_type,
             size,
             // A real capture, not a file being played.
@@ -464,6 +466,7 @@ pub(crate) fn pipeline_source(node_id: u32) -> String {
     nd_core::pipeline::VideoSource::PipeWire {
         fd: None,
         node_id,
+        serial: None,
         size: None,
     }
     .description()

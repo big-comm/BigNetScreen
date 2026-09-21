@@ -105,7 +105,9 @@ pub fn serve(listener: TcpListener, config: FrontDoorConfig) -> Result<FrontDoor
         // leave token-bearing keep-alive tasks alive after publication ends.
         let mut clients = tokio::task::JoinSet::new();
         loop {
-            if *stopped.borrow() { break; }
+            if *stopped.borrow() {
+                break;
+            }
             let accepted = tokio::select! {
                 biased;
                 _ = stopped.changed() => break,
@@ -131,10 +133,13 @@ pub fn serve(listener: TcpListener, config: FrontDoorConfig) -> Result<FrontDoor
                     .max_buf_size(16 * 1024)
                     .timer(TokioTimer::new())
                     .header_read_timeout(REQUEST_READ_TIMEOUT);
-                let result = tokio::time::timeout(CONNECTION_TIMEOUT,
-                    http.serve_connection(TokioIo::new(stream), service)).await;
+                let result = tokio::time::timeout(
+                    CONNECTION_TIMEOUT,
+                    http.serve_connection(TokioIo::new(stream), service),
+                )
+                .await;
                 match result {
-                    Ok(Ok(())) => {},
+                    Ok(Ok(())) => {}
                     Ok(Err(err)) => tracing::debug!(%peer, %err, "front door connection failed"),
                     Err(_) => tracing::debug!(%peer, "front door connection timed out"),
                 }
@@ -170,8 +175,11 @@ fn token_of(request: &Request<Incoming>) -> Option<&str> {
 async fn read_body(request: Request<Incoming>) -> Option<Bytes> {
     let body = request.into_body();
     let limited = http_body_util::Limited::new(body, MAX_BODY_BYTES);
-    tokio::time::timeout(REQUEST_READ_TIMEOUT, limited.collect()).await
-        .ok()?.ok().map(|c| c.to_bytes())
+    tokio::time::timeout(REQUEST_READ_TIMEOUT, limited.collect())
+        .await
+        .ok()?
+        .ok()
+        .map(|c| c.to_bytes())
 }
 
 async fn handle(
@@ -238,21 +246,32 @@ async fn check_pin(shared: &Shared, peer: SocketAddr, request: Request<Incoming>
     // Only surrounding whitespace is ignored. Do not transform arbitrary
     // attacker-controlled text into a valid PIN by discarding its characters.
     let attempt = std::str::from_utf8(&body).unwrap_or_default().trim();
-    let mut guard = shared.guard.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut guard = shared
+        .guard
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     // Recheck AFTER the asynchronous read, while holding the same lock that
     // records the attempt. Parallel partial POSTs cannot bypass the lockout.
     let status = record_pin_attempt(&mut guard, attempt, &shared.config.pin, Instant::now());
     if status == StatusCode::OK {
         tracing::info!(%peer, "receiver accepted with the PIN");
         let mut response = reply(status, shared.config.token.clone());
-        response.headers_mut().insert(http::header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+        response.headers_mut().insert(
+            http::header::CACHE_CONTROL,
+            HeaderValue::from_static("no-store"),
+        );
         return response;
     }
     tracing::debug!(%peer, %status, "PIN request rejected");
     reply(status, "")
 }
 
-fn record_pin_attempt(guard: &mut PinGuard, attempt: &str, expected: &str, now: Instant) -> StatusCode {
+fn record_pin_attempt(
+    guard: &mut PinGuard,
+    attempt: &str,
+    expected: &str,
+    now: Instant,
+) -> StatusCode {
     if guard.locked_until.is_some_and(|until| now < until) {
         return StatusCode::TOO_MANY_REQUESTS;
     }
@@ -526,17 +545,22 @@ mod tests {
             record_pin_attempt(&mut guard, "0000", "1234", now);
         }
         for _ in 0..100 {
-            assert_eq!(record_pin_attempt(&mut guard, "1234", "1234", now),
-                StatusCode::TOO_MANY_REQUESTS);
+            assert_eq!(
+                record_pin_attempt(&mut guard, "1234", "1234", now),
+                StatusCode::TOO_MANY_REQUESTS
+            );
         }
-        assert_eq!(record_pin_attempt(&mut guard, "1234", "1234", now + PIN_LOCKOUT),
-            StatusCode::OK);
+        assert_eq!(
+            record_pin_attempt(&mut guard, "1234", "1234", now + PIN_LOCKOUT),
+            StatusCode::OK
+        );
     }
 
     #[tokio::test]
     async fn pin_does_not_discard_embedded_non_digits() {
         let door = door("1234", 1).await;
-        let (status, _, _) = request(door.local_addr(), &post("/pin", "text/plain", "a1b2c3d4")).await;
+        let (status, _, _) =
+            request(door.local_addr(), &post("/pin", "text/plain", "a1b2c3d4")).await;
         assert_eq!(status, 403);
     }
 
@@ -544,12 +568,18 @@ mod tests {
     async fn dropping_the_front_door_closes_an_existing_partial_request() {
         let door = door("1234", 1).await;
         let mut stream = TcpStream::connect(door.local_addr()).await.unwrap();
-        stream.write_all(b"GET / HTTP/1.1\r\nHost: x\r\n").await.unwrap();
+        stream
+            .write_all(b"GET / HTTP/1.1\r\nHost: x\r\n")
+            .await
+            .unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
         drop(door);
         let mut response = Vec::new();
-        let ended = tokio::time::timeout(Duration::from_secs(2), stream.read_to_end(&mut response)).await;
-        assert!(ended.is_ok(), "a request survived the publication's shutdown");
+        let ended =
+            tokio::time::timeout(Duration::from_secs(2), stream.read_to_end(&mut response)).await;
+        assert!(
+            ended.is_ok(),
+            "a request survived the publication's shutdown"
+        );
     }
-
 }

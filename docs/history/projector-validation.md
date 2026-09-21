@@ -1,3 +1,5 @@
+> Historical experiment report. This describes earlier development work, not validation of the current tree. Use [the current test plan](../testing.md) and the delivered gate logs for release decisions.
+
 # Samsung projector validation
 
 Date: 2026-09-16 (America/Sao_Paulo). Native GNOME/Wayland, Mutter,

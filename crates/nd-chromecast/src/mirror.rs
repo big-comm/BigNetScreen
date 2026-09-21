@@ -215,8 +215,11 @@ pub struct AudioLimits {
 }
 
 fn positive_u32(value: &Value, field: &str) -> Result<u32> {
-    value.get(field).and_then(Value::as_u64)
-        .and_then(|n| u32::try_from(n).ok()).filter(|n| *n > 0)
+    value
+        .get(field)
+        .and_then(Value::as_u64)
+        .and_then(|n| u32::try_from(n).ok())
+        .filter(|n| *n > 0)
         .ok_or_else(|| NdError::Protocol(format!("invalid positive ANSWER field {field}")))
 }
 
@@ -232,9 +235,14 @@ fn parse_frame_rate(value: &Value) -> Result<f64> {
         Value::Number(number) => number.as_f64(),
         Value::String(text) => {
             if let Some((n, d)) = text.split_once('/') {
-                n.parse::<u32>().ok().zip(d.parse::<u32>().ok())
-                    .filter(|(_, d)| *d > 0).map(|(n, d)| f64::from(n) / f64::from(d))
-            } else { text.parse::<f64>().ok() }
+                n.parse::<u32>()
+                    .ok()
+                    .zip(d.parse::<u32>().ok())
+                    .filter(|(_, d)| *d > 0)
+                    .map(|(n, d)| f64::from(n) / f64::from(d))
+            } else {
+                text.parse::<f64>().ok()
+            }
         }
         _ => None,
     };
@@ -248,12 +256,17 @@ impl VideoLimits {
         let min_bitrate = optional_positive_u32(value, "minBitRate")?.unwrap_or(0);
         let max_bitrate = positive_u32(value, "maxBitRate")?;
         if min_bitrate > max_bitrate {
-            return Err(NdError::Protocol("ANSWER bitrate limits are reversed".into()));
+            return Err(NdError::Protocol(
+                "ANSWER bitrate limits are reversed".into(),
+            ));
         }
         let max_pixels_per_second = match value.get("maxPixelsPerSecond") {
             None | Some(Value::Null) => None,
-            Some(v) => Some(v.as_f64().filter(|n| n.is_finite() && *n > 0.0)
-                .ok_or_else(|| NdError::Protocol("invalid ANSWER maxPixelsPerSecond".into()))?),
+            Some(v) => Some(
+                v.as_f64()
+                    .filter(|n| n.is_finite() && *n > 0.0)
+                    .ok_or_else(|| NdError::Protocol("invalid ANSWER maxPixelsPerSecond".into()))?,
+            ),
         };
         let min_size = match value.get("minResolution") {
             None | Some(Value::Null) => None,
@@ -263,7 +276,10 @@ impl VideoLimits {
             max_width: positive_u32(dims, "width")?,
             max_height: positive_u32(dims, "height")?,
             max_fps: parse_frame_rate(&dims["frameRate"])?,
-            max_pixels_per_second, min_bitrate, max_bitrate, min_size,
+            max_pixels_per_second,
+            min_bitrate,
+            max_bitrate,
+            min_size,
             max_delay_ms: optional_positive_u32(value, "maxDelay")?,
         })
     }
@@ -279,7 +295,9 @@ impl AudioLimits {
             max_delay_ms: optional_positive_u32(value, "maxDelay")?,
         };
         if limits.min_bitrate > limits.max_bitrate {
-            return Err(NdError::Protocol("ANSWER audio bitrate limits are reversed".into()));
+            return Err(NdError::Protocol(
+                "ANSWER audio bitrate limits are reversed".into(),
+            ));
         }
         Ok(limits)
     }
@@ -288,14 +306,23 @@ impl AudioLimits {
 impl Answer {
     /// Apply independent decoder dimension, pixel-rate and bandwidth limits.
     /// Preserve aspect ratio and never raise a user's requested resolution/FPS.
-    pub fn constrain(&self, cfg: &mut nd_core::pipeline::StreamConfig, delay_ms: u32, with_audio: bool) -> Result<()> {
+    pub fn constrain(
+        &self,
+        cfg: &mut nd_core::pipeline::StreamConfig,
+        delay_ms: u32,
+        with_audio: bool,
+    ) -> Result<()> {
         use nd_core::pipeline::{StreamConfig, CAST_MAX_BITRATE_KBPS};
         if let Some(limits) = &self.video_limits {
             if limits.max_width < 2 || limits.max_height < 2 {
-                return Err(NdError::Unsupported("receiver cannot accept even H.264 dimensions".into()));
+                return Err(NdError::Unsupported(
+                    "receiver cannot accept even H.264 dimensions".into(),
+                ));
             }
             (cfg.width, cfg.height) = StreamConfig::fit_within(
-                (cfg.width, cfg.height), (limits.max_width, limits.max_height));
+                (cfg.width, cfg.height),
+                (limits.max_width, limits.max_height),
+            );
             cfg.fps = cfg.fps.min(limits.max_fps.floor() as u32);
             if let Some(rate) = limits.max_pixels_per_second {
                 let pixels = f64::from(cfg.width) * f64::from(cfg.height);
@@ -303,25 +330,38 @@ impl Answer {
             }
             let ceiling = (limits.max_bitrate / 1000).min(CAST_MAX_BITRATE_KBPS);
             let floor = limits.min_bitrate.div_ceil(1000);
-            if ceiling == 0 || floor > ceiling || cfg.fps == 0
-                || limits.min_size.is_some_and(|(w, h)| cfg.width < w || cfg.height < h)
-                || limits.max_delay_ms.is_some_and(|limit| delay_ms > limit) {
-                return Err(NdError::Unsupported("receiver limits cannot accommodate this mirroring mode".into()));
+            if ceiling == 0
+                || floor > ceiling
+                || cfg.fps == 0
+                || limits
+                    .min_size
+                    .is_some_and(|(w, h)| cfg.width < w || cfg.height < h)
+                || limits.max_delay_ms.is_some_and(|limit| delay_ms > limit)
+            {
+                return Err(NdError::Unsupported(
+                    "receiver limits cannot accommodate this mirroring mode".into(),
+                ));
             }
             cfg.bitrate_kbps = cfg.scaled_bitrate_kbps().min(ceiling).max(floor);
         } else {
             // No capability claim: do not assume every receiver supports 1080p60/4K.
-            (cfg.width, cfg.height) = StreamConfig::fit_within((cfg.width, cfg.height), (1920, 1080));
+            (cfg.width, cfg.height) =
+                StreamConfig::fit_within((cfg.width, cfg.height), (1920, 1080));
             cfg.fps = cfg.fps.min(30);
             cfg.bitrate_kbps = cfg.scaled_bitrate_kbps().min(CAST_MAX_BITRATE_KBPS);
         }
         if with_audio {
             if let Some(limits) = &self.audio_limits {
                 // The current Opus pipeline is fixed at 48 kHz / stereo / 128 kbit/s.
-                if limits.max_sample_rate < AUDIO_TIME_BASE || limits.max_channels < 2
-                    || limits.max_bitrate < 128_000 || limits.min_bitrate > 128_000
-                    || limits.max_delay_ms.is_some_and(|limit| delay_ms > limit) {
-                    return Err(NdError::Unsupported("receiver cannot accept the offered Opus audio mode".into()));
+                if limits.max_sample_rate < AUDIO_TIME_BASE
+                    || limits.max_channels < 2
+                    || limits.max_bitrate < 128_000
+                    || limits.min_bitrate > 128_000
+                    || limits.max_delay_ms.is_some_and(|limit| delay_ms > limit)
+                {
+                    return Err(NdError::Unsupported(
+                        "receiver cannot accept the offered Opus audio mode".into(),
+                    ));
                 }
             }
         }
@@ -370,7 +410,10 @@ pub fn build_offer(cfg: &MirrorConfig, seq_num: i64) -> Result<(Value, Offer)> {
     let mut json_streams = Vec::new();
 
     let video_keys = StreamKeys::random()?;
-    let video_ssrc = 100_001u32;
+    // Match Open Screen's priority ranges without reusing constants between
+    // sessions. SSRCs identify streams; unlike AES keys they need no secrecy.
+    let random = random_bytes()?;
+    let video_ssrc = 50_001 + u32::from_be_bytes(random[..4].try_into().unwrap()) % 50_000;
     json_streams.push(json!({
         "index": 0,
         "type": "video_source",
@@ -385,7 +428,6 @@ pub fn build_offer(cfg: &MirrorConfig, seq_num: i64) -> Result<(Value, Offer)> {
         "maxFrameRate": format!("{}/1", cfg.fps),
         "maxBitRate": cfg.max_bitrate,
         "receiverRtcpEventLog": true,
-        "rtpExtensions": ["adaptive_playout_delay"],
         "resolutions": [{ "width": cfg.width, "height": cfg.height }],
     }));
     streams.push(OfferedStream {
@@ -398,7 +440,7 @@ pub fn build_offer(cfg: &MirrorConfig, seq_num: i64) -> Result<(Value, Offer)> {
 
     if cfg.with_audio {
         let audio_keys = StreamKeys::random()?;
-        let audio_ssrc = 100_003u32;
+        let audio_ssrc = 1 + u32::from_be_bytes(random[4..8].try_into().unwrap()) % 50_000;
         json_streams.push(json!({
             "index": 1,
             "type": "audio_source",
@@ -411,7 +453,6 @@ pub fn build_offer(cfg: &MirrorConfig, seq_num: i64) -> Result<(Value, Offer)> {
             "aesIvMask": audio_keys.iv_hex(),
             "timeBase": format!("1/{AUDIO_TIME_BASE}"),
             "receiverRtcpEventLog": true,
-            "rtpExtensions": ["adaptive_playout_delay"],
             "bitRate": 128_000,
             "channels": 2,
             "sampleRate": AUDIO_TIME_BASE,
@@ -476,27 +517,54 @@ pub fn parse_answer(payload: &Value, seq_num: i64) -> Result<Answer> {
 
     let send_indexes = parse_u32_array(answer, "sendIndexes")?;
     if send_indexes.is_empty() {
-        return Err(NdError::Protocol("the receiver accepted none of the offered streams".into()));
+        return Err(NdError::Protocol(
+            "the receiver accepted none of the offered streams".into(),
+        ));
     }
     let ssrcs = parse_u32_array(answer, "ssrcs")?;
-    if send_indexes.len() != ssrcs.len() || send_indexes.len() > 2
-        || send_indexes.iter().enumerate().any(|(i, id)| send_indexes[..i].contains(id))
-        || ssrcs.iter().enumerate().any(|(i, id)| *id == 0 || ssrcs[..i].contains(id)) {
-        return Err(NdError::Protocol("ANSWER has invalid stream/SSRC correspondence".into()));
+    if send_indexes.len() != ssrcs.len()
+        || send_indexes.len() > 2
+        || send_indexes
+            .iter()
+            .enumerate()
+            .any(|(i, id)| send_indexes[..i].contains(id))
+        || ssrcs
+            .iter()
+            .enumerate()
+            .any(|(i, id)| *id == 0 || ssrcs[..i].contains(id))
+    {
+        return Err(NdError::Protocol(
+            "ANSWER has invalid stream/SSRC correspondence".into(),
+        ));
     }
     let (video_limits, audio_limits) = match answer.get("constraints") {
         None | Some(Value::Null) => (None, None),
-        Some(c) => (Some(VideoLimits::parse(&c["video"])?), Some(AudioLimits::parse(&c["audio"])?)),
+        Some(c) => (
+            Some(VideoLimits::parse(&c["video"])?),
+            Some(AudioLimits::parse(&c["audio"])?),
+        ),
     };
-    Ok(Answer { udp_port, send_indexes, ssrcs, video_limits, audio_limits })
+    Ok(Answer {
+        udp_port,
+        send_indexes,
+        ssrcs,
+        video_limits,
+        audio_limits,
+    })
 }
 
 fn parse_u32_array(value: &Value, field: &str) -> Result<Vec<u32>> {
-    let list = value.get(field).and_then(Value::as_array)
+    let list = value
+        .get(field)
+        .and_then(Value::as_array)
         .ok_or_else(|| NdError::Protocol(format!("ANSWER has no {field} array")))?;
-    list.iter().map(|n| n.as_u64().and_then(|n| u32::try_from(n).ok())
-        .ok_or_else(|| NdError::Protocol(format!("invalid uint32 in ANSWER {field}")))).collect()
-
+    list.iter()
+        .map(|n| {
+            n.as_u64()
+                .and_then(|n| u32::try_from(n).ok())
+                .ok_or_else(|| NdError::Protocol(format!("invalid uint32 in ANSWER {field}")))
+        })
+        .collect()
 }
 
 /// Runs the full negotiation against an already connected receiver.
@@ -529,7 +597,9 @@ pub async fn negotiate(
             .ok_or_else(|| NdError::Protocol("the channel closed during the negotiation".into()))?;
 
         if event.closes(app) {
-            return Err(NdError::Protocol("receiver closed mirroring during negotiation".into()));
+            return Err(NdError::Protocol(
+                "receiver closed mirroring during negotiation".into(),
+            ));
         }
         if event.namespace != NS_WEBRTC || event.source_id != app.transport_id {
             continue;
@@ -538,14 +608,32 @@ pub async fn negotiate(
         match kind {
             Some("ANSWER") => {
                 let answer = parse_answer(&event.payload, seq_num)?;
-                if answer.send_indexes.iter().any(|id| !offer.streams.iter().any(|stream| stream.index == *id)) {
-                    return Err(NdError::Protocol("ANSWER selected a stream that was not offered".into()));
+                if answer
+                    .send_indexes
+                    .iter()
+                    .any(|id| !offer.streams.iter().any(|stream| stream.index == *id))
+                {
+                    return Err(NdError::Protocol(
+                        "ANSWER selected a stream that was not offered".into(),
+                    ));
                 }
-                if answer.ssrcs.iter().any(|ssrc| offer.streams.iter().any(|stream| stream.ssrc == *ssrc)) {
-                    return Err(NdError::Protocol("ANSWER reused a sender SSRC for the receiver".into()));
+                if answer
+                    .ssrcs
+                    .iter()
+                    .any(|ssrc| offer.streams.iter().any(|stream| stream.ssrc == *ssrc))
+                {
+                    return Err(NdError::Protocol(
+                        "ANSWER reused a sender SSRC for the receiver".into(),
+                    ));
                 }
-                if !offer.streams.iter().any(|stream| stream.is_video && answer.send_indexes.contains(&stream.index)) {
-                    return Err(NdError::Unsupported("receiver accepted no video stream".into()));
+                if !offer
+                    .streams
+                    .iter()
+                    .any(|stream| stream.is_video && answer.send_indexes.contains(&stream.index))
+                {
+                    return Err(NdError::Unsupported(
+                        "receiver accepted no video stream".into(),
+                    ));
                 }
                 tracing::info!(
                     port = answer.udp_port,
@@ -586,6 +674,18 @@ pub async fn negotiate(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn offer_has_audio_priority_and_only_implemented_extensions() {
+        let (payload, offer) = build_offer(&MirrorConfig::default(), 1).unwrap();
+        let audio = offer.streams.iter().find(|s| !s.is_video).unwrap();
+        let video = offer.streams.iter().find(|s| s.is_video).unwrap();
+        assert!((1..=50_000).contains(&audio.ssrc));
+        assert!((50_001..=100_000).contains(&video.ssrc));
+        for stream in payload["offer"]["supportedStreams"].as_array().unwrap() {
+            assert!(stream.get("rtpExtensions").is_none());
+        }
+    }
 
     #[test]
     fn target_delay_keeps_profile_defaults_without_a_valid_override() {
@@ -788,9 +888,14 @@ mod tests {
     }
     #[test]
     fn answer_rejects_truncation_overflow_duplicates_and_missing_sequence() {
-        for (field, bad) in [("sendIndexes", json!([0, "1"])),
-            ("sendIndexes", json!([0, 4294967296u64])), ("sendIndexes", json!([0, 0])),
-            ("ssrcs", json!([1])), ("ssrcs", json!([1, 1])), ("ssrcs", json!([0, 2]))] {
+        for (field, bad) in [
+            ("sendIndexes", json!([0, "1"])),
+            ("sendIndexes", json!([0, 4294967296u64])),
+            ("sendIndexes", json!([0, 0])),
+            ("ssrcs", json!([1])),
+            ("ssrcs", json!([1, 1])),
+            ("ssrcs", json!([0, 2])),
+        ] {
             let mut value = answer_json(1);
             value["answer"][field] = bad;
             assert!(parse_answer(&value, 1).is_err());
@@ -804,7 +909,13 @@ mod tests {
     fn frame_rate_handles_numeric_and_fractional_limits() {
         assert_eq!(parse_frame_rate(&json!(30)).unwrap(), 30.0);
         assert!((parse_frame_rate(&json!("60000/1001")).unwrap() - 59.94005994).abs() < 0.00001);
-        for bad in [json!("1/0"), json!("NaN"), json!("inf"), json!(-1), json!(null)] {
+        for bad in [
+            json!("1/0"),
+            json!("NaN"),
+            json!("inf"),
+            json!(-1),
+            json!(null),
+        ] {
             assert!(parse_frame_rate(&bad).is_err());
         }
     }
@@ -813,16 +924,30 @@ mod tests {
     fn decoder_limits_bound_pixels_bitrate_and_fps_independently() {
         let mut answer = parse_answer(&answer_json(1), 1).unwrap();
         answer.video_limits = Some(VideoLimits {
-            max_width: 1920, max_height: 1080, max_fps: 60.0,
+            max_width: 1920,
+            max_height: 1080,
+            max_fps: 60.0,
             max_pixels_per_second: Some(1920.0 * 1080.0 * 30.0),
-            min_bitrate: 300_000, max_bitrate: 6_000_000,
-            min_size: None, max_delay_ms: Some(300),
+            min_bitrate: 300_000,
+            max_bitrate: 6_000_000,
+            min_size: None,
+            max_delay_ms: Some(300),
         });
-        let mut cfg = nd_core::pipeline::StreamConfig { width: 3840, height: 2160, fps: 60,
-            bitrate_kbps: 10_000, ..Default::default() };
+        let mut cfg = nd_core::pipeline::StreamConfig {
+            width: 3840,
+            height: 2160,
+            fps: 60,
+            bitrate_kbps: 10_000,
+            ..Default::default()
+        };
         answer.constrain(&mut cfg, 150, false).unwrap();
-        assert_eq!((cfg.width, cfg.height, cfg.fps, cfg.bitrate_kbps), (1920, 1080, 30, 6000));
-        cfg.width = 1280; cfg.height = 720; cfg.fps = 60;
+        assert_eq!(
+            (cfg.width, cfg.height, cfg.fps, cfg.bitrate_kbps),
+            (1920, 1080, 30, 6000)
+        );
+        cfg.width = 1280;
+        cfg.height = 720;
+        cfg.fps = 60;
         answer.constrain(&mut cfg, 150, false).unwrap();
         assert_eq!(cfg.fps, 60);
     }
@@ -830,10 +955,13 @@ mod tests {
     #[test]
     fn unknown_capabilities_do_not_claim_4k60_support() {
         let answer = parse_answer(&answer_json(1), 1).unwrap();
-        let mut cfg = nd_core::pipeline::StreamConfig { width: 3840, height: 2160, fps: 60,
-            ..Default::default() };
+        let mut cfg = nd_core::pipeline::StreamConfig {
+            width: 3840,
+            height: 2160,
+            fps: 60,
+            ..Default::default()
+        };
         answer.constrain(&mut cfg, 150, false).unwrap();
         assert_eq!((cfg.width, cfg.height, cfg.fps), (1920, 1080, 30));
     }
-
 }

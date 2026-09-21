@@ -206,18 +206,26 @@ impl FileServer {
 /// Reads one request and answers it.
 async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> Result<()> {
     let request = read_request(&mut stream).await?;
-    let (method, target) = request_line(&request)
-        .ok_or_else(|| NdError::Protocol("malformed HTTP request".into()))?;
+    let (method, target) =
+        request_line(&request).ok_or_else(|| NdError::Protocol("malformed HTTP request".into()))?;
     let mut lines = request.lines().skip(1);
 
     // A wrong token gets 404, without distinguishing a protected file from
     // an unknown resource. A response does not conceal the listening server.
     let Some(index) = parse_target(target, token) else {
-        let _ = write_bounded(&mut stream, b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await;
+        let _ = write_bounded(
+            &mut stream,
+            b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        )
+        .await;
         return Ok(());
     };
     let Some(file) = files.get(index) else {
-        let _ = write_bounded(&mut stream, b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await;
+        let _ = write_bounded(
+            &mut stream,
+            b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        )
+        .await;
         return Ok(());
     };
 
@@ -293,7 +301,9 @@ async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> R
             .await
             .map_err(|e| NdError::Network(e.to_string()))?;
         if read == 0 {
-            return Err(NdError::Network("file truncated during HTTP transfer".into()));
+            return Err(NdError::Network(
+                "file truncated during HTTP transfer".into(),
+            ));
         }
         // A receiver that stops watching closes the socket; that is an ordinary
         // end of transfer, not a fault to report.
