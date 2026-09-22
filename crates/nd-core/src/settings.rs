@@ -148,8 +148,13 @@ pub struct Settings {
     pub mic_volume: u8,
     /// Search for receivers as soon as the application starts.
     pub auto_discovery: bool,
-    /// Buffered playback ([`crate::latency::Profile::Film`]).
-    pub film_mode: bool,
+    /// What to favour when delay and smoothness pull apart.
+    ///
+    /// One choice on one scale, not two switches: a person cannot want the
+    /// lowest delay and the smoothest playback at once, and offering both as
+    /// independent toggles would make a state the product has to resolve behind
+    /// their back.
+    pub latency: crate::latency::Profile,
     /// How this computer names itself to a receiver. Empty = the host name.
     pub device_name: String,
     /// A fixed port for the receiver to connect back to, for a firewall that
@@ -169,7 +174,7 @@ impl Default for Settings {
             microphone: false,
             mic_volume: 80,
             auto_discovery: true,
-            film_mode: false,
+            latency: crate::latency::Profile::Responsive,
             device_name: String::new(),
             port: 0,
         }
@@ -213,7 +218,7 @@ impl Settings {
              microphone = {}\n\
              mic_volume = {}\n\
              auto_discovery = {}\n\
-             film_mode = {}\n\
+             latency = {}\n\
              device_name = {}\n\
              port = {}\n",
             self.protocol.as_key(),
@@ -225,7 +230,7 @@ impl Settings {
             self.microphone,
             self.mic_volume,
             self.auto_discovery,
-            self.film_mode,
+            latency_key(self.latency),
             self.device_name.replace(['\n', '\r'], " "),
             self.port,
         )
@@ -277,7 +282,16 @@ impl Settings {
                     }
                 }
                 "auto_discovery" => settings.auto_discovery = value == "true",
-                "film_mode" => settings.film_mode = value == "true",
+                "latency" => {
+                    if let Some(profile) = parse_latency(value) {
+                        settings.latency = profile;
+                    }
+                }
+                // Written by versions that had a film switch and nothing else.
+                // Read so upgrading keeps the choice; never written again.
+                "film_mode" if value == "true" => {
+                    settings.latency = crate::latency::Profile::Film;
+                }
                 "device_name" => settings.device_name = value.to_string(),
                 "port" => {
                     if let Ok(port) = value.parse::<u16>() {
@@ -288,6 +302,26 @@ impl Settings {
             }
         }
         settings
+    }
+}
+
+/// The latency profile's name in the settings file.
+fn latency_key(profile: crate::latency::Profile) -> &'static str {
+    match profile {
+        crate::latency::Profile::Low => "low",
+        crate::latency::Profile::Responsive => "responsive",
+        crate::latency::Profile::Film => "film",
+    }
+}
+
+/// An unknown name keeps the default rather than inventing a profile: the file
+/// is hand-editable, and a typo should not silently change how a session feels.
+fn parse_latency(value: &str) -> Option<crate::latency::Profile> {
+    match value {
+        "low" => Some(crate::latency::Profile::Low),
+        "responsive" => Some(crate::latency::Profile::Responsive),
+        "film" => Some(crate::latency::Profile::Film),
+        _ => None,
     }
 }
 
@@ -316,11 +350,7 @@ pub fn current() -> Settings {
         .unwrap_or_default();
     // The profile lives in its own module because the pipeline reads it on
     // every session; keep the two in step from the moment the file is read.
-    crate::latency::set(if loaded.film_mode {
-        crate::latency::Profile::Film
-    } else {
-        crate::latency::Profile::Responsive
-    });
+    crate::latency::set(loaded.latency);
     if let Ok(mut guard) = CURRENT.write() {
         *guard = Some(loaded.clone());
     }
@@ -343,11 +373,7 @@ pub fn set(settings: Settings) {
 /// coalesces a slider's stream of values into one [`persist`] instead of an
 /// `fsync` per pixel of movement. [`set`] does both at once.
 pub fn set_in_memory(settings: &Settings) {
-    crate::latency::set(if settings.film_mode {
-        crate::latency::Profile::Film
-    } else {
-        crate::latency::Profile::Responsive
-    });
+    crate::latency::set(settings.latency);
     if let Ok(mut guard) = CURRENT.write() {
         *guard = Some(settings.clone());
     }
@@ -410,13 +436,48 @@ mod tests {
             microphone: true,
             mic_volume: 42,
             auto_discovery: false,
-            film_mode: true,
+            latency: crate::latency::Profile::Film,
             device_name: "Tales' laptop".to_string(),
             port: 31789,
             custom_width: 1920,
             custom_height: 1080,
         };
         assert_eq!(Settings::from_file(&settings.to_file()), settings);
+    }
+
+    #[test]
+    fn every_latency_profile_survives_a_write_and_a_read() {
+        for latency in [
+            crate::latency::Profile::Low,
+            crate::latency::Profile::Responsive,
+            crate::latency::Profile::Film,
+        ] {
+            let settings = Settings {
+                latency,
+                ..Settings::default()
+            };
+            assert_eq!(Settings::from_file(&settings.to_file()).latency, latency);
+        }
+    }
+
+    #[test]
+    fn an_upgraded_file_keeps_the_choice_the_film_switch_recorded() {
+        // The switch this replaced wrote a boolean. Someone who had turned it
+        // on should not find their preference quietly reset by an update.
+        assert_eq!(
+            Settings::from_file("film_mode = true").latency,
+            crate::latency::Profile::Film
+        );
+        // And "off" was the default, which is what the default still is.
+        assert_eq!(
+            Settings::from_file("film_mode = false").latency,
+            Settings::default().latency
+        );
+        // A hand-edited typo keeps the default rather than inventing a feel.
+        assert_eq!(
+            Settings::from_file("latency = fastest").latency,
+            Settings::default().latency
+        );
     }
 
     #[test]

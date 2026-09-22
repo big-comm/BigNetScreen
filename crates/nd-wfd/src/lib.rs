@@ -268,6 +268,10 @@ impl Sink for WfdSink {
         self.status.link()
     }
 
+    fn max_source_size(&self) -> Option<(u32, u32)> {
+        Some(rtsp::MAX_SOURCE_SIZE)
+    }
+
     async fn start_stream(&self, source: CaptureSource) -> Result<()> {
         self.status.set(SinkState::Connecting);
 

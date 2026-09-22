@@ -1,12 +1,14 @@
 //! Creates a **virtual monitor** and reports what came back.
 //!
 //! ```sh
-//! cargo run -p nd-capture --example virtual_monitor [width] [height] [seconds]
+//! cargo run -p nd-capture --example virtual_monitor [width] [height] [seconds] [fps]
 //! ```
 //!
 //! A virtual monitor is an extra desktop that exists only for the cast: the
-//! receiver shows a second screen instead of duplicating the laptop's. It needs
-//! `org.gnome.Mutter.ScreenCast` — most desktop portals do not offer it.
+//! receiver shows a second screen instead of duplicating the laptop's. It goes
+//! through whatever [`nd_capture::select_backend_for`] picks here — Mutter on
+//! GNOME, `zkde_screencast_unstable_v1` on KWin, the portal otherwise — so the
+//! size below is also the check that the chosen backend honours a size at all.
 //!
 //! The example exists because this path is easy to write and hard to trust: it
 //! either creates a screen the compositor really renders to, or it succeeds on
@@ -17,8 +19,7 @@ use std::time::Duration;
 
 use gstreamer::prelude::*;
 
-use nd_capture::MutterBackend;
-use nd_core::capture::{CaptureBackend, SourceType};
+use nd_core::capture::SourceType;
 use nd_core::pipeline::{self, PipelineEvent};
 
 #[tokio::main]
@@ -34,27 +35,15 @@ async fn main() -> nd_core::Result<()> {
     let width: u32 = args.next().and_then(|a| a.parse().ok()).unwrap_or(1920);
     let height: u32 = args.next().and_then(|a| a.parse().ok()).unwrap_or(1080);
     let secs: u64 = args.next().and_then(|a| a.parse().ok()).unwrap_or(10);
-
-    let backend = MutterBackend::new();
-    if !backend.is_available().await {
-        eprintln!(
-            "org.gnome.Mutter.ScreenCast is not on the bus — a virtual monitor \
-             needs native GNOME (it is unavailable under Flatpak, KDE, Sway…)"
-        );
-        return Ok(());
-    }
-
-    let supported = backend.supported_sources().await;
-    eprintln!("source types offered: {supported:?}");
-    if !supported.contains(&SourceType::Virtual) {
-        eprintln!("this compositor does not offer a virtual monitor");
-        return Ok(());
-    }
+    // The frame count below is only worth reading against a rate that was
+    // asked for: a screen that renders at 60 and a pipeline that asks for 30
+    // both produce 30.
+    let fps: u32 = args.next().and_then(|a| a.parse().ok()).unwrap_or(30);
 
     // `VM_MODE=1280x720` asks for a monitor of a different size than the one
     // the pipeline requests. That is what tells "the compositor honoured the
-    // `modes` property" apart from "PipeWire negotiated the pipeline's size and
-    // the two happened to match".
+    // size we asked for" apart from "PipeWire negotiated the pipeline's size
+    // and the two happened to match".
     let (mode_w, mode_h) = std::env::var("VM_MODE")
         .ok()
         .and_then(|spec| {
@@ -62,11 +51,20 @@ async fn main() -> nd_core::Result<()> {
             Some((w.parse().ok()?, h.parse().ok()?))
         })
         .unwrap_or((width, height));
-    backend.set_virtual_size(mode_w, mode_h).await;
+
+    // The backends read the size from the preferences, same as the app does.
+    let mut chosen = nd_core::settings::current();
+    chosen.quality = nd_core::settings::Quality::Custom;
+    chosen.custom_width = mode_w;
+    chosen.custom_height = mode_h;
+    nd_core::settings::set_in_memory(&chosen);
+
+    let backend = nd_capture::select_backend_for(SourceType::Virtual, None).await;
+    eprintln!("backend: {}", backend.id());
     if (mode_w, mode_h) != (width, height) {
         eprintln!("monitor mode requested: {mode_w}x{mode_h} (pipeline asks {width}x{height})");
     }
-    eprintln!("creating a {width}x{height} virtual monitor…");
+    eprintln!("creating a {mode_w}x{mode_h} virtual monitor…");
 
     let source = backend.start(SourceType::Virtual).await?;
     eprintln!(
@@ -77,12 +75,24 @@ async fn main() -> nd_core::Result<()> {
 
     // A node with no frames is the failure mode worth catching: D-Bus says yes
     // and nothing is ever rendered.
+    // The encoder production would pick. Counting frames through x264 says
+    // nothing about a machine that casts with NVENC.
+    let driver = nd_net::detect_gpu_driver();
+    let encoder = pipeline::best_encoder(driver)?;
+    eprintln!("encoder: {encoder:?} (driver {driver:?})");
     let cfg = pipeline::StreamConfig {
         width,
         height,
+        fps,
+        encoder,
         ..Default::default()
     };
-    let desc = pipeline::mirror_pipeline_description(&cfg, &source.video_source());
+    let desc = pipeline::mirror_pipeline_description(
+        &cfg,
+        &source.video_source(),
+        pipeline::CHROMECAST_MAX_RESOLUTION,
+        false,
+    );
     let (gst_pipeline, mut events) = pipeline::build_pipeline(&desc, cfg.latency_ms())?;
     gst_pipeline
         .set_state(gstreamer::State::Playing)
@@ -112,7 +122,7 @@ async fn main() -> nd_core::Result<()> {
     drop(source);
     backend.stop().await?;
 
-    eprintln!("\n{frames} frames captured in {secs}s");
+    eprintln!("\n{frames} frames captured in {secs}s (asked for {fps} fps)");
     if frames == 0 {
         eprintln!(
             "the monitor was created but produced nothing — this is the silent failure \

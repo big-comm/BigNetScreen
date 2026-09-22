@@ -47,7 +47,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         encoder,
         ..Default::default()
     };
-    let desc = pipeline::chromecast_pipeline_description(&cfg, &VideoSource::Test);
+    let desc = pipeline::chromecast_pipeline_description(
+        &cfg,
+        &VideoSource::Test,
+        nd_core::pipeline::VideoTarget::Exact((cfg.width, cfg.height)),
+    );
     let (gst_pipeline, _events) = pipeline::build_pipeline(&desc, cfg.latency_ms())?;
     let sink = gst_pipeline
         .by_name(CHROMECAST_SINK_NAME)

@@ -105,34 +105,303 @@ pub fn instrument_framerate(pipeline: &gst::Pipeline) {
     if std::env::var("BIGNETSCREEN_FPS_LOG").as_deref() != Ok("1") {
         return;
     }
-    let Some(encoder) = pipeline.by_name("enc") else {
-        tracing::debug!("no element named `enc`; frame rate not instrumented");
-        return;
-    };
-    let Some(pad) = encoder.static_pad("src") else {
-        return;
-    };
+    // Both ends of the pipeline, because they answer different questions. A
+    // compositor only repaints what changed, so a still screen legitimately
+    // produces almost no capture buffers — and `pipewiresrc`'s keepalive then
+    // resends the last one, which is a real frame rate of one per second. Told
+    // apart from an encoder that cannot keep up only by counting both.
+    for (element, pad, label) in [
+        (
+            CAPTURE_SOURCE_NAME,
+            "src",
+            "frames arriving from the compositor",
+        ),
+        (ENCODER_NAME, "src", "frames leaving the encoder"),
+    ] {
+        let Some(pad) = pipeline
+            .by_name(element)
+            .and_then(|element| element.static_pad(pad))
+        else {
+            tracing::debug!(element, "not in this pipeline; frame rate not instrumented");
+            continue;
+        };
+        let frames = std::sync::atomic::AtomicU64::new(0);
+        let since = std::sync::Mutex::new(std::time::Instant::now());
+        pad.add_probe(gst::PadProbeType::BUFFER, move |_, info| {
+            if let Some(gst::PadProbeData::Buffer(buffer)) = &info.data {
+                let bytes = buffer.size() as u64;
+                let count = frames.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                let mut mark = since.lock().unwrap_or_else(|e| e.into_inner());
+                let elapsed = mark.elapsed();
+                if elapsed >= std::time::Duration::from_secs(1) {
+                    tracing::info!(
+                        fps = format!("{:.1}", count as f64 / elapsed.as_secs_f64()),
+                        last_frame_bytes = bytes,
+                        "{label}"
+                    );
+                    frames.store(0, std::sync::atomic::Ordering::Relaxed);
+                    *mark = std::time::Instant::now();
+                }
+            }
+            gst::PadProbeReturn::Ok
+        });
+    }
+}
 
-    let frames = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
-    let since = std::sync::Arc::new(std::sync::Mutex::new(std::time::Instant::now()));
-    pad.add_probe(gst::PadProbeType::BUFFER, move |_, info| {
-        if let Some(gst::PadProbeData::Buffer(buffer)) = &info.data {
-            let bytes = buffer.size() as u64;
-            let count = frames.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-            let mut mark = since.lock().unwrap_or_else(|e| e.into_inner());
-            let elapsed = mark.elapsed();
-            if elapsed >= std::time::Duration::from_secs(1) {
-                tracing::info!(
-                    fps = format!("{:.1}", count as f64 / elapsed.as_secs_f64()),
-                    last_frame_bytes = bytes,
-                    "frames leaving the encoder"
-                );
-                frames.store(0, std::sync::atomic::Ordering::Relaxed);
-                *mark = std::time::Instant::now();
+/// The device buffer asked of `pulsesrc`, in microseconds.
+///
+/// The element's own default is 200 ms, documented as "the maximum latency
+/// that the source reports". A pipeline adopts the largest latency any of its
+/// sources reports and the screen capture reports almost none, so that default
+/// made the audio branch decide how late the picture was — reported from use
+/// as the screen arriving noticeably sooner with audio switched off, and
+/// confirmed by asking for less and watching the delay go.
+///
+/// Forty milliseconds, not the ten that was measured working. Ten is one read
+/// period — `latency-time` asks for ten and gets one buffer's worth of room,
+/// which is no headroom at all, and this already logs an overrun at startup
+/// with two hundred. It held on one fast machine; this ships to slow ones,
+/// where the cost is not latency but audio breaking up. Four periods is the
+/// usual floor for low-latency capture and still cuts the old default by five.
+///
+/// `BIGNETSCREEN_AUDIO_BUFFER_MS` overrides it either way.
+const CAPTURE_AUDIO_BUFFER_MS: u32 = 40;
+
+fn capture_audio_buffer_us() -> u32 {
+    std::env::var("BIGNETSCREEN_AUDIO_BUFFER_MS")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+        .unwrap_or(CAPTURE_AUDIO_BUFFER_MS)
+        .clamp(5, 500)
+        * 1_000
+}
+
+/// The `buffer-time=` property as `pulsesrc` spells it.
+fn audio_buffer_property() -> String {
+    format!(" buffer-time={}", capture_audio_buffer_us())
+}
+
+/// The capture element's name, so its negotiated caps can be read back.
+pub const CAPTURE_SOURCE_NAME: &str = "capture";
+
+/// How long `pipewiresrc` waits before resending the last frame, in ms.
+///
+/// One frame at 30 Hz, two at 60. It is the frame rate a still screen gets,
+/// because nothing else produces buffers when the compositor has nothing to
+/// repaint — at the 1000 ms it used to be, typing in a terminal updated the
+/// picture about once a second.
+///
+/// `BIGNETSCREEN_CAPTURE_KEEPALIVE_MS` overrides it, and exists for an open
+/// question rather than for tuning. A resent frame is not a copy of the real
+/// one: `gstpipewiresrc` rewrites its timestamp to the clock, while a real
+/// frame keeps the one the compositor gave it. If those two disagree, a real
+/// frame arriving between resends can look older than what already went out —
+/// which would show up as exactly the reported symptom, a keystroke taking far
+/// too long to appear while a moving pointer stays fluid. Comparing 33 against
+/// a much larger value while typing is what tells that apart from the
+/// compositor simply not sending the damage.
+fn capture_keepalive_ms() -> u32 {
+    std::env::var("BIGNETSCREEN_CAPTURE_KEEPALIVE_MS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .map(|ms: u32| ms.clamp(1, 5_000))
+        .unwrap_or(CAPTURE_KEEPALIVE_MS)
+}
+
+const CAPTURE_KEEPALIVE_MS: u32 = 33;
+
+/// The video capsfilter's name, so its size can be read back or narrowed after
+/// the pipeline has negotiated.
+pub const SCALE_CAPS: &str = "scale-caps";
+
+/// What size to encode at.
+///
+/// Two shapes because two situations, and telling them apart is the whole
+/// reason this is a type rather than a pair of numbers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VideoTarget {
+    /// Encode at exactly this. For a link that agreed on a mode and would
+    /// refuse anything else — Miracast negotiates one with the sink, and a Cast
+    /// receiver whose ANSWER declares a smaller decoder has done the same.
+    Exact((u32, u32)),
+    /// Encode at whatever the capture is, up to this ceiling.
+    ///
+    /// The right shape wherever nothing was promised, because the portal
+    /// announces a size in the compositor's coordinate space rather than
+    /// pixels: measured, 2328x1310 announced for a 2560x1440 panel at 110%
+    /// scale. Pinning the announced number resamples every frame away from the
+    /// size it arrived in. A range lets the scaler stand aside.
+    UpTo((u32, u32)),
+}
+
+impl VideoTarget {
+    /// The `width`/`height` fields, fixed or as a range.
+    fn caps_dimensions(self) -> String {
+        match self {
+            VideoTarget::Exact((w, h)) => format!("width={w},height={h}"),
+            VideoTarget::UpTo((w, h)) => {
+                format!("width=[2,{}],height=[2,{}]", w.max(2), h.max(2))
             }
         }
-        gst::PadProbeReturn::Ok
-    });
+    }
+}
+
+/// Whether to keep mirroring frames on the graphics card end to end.
+///
+/// Off unless `BIGNETSCREEN_GPU_PATH=1`, and measured to be the right default.
+///
+/// The path works: KWin hands over a real DMA-BUF (`drm-format=AR24` with
+/// NVIDIA's block-linear modifier `0x0300000000606014`), `glupload` imports it
+/// and NVENC takes the texture, so the picture never crosses to the CPU. It is
+/// also **slower**. On a GeForce with that modifier, against the system-memory
+/// path carrying BGRx:
+///
+/// | | system memory | GPU |
+/// | --- | --- | --- |
+/// | frames from the compositor | 45-53/s | 16-26/s |
+/// | frames leaving the encoder | ~60/s | 21-41/s |
+///
+/// The cost is not the import and not our handling of it. Taking 300 frames at
+/// 2560x1440 apart stage by stage:
+///
+/// | pipeline | wall clock |
+/// | --- | --- |
+/// | generate only | 0.55s |
+/// | + `glupload` | 0.72s |
+/// | + `nvh264enc` from system memory | 1.44s |
+/// | + `nvh264enc` from GL memory | 4.74s |
+/// | `glupload ! cudaupload ! nvh264enc` | 3.74s |
+///
+/// The upload costs 0.17s and the encode 0.89s, but encoding *from a GL
+/// texture* costs 4.02s — four and a half times as much, and routing through
+/// `cudaupload` instead of letting the encoder do it saves only a third of that.
+/// The expense is the GL/CUDA bridge itself, wherever it is crossed.
+///
+/// There is no way around it here: GStreamer 1.28.6 ships no nvcodec element
+/// that accepts `memory:DMABuf`, so GL is the only import route, and the
+/// import is what makes the frame worth having.
+///
+/// Kept, switch and all, because the result is hardware-specific: another card,
+/// another compositor or a linear modifier could invert it, and the next person
+/// to wonder should be able to measure in one run rather than build this again.
+/// Promoting it to a default would also need a fallback, since a machine
+/// without the DMA-BUF or the interop does not start at all.
+pub fn gpu_path_requested() -> bool {
+    std::env::var("BIGNETSCREEN_GPU_PATH").as_deref() == Ok("1")
+}
+
+/// The longest input gap `videorate` will fill with repeats, in nanoseconds.
+///
+/// Comfortably more than the keepalive interval, so ordinary jitter is still
+/// smoothed. Anything past it is the capture having stopped, and repeating a
+/// frozen frame at full resolution is the most expensive way to display
+/// nothing.
+const MAX_DUPLICATION_NS: u64 = 500_000_000;
+
+/// The size the encoder will really be fed, once the pipeline has negotiated.
+///
+/// This is the number the Cast OFFER has to carry, and it cannot be known any
+/// earlier: the portal announces a compositor-space size that is not pixels,
+/// and the only other way to ask — a second PipeWire stream — is refused by
+/// the session manager ("target not found"), because the portal's node has no
+/// session item to look up. So the pipeline is built first and asked here.
+pub fn negotiated_video_size(
+    pipeline: &gst::Pipeline,
+    deadline: std::time::Instant,
+) -> Option<(u32, u32)> {
+    use gst::prelude::*;
+
+    let pad = pipeline
+        .by_name(SCALE_CAPS)
+        .and_then(|caps| caps.static_pad("src"))?;
+    loop {
+        if let Some(caps) = pad.current_caps() {
+            let s = caps.structure(0)?;
+            let (w, h) = (s.get::<i32>("width").ok()?, s.get::<i32>("height").ok()?);
+            if w > 0 && h > 0 {
+                return Some((w as u32, h as u32));
+            }
+        }
+        if std::time::Instant::now() >= deadline {
+            tracing::info!("the capture did not negotiate a size in time");
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+/// Narrows the mirroring capsfilter to one exact size.
+///
+/// Only for a receiver whose ANSWER declares a decoder smaller than the screen.
+/// Left alone otherwise, so the capture reaches the encoder untouched.
+pub fn pin_video_size(pipeline: &gst::Pipeline, cfg: &StreamConfig) -> Result<()> {
+    use gst::prelude::*;
+
+    let filter = pipeline
+        .by_name(SCALE_CAPS)
+        .ok_or_else(|| NdError::Gst("the mirroring capsfilter is missing".into()))?;
+    // Narrow the size and nothing else: the format stays a list so the picture
+    // still reaches the encoder in whatever it was captured as, even when the
+    // receiver has forced a scale.
+    let caps = format!(
+        "video/x-raw,format={fmt},width={w},height={h},framerate={fps}/1",
+        fmt = cfg.encoder.accepted_formats(),
+        w = cfg.width,
+        h = cfg.height,
+        fps = cfg.fps,
+    );
+    let caps = caps
+        .parse::<gst::Caps>()
+        .map_err(|err| NdError::Gst(format!("mirroring caps: {err}")))?;
+    filter.set_property("caps", &caps);
+    Ok(())
+}
+
+/// The size PipeWire is really delivering, from the capture's own pad.
+///
+/// Read alongside [`negotiated_video_size`] so one line can say whether the
+/// scaler is doing anything: if the two agree, the capture reaches the encoder
+/// untouched.
+pub fn delivered_capture_size(pipeline: &gst::Pipeline) -> Option<(u32, u32)> {
+    use gst::prelude::*;
+
+    let caps = pipeline
+        .by_name(CAPTURE_SOURCE_NAME)?
+        .static_pad("src")?
+        .current_caps()?;
+    let s = caps.structure(0)?;
+    let (w, h) = (s.get::<i32>("width").ok()?, s.get::<i32>("height").ok()?);
+    (w > 0 && h > 0).then_some((w as u32, h as u32))
+}
+
+/// What the capture settled on, and whether it could have done better.
+///
+/// Returns the negotiated caps and what the source says when asked for a GPU
+/// buffer specifically.
+///
+/// The two answer different questions. Negotiated caps of plain `video/x-raw`
+/// mean the frame is in system memory, but not why: the compositor may offer
+/// nothing else, or our own scaler and converter may have forced the download
+/// by being unable to accept a GPU buffer. Asking with a `memory:DMABuf` filter
+/// separates those — `pipewiresrc` builds that feature from the modifiers the
+/// producer advertises (`gstpipewireformat.c`), so an empty answer means there
+/// is nothing to import and a non-empty one means importing it is available to
+/// be taken.
+pub fn capture_memory(pipeline: &gst::Pipeline) -> Option<(String, String)> {
+    use gst::prelude::*;
+
+    let pad = pipeline.by_name(CAPTURE_SOURCE_NAME)?.static_pad("src")?;
+    let negotiated = pad.current_caps()?.to_string();
+    let dmabuf = gst::Caps::builder("video/x-raw")
+        .features(["memory:DMABuf"])
+        .build();
+    let offered = pad.query_caps(Some(&dmabuf));
+    let dmabuf = if offered.is_empty() {
+        "none".to_string()
+    } else {
+        offered.to_string()
+    };
+    Some((negotiated, dmabuf))
 }
 
 fn pad_running_time(pad: &gst::Pad, pts: gst::ClockTime) -> Option<gst::ClockTime> {
@@ -293,6 +562,9 @@ pub fn build_configured_pipeline(
     if latency_ms > 0 {
         pipeline.set_latency(gst::ClockTime::from_mseconds(latency_ms));
     }
+    // Every pipeline, because the question "were those frames ever made?" is
+    // asked of whichever one is misbehaving. Costs nothing unless asked for.
+    instrument_framerate(&pipeline);
 
     // Optional diagnostic: how long a frame spends in here. Kept behind an
     // environment variable because it installs a probe on every buffer.
@@ -555,6 +827,26 @@ impl H264Encoder {
         }
     }
 
+    /// Every raw format this encoder takes, as a caps list.
+    ///
+    /// A list rather than one choice, so negotiation can settle on whatever
+    /// the capture already is and leave the converter a passthrough. The
+    /// portal delivers BGRA and NVENC accepts BGRA, converting on the GPU as
+    /// part of encoding it — asking for NV12 first buys nothing and spends a
+    /// full-frame pass over the CPU to do it. Measured over 300 frames at
+    /// 2560x1440: 2.76s of CPU against 1.21s, and twice the wall clock.
+    ///
+    /// Only NVENC is listed from measurement, because it is the only hardware
+    /// encoder installed on the machine this was verified on. The others keep
+    /// the single format they had: a list nobody checked is a guess, and the
+    /// cost of guessing wrong here is a receiver that gets nothing.
+    pub fn accepted_formats(self) -> &'static str {
+        match self {
+            H264Encoder::NvH264 => "{ BGRA, BGRx, RGBA, RGBx, NV12 }",
+            _ => self.preferred_format(),
+        }
+    }
+
     /// The pipeline latency suited to this encoder.
     pub fn pipeline_latency_ms(self) -> u64 {
         match self {
@@ -568,7 +860,17 @@ impl H264Encoder {
     /// unit**.
     pub fn encoder_description(self, cfg: &StreamConfig) -> String {
         let kbps = cfg.scaled_bitrate_kbps();
-        let gop = cfg.gop();
+        // `0` means the caller wants no schedule at all: key frames come when
+        // they are asked for. Each encoder spells that differently, and only
+        // the two verified on this machine are told directly — the rest keep a
+        // finite distance, because a driver that reads `0` as "every frame is
+        // an I-frame" would ruin a session nobody here can test.
+        let gop = match (cfg.gop(), self) {
+            (0, H264Encoder::NvH264) => "-1".to_string(),
+            (0, H264Encoder::X264) => "0".to_string(),
+            (0, _) => (cfg.fps.max(1) * 10).to_string(),
+            (frames, _) => frames.to_string(),
+        };
         let cabac = cfg.profile.cabac();
         match self {
             H264Encoder::X264 => {
@@ -883,8 +1185,8 @@ pub async fn working_encoder(driver: GpuDriver, session: StreamConfig) -> Result
         let cfg = StreamConfig { encoder, ..session };
         let description = format!(
             "videotestsrc is-live=true num-buffers=2 ! {} ! {} ! fakesink sync=false",
-            cfg.convert_scale(),
-            encoder.encoder_description(&cfg)
+            cfg.convert_scale(VideoTarget::Exact((cfg.width, cfg.height))),
+            cfg.encoder_stage(false)
         );
         let Ok(monitored) = build_monitored(&description, cfg.latency_ms(), encoder) else {
             continue;
@@ -1048,9 +1350,23 @@ impl VideoSource {
                     Some(serial) => format!("target-object={serial}"),
                     None => format!("path={node_id}"),
                 };
+                // `keepalive-time` is the floor on the capture's frame rate: a
+                // compositor only repaints what changed, so when the screen is
+                // still this is the only thing producing buffers at all.
+                //
+                // It used to be 1000 ms, which is a floor of one frame per
+                // second — measured, and visible as exactly that: typing in a
+                // terminal changes a character cell, the compositor sends
+                // almost nothing, and the picture updated about once a second.
+                // One frame interval keeps the encoder fed and the receiver's
+                // clock moving, at the price of duplicate frames that a P-frame
+                // codes in a handful of bytes. The encoder was already emitting
+                // 60 fps against 13 arriving, so the duplicates are not new —
+                // only their timing is, and regular beats bursty.
                 format!(
-                    "pipewiresrc {fd_prop}{target} do-timestamp=true \
-                     keepalive-time=1000 resend-last=true"
+                    "pipewiresrc name={CAPTURE_SOURCE_NAME} {fd_prop}{target} \
+                     do-timestamp=true keepalive-time={keepalive} resend-last=true",
+                    keepalive = capture_keepalive_ms()
                 )
             }
             VideoSource::Test => "videotestsrc is-live=true".to_string(),
@@ -1167,16 +1483,21 @@ impl AudioSource {
             //
             // `provide-clock=false`: the screen capture sets the pace; a second
             // clock in the pipeline fights with it.
-            AudioSource::System => {
-                "pulsesrc device=@DEFAULT_MONITOR@ provide-clock=false do-timestamp=true"
-                    .to_string()
-            }
+            //
+            // `buffer-time`: see `CAPTURE_AUDIO_BUFFER_MS`. This branch reports
+            // the pipeline's largest latency, so it decides when the picture
+            // arrives.
+            AudioSource::System => format!(
+                "pulsesrc device=@DEFAULT_MONITOR@ provide-clock=false do-timestamp=true{buffer}",
+                buffer = audio_buffer_property()
+            ),
             // `@DEFAULT_SOURCE@`, the counterpart of `@DEFAULT_MONITOR@`: the
             // input the person selected in their sound settings, following
             // them when they plug a headset in mid-session.
             AudioSource::Mic { volume } => format!(
-                "pulsesrc device=@DEFAULT_SOURCE@ provide-clock=false do-timestamp=true \
-                 ! audioconvert ! audioresample ! volume volume={volume:.2}"
+                "pulsesrc device=@DEFAULT_SOURCE@ provide-clock=false do-timestamp=true{buffer} \
+                 ! audioconvert ! audioresample ! volume volume={volume:.2}",
+                buffer = audio_buffer_property()
             ),
             // Two live sources into one branch. What matters here:
             //
@@ -1190,12 +1511,13 @@ impl AudioSource {
             //   a microphone that hiccups drop the system audio with it.
             AudioSource::SystemAndMic { volume } => format!(
                 "audiomixer name=micmix latency=20000000 \
-                 pulsesrc device=@DEFAULT_MONITOR@ provide-clock=false do-timestamp=true \
+                 pulsesrc device=@DEFAULT_MONITOR@ provide-clock=false do-timestamp=true{buffer} \
                  ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! micmix. \
-                 pulsesrc device=@DEFAULT_SOURCE@ provide-clock=false do-timestamp=true \
+                 pulsesrc device=@DEFAULT_SOURCE@ provide-clock=false do-timestamp=true{buffer} \
                  ! audioconvert ! audioresample ! volume volume={volume:.2} \
                  ! audio/x-raw,rate=48000,channels=2 ! micmix. \
-                 micmix."
+                 micmix.",
+                buffer = audio_buffer_property()
             ),
             // Mixed with silence, and that is not belt and braces: a film with
             // no audio track, and every photo, leaves this branch with nothing
@@ -1268,6 +1590,20 @@ pub struct StreamConfig {
     /// is *worse* than no limit at all: the rate control cannot fit an IDR in
     /// that bucket and overshoots wildly instead.
     pub vbv_frames: u32,
+    /// Seconds between forced key frames, or `0` for none at all.
+    ///
+    /// One by default, which is a direct link's answer: a periodic IDR bounds
+    /// recovery after loss where the receiver has no way to ask for one.
+    ///
+    /// Cast mirroring has two ways to ask. The receiver sends a picture loss
+    /// indication, which the sender turns into a key frame, and lost packets
+    /// are retransmitted on NACK before it comes to that — so scheduling them
+    /// as well buys nothing, and it is not free. An IDR is a whole picture
+    /// squeezed into a rate-control budget a few frames wide: it lands softer
+    /// than its neighbours and they sharpen it again, which at one per second
+    /// is the image visibly pulsing. Reported, repeatedly, as a blur every few
+    /// seconds.
+    pub gop_seconds: u32,
     /// The H.264 feature set the receiver on this path is known to decode.
     ///
     /// Constrained baseline by default, which is what every path assumed
@@ -1288,6 +1624,7 @@ impl Default for StreamConfig {
             audio: AudioSource::Silence,
             intra_refresh: false,
             vbv_frames: 0,
+            gop_seconds: 1,
             profile: H264Profile::ConstrainedBaseline,
         }
     }
@@ -1400,13 +1737,20 @@ impl StreamConfig {
     /// One second (not two): over an unstable Wi-Fi Direct link the GOP sets
     /// the recovery time after packet loss, and more frequent IDRs keep the
     /// bitrate curve flatter (less VBV jitter).
+    ///
+    /// That reasoning is a direct link's. [`Self::gop_seconds`] carries the
+    /// path's own answer, because Cast asks for a key frame rather than
+    /// scheduling one.
     pub fn gop(&self) -> u32 {
         if let Ok(value) = std::env::var("BIGNETSCREEN_GOP") {
             if let Ok(gop) = value.parse::<u32>() {
                 return gop.max(1);
             }
         }
-        self.fps.max(1)
+        if self.gop_seconds == 0 {
+            return 0;
+        }
+        self.fps.max(1) * self.gop_seconds
     }
 
     /// The pipeline latency suited to the chosen encoder.
@@ -1438,22 +1782,75 @@ impl StreamConfig {
     /// 2. on the VA-API path `vapostproc` is used, converting and scaling **on
     ///    the GPU** — at 4K that avoids hundreds of MB/s of GPU→RAM→GPU
     ///    copying.
-    fn convert_scale(&self) -> String {
-        let fmt = self.encoder.preferred_format();
-        let (w, h, fps) = (self.width, self.height, self.fps);
-        if self.encoder.is_va() {
-            // `add-borders=true` is **not** vapostproc's default (unlike
-            // videoscale's): without it, a 16:10 screen sent to a 16:9 panel
-            // comes out stretched vertically.
-            format!(
-                "videorate ! vapostproc add-borders=true ! \
-                 video/x-raw,format={fmt},width={w},height={h},framerate={fps}/1"
-            )
+    fn convert_scale(&self, target: VideoTarget) -> String {
+        let fmt = self.encoder.accepted_formats();
+        let fps = self.fps;
+        // `videorate` fills a gap in the input by repeating the last frame
+        // until the timeline catches up. Over a short gap that is what keeps
+        // the output steady. Over a long one it is a flood: measured during a
+        // ten-second freeze, capture stalled at 0.5 fps while the encoder ran
+        // at 78 — above the 60 it was asked for — because every frame that did
+        // arrive carried a timestamp two seconds ahead and bought a hundred
+        // duplicates. Each of those is a full-size scale and colour convert, so
+        // the stall pays for its own continuation.
+        //
+        // Cap the gap it will fill. Anything longer is a stall, and a stalled
+        // picture should cost nothing until it recovers. `drop-only` is not the
+        // answer despite costing less: this is also what turns the compositor's
+        // variable cadence into a fixed one, and without it encoded frames
+        // carry timestamps the Cast sender cannot map through its segment.
+        let rate = format!("videorate max-duplication-time={MAX_DUPLICATION_NS}");
+        // `add-borders=true` is **not** vapostproc's default (unlike
+        // videoscale's): without it, a 16:10 screen sent to a 16:9 panel
+        // comes out stretched vertically.
+        let scale = if self.encoder.is_va() {
+            "vapostproc add-borders=true".to_string()
         } else {
-            format!(
-                "videorate ! videoscale add-borders=true ! videoconvert n-threads=0 ! \
-                 video/x-raw,format={fmt},width={w},height={h},framerate={fps}/1"
-            )
+            "videoscale add-borders=true ! videoconvert n-threads=0".to_string()
+        };
+        let caps = format!(
+            "video/x-raw,format={fmt},{dims},framerate={fps}/1",
+            dims = target.caps_dimensions()
+        );
+        format!("{rate} ! {scale} ! capsfilter name={SCALE_CAPS} caps=\"{caps}\"")
+    }
+
+    /// The same stage, keeping the frame on the GPU from end to end.
+    ///
+    /// The capture is imported as a GL texture and handed to NVENC through GL
+    /// interop, so the picture is never read back to the CPU and never uploaded
+    /// again. What it cannot do is scale: `glcolorscale` will not link to this
+    /// encoder here (measured), so this shape only fits a screen that already
+    /// sits inside the person's ceiling — which is why the caller decides.
+    ///
+    /// Requesting `memory:DMABuf` explicitly is the point. Without it `glupload`
+    /// would happily accept system memory and upload it, which is what already
+    /// happens and would make this path a rename rather than a saving.
+    fn gpu_convert(&self, ceiling: (u32, u32)) -> String {
+        let fps = self.fps;
+        let dims = VideoTarget::UpTo(ceiling).caps_dimensions();
+        format!(
+            "video/x-raw(memory:DMABuf) ! \
+             videorate max-duplication-time={MAX_DUPLICATION_NS} ! glupload ! \
+             capsfilter name={SCALE_CAPS} \
+             caps=\"video/x-raw(memory:GLMemory),{dims},framerate={fps}/1\""
+        )
+    }
+
+    /// The encoder, with the transfer to the card done by the element that is
+    /// best at it.
+    ///
+    /// NVENC uploads its own input when handed system memory, and `cudaupload`
+    /// does the same job measurably faster — 300 frames at 2560x1440 encode in
+    /// 1.15s through it against 1.30s without, repeatably, which is about a
+    /// fifth off the encoding stage. On the GPU path the frame is already on the
+    /// card and there is nothing to upload.
+    fn encoder_stage(&self, gpu: bool) -> String {
+        let encoder = self.encoder.encoder_description(self);
+        if gpu || self.encoder != H264Encoder::NvH264 {
+            encoder
+        } else {
+            format!("cudaupload ! {encoder}")
         }
     }
 
@@ -1597,13 +1994,15 @@ pub fn wfd_pipeline_description(
          {audio}",
         rtp_latency = rtp_latency_ms(),
         src = source.description(),
-        convert = cfg.convert_scale(),
+        // Wi-Fi Display agreed a mode with the sink in M3/M4; sending any
+        // other size is a mode it never accepted.
+        convert = cfg.convert_scale(VideoTarget::Exact((cfg.width, cfg.height))),
         vqueue = if source.is_file() {
             cfg.video_queue().replace("leaky=downstream", "leaky=no")
         } else {
             cfg.video_queue()
         },
-        enc = cfg.encoder.encoder_description(cfg),
+        enc = cfg.encoder_stage(false),
         video_pid = WFD_VIDEO_PID,
         // A screen produces frames at the pace of the screen, so waiting on
         // the clock before sending is pure delay. **A file does not**: with
@@ -1661,7 +2060,21 @@ pub const MIRROR_AUDIO_SINK: &str = "mirror-audio";
 /// - the audio `appsink` with a little more slack: Opus frames go out every
 ///   10 ms and a minimal amount of slack absorbs thread scheduling without
 ///   becoming perceptible delay (8 frames = 80 ms in the worst case).
-pub fn mirror_pipeline_description(cfg: &StreamConfig, source: &VideoSource) -> String {
+///
+/// `ceiling` is the largest picture the person is willing to send. The scaler
+/// stays out of the way below it, so the capture reaches the encoder at the
+/// size it was captured in rather than at the portal's guess about it.
+///
+/// `gpu` keeps the frame on the graphics card from capture to encoder. It is
+/// off unless [`gpu_path_requested`] says otherwise, because it demands a
+/// DMA-BUF the compositor may not offer and cannot scale — a screen larger than
+/// the ceiling has no path through it.
+pub fn mirror_pipeline_description(
+    cfg: &StreamConfig,
+    source: &VideoSource,
+    ceiling: (u32, u32),
+    gpu: bool,
+) -> String {
     let audio = if cfg.audio_enabled() {
         format!(
             " {src} ! audioconvert ! audioresample ! \
@@ -1690,13 +2103,17 @@ alignment=au ! \
          max-buffers=1 drop=false{audio}",
         profile = cfg.profile.caps_name(),
         src = source.description(),
-        convert = cfg.convert_scale(),
+        convert = if gpu {
+            cfg.gpu_convert(ceiling)
+        } else {
+            cfg.convert_scale(VideoTarget::UpTo(ceiling))
+        },
         vqueue = if source.is_file() {
             cfg.video_queue().replace("leaky=downstream", "leaky=no")
         } else {
             cfg.video_queue()
         },
-        enc = cfg.encoder.encoder_description(cfg),
+        enc = cfg.encoder_stage(gpu),
         video_sink = MIRROR_VIDEO_SINK,
         audio = audio,
     )
@@ -1709,33 +2126,40 @@ alignment=au ! \
 /// (a 16:10 1920x1200 one, say) makes the device rescale — or refuse.
 pub const CHROMECAST_MAX_RESOLUTION: (u32, u32) = (1920, 1080);
 
-/// The video bitrate ceiling on the Cast paths, in kbit/s.
+/// The Cast bitrate at the mode Open Screen calibrates against, in kbit/s.
 ///
-/// Open Screen calibrates its own ceiling (`kDefaultVideoMaxBitRate`) at
-/// "1080P @ 30FPS, which can be played back at good quality around 10mbps",
-/// and that number describes the receiver's decoder and the last Wi-Fi hop to
-/// it — neither of which grows because the shared screen is bigger.
+/// Open Screen describes 1080p30 as "playable at good quality around 10mbps",
+/// and [`StreamConfig::scaled_bitrate_kbps`] returns exactly this at that mode.
+/// It is the anchor the rest of the table is read against, not a ceiling: a
+/// receiver that declares `maxBitRate` caps the stream, and a receiver that
+/// declares nothing gets what the mode needs.
 ///
-/// [`StreamConfig::scaled_bitrate_kbps`] scales with resolution **and** frame
-/// rate, which is right for a direct Miracast link and wrong here: a 1440p60
-/// desktop asked for 21 Mbit/s. Measured in the field against a Google TV
-/// Stick, the picture lost frames from the first second and the backlog grew
-/// until the device ended the session.
-pub const CAST_MAX_BITRATE_KBPS: u32 = 10_000;
+/// A flat 10 Mbit ceiling used to sit here for every Cast mode. It could not
+/// protect anybody: at 1080p30 and below the table already returns this number
+/// or less, so the ceiling only ever fired against a bigger picture, handing a
+/// 1440p60 screen the bitrate of a 1080p30 one. The field report behind it — a
+/// Google TV Stick losing frames from the first second, with a backlog that
+/// grew until it ended the session — was measured before the sender bounded
+/// its own backlog at all (see `flow.rs`). Re-measure before restoring any
+/// fixed ceiling, and if one is needed, pin it to a number that was observed.
+pub const CAST_REFERENCE_BITRATE_KBPS: u32 = 10_000;
 
-/// The rate-control slack given to the Cast **mirroring** encoder, in frames.
+/// The rate-control budget the Cast **mirroring** encoder is held to, in
+/// frames. See [`StreamConfig::vbv_frames`] for the table behind the number.
 ///
-/// Separate from every other path on purpose. Mirroring is the only one that
-/// puts each frame on the wire as its own burst of UDP datagrams, so the size
-/// of a single frame is a property the network sees directly: at NVENC's
-/// default a key frame reached 756 packets, which is 29 burst windows — about
-/// 290 ms of pacing, once per second, at 30 fps. Miracast, NDI and the browser
-/// path each hand their frames to a muxer or to a stack that paces on their
-/// behalf, and none of them were measured here, so none of them change.
+/// Every other path hands its frames to a muxer or to a stack that paces on
+/// its behalf. Mirroring puts each frame on the wire as its own burst of UDP
+/// datagrams, so the size of one frame is something the network sees directly,
+/// and an encoder given no budget will spend it: switching a browser tab
+/// changes the whole screen and produces one enormous frame, several hundred
+/// datagrams the pacer then releases a burst at a time. The receiver cannot
+/// show any of that change until the last packet of it arrives.
 ///
-/// Two is the measured optimum; the table in [`StreamConfig::vbv_frames`]
-/// shows why one is worse than no limit at all.
-pub const CAST_VBV_FRAMES: u32 = 2;
+/// This was removed once, on the reasoning that an encoder knows its own job.
+/// It does — about pictures. It cannot know that here a frame is a burst on a
+/// paced link, which is a property of this transport and not of H.264. That is
+/// the line: configure what the component has no way to know, and nothing else.
+pub const CAST_VBV_FRAMES: u32 = 3;
 
 /// The `multisocketsink`'s name in the Chromecast pipeline description.
 ///
@@ -1749,7 +2173,11 @@ pub const CHROMECAST_SINK_NAME: &str = "cc-sink";
 /// units and short mux/queue batches bound sender buffering; the receiver may
 /// still prebuffer seconds. This is not the raw-RTP mirroring path.
 /// `multisocketsink` takes the receiver socket after HTTP headers are written.
-pub fn chromecast_pipeline_description(cfg: &StreamConfig, source: &VideoSource) -> String {
+pub fn chromecast_pipeline_description(
+    cfg: &StreamConfig,
+    source: &VideoSource,
+    target: VideoTarget,
+) -> String {
     format!(
         "{src} ! {convert} ! {vqueue} ! \
          {enc} ! h264parse config-interval=-1 ! \
@@ -1760,13 +2188,13 @@ pub fn chromecast_pipeline_description(cfg: &StreamConfig, source: &VideoSource)
          burst-format=buffers sync-method={sync_method} recover-policy=keyframe \
          {audio}",
         src = source.description(),
-        convert = cfg.convert_scale(),
+        convert = cfg.convert_scale(target),
         vqueue = if source.is_file() {
             cfg.video_queue().replace("leaky=downstream", "leaky=no")
         } else {
             cfg.video_queue()
         },
-        enc = cfg.encoder.encoder_description(cfg),
+        enc = cfg.encoder_stage(false),
         sink = CHROMECAST_SINK_NAME,
         sync_method = chromecast_sync_method(),
         audio = if source.is_file() {
@@ -2031,14 +2459,45 @@ mod tests {
 
         // Cast mirroring takes whatever the session decided.
         assert!(
-            mirror_pipeline_description(&high, &VideoSource::Test).contains("profile=high"),
+            mirror_pipeline_description(
+                &high,
+                &VideoSource::Test,
+                CHROMECAST_MAX_RESOLUTION,
+                false
+            )
+            .contains("profile=high"),
             "the mirroring caps have to follow the configuration"
         );
         let base = StreamConfig::default();
         assert!(
-            mirror_pipeline_description(&base, &VideoSource::Test)
-                .contains("profile=constrained-baseline"),
+            mirror_pipeline_description(
+                &base,
+                &VideoSource::Test,
+                CHROMECAST_MAX_RESOLUTION,
+                false
+            )
+            .contains("profile=constrained-baseline"),
             "and default to what every path assumed before there was a choice"
+        );
+    }
+
+    #[test]
+    fn a_still_screen_is_not_left_at_one_frame_per_second() {
+        // A compositor repaints what changed, so on a still screen the only
+        // thing producing buffers is this timeout — it *is* the frame rate.
+        // At the 1000 ms it used to be, typing in a terminal changed one
+        // character cell and the picture updated about once a second.
+        const _: () = assert!(CAPTURE_KEEPALIVE_MS <= 1000 / 30);
+        let description = VideoSource::PipeWire {
+            fd: Some(7),
+            node_id: 42,
+            serial: None,
+            size: None,
+        }
+        .description();
+        assert!(
+            description.contains("keepalive-time=33") && description.contains("resend-last=true"),
+            "{description}"
         );
     }
 
@@ -2070,40 +2529,115 @@ mod tests {
     }
 
     #[test]
-    fn the_mirroring_encoder_gets_two_frames_of_rate_control_slack() {
-        // 10 Mbit at 30 fps, two frames: the 667 kbit that measured a key
-        // frame down from 908 KB to 154 KB. Pinned because the arithmetic
-        // crosses two units and an error here is only visible as "the picture
-        // stutters when there is movement".
+    fn a_link_that_can_ask_for_a_key_frame_is_not_sent_one_every_second() {
+        // A periodic IDR bounds recovery where the receiver cannot ask. Cast
+        // can: it sends a picture loss indication and the sender answers, and
+        // NACK repairs loss before that. Scheduling one a second as well only
+        // makes the picture pulse — each IDR is a whole picture inside a
+        // rate-control budget a few frames wide, so it lands softer than its
+        // neighbours and they sharpen it again.
+        let direct = StreamConfig {
+            fps: 60,
+            ..Default::default()
+        };
+        assert_eq!(direct.gop(), 60, "a direct link keeps its one second");
+
+        // Nought means no schedule: the encoder decides, and a key frame is
+        // produced when the receiver asks. Each encoder spells it its own way,
+        // and only the two that could be checked here are told directly.
+        let cast = StreamConfig {
+            fps: 60,
+            gop_seconds: 0,
+            encoder: H264Encoder::NvH264,
+            ..Default::default()
+        };
+        assert_eq!(cast.gop(), 0);
+        assert!(
+            cast.encoder
+                .encoder_description(&cast)
+                .contains("gop-size=-1"),
+            "{}",
+            cast.encoder.encoder_description(&cast)
+        );
+        let x264 = StreamConfig {
+            encoder: H264Encoder::X264,
+            ..cast
+        };
+        assert!(
+            x264.encoder
+                .encoder_description(&x264)
+                .contains("key-int-max=0"),
+            "{}",
+            x264.encoder.encoder_description(&x264)
+        );
+        // An encoder nobody here can test keeps a finite distance rather than
+        // a value a driver might read as "every frame is an I-frame".
+        let va = StreamConfig {
+            encoder: H264Encoder::VaH264,
+            ..cast
+        };
+        assert!(
+            va.encoder
+                .encoder_description(&va)
+                .contains("key-int-max=600"),
+            "{}",
+            va.encoder.encoder_description(&va)
+        );
+    }
+
+    #[test]
+    fn a_rate_control_buffer_is_asked_for_or_left_alone() {
+        // The arithmetic is pinned because it crosses two units and getting it
+        // wrong shows up only as a picture that takes too long to change.
         let cfg = StreamConfig {
             fps: 30,
-            bitrate_kbps: CAST_MAX_BITRATE_KBPS,
+            bitrate_kbps: CAST_REFERENCE_BITRATE_KBPS,
             encoder: H264Encoder::NvH264,
             vbv_frames: CAST_VBV_FRAMES,
             ..Default::default()
         };
-        assert_eq!(cfg.vbv_ms(), 66);
+        assert_eq!(cfg.vbv_ms(), 100);
         assert!(
             cfg.encoder
                 .encoder_description(&cfg)
-                .contains("vbv-buffer-size=666"),
+                .contains("vbv-buffer-size=1000"),
             "{}",
             cfg.encoder.encoder_description(&cfg)
         );
 
-        // And at 60 fps it is still two frames, not twice as much buffer.
+        // And at 60 fps it is still three frames, not twice as much buffer.
         let fast = StreamConfig { fps: 60, ..cfg };
-        assert_eq!(fast.vbv_ms(), 33);
+        assert_eq!(fast.vbv_ms(), 50);
         assert!(
             fast.encoder
                 .encoder_description(&fast)
-                .contains("vbv-buffer-size=333"),
+                .contains("vbv-buffer-size=500"),
             "{}",
             fast.encoder.encoder_description(&fast)
         );
 
-        // One frame measured worse than no limit at all; never ship it.
-        const _: () = assert!(CAST_VBV_FRAMES >= 2);
+        // Nought is the default and means the property is never written, which
+        // is what every path that hands its frames to a muxer gets. Removing it
+        // from Cast mirroring was tried and reverted: a tab switch became one
+        // enormous frame and the receiver could show none of the change until
+        // its last datagram arrived.
+        const _: () = assert!(
+            CAST_VBV_FRAMES >= 2,
+            "one frame measured worse than no limit"
+        );
+        let untouched = StreamConfig {
+            encoder: H264Encoder::NvH264,
+            ..Default::default()
+        };
+        assert_eq!(untouched.vbv_frames, 0);
+        assert!(
+            !untouched
+                .encoder
+                .encoder_description(&untouched)
+                .contains("vbv-buffer-size"),
+            "{}",
+            untouched.encoder.encoder_description(&untouched)
+        );
     }
 
     #[test]
@@ -2335,8 +2869,12 @@ mod tests {
             serial: None,
             size: None,
         };
-        let desc = chromecast_pipeline_description(&cfg, &src);
-        assert!(desc.contains("pipewiresrc path=42"), "{desc}");
+        let desc = chromecast_pipeline_description(
+            &cfg,
+            &src,
+            VideoTarget::Exact((cfg.width, cfg.height)),
+        );
+        assert!(desc.contains("pipewiresrc name=capture path=42"), "{desc}");
         assert!(!desc.contains("fd="), "{desc}");
     }
 
@@ -2346,7 +2884,10 @@ mod tests {
         // stream the portal opened — it captured an arbitrary node from the
         // daemon.
         let desc = wfd_desc(&StreamConfig::default());
-        assert!(desc.contains("pipewiresrc fd=7 path=42"), "{desc}");
+        assert!(
+            desc.contains("pipewiresrc name=capture fd=7 path=42"),
+            "{desc}"
+        );
     }
 
     #[test]
@@ -2379,7 +2920,11 @@ mod tests {
     #[test]
     fn chromecast_pipeline_has_audio_track() {
         let cfg = StreamConfig::default();
-        let desc = chromecast_pipeline_description(&cfg, &VideoSource::Test);
+        let desc = chromecast_pipeline_description(
+            &cfg,
+            &VideoSource::Test,
+            VideoTarget::Exact((cfg.width, cfg.height)),
+        );
         assert!(desc.contains("avenc_aac"), "{desc}");
         assert!(desc.contains("mpegtsmux"), "{desc}");
     }
@@ -2389,7 +2934,11 @@ mod tests {
         // `sync=true` on multisocketsink adds an entire pipeline latency
         // before the byte reaches the socket. The source is already live.
         let cfg = StreamConfig::default();
-        let desc = chromecast_pipeline_description(&cfg, &VideoSource::Test);
+        let desc = chromecast_pipeline_description(
+            &cfg,
+            &VideoSource::Test,
+            VideoTarget::Exact((cfg.width, cfg.height)),
+        );
         assert!(desc.contains("sync=false"), "{desc}");
         assert!(!desc.contains("sync=true"), "{desc}");
         assert!(desc.contains("blocksize=8192"), "{desc}");
@@ -2401,7 +2950,8 @@ mod tests {
         // buffering, and the receiver would not know what to do with the
         // container.
         let cfg = StreamConfig::default();
-        let desc = mirror_pipeline_description(&cfg, &VideoSource::Test);
+        let desc =
+            mirror_pipeline_description(&cfg, &VideoSource::Test, CHROMECAST_MAX_RESOLUTION, false);
         for muxer in ["matroskamux", "mp4mux", "mpegtsmux", "webmmux"] {
             assert!(!desc.contains(muxer), "{muxer} should not be here: {desc}");
         }
@@ -2413,7 +2963,8 @@ mod tests {
     #[test]
     fn mirror_pipeline_exposes_both_sinks_without_queueing() {
         let cfg = StreamConfig::default();
-        let desc = mirror_pipeline_description(&cfg, &VideoSource::Test);
+        let desc =
+            mirror_pipeline_description(&cfg, &VideoSource::Test, CHROMECAST_MAX_RESOLUTION, false);
         assert!(
             desc.contains(&format!("name={MIRROR_VIDEO_SINK}")),
             "{desc}"
@@ -2481,6 +3032,136 @@ mod tests {
     }
 
     #[test]
+    fn every_h264_path_gets_the_same_capture_and_encode_stage() {
+        // The three paths that encode H.264 differ in what they do with the
+        // result — Cast mirroring sends access units, Cast HTTP and Miracast
+        // mux — and not in how the picture reaches the encoder. Keeping that
+        // stage in one place is what stops a measured gain from landing on one
+        // path and leaving the other two on the old code, which is exactly what
+        // happened while this was two functions.
+        let cfg = StreamConfig {
+            width: 1920,
+            height: 1080,
+            encoder: H264Encoder::NvH264,
+            ..Default::default()
+        };
+        let mirror = mirror_pipeline_description(&cfg, &VideoSource::Test, (2560, 1440), false);
+        let http = chromecast_pipeline_description(
+            &cfg,
+            &VideoSource::Test,
+            VideoTarget::UpTo((2560, 1440)),
+        );
+        let wfd = wfd_desc(&cfg);
+        for desc in [&mirror, &http, &wfd] {
+            assert!(
+                desc.contains("format={ BGRA, BGRx, RGBA, RGBx, NV12 }"),
+                "{desc}"
+            );
+            assert!(desc.contains("cudaupload ! nvh264enc"), "{desc}");
+            assert!(desc.contains("capsfilter name=scale-caps"), "{desc}");
+        }
+        // What genuinely differs: Wi-Fi Display agreed one mode with the sink
+        // in M3/M4 and may not be sent another. Nothing was promised on either
+        // Cast path, so there the capture's own size stands.
+        assert!(wfd.contains("width=1920,height=1080"), "{wfd}");
+        for desc in [&mirror, &http] {
+            assert!(desc.contains("width=[2,2560],height=[2,1440]"), "{desc}");
+        }
+    }
+
+    #[test]
+    fn nvenc_gets_its_input_uploaded_by_the_element_that_is_best_at_it() {
+        // Measured, 300 frames at 2560x1440: 1.15s through cudaupload against
+        // 1.30s letting the encoder upload its own input, repeatably.
+        let nv = StreamConfig {
+            encoder: H264Encoder::NvH264,
+            ..Default::default()
+        };
+        let desc = mirror_pipeline_description(&nv, &VideoSource::Test, (2560, 1440), false);
+        assert!(desc.contains("cudaupload ! nvh264enc"), "{desc}");
+        // On the GPU path the frame is already on the card.
+        let gpu = mirror_pipeline_description(&nv, &VideoSource::Test, (2560, 1440), true);
+        assert!(!gpu.contains("cudaupload"), "{gpu}");
+        // And no other encoder grows a CUDA upload it cannot use.
+        for encoder in [
+            H264Encoder::X264,
+            H264Encoder::VaH264,
+            H264Encoder::OpenH264,
+        ] {
+            let cfg = StreamConfig {
+                encoder,
+                ..Default::default()
+            };
+            let desc = mirror_pipeline_description(&cfg, &VideoSource::Test, (2560, 1440), false);
+            assert!(!desc.contains("cudaupload"), "{desc}");
+        }
+        // The real string, built and linked: the one check that catches a
+        // misspelled element or a caps field the encoder will not take.
+        if init().is_ok() {
+            let built = mirror_pipeline_description(&nv, &VideoSource::Test, (2560, 1440), false);
+            gst::parse::launch(&built).expect("the CUDA description builds");
+        }
+    }
+
+    #[test]
+    fn the_gpu_path_asks_for_a_dmabuf_and_builds() {
+        let cfg = StreamConfig {
+            width: 2560,
+            height: 1440,
+            fps: 60,
+            encoder: H264Encoder::NvH264,
+            ..Default::default()
+        };
+        let desc = mirror_pipeline_description(&cfg, &VideoSource::Test, (2560, 1440), true);
+        // Without asking for the DMA-BUF, `glupload` would accept system memory
+        // and upload it — the same copy, behind a longer pipeline.
+        assert!(desc.contains("video/x-raw(memory:DMABuf)"), "{desc}");
+        assert!(desc.contains("glupload"), "{desc}");
+        // `glcolorscale` will not link to this encoder: measured, and the whole
+        // reason the caller only picks this path for a screen that fits.
+        assert!(!desc.contains("glcolorscale"), "{desc}");
+        assert!(!desc.contains("videoconvert"), "{desc}");
+
+        // The requirement is enforced when the pipeline is built, not silently
+        // dropped later: a source that cannot produce a DMA-BUF fails to link.
+        // That is what makes this path safe to gate behind a switch — it either
+        // runs on the graphics card or it refuses to start, and never quietly
+        // becomes the copy it was meant to remove.
+        if init().is_ok() {
+            let error = gst::parse::launch(&desc).expect_err("a test source has no DMA-BUF");
+            assert!(
+                error.to_string().contains("memory:DMABuf"),
+                "the refusal must name what was missing: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn mirroring_asks_for_a_ceiling_rather_than_the_portal_s_guess() {
+        // Measured: a 2560x1440 panel at 110% scale is announced by the portal
+        // as 2328x1310 and delivered at 2560x1440. Pinning the announced size
+        // resampled every frame down and handed the receiver an off-standard
+        // mode to resample back up. A range lets the capture through at its
+        // own size and only bites above the person's ceiling.
+        let cfg = StreamConfig {
+            width: 2326,
+            height: 1308,
+            fps: 60,
+            encoder: H264Encoder::X264,
+            ..Default::default()
+        };
+        let desc = mirror_pipeline_description(&cfg, &VideoSource::Test, (2560, 1440), false);
+        assert!(
+            desc.contains("capsfilter name=scale-caps")
+                && desc.contains("width=[2,2560],height=[2,1440]"),
+            "{desc}"
+        );
+        // The portal's numbers must not reach the scaler at all.
+        assert!(!desc.contains("width=2326"), "{desc}");
+        assert!(!desc.contains("height=1308"), "{desc}");
+    }
+
+    #[test]
     fn the_capture_source_never_has_caps_forced_on_it() {
         // A privacy regression seen in the field, and the reason this is a
         // test rather than a comment.
@@ -2515,9 +3196,45 @@ mod tests {
     }
 
     #[test]
+    fn mirroring_lets_the_encoder_take_the_capture_s_own_format() {
+        // The portal delivers BGRA and NVENC accepts BGRA. Asking for NV12
+        // first spends a full-frame CPU pass to reach a format the GPU would
+        // have produced while encoding: measured over 300 frames at 2560x1440,
+        // 2.76s of CPU against 1.21s.
+        let nv = StreamConfig {
+            encoder: H264Encoder::NvH264,
+            ..Default::default()
+        };
+        let desc = mirror_pipeline_description(&nv, &VideoSource::Test, (2560, 1440), false);
+        assert!(
+            desc.contains("format={ BGRA, BGRx, RGBA, RGBx, NV12 }"),
+            "{desc}"
+        );
+
+        // Every other encoder keeps the one format it was verified with: this
+        // machine has no other hardware encoder to measure, and a format list
+        // that turns out to be wrong shows up as a receiver getting nothing.
+        for encoder in [H264Encoder::X264, H264Encoder::VaH264] {
+            let cfg = StreamConfig {
+                encoder,
+                ..Default::default()
+            };
+            assert_eq!(
+                cfg.encoder.accepted_formats(),
+                cfg.encoder.preferred_format()
+            );
+        }
+    }
+
+    #[test]
     fn only_the_video_queue_may_drop_data() {
         let cfg = StreamConfig::default();
-        let desc = mirror_pipeline_description(&cfg, &VideoSource::Diagnostic);
+        let desc = mirror_pipeline_description(
+            &cfg,
+            &VideoSource::Diagnostic,
+            CHROMECAST_MAX_RESOLUTION,
+            false,
+        );
 
         // Video may leak: an old frame is of no interest, the next comes whole.
         assert!(
@@ -2540,7 +3257,8 @@ mod tests {
     fn mirror_audio_is_opus() {
         // The mirroring app expects Opus, not AAC.
         let cfg = StreamConfig::default();
-        let desc = mirror_pipeline_description(&cfg, &VideoSource::Test);
+        let desc =
+            mirror_pipeline_description(&cfg, &VideoSource::Test, CHROMECAST_MAX_RESOLUTION, false);
         assert!(desc.contains("opusenc"), "{desc}");
         assert!(!desc.contains("avenc_aac"), "{desc}");
     }
@@ -2555,7 +3273,12 @@ mod tests {
                 encoder: enc,
                 ..Default::default()
             };
-            let desc = mirror_pipeline_description(&cfg, &VideoSource::Test);
+            let desc = mirror_pipeline_description(
+                &cfg,
+                &VideoSource::Test,
+                CHROMECAST_MAX_RESOLUTION,
+                false,
+            );
             if let Err(err) = gst::parse::launch(&desc) {
                 let msg = err.to_string();
                 assert!(
@@ -2571,7 +3294,11 @@ mod tests {
         // The HTTP server locates the element by this name in order to hand it
         // the receiver's socket.
         let cfg = StreamConfig::default();
-        let desc = chromecast_pipeline_description(&cfg, &VideoSource::Test);
+        let desc = chromecast_pipeline_description(
+            &cfg,
+            &VideoSource::Test,
+            VideoTarget::Exact((cfg.width, cfg.height)),
+        );
         assert!(
             desc.contains(&format!("name={CHROMECAST_SINK_NAME}")),
             "{desc}"
@@ -2580,7 +3307,11 @@ mod tests {
 
     #[test]
     fn chromecast_uses_supported_transport_stream_framing() {
-        let desc = chromecast_pipeline_description(&StreamConfig::default(), &VideoSource::Test);
+        let desc = chromecast_pipeline_description(
+            &StreamConfig::default(),
+            &VideoSource::Test,
+            VideoTarget::Exact((1920, 1080)),
+        );
         assert!(desc.contains("mpegtsmux name=mux alignment=7"), "{desc}");
         assert!(
             desc.contains("stream-format=byte-stream,alignment=au"),
@@ -2759,7 +3490,11 @@ mod tests {
                 ..Default::default()
             };
             for desc in [
-                chromecast_pipeline_description(&cfg, &VideoSource::Test),
+                chromecast_pipeline_description(
+                    &cfg,
+                    &VideoSource::Test,
+                    VideoTarget::Exact((cfg.width, cfg.height)),
+                ),
                 wfd_pipeline_description(
                     &cfg,
                     &VideoSource::Test,

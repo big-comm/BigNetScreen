@@ -98,7 +98,11 @@ fn describe_source(cfg: &StreamConfig, source: &nd_core::capture::CaptureSource)
     let video = source.video_source();
     // Reuses the core's conversion logic through a throwaway full pipeline,
     // so the rules are not duplicated here.
-    let full = pipeline::chromecast_pipeline_description(cfg, &video);
+    let full = pipeline::chromecast_pipeline_description(
+        cfg,
+        &video,
+        pipeline::VideoTarget::Exact((cfg.width, cfg.height)),
+    );
     // Take everything up to the encoder (exclusive).
     let cut = full
         .find(cfg.encoder.element())

@@ -315,6 +315,16 @@ pub trait Sink: Send + Sync {
         None
     }
 
+    /// The largest capture this protocol can carry, when it has a fixed limit.
+    ///
+    /// Read before the capture opens, so it is the protocol's own ceiling and
+    /// not the mode a particular receiver negotiated — that is only known once
+    /// the session is up, and by then the screen exists. `None` for a protocol
+    /// that carries whatever it is given.
+    fn max_source_size(&self) -> Option<(u32, u32)> {
+        None
+    }
+
     /// Starts casting from an already open capture source.
     async fn start_stream(&self, source: CaptureSource) -> Result<()>;
 

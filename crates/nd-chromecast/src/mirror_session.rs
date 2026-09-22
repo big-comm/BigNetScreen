@@ -41,7 +41,7 @@ use nd_core::sink::{SinkState, SinkStatus};
 use nd_core::{NdError, Result};
 
 use crate::cast::CastChannel;
-use crate::flow::{AckWindow, MediaWindow, MAX_UNACKED_FRAMES};
+use crate::flow::{AckWindow, MAX_UNACKED_FRAMES};
 use crate::mirror::{self, MirrorConfig, Negotiated, OfferedStream, MIRRORING_APP_ID};
 use crate::rtcp::{
     build_sender_report, classify_receiver_packet, ntp_timestamp, parse_cast_feedbacks,
@@ -74,6 +74,27 @@ const BURST_INTERVAL: Duration = Duration::from_millis(10);
 /// What one burst window may carry, in bytes.
 const BURST_BUDGET_BYTES: usize =
     MAX_BURST_BITRATE / 8 * BURST_INTERVAL.as_millis() as usize / 1000;
+
+/// The most video the sender can actually push, in kbit/s.
+///
+/// The burst budget resets at each window and unspent room does not carry, so
+/// [`MAX_BURST_BITRATE`] is a ceiling on the *average* rate and not only on
+/// bursts. Asking the encoder for more than the pacer can drain buys no
+/// detail: the surplus piles up in front of the socket and the picture falls
+/// further behind for as long as the session runs.
+///
+/// 2160p60 is where the two met. The bitrate table asks 30 Mbit for it, against
+/// a 24 Mbit pacer, and the delay grew without bound — while 2160p30, which
+/// asks 20 Mbit, stayed fine. Reported from use, in those words.
+///
+/// An eighth is left free. A stream that fills the pacer exactly has no room to
+/// resend a lost packet without adding backlog it can never drain, and the
+/// audio track and the RTP and Cast headers on every packet come out of the
+/// same budget — together about 3% of it at this packet size.
+///
+/// An eighth and not more: 1440p60 asks 21 Mbit and works, so the cap has to
+/// clear it. It holds 2160p60 and nothing below.
+pub(crate) const MAX_VIDEO_BITRATE_KBPS: u32 = MAX_BURST_BITRATE as u32 / 1000 / 8 * 7;
 /// How much worth of frames is kept for retransmission.
 ///
 /// The receiver asks for what it lost back; without this history it waits
@@ -222,7 +243,6 @@ fn video_frame_interval(fps: u32) -> Duration {
 #[derive(Clone, Copy)]
 struct SenderTiming {
     fps: u32,
-    playout_delay: Duration,
 }
 
 struct StreamSender {
@@ -249,19 +269,25 @@ struct StreamSender {
     /// Full frame ids are retained. Age expiration applies only after ACK;
     /// unacknowledged frames remain available throughout the bounded window.
     history: History,
-    media_window: MediaWindow,
     /// How many packets the receiver has asked to have sent again.
     nacks_seen: u64,
     /// Expanded monotonic receiver checkpoint and the bounded sent window.
     checkpoint: std::sync::Arc<std::sync::Mutex<AckWindow>>,
     /// Shared with the thread loop, which turns it into a forced IDR.
-    want_key_frame: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Raised by this sender when it must resync, and honoured without the
+    /// rate limit the receiver's own requests are held to.
+    urgent_key_frame: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// Waiting for that IDR: until it arrives every P-frame references frames
     /// that were dropped and never reached the receiver.
     resyncing: bool,
     resync_requested: bool,
     /// Frames dropped to keep the backlog inside the window.
     frames_dropped: u64,
+    /// Which gate refused, because "the picture froze" names none of them and
+    /// the three have different fixes: the frame was older than the sender's
+    /// own budget, too much media is still unacknowledged, or the 8-bit frame
+    /// window is full.
+    dropped_window: u64,
     stats: SenderStats,
     /// Outgoing-flow diagnostics: discontinuity in the frames' timestamps (a
     /// hole born before the network) and the largest wall-clock gap between
@@ -286,7 +312,7 @@ impl StreamSender {
         socket: std::sync::Arc<UdpSocket>,
         timing: SenderTiming,
         checkpoint: std::sync::Arc<std::sync::Mutex<AckWindow>>,
-        want_key_frame: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        urgent_key_frame: std::sync::Arc<std::sync::atomic::AtomicBool>,
         pacer: BurstPacer,
     ) -> Result<Self> {
         let (element_name, label) = if stream.is_video {
@@ -321,13 +347,13 @@ impl StreamSender {
             frame_id: 0,
             label,
             history: std::collections::VecDeque::new(),
-            media_window: MediaWindow::new(timing.playout_delay),
             nacks_seen: 0,
             checkpoint,
-            want_key_frame,
+            urgent_key_frame,
             resyncing: stream.is_video,
             resync_requested: false,
             frames_dropped: 0,
+            dropped_window: 0,
             stats: SenderStats::default(),
             flow: FlowWatch::default(),
             clock_origin: std::time::SystemTime::UNIX_EPOCH,
@@ -357,7 +383,6 @@ impl StreamSender {
             .buffer()
             .ok_or_else(|| NdError::Gst("encoded Cast sample has no buffer".into()))?;
         let pts = sample_running_time(&sample)?;
-        let media_time = Duration::from_nanos(pts.nseconds());
 
         {
             let window = self
@@ -378,18 +403,18 @@ impl StreamSender {
 
         // Before encrypting and packetising: a frame the receiver has no room
         // for costs the same CPU and the same network as one it can use.
-        let acknowledged = self
-            .checkpoint
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .checkpoint();
-        let fresh = self.pipeline.current_running_time().is_none_or(|now| {
-            !self
-                .media_window
-                .is_stale(media_time, Duration::from_nanos(now.nseconds()))
-        });
-        let within_duration = self.media_window.has_room(media_time, acknowledged);
-        if self.skip_while_receiver_catches_up(is_key, fresh && within_duration) {
+        //
+        // "No room" is the eight-bit frame window and nothing else now. Two
+        // other tests used to share this decision and both were measured out
+        // of it: an age test that refused 533 of 567 dropped frames, and a
+        // media-time budget that refused every audio frame it ever dropped —
+        // 121 of 121 in the session that ended with the receiver hanging up.
+        // Opus frames are 10 ms and that budget was 66, so six frames of
+        // tolerance for an acknowledgement to cross a wireless network, which
+        // it routinely does not. The stream was being punched full of holes to
+        // protect a receiver that was never more than seven frames behind out
+        // of a hundred and twenty.
+        if self.skip_while_receiver_catches_up(is_key) {
             return Ok(true);
         }
 
@@ -419,7 +444,6 @@ impl StreamSender {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .sent(self.frame_id);
-        self.media_window.sent(self.frame_id, media_time);
         // Open Screen sends the initial clock mapping before the first RTP
         // packet, but never before a valid encoded frame establishes a track.
         self.has_media = true;
@@ -466,14 +490,14 @@ impl StreamSender {
     /// low bitrate does not exempt it from the eight-bit protocol constraint.
     /// After video drops, only an IDR can restart the dependency chain. Request
     /// it when a slot is available, not while the forced IDR would be dropped.
-    fn skip_while_receiver_catches_up(&mut self, is_key: bool, within_duration: bool) -> bool {
-        let has_room = within_duration
-            && self
-                .checkpoint
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .can_send();
+    fn skip_while_receiver_catches_up(&mut self, is_key: bool) -> bool {
+        let has_room = self
+            .checkpoint
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .can_send();
         if !has_room {
+            self.dropped_window += 1;
             if self.is_video() {
                 self.resyncing = true;
                 self.resync_requested = false;
@@ -484,7 +508,7 @@ impl StreamSender {
         if self.resyncing {
             if !is_key {
                 if !self.resync_requested {
-                    self.want_key_frame
+                    self.urgent_key_frame
                         .store(true, std::sync::atomic::Ordering::Relaxed);
                     self.resync_requested = true;
                 }
@@ -807,10 +831,28 @@ pub async fn run(
             // preference is the whole answer, capped at what H.264 mirroring
             // receivers accept.
             fps: StreamConfig::capped_fps(60),
-            // Mirroring's own encoder settings, which reach no other path:
-            // here a frame *is* a burst of datagrams, so its size is something
-            // the network sees.
+            // Three frames of rate-control budget, and this one stays.
+            //
+            // It was removed on the reasoning that the encoder knows its own
+            // job, which was right about the key-frame interval and wrong here.
+            // Switching a browser tab changes the whole screen at once, and an
+            // encoder with no budget spends it: one enormous frame, which on
+            // this path is several hundred UDP datagrams the pacer then lets
+            // out a burst at a time. Reported immediately as the receiver being
+            // slow to show a big change, because the first update cannot
+            // arrive until the last packet of that frame has.
+            //
+            // The difference from the key-frame interval is what the encoder
+            // can know. It knows how to spend bits on a picture. It does not
+            // know that here a frame *is* a burst of datagrams on a paced link
+            // — that is a property of this transport, and telling it so is the
+            // one kind of configuration worth keeping.
             vbv_frames: pipeline::CAST_VBV_FRAMES,
+            //
+            // The receiver asks for a key frame when it needs one, and NACK
+            // repairs loss before it comes to that. Scheduling one a second on
+            // top only makes the picture pulse.
+            gop_seconds: 0,
             // Google documents H.264 High for Cast playback. The supplied
             // fixed-QP samples save about 13%; mirroring interoperability
             // still needs validation across the receiver matrix.
@@ -818,16 +860,85 @@ pub async fn run(
             audio: pipeline::AudioSource::detect(),
             ..Default::default()
         };
-        // Offer the user's mode with a bounded bitrate. Apply the receiver's
-        // dimension, frame-rate and pixel-rate constraints before encoding.
-        cfg.bitrate_kbps = cfg
-            .scaled_bitrate_kbps()
-            .min(pipeline::CAST_MAX_BITRATE_KBPS);
+        // The encoder is chosen before the receiver has spoken, because the
+        // pipeline has to exist before there is a size to offer. A GPU that
+        // encodes the portal's guess encodes the real thing: the two differ by
+        // the compositor's scale factor, not by a capability.
+        let driver = crate::session::detect_gpu_driver();
+        cfg.encoder = pipeline::working_encoder(driver, cfg).await?;
+        // The candidate list is logged before the probes run; this is the one
+        // that actually encoded a frame, which is the only one that matters.
+        tracing::info!(encoder = ?cfg.encoder, "encoder in use");
+        if *cancel.borrow() {
+            return Ok(());
+        }
+
+        // Build and start the capture now. Until it negotiates, every size in
+        // play is the portal's compositor-space guess — `size_or` documents why
+        // that is not pixels — and the OFFER must not carry a guess.
+        let ceiling = StreamConfig::preferred_or(pipeline::CHROMECAST_MAX_RESOLUTION);
+        // The GPU path cannot scale, so it is only eligible while the screen
+        // fits inside the ceiling — which is what the portal's size, wrong as
+        // it is about pixels, is accurate enough to decide.
+        let gpu = pipeline::gpu_path_requested()
+            && cfg.encoder == pipeline::H264Encoder::NvH264
+            && size.0 <= ceiling.0
+            && size.1 <= ceiling.1;
+        tracing::info!(gpu, "mirroring capture path");
+        let desc = pipeline::mirror_pipeline_description(&cfg, &video, ceiling, gpu);
+        let (gst_pipeline, events) = pipeline::build_pipeline(&desc, cfg.latency_ms())?;
+        let _capture = StreamWorkers {
+            pipeline: gst_pipeline.clone(),
+            stop: Default::default(),
+            threads: Vec::new(),
+        };
+        gst_pipeline
+            .set_state(gst::State::Playing)
+            .map_err(|err| NdError::Gst(err.to_string()))?;
+        // Frames produced before the senders exist are dropped by the leaky
+        // video queue; nothing reaches the network until the ANSWER arrives.
+        if let Some(negotiated) = pipeline::negotiated_video_size(
+            &gst_pipeline,
+            std::time::Instant::now() + Duration::from_secs(5),
+        ) {
+            (cfg.width, cfg.height) = negotiated;
+        }
+        // Delivered against encoded, so one line says whether the scaler is
+        // doing anything. `portal` is what the OFFER used to be built from.
+        let delivered = pipeline::delivered_capture_size(&gst_pipeline);
+        let (caps, dmabuf) = pipeline::capture_memory(&gst_pipeline)
+            .unwrap_or_else(|| ("unknown".into(), "unknown".into()));
+        tracing::info!(
+            delivered = ?delivered.map(|(w, h)| format!("{w}x{h}")),
+            encoding = format!("{}x{}", cfg.width, cfg.height),
+            portal = format!("{width}x{height}"),
+            rescaled = delivered.is_some_and(|size| size != (cfg.width, cfg.height)),
+            // Whether the frame is still on the GPU when we get it, and whether
+            // it could have been. See `pipeline::capture_memory`.
+            %caps,
+            %dmabuf,
+            "capture negotiated"
+        );
+
+        // Offer the bitrate this mode needs. A bigger, faster picture that is
+        // sent at 1080p30's bitrate does not arrive safer, it arrives smeared.
+        // The receiver's own `maxBitRate` still caps this in `constrain`.
+        cfg.bitrate_kbps = 0;
+        let wanted = cfg.scaled_bitrate_kbps();
+        cfg.bitrate_kbps = mirror::cast_bitrate_kbps(&cfg);
+        if cfg.bitrate_kbps < wanted {
+            tracing::info!(
+                wanted_kbps = wanted,
+                sending_kbps = cfg.bitrate_kbps,
+                "this mode wants more bitrate than the sender can push; a lower \
+                 frame rate would spend the same bits on fewer, sharper frames"
+            );
+        }
         let mirror_cfg = MirrorConfig {
-            width,
-            height,
+            width: cfg.width,
+            height: cfg.height,
             fps: cfg.fps,
-            max_bitrate: cfg.scaled_bitrate_kbps() * 1000,
+            max_bitrate: cfg.bitrate_kbps * 1000,
             with_audio: true,
             ..Default::default()
         };
@@ -837,13 +948,18 @@ pub async fn run(
             _ = cancel.changed() => return Ok(()),
         };
 
+        let offered = (cfg.width, cfg.height);
         session.answer.constrain(&mut cfg, mirror_cfg.target_delay_ms, session.audio().is_some())?;
-        let driver = crate::session::detect_gpu_driver();
-        // Probe the actual decoder-constrained mode, not an unsupported 4K/60 offer.
-        cfg.encoder = pipeline::working_encoder(driver, cfg).await?;
         if *cancel.borrow() { return Ok(()); }
+        // Only a receiver that asked for something smaller makes the scaler
+        // work. Left alone, the capture reaches the encoder untouched.
+        if (cfg.width, cfg.height) != offered {
+            pipeline::pin_video_size(&gst_pipeline, &cfg)?;
+        }
         tracing::info!(width = cfg.width, height = cfg.height, fps = cfg.fps,
-            bitrate_kbps = cfg.bitrate_kbps, "Cast transmission mode after receiver constraints");
+            bitrate_kbps = cfg.bitrate_kbps,
+            rescaled = (cfg.width, cfg.height) != offered,
+            "Cast transmission mode after receiver constraints");
         // After the negotiation, not before: what goes on the wall is what the
         // receiver agreed to.
         status.set_link(nd_core::sink::StreamLink {
@@ -855,8 +971,8 @@ pub async fn run(
         });
         let result = {
             let (stop, mut stopped) = tokio::sync::watch::channel(*cancel.borrow());
-            let streaming = stream(&cfg, &video, &session, status, &mut stopped,
-                Duration::from_millis(u64::from(mirror_cfg.target_delay_ms)));
+            let streaming = stream(&cfg, gst_pipeline.clone(), events, &session, status,
+                &mut stopped);
             tokio::pin!(streaming);
             loop {
                 tokio::select! {
@@ -907,21 +1023,21 @@ impl Drop for StreamWorkers {
     }
 }
 
+/// The pipeline arrives already built and running: its negotiated size is what
+/// the OFFER was written from, so it cannot be created here.
 async fn stream(
     cfg: &StreamConfig,
-    video: &pipeline::VideoSource,
+    gst_pipeline: gst::Pipeline,
+    mut events: pipeline::PipelineEvents,
     session: &Negotiated,
     status: &SinkStatus,
     cancel: &mut tokio::sync::watch::Receiver<bool>,
-    playout_delay: Duration,
 ) -> Result<()> {
     if *cancel.borrow() {
         return Ok(());
     }
     status.set(SinkState::WaitStreaming);
 
-    let desc = pipeline::mirror_pipeline_description(cfg, video);
-    let (gst_pipeline, mut events) = pipeline::build_pipeline(&desc, cfg.latency_ms())?;
     let mut workers = StreamWorkers {
         pipeline: gst_pipeline.clone(),
         stop: Default::default(),
@@ -933,6 +1049,7 @@ async fn stream(
 
     let mut senders = Vec::new();
     let want_key_frame = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let urgent_key_frame = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     // The receiver's acknowledgement, one slot per stream, keyed by the SSRC
     // its feedback carries. `-1` until it first speaks.
     let mut checkpoints: std::collections::HashMap<
@@ -970,12 +1087,9 @@ async fn stream(
             &gst_pipeline,
             stream,
             socket.clone(),
-            SenderTiming {
-                fps: cfg.fps,
-                playout_delay,
-            },
+            SenderTiming { fps: cfg.fps },
             checkpoint,
-            want_key_frame.clone(),
+            urgent_key_frame.clone(),
             pacer.clone(),
         )?);
     }
@@ -986,13 +1100,24 @@ async fn stream(
             &gst_pipeline,
             stream,
             socket.clone(),
-            SenderTiming {
-                fps: cfg.fps,
-                playout_delay,
-            },
+            SenderTiming { fps: cfg.fps },
             checkpoint,
-            want_key_frame.clone(),
-            pacer.clone(),
+            urgent_key_frame.clone(),
+            // Audio paces against itself, not against video.
+            //
+            // A burst window is 10 ms and carries 30 KB. A 1080p60 frame at
+            // 15 Mbit averages 31 KB, so an ordinary video frame fills the
+            // window on its own and a large one fills several — and an Opus
+            // packet that arrives in the meantime waits for a window with room
+            // in it. That is a hundred and sixty bytes, once every 10 ms,
+            // queueing behind megabits: audio drifting behind the picture,
+            // which is how it was reported.
+            //
+            // The ceiling exists to keep a burst from swamping the link. Audio
+            // is 128 kbit/s against a 24 Mbit/s limit and cannot swamp
+            // anything, so it gets a budget of its own rather than a share of
+            // the one video is always exhausting.
+            BurstPacer::new(workers.stop.clone()),
         ) {
             Ok(sender) => senders.push(sender),
             // The session goes on without audio: video is what matters here,
@@ -1142,6 +1267,7 @@ async fn stream(
         let label = sender.label();
         let is_video = sender.is_video();
         let key_flag = want_key_frame.clone();
+        let urgent_flag = urgent_key_frame.clone();
         let video_element = video_element.clone();
         let done_tx = done_tx.clone();
         let receiver_alive = receiver_alive.clone();
@@ -1214,10 +1340,20 @@ async fn stream(
                     }
 
                     // A key-frame request only makes sense for video.
+                    //
+                    // The rate limit is for the receiver, which asks repeatedly
+                    // while it is unhappy and would otherwise have the encoder
+                    // spending its budget on key frames. Our own resync is not
+                    // that: it is raised once per resync, and until it is
+                    // answered every frame is being dropped anyway — so waiting
+                    // half a second to honour it is half a second of frozen
+                    // picture bought for nothing.
+                    let urgent = urgent_flag.swap(false, std::sync::atomic::Ordering::Relaxed);
                     if is_video
-                        && last_key_request
-                            .is_none_or(|at| at.elapsed() >= Duration::from_millis(500))
-                        && key_flag.swap(false, std::sync::atomic::Ordering::Relaxed)
+                        && (urgent
+                            || last_key_request
+                                .is_none_or(|at| at.elapsed() >= Duration::from_millis(500)))
+                        && (urgent || key_flag.swap(false, std::sync::atomic::Ordering::Relaxed))
                     {
                         last_key_request = Some(std::time::Instant::now());
                         if let Some(element) = &video_element {
@@ -1246,32 +1382,36 @@ async fn stream(
                         }
                     }
 
-                    if last_stats.elapsed() >= Duration::from_secs(5) {
+                    let window = last_stats.elapsed();
+                    if window >= Duration::from_secs(5) {
                         let (frames, pts_jumps, worst_jump, worst_send) = sender.flow.take();
-                        tracing::debug!(
+                        // One line, at `info`, because "the picture is late" is
+                        // never diagnosable from the sentence alone and this is
+                        // what we end up asking for every time. Read it as:
+                        //
+                        // - `fps` below the configured rate: nothing downstream
+                        //   is at fault, the capture or the encoder is not
+                        //   producing frames.
+                        // - `pts_jumps`: the gaps are in the source timestamps,
+                        //   so the frames were never made.
+                        // - `worst_send_ms` high with `pts_jumps` at zero: the
+                        //   pacer is holding sends back, which is it working —
+                        //   unless the number keeps climbing.
+                        // - `dropped`/`window_full` climbing: the receiver is
+                        //   behind and our flow control is skipping frames.
+                        // - `resent` climbing: the link is losing packets.
+                        tracing::info!(
                             stream = label,
-                            frames,
+                            fps = frames / window.as_secs().max(1),
                             pts_jumps,
                             worst_jump_ms = worst_jump,
                             worst_send_ms = worst_send,
-                            "outgoing flow"
-                        );
-                        tracing::debug!(
-                            stream = label,
+                            dropped = sender.frames_dropped,
+                            window_full = sender.dropped_window,
+                            unacked = sender.unacked_frames(),
                             nacks = nacks_seen,
                             resent = packets_resent,
                             expired = nacks_expired,
-                            "retransmission requests"
-                        );
-                        // Frames held back because the receiver was still
-                        // behind. A number that keeps climbing says the link
-                        // or the decoder cannot take the configured
-                        // resolution and frame rate — which is the one thing
-                        // "the picture is choppy" never tells you on its own.
-                        tracing::debug!(
-                            stream = label,
-                            dropped = sender.frames_dropped,
-                            unacked = sender.unacked_frames(),
                             "backlog control"
                         );
                         last_stats = std::time::Instant::now();
@@ -1321,6 +1461,64 @@ async fn stream(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn no_mode_asks_the_encoder_for_more_video_than_the_pacer_can_drain() {
+        // Reported from use: 2160p30 was fine and 2160p60 fell further and
+        // further behind. The table asked 30 Mbit for it and the pacer drains
+        // 24 — the surplus had nowhere to go but the queue in front of the
+        // socket.
+        let pacer_kbps =
+            (BURST_BUDGET_BYTES * 8) as u32 * (1000 / BURST_INTERVAL.as_millis() as u32) / 1000;
+        for (width, height) in [
+            (640, 480),
+            (1280, 720),
+            (1920, 1080),
+            (2560, 1440),
+            (3840, 2160),
+        ] {
+            for fps in [30, 60] {
+                let cfg = nd_core::pipeline::StreamConfig {
+                    width,
+                    height,
+                    fps,
+                    bitrate_kbps: 0,
+                    ..Default::default()
+                };
+                let asked = crate::mirror::cast_bitrate_kbps(&cfg);
+                assert!(
+                    asked < pacer_kbps,
+                    "{width}x{height}@{fps} asks {asked} kbps against a {pacer_kbps} kbps pacer"
+                );
+            }
+        }
+        // And the cap has to be what is doing the holding, not a table that
+        // happens to stay small.
+        let uncapped = nd_core::pipeline::StreamConfig {
+            width: 3840,
+            height: 2160,
+            fps: 60,
+            bitrate_kbps: 0,
+            ..Default::default()
+        };
+        assert!(uncapped.scaled_bitrate_kbps() > MAX_VIDEO_BITRATE_KBPS);
+        assert_eq!(
+            crate::mirror::cast_bitrate_kbps(&uncapped),
+            MAX_VIDEO_BITRATE_KBPS
+        );
+        // 1440p60 asks 21 Mbit and works; the cap must not start holding it.
+        let works = nd_core::pipeline::StreamConfig {
+            width: 2560,
+            height: 1440,
+            fps: 60,
+            bitrate_kbps: 0,
+            ..Default::default()
+        };
+        assert_eq!(
+            crate::mirror::cast_bitrate_kbps(&works),
+            works.scaled_bitrate_kbps()
+        );
+    }
 
     #[test]
     fn encoded_pts_is_converted_through_its_segment() {
@@ -1488,10 +1686,30 @@ mod tests {
     }
 
     #[test]
-    fn audio_and_video_clones_share_the_same_budget() {
+    fn audio_never_waits_for_a_window_video_has_emptied() {
+        // A clone shares the budget, which is what video's own senders want
+        // and what audio must not have.
+        let video = BurstPacer::new(Default::default());
+        assert!(std::sync::Arc::ptr_eq(&video.clone().budget, &video.budget));
         let audio = BurstPacer::new(Default::default());
-        let video = audio.clone();
-        assert!(std::sync::Arc::ptr_eq(&audio.budget, &video.budget));
+        assert!(!std::sync::Arc::ptr_eq(&audio.budget, &video.budget));
+
+        // Why it matters, in the arithmetic that made it a report: a window
+        // holds about one average video frame — 31457 bytes against 31250 at
+        // 1080p60 and 15 Mbit — so an average frame very nearly empties it and
+        // anything above average takes more than one window. Whatever shares
+        // the budget waits for a window video has left something in.
+        let window_bytes = BURST_BUDGET_BYTES;
+        let average_video_frame = 15_000_000 / 8 / 60;
+        assert!(
+            average_video_frame * 10 > window_bytes * 9,
+            "a video frame no longer fills a burst window: \
+             {average_video_frame} against {window_bytes}"
+        );
+        // An Opus packet is three orders of magnitude smaller and arrives once
+        // per window. It cannot congest a 24 Mbit/s ceiling.
+        let opus_packet = 128_000 / 8 / 100;
+        assert!(opus_packet * 50 < window_bytes, "{opus_packet}");
     }
 
     #[test]
@@ -1613,13 +1831,23 @@ mod lifecycle_tests {
             tokio::time::sleep(Duration::from_millis(300)).await;
             tx.send(true).unwrap();
         });
-        stream(
+        // The session builds and starts the pipeline before negotiating now,
+        // so the test does the same rather than handing `stream` a source.
+        let desc = pipeline::mirror_pipeline_description(
             &cfg,
             &pipeline::VideoSource::Test,
+            pipeline::CHROMECAST_MAX_RESOLUTION,
+            false,
+        );
+        let (gst_pipeline, events) = pipeline::build_pipeline(&desc, cfg.latency_ms()).unwrap();
+        gst_pipeline.set_state(gst::State::Playing).unwrap();
+        stream(
+            &cfg,
+            gst_pipeline,
+            events,
             &negotiated,
             &SinkStatus::new(),
             &mut rx,
-            Duration::from_millis(150),
         )
         .await
         .unwrap();

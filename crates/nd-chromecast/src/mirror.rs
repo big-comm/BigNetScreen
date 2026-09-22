@@ -63,11 +63,7 @@ pub const DEFAULT_TARGET_DELAY_MS: u32 = 150;
 /// holds frames for this long before showing them, which is what smooths out
 /// uneven arrival — and what delays the pointer by the same amount.
 pub fn target_delay_ms() -> u32 {
-    let default = if nd_core::latency::is_film() {
-        nd_core::latency::FILM_PLAYOUT_DELAY_MS
-    } else {
-        DEFAULT_TARGET_DELAY_MS
-    };
+    let default = nd_core::latency::cast_playout_delay_ms(DEFAULT_TARGET_DELAY_MS);
     resolve_target_delay_ms(
         default,
         std::env::var("BIGNETSCREEN_CAST_TARGET_DELAY_MS")
@@ -303,6 +299,27 @@ impl AudioLimits {
     }
 }
 
+/// The bitrate to ask the encoder for.
+///
+/// What the mode needs, held to what the sender can actually push. The two are
+/// decided independently — the table by resolution and frame rate, the pacer by
+/// what a Wi-Fi queue tolerates — and above 1440p60 the table wins an argument
+/// it cannot deliver. See [`crate::mirror_session::MAX_VIDEO_BITRATE_KBPS`].
+pub(crate) fn cast_bitrate_kbps(cfg: &nd_core::pipeline::StreamConfig) -> u32 {
+    let ceiling = crate::mirror_session::MAX_VIDEO_BITRATE_KBPS;
+    // `BIGNETSCREEN_CAST_BITRATE_KBPS` answers one question the table cannot:
+    // whether a receiver that struggles with a mode is struggling with its
+    // bitrate or with its pixel rate. Send the same mode with fewer bits and
+    // see. Still held to the pacer, which is a physical limit and not a guess.
+    if let Some(kbps) = std::env::var("BIGNETSCREEN_CAST_BITRATE_KBPS")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+    {
+        return kbps.clamp(500, ceiling);
+    }
+    cfg.scaled_bitrate_kbps().min(ceiling)
+}
+
 impl Answer {
     /// Apply independent decoder dimension, pixel-rate and bandwidth limits.
     /// Preserve aspect ratio and never raise a user's requested resolution/FPS.
@@ -312,7 +329,7 @@ impl Answer {
         delay_ms: u32,
         with_audio: bool,
     ) -> Result<()> {
-        use nd_core::pipeline::{StreamConfig, CAST_MAX_BITRATE_KBPS};
+        use nd_core::pipeline::StreamConfig;
         if let Some(limits) = &self.video_limits {
             if limits.max_width < 2 || limits.max_height < 2 {
                 return Err(NdError::Unsupported(
@@ -328,7 +345,9 @@ impl Answer {
                 let pixels = f64::from(cfg.width) * f64::from(cfg.height);
                 cfg.fps = cfg.fps.min((rate / pixels).floor() as u32);
             }
-            let ceiling = (limits.max_bitrate / 1000).min(CAST_MAX_BITRATE_KBPS);
+            // The receiver's own declaration is the only external ceiling: it
+            // is the one number the device actually measured about itself.
+            let ceiling = limits.max_bitrate / 1000;
             let floor = limits.min_bitrate.div_ceil(1000);
             if ceiling == 0
                 || floor > ceiling
@@ -342,13 +361,22 @@ impl Answer {
                     "receiver limits cannot accommodate this mirroring mode".into(),
                 ));
             }
-            cfg.bitrate_kbps = cfg.scaled_bitrate_kbps().min(ceiling).max(floor);
+            cfg.bitrate_kbps = cast_bitrate_kbps(cfg).min(ceiling).max(floor);
         } else {
-            // No capability claim: do not assume every receiver supports 1080p60/4K.
-            (cfg.width, cfg.height) =
-                StreamConfig::fit_within((cfg.width, cfg.height), (1920, 1080));
-            cfg.fps = cfg.fps.min(30);
-            cfg.bitrate_kbps = cfg.scaled_bitrate_kbps().min(CAST_MAX_BITRATE_KBPS);
+            // Silence is not a claim of 1080p30. The receiver was sent this
+            // exact mode in the OFFER and accepted the video stream — sending
+            // something else now is a different session from the negotiated
+            // one, not a safer one.
+            //
+            // Clamping here could never protect a cautious person either: on
+            // the default settings the OFFER is already 1080p30, because
+            // `preferred_or` and `capped_fps` built it from those settings. A
+            // ceiling applied after the fact can therefore only overrule
+            // somebody who deliberately asked for more — which is the exact
+            // field report `StreamConfig::preferred_or` exists to answer.
+            //
+            // Nothing to cap against, so the mode's own bitrate stands.
+            cfg.bitrate_kbps = cast_bitrate_kbps(cfg);
         }
         if with_audio {
             if let Some(limits) = &self.audio_limits {
@@ -649,6 +677,14 @@ pub async fn negotiate(
                     // same from the sofa, and only this number tells them
                     // apart without reproducing the session.
                     max_bitrate = cfg.max_bitrate,
+                    // The mode that was offered, and what the receiver said it
+                    // can decode. Without both, "it arrived at 1080p30" cannot
+                    // be told apart: the device may have imposed that, or it
+                    // may have declared nothing and been given our own ceiling.
+                    // `None` here means the receiver claimed no limit at all.
+                    offered = format_args!("{}x{}@{}", cfg.width, cfg.height, cfg.fps),
+                    video_limits = ?answer.video_limits,
+                    audio_limits = ?answer.audio_limits,
                     "mirroring negotiated"
                 );
                 return Ok(Negotiated {
@@ -953,15 +989,41 @@ mod tests {
     }
 
     #[test]
-    fn unknown_capabilities_do_not_claim_4k60_support() {
+    fn a_silent_answer_keeps_the_mode_the_receiver_accepted() {
         let answer = parse_answer(&answer_json(1), 1).unwrap();
         let mut cfg = nd_core::pipeline::StreamConfig {
-            width: 3840,
-            height: 2160,
+            width: 2560,
+            height: 1440,
             fps: 60,
             ..Default::default()
         };
         answer.constrain(&mut cfg, 150, false).unwrap();
-        assert_eq!((cfg.width, cfg.height, cfg.fps), (1920, 1080, 30));
+        assert_eq!((cfg.width, cfg.height, cfg.fps), (2560, 1440, 60));
+        // And the bitrate the mode needs, not 1080p30's.
+        assert_eq!(cfg.bitrate_kbps, 21_000);
+    }
+
+    #[test]
+    fn a_declared_bitrate_limit_still_caps_a_larger_mode() {
+        let mut answer = parse_answer(&answer_json(1), 1).unwrap();
+        answer.video_limits = Some(VideoLimits {
+            max_width: 3840,
+            max_height: 2160,
+            max_fps: 60.0,
+            max_pixels_per_second: None,
+            min_bitrate: 300_000,
+            max_bitrate: 12_000_000,
+            min_size: None,
+            max_delay_ms: None,
+        });
+        let mut cfg = nd_core::pipeline::StreamConfig {
+            width: 2560,
+            height: 1440,
+            fps: 60,
+            ..Default::default()
+        };
+        answer.constrain(&mut cfg, 150, false).unwrap();
+        assert_eq!((cfg.width, cfg.height, cfg.fps), (2560, 1440, 60));
+        assert_eq!(cfg.bitrate_kbps, 12_000);
     }
 }

@@ -128,7 +128,22 @@ impl CaptureSource {
         }
     }
 
-    /// The known resolution, or the given guess.
+    /// The size the portal announced, or the given guess.
+    ///
+    /// Known to be wrong under fractional scaling, and knowingly used anyway.
+    /// The portal announces a size in the compositor's coordinate space, which
+    /// the spec warns "may not be equivalent to a size in a pixel coordinate
+    /// space": measured on a 2560x1440 panel at 110%, announced 2328x1310 and
+    /// delivered 2560x1440. Encoding at the announced size resamples every
+    /// frame away from the size it arrived in.
+    ///
+    /// Only the negotiated caps carry the truth, and they do not exist until
+    /// the pipeline runs — after the Cast OFFER has committed to a size. A
+    /// second PipeWire connection cannot be used to ask early: the portal's
+    /// node is not resolvable from one, which nineteen consecutive attempts
+    /// per session established before this went back to the announced size.
+    /// The Cast mirroring path no longer uses this for the size it encodes at:
+    /// it builds the pipeline first and reads the negotiated caps back.
     pub fn size_or(&self, default: (u32, u32)) -> (u32, u32) {
         self.size.unwrap_or(default)
     }
@@ -179,5 +194,19 @@ mod tests {
             "{description}"
         );
         assert!(!description.contains("path="), "{description}");
+    }
+
+    #[test]
+    fn a_declared_size_is_preferred_over_the_caller_s_guess() {
+        let source = CaptureSource::media_file(
+            MediaPlayback {
+                control: None,
+                path: "/nonexistent.mp4".into(),
+                kind: crate::media::MediaKind::Video,
+                title: String::new(),
+            },
+            (1280, 720),
+        );
+        assert_eq!(source.size_or((1920, 1080)), (1280, 720));
     }
 }

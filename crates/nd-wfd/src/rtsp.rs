@@ -172,6 +172,34 @@ const HH_MODES: &[(u32, u32, u32, bool)] = &[
     (848, 480, 60, false),
 ];
 
+/// The largest picture Wi-Fi Display can carry, over every table.
+///
+/// A sink advertises its modes as bits into the three tables above, so nothing
+/// larger than this can be negotiated with any sink that exists. It is what a
+/// **virtual screen** should be created at: making a 3440x1440 desktop for a
+/// protocol whose ceiling is 1920x1200 only buys a `videoscale` on every frame.
+///
+/// Computed rather than written down, so adding a mode cannot leave it stale.
+pub const MAX_SOURCE_SIZE: (u32, u32) = {
+    let (width, height) = widest(CEA_MODES, 0, 0);
+    let (width, height) = widest(VESA_MODES, width, height);
+    widest(HH_MODES, width, height)
+};
+
+const fn widest(modes: &[(u32, u32, u32, bool)], mut width: u32, mut height: u32) -> (u32, u32) {
+    let mut index = 0;
+    while index < modes.len() {
+        if modes[index].0 > width {
+            width = modes[index].0;
+        }
+        if modes[index].1 > height {
+            height = modes[index].1;
+        }
+        index += 1;
+    }
+    (width, height)
+}
+
 fn decode_table(
     bitmap: u32,
     table: ResolutionTable,
@@ -1162,6 +1190,22 @@ mod tests {
     const M3_BODY: &str = "wfd_audio_codecs: LPCM 00000003 00, AAC 00000001 00\r\n\
          wfd_video_formats: 40 00 01 10 000001e3 0f3fffff 00000fff 00 0000 00c8 01 none none\r\n\
          wfd_client_rtp_ports: RTP/AVP/UDP;unicast 19002 0 mode=play\r\n";
+
+    #[test]
+    fn no_advertised_mode_is_larger_than_the_ceiling_the_screen_is_built_to() {
+        // MAX_SOURCE_SIZE decides how big a virtual screen gets made, so a new
+        // table entry that outgrew it would silently cost a scale on every
+        // frame instead of failing here.
+        for modes in [CEA_MODES, VESA_MODES, HH_MODES] {
+            for (width, height, _, _) in modes {
+                assert!(
+                    *width <= MAX_SOURCE_SIZE.0 && *height <= MAX_SOURCE_SIZE.1,
+                    "{width}x{height} is outside {MAX_SOURCE_SIZE:?}"
+                );
+            }
+        }
+        assert_eq!(MAX_SOURCE_SIZE, (1920, 1200));
+    }
 
     #[test]
     fn parses_a_real_m3_response() {

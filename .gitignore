@@ -50,3 +50,6 @@ __pycache__/
 # applied. Their own documents link as if they sat at the repository root, so
 # they fail the link check too. Archive material, never project source.
 /docs/*-DELIVERY/
+
+# `makepkg` clones the git source here.
+/pkgbuild/bignetscreen/

@@ -4,6 +4,9 @@
 //!   viable path under Flatpak, and it works on any desktop.
 //! - [`MutterBackend`] — `org.gnome.Mutter.ScreenCast` over D-Bus. Used for
 //!   the **virtual monitor** on native GNOME, where the portal is weak.
+//! - [`KWinBackend`] — `zkde_screencast_unstable_v1` over Wayland. The same
+//!   trade on KDE: the portal there creates every virtual screen at a
+//!   hard-coded 1920x1080.
 //!
 //! [`select_backend`] chooses at runtime.
 //!
@@ -16,6 +19,7 @@
 //! `$XDG_DATA_HOME/bignetscreen/restore-token` (mode 0600).
 
 pub mod display_config;
+pub mod kwin;
 pub mod mutter;
 mod portal_start;
 
@@ -32,6 +36,7 @@ use tokio::sync::Mutex;
 use nd_core::capture::{CaptureBackend, CaptureSource, SourceType};
 use nd_core::{NdError, Result};
 
+pub use kwin::KWinBackend;
 pub use mutter::MutterBackend;
 
 fn cap_err<E: std::fmt::Display>(e: E) -> NdError {
@@ -411,13 +416,16 @@ impl CaptureBackend for MutterWithPortalFallback {
 ///
 /// On KDE, Sway, Cosmic and the like Mutter simply is not on the bus and this
 /// path is never exercised.
-pub async fn select_backend_for(source_type: SourceType) -> Box<dyn CaptureBackend> {
+pub async fn select_backend_for(
+    source_type: SourceType,
+    virtual_limit: Option<(u32, u32)>,
+) -> Box<dyn CaptureBackend> {
     let forced = std::env::var("BIGNETSCREEN_CAPTURE").ok();
     match forced.as_deref() {
         Some("portal") => return Box::new(PortalBackend::new()),
         Some("mutter") => {
             let backend = MutterWithPortalFallback::new();
-            let size = nd_core::settings::current().resolution_limit();
+            let size = virtual_size(virtual_limit);
             backend.mutter.set_virtual_size(size.0, size.1).await;
             if backend.mutter.is_available().await {
                 tracing::info!("capturing through Mutter (forced by BIGNETSCREEN_CAPTURE)");
@@ -435,21 +443,56 @@ pub async fn select_backend_for(source_type: SourceType) -> Box<dyn CaptureBacke
     }
 
     if source_type == SourceType::Virtual {
+        let size = virtual_size(virtual_limit);
+
         let backend = MutterWithPortalFallback::new();
-        let size = nd_core::settings::current().resolution_limit();
         backend.mutter.set_virtual_size(size.0, size.1).await;
         if backend.mutter.is_available().await {
             tracing::info!("virtual monitor: trying Mutter directly (portal as fallback)");
             return Box::new(backend);
+        }
+
+        let kwin = KWinBackend::new();
+        kwin.set_virtual_size(size.0, size.1).await;
+        if kwin.is_available().await {
+            tracing::info!(
+                width = size.0,
+                height = size.1,
+                "virtual monitor: asking KWin directly (the portal caps it at 1920x1080)"
+            );
+            return Box::new(kwin);
         }
     }
 
     Box::new(PortalBackend::new())
 }
 
+/// How big to make a virtual screen.
+///
+/// The person's preference, held down to what the protocol can actually carry.
+/// Miracast tops out at 1920x1200 whatever the sink is, so a larger desktop is
+/// not extra detail on the receiver — it is a `videoscale` on every frame and a
+/// bigger screen to composite, for a picture that arrives the same size.
+fn virtual_size(limit: Option<(u32, u32)>) -> (u32, u32) {
+    let (width, height) = nd_core::settings::current().resolution_limit();
+    match limit {
+        Some((max_width, max_height)) if width > max_width || height > max_height => {
+            tracing::info!(
+                width,
+                height,
+                max_width,
+                max_height,
+                "the protocol cannot carry the chosen size; making the virtual screen smaller"
+            );
+            (width.min(max_width), height.min(max_height))
+        }
+        _ => (width, height),
+    }
+}
+
 /// A shortcut for the common case (monitor capture).
 pub async fn select_backend() -> Box<dyn CaptureBackend> {
-    select_backend_for(SourceType::Monitor).await
+    select_backend_for(SourceType::Monitor, None).await
 }
 
 /// Are we running inside a Flatpak sandbox?

@@ -1324,7 +1324,7 @@ async fn run_cast(
         return Ok(());
     }
     let backend = tokio::select! {
-        backend = nd_capture::select_backend_for(source_type) => backend,
+        backend = nd_capture::select_backend_for(source_type, sink.max_source_size()) => backend,
         _ = cancel.changed() => return Ok(()),
     };
     let result = async {
@@ -1342,7 +1342,8 @@ async fn run_cast(
 /// Asks the capture backend, once, whether it can create a virtual monitor.
 fn probe_virtual_support(sender: &ComponentSender<AppModel>) {
     sender.oneshot_command(async move {
-        let backend = nd_capture::select_backend_for(SourceType::Virtual).await;
+        // No sink yet: this only asks whether a virtual screen is possible.
+        let backend = nd_capture::select_backend_for(SourceType::Virtual, None).await;
         let supported = backend.supported_sources().await;
         AppCmd::VirtualSupported(supported.contains(&SourceType::Virtual))
     });

@@ -14,7 +14,7 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/pages/settings.rs:287
+#: crates/nd-gui/src/pages/settings.rs:304
 msgid ""
 "0 lets the system choose. Set one only if you opened a port on your firewall "
 "by hand."
@@ -22,35 +22,40 @@ msgstr ""
 "0 lader systemet vælge. Angiv kun én, hvis du har åbnet en port i din "
 "firewall manuelt."
 
-#: crates/nd-gui/src/pages/settings.rs:191
+#: crates/nd-gui/src/pages/settings.rs:195
 msgid "24 FPS"
 msgstr "24 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:191
+#: crates/nd-gui/src/pages/settings.rs:195
 msgid "25 FPS"
 msgstr "25 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:191
+#: crates/nd-gui/src/pages/settings.rs:195
 msgid "30 FPS"
 msgstr "30 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:191
+#: crates/nd-gui/src/pages/settings.rs:195
 msgid "50 FPS"
 msgstr "50 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:191
+#: crates/nd-gui/src/pages/settings.rs:195
 msgid "60 FPS"
 msgstr "60 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:188
-msgid "60 is smoother and costs about half as much again in bandwidth"
+#: crates/nd-gui/src/pages/settings.rs:190
+#, fuzzy
+msgid ""
+"60 is smoother and costs about half as much again in bandwidth. Many "
+"Chromecast models mirror at 30 and will hold it there."
 msgstr ""
 "60 er mere flydende og koster cirka halvanden gang så meget i båndbredde"
 
-#: crates/nd-gui/src/pages/settings.rs:124
+#: crates/nd-gui/src/pages/settings.rs:125
+#, fuzzy
 msgid ""
-"A ceiling: a smaller screen is sent as it is. Above 1080p not every receiver "
-"will accept it."
+"A ceiling: a smaller screen is sent as it is. Above 1080p is sent only if "
+"the receiver accepts it — many Chromecast models mirror at 1080p and will "
+"hold it there."
 msgstr ""
 "En grænse: en mindre skærm sendes som den er. Over 1080p vil ikke alle "
 "modtagere acceptere det."
@@ -59,7 +64,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "En ny skærm"
 
-#: crates/nd-gui/src/app.rs:1086
+#: crates/nd-gui/src/app.rs:1126
 msgid "A stream is already running"
 msgstr "En stream kører allerede"
 
@@ -67,7 +72,7 @@ msgstr "En stream kører allerede"
 msgid "A window"
 msgstr "Et vindue"
 
-#: crates/nd-gui/src/app.rs:300
+#: crates/nd-gui/src/app.rs:303
 msgid "About BigNetScreen"
 msgstr "Om BigNetScreen"
 
@@ -87,7 +92,7 @@ msgstr "Alle protokoller"
 msgid "An extra desktop, just for this"
 msgstr "Et ekstra skrivebord, kun til dette"
 
-#: crates/nd-gui/src/pages/settings.rs:172
+#: crates/nd-gui/src/pages/settings.rs:174
 msgid ""
 "Aspect ratio is preserved. Miracast uses a supported mode within these "
 "limits."
@@ -95,11 +100,11 @@ msgstr ""
 "Billedformatet bevares. Miracast bruger en understøttet tilstand inden for "
 "disse grænser."
 
-#: crates/nd-gui/src/pages/settings.rs:215
+#: crates/nd-gui/src/pages/settings.rs:232
 msgid "Audio"
 msgstr "Lyd"
 
-#: crates/nd-gui/src/app.rs:554
+#: crates/nd-gui/src/app.rs:571
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
@@ -108,16 +113,16 @@ msgstr ""
 "downloade og bygge pakken. Lad appen være åben, indtil installationen er "
 "færdig."
 
-#: crates/nd-gui/src/pages/settings.rs:107
+#: crates/nd-gui/src/pages/settings.rs:108
 msgid "Automatic"
 msgstr "Automatisk"
 
 #: crates/nd-gui/src/pages/devices.rs:170
-#: crates/nd-gui/src/pages/settings.rs:267
+#: crates/nd-gui/src/pages/settings.rs:284
 msgid "Automatic discovery"
 msgstr "Automatisk registrering"
 
-#: crates/nd-gui/src/app.rs:422 crates/nd-gui/src/app.rs:1035
+#: crates/nd-gui/src/app.rs:425 crates/nd-gui/src/app.rs:1075
 msgid "Automatic discovery is off"
 msgstr "Automatisk registrering er slået fra"
 
@@ -133,11 +138,16 @@ msgstr "Tilbage"
 msgid "Back 10 seconds"
 msgstr "10 sekunder tilbage"
 
-#: crates/nd-gui/src/pages/settings.rs:203
+#: crates/nd-gui/src/pages/settings.rs:218
+msgid "Balanced — the default"
+msgstr ""
+
+#: crates/nd-gui/src/pages/settings.rs:211
+#, fuzzy
 msgid ""
-"Buffers the picture so video plays smoothly, at the cost of delay. On "
-"Miracast it is applied here; on Chromecast it is a request the receiver may "
-"ignore."
+"Buffering smooths uneven playback and delays everything, the pointer "
+"included. On Miracast it is applied here; on Chromecast it is a request the "
+"receiver may ignore."
 msgstr ""
 "Buffer billedet, så video afspilles jævnt, på bekostning af forsinkelse. På "
 "Miracast anvendes det her; på Chromecast er det en anmodning, som modtageren "
@@ -183,7 +193,7 @@ msgstr "Chromecast"
 msgid "Chromecast / AirPlay"
 msgstr "Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/settings.rs:109
+#: crates/nd-gui/src/pages/settings.rs:110
 msgid "Chromecast / AirPlay only"
 msgstr "Kun Chromecast / AirPlay"
 
@@ -201,7 +211,7 @@ msgstr ""
 msgid "Clear queue"
 msgstr "Tøm køen"
 
-#: crates/nd-gui/src/app.rs:713 crates/nd-gui/src/app.rs:836
+#: crates/nd-gui/src/app.rs:731 crates/nd-gui/src/app.rs:858
 msgid "Close"
 msgstr "Luk"
 
@@ -213,11 +223,11 @@ msgstr "Opret forbindelse til det samme netværk"
 msgid "Connected"
 msgstr "Forbundet"
 
-#: crates/nd-gui/src/app.rs:265
+#: crates/nd-gui/src/app.rs:268
 msgid "Connected to"
 msgstr "Forbundet til"
 
-#: crates/nd-gui/src/app.rs:1115 crates/nd-gui/src/app.rs:1271
+#: crates/nd-gui/src/app.rs:1155 crates/nd-gui/src/app.rs:1311
 #: crates/nd-gui/src/pages/mod.rs:190
 msgid "Connecting…"
 msgstr "Forbinder…"
@@ -234,15 +244,19 @@ msgstr "Forbindelseskvalitet"
 msgid "Copy the address"
 msgstr ""
 
-#: crates/nd-gui/src/app.rs:1272
+#: crates/nd-gui/src/app.rs:1312
 #, fuzzy
 msgid "Could not connect. Make sure both devices are on the same network."
 msgstr ""
 "Til Chromecast skal begge enheder være tilsluttet det samme Wi-Fi-netværk."
 
-#: crates/nd-gui/src/pages/settings.rs:139
+#: crates/nd-gui/src/pages/settings.rs:141
 msgid "Custom resolution"
 msgstr "Brugerdefineret opløsning"
+
+#: crates/nd-gui/src/pages/settings.rs:209
+msgid "Delay"
+msgstr ""
 
 #: crates/nd-gui/src/pages/mod.rs:49 crates/nd-gui/src/pages/devices.rs:105
 msgid "Devices"
@@ -252,7 +266,7 @@ msgstr "Enheder"
 msgid "Disconnect"
 msgstr "Afbryd forbindelse"
 
-#: crates/nd-gui/src/pages/settings.rs:262
+#: crates/nd-gui/src/pages/settings.rs:279
 msgid "Discovery and devices"
 msgstr "Registrering og enheder"
 
@@ -267,7 +281,7 @@ msgstr ""
 "Slå skærmspejling til på dit tv eller din projektor, før du opretter "
 "forbindelse."
 
-#: crates/nd-gui/src/app.rs:1267
+#: crates/nd-gui/src/app.rs:1307
 msgid "Enter the PIN shown on the computer that is sharing."
 msgstr ""
 
@@ -287,9 +301,9 @@ msgstr "Ekstra skærm"
 msgid "Failed"
 msgstr "Mislykkedes"
 
-#: crates/nd-gui/src/pages/settings.rs:201
-msgid "Film mode"
-msgstr "Film-tilstand"
+#: crates/nd-gui/src/pages/settings.rs:219
+msgid "Film — smoothest, for watching"
+msgstr ""
 
 #: crates/nd-gui/src/pages/devices.rs:106
 msgid "Find and connect to nearby wireless receivers."
@@ -303,7 +317,7 @@ msgstr "Find kompatible enheder"
 msgid "Finished"
 msgstr "Færdig"
 
-#: crates/nd-gui/src/pages/settings.rs:285
+#: crates/nd-gui/src/pages/settings.rs:302
 msgid "Fixed port"
 msgstr "Fast port"
 
@@ -316,7 +330,7 @@ msgstr ""
 msgid "Forward 10 seconds"
 msgstr "10 sekunder frem"
 
-#: crates/nd-gui/src/pages/settings.rs:186
+#: crates/nd-gui/src/pages/settings.rs:188
 msgid "Frame rate"
 msgstr "Billedhastighed"
 
@@ -324,15 +338,15 @@ msgstr "Billedhastighed"
 msgid "Good"
 msgstr "God"
 
-#: crates/nd-gui/src/app.rs:344
+#: crates/nd-gui/src/app.rs:347
 msgid "Got it"
 msgstr "Forstået"
 
-#: crates/nd-gui/src/pages/settings.rs:171
+#: crates/nd-gui/src/pages/settings.rs:173
 msgid "Height (pixels)"
 msgstr "Højde (pixels)"
 
-#: crates/nd-gui/src/pages/settings.rs:131
+#: crates/nd-gui/src/pages/settings.rs:133
 msgid "High (1080p)"
 msgstr "Høj (1080p)"
 
@@ -340,19 +354,19 @@ msgstr "Høj (1080p)"
 msgid "Home"
 msgstr "Start"
 
-#: crates/nd-gui/src/pages/settings.rs:220
+#: crates/nd-gui/src/pages/settings.rs:237
 msgid "Include system audio"
 msgstr "Medtag systemlyd"
 
-#: crates/nd-gui/src/pages/settings.rs:230
+#: crates/nd-gui/src/pages/settings.rs:247
 msgid "Include the microphone"
 msgstr "Medtag mikrofonen"
 
-#: crates/nd-gui/src/app.rs:839
+#: crates/nd-gui/src/app.rs:861
 msgid "Install"
 msgstr "Installér"
 
-#: crates/nd-gui/src/app.rs:694
+#: crates/nd-gui/src/app.rs:712
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
@@ -360,7 +374,7 @@ msgstr ""
 "Installationen mislykkedes, eller godkendelsen blev annulleret. Du kan prøve "
 "igen eller installere biblioteket manuelt."
 
-#: crates/nd-gui/src/app.rs:553
+#: crates/nd-gui/src/app.rs:570
 msgid "Installing NDI…"
 msgstr "Installerer NDI…"
 
@@ -372,11 +386,11 @@ msgstr "Hold alle enheder på det samme Wi-Fi-netværk for de bedste resultater.
 msgid "Keep the receiver ready"
 msgstr "Gør modtageren klar"
 
-#: crates/nd-gui/src/app.rs:1359
+#: crates/nd-gui/src/app.rs:1399
 msgid "Local network discovery unavailable"
 msgstr "Lokal netværks-discovery er ikke tilgængelig"
 
-#: crates/nd-gui/src/pages/settings.rs:269
+#: crates/nd-gui/src/pages/settings.rs:286
 msgid "Look for receivers as soon as the app starts"
 msgstr "Søg efter modtagere, så snart appen starter"
 
@@ -384,11 +398,15 @@ msgstr "Søg efter modtagere, så snart appen starter"
 msgid "Looking for receivers…"
 msgstr "Søger efter modtagere…"
 
-#: crates/nd-gui/src/pages/settings.rs:133
+#: crates/nd-gui/src/pages/settings.rs:135
 msgid "Low (480p)"
 msgstr "Lav (480p)"
 
-#: crates/nd-gui/src/pages/settings.rs:129
+#: crates/nd-gui/src/pages/settings.rs:217
+msgid "Low — for using the computer on the big screen"
+msgstr ""
+
+#: crates/nd-gui/src/pages/settings.rs:131
 msgid "Maximum (2160p)"
 msgstr "Maksimal (2160p)"
 
@@ -400,11 +418,11 @@ msgstr "Måler…"
 msgid "Media"
 msgstr "Medier"
 
-#: crates/nd-gui/src/pages/settings.rs:132
+#: crates/nd-gui/src/pages/settings.rs:134
 msgid "Medium (720p)"
 msgstr "Mellem (720p)"
 
-#: crates/nd-gui/src/pages/settings.rs:239
+#: crates/nd-gui/src/pages/settings.rs:256
 msgid "Microphone volume"
 msgstr "Mikrofonens lydstyrke"
 
@@ -412,7 +430,7 @@ msgstr "Mikrofonens lydstyrke"
 msgid "Miracast"
 msgstr "Miracast"
 
-#: crates/nd-gui/src/app.rs:1418
+#: crates/nd-gui/src/app.rs:1458
 msgid ""
 "Miracast does not work in the Flatpak build (it needs the system "
 "NetworkManager)"
@@ -420,7 +438,7 @@ msgstr ""
 "Miracast fungerer ikke i Flatpak-buildet (det kræver systemets "
 "NetworkManager)"
 
-#: crates/nd-gui/src/app.rs:1426
+#: crates/nd-gui/src/app.rs:1466
 msgid ""
 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over the "
 "network still works."
@@ -428,15 +446,15 @@ msgstr ""
 "Miracast kræver en Wi-Fi-adapter, og denne computer har ingen. Streaming "
 "over netværket virker stadig."
 
-#: crates/nd-gui/src/pages/settings.rs:108
+#: crates/nd-gui/src/pages/settings.rs:109
 msgid "Miracast only"
 msgstr "Kun Miracast"
 
-#: crates/nd-gui/src/app.rs:1434
+#: crates/nd-gui/src/app.rs:1474
 msgid "Miracast unavailable"
 msgstr "Miracast utilgængelig"
 
-#: crates/nd-gui/src/app.rs:1432
+#: crates/nd-gui/src/app.rs:1472
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast utilgængelig: dette Wi-Fi-kort understøtter ikke Wi-Fi Direct"
 
@@ -444,7 +462,7 @@ msgstr "Miracast utilgængelig: dette Wi-Fi-kort understøtter ikke Wi-Fi Direct
 msgid "Mirror screen"
 msgstr "Spejling af skærm"
 
-#: crates/nd-gui/src/pages/settings.rs:232
+#: crates/nd-gui/src/pages/settings.rs:249
 msgid "Mix your voice into what is sent"
 msgstr "Bland din stemme ind i det, der sendes"
 
@@ -452,15 +470,15 @@ msgstr "Bland din stemme ind i det, der sendes"
 msgid "Music"
 msgstr "Musik"
 
-#: crates/nd-gui/src/app.rs:693
+#: crates/nd-gui/src/app.rs:711
 msgid "NDI installation did not finish"
 msgstr "NDI-installationen blev ikke fuldført"
 
-#: crates/nd-gui/src/app.rs:687
+#: crates/nd-gui/src/app.rs:705
 msgid "NDI installed"
 msgstr "NDI er installeret"
 
-#: crates/nd-gui/src/app.rs:830
+#: crates/nd-gui/src/app.rs:852
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
@@ -471,7 +489,7 @@ msgstr ""
 "beder om administratorgodkendelse. Andre delingsmetoder fungerer også uden "
 "dette bibliotek."
 
-#: crates/nd-gui/src/app.rs:832
+#: crates/nd-gui/src/app.rs:854
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
@@ -481,15 +499,15 @@ msgstr ""
 "Installer kørselsmiljøet til NDI 5 eller 6 for din distribution, og genstart "
 "derefter appen. Andre delingsmetoder fungerer også uden dette bibliotek."
 
-#: crates/nd-gui/src/app.rs:835 crates/nd-gui/src/app.rs:1151
+#: crates/nd-gui/src/app.rs:857 crates/nd-gui/src/app.rs:1191
 msgid "NDI runtime required"
 msgstr "NDI-kørselsmiljø påkrævet"
 
-#: crates/nd-gui/src/app.rs:856 crates/nd-gui/src/app.rs:1450
+#: crates/nd-gui/src/app.rs:878 crates/nd-gui/src/app.rs:1490
 msgid "NDI setup"
 msgstr "NDI-opsætning"
 
-#: crates/nd-gui/src/app.rs:530
+#: crates/nd-gui/src/app.rs:547
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI er ikke tilgængeligt. Se vejledningen til opsætning af NDI."
 
@@ -522,7 +540,7 @@ msgstr "Der er ingen musik i din musikmappe. Brug \"Vælg filer\"."
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "Der er ingen billeder i din billedmappe. Brug \"Vælg filer\"."
 
-#: crates/nd-gui/src/app.rs:1043 crates/nd-gui/src/pages/home.rs:1063
+#: crates/nd-gui/src/app.rs:1083 crates/nd-gui/src/pages/home.rs:1063
 msgid "No receivers found"
 msgstr "Ingen modtagere fundet"
 
@@ -571,7 +589,7 @@ msgstr "Fotos, videoer og musik"
 msgid "Pick files and choose where to play them."
 msgstr "Vælg filer og vælg, hvor de skal afspilles."
 
-#: crates/nd-gui/src/pages/settings.rs:103
+#: crates/nd-gui/src/pages/settings.rs:104
 msgid "Preferred protocol"
 msgstr "Foretrukken protokol"
 
@@ -615,15 +633,15 @@ msgstr "Opdater enhedslisten, og kontrollér, at modtageren er tændt."
 msgid "Remove from queue"
 msgstr "Fjern fra køen"
 
-#: crates/nd-gui/src/pages/settings.rs:122
+#: crates/nd-gui/src/pages/settings.rs:123
 msgid "Resolution limit"
 msgstr "Maksimal opløsning"
 
-#: crates/nd-gui/src/app.rs:688
+#: crates/nd-gui/src/app.rs:706
 msgid "Restart BigNetScreen to use NDI."
 msgstr "Genstart BigNetScreen for at bruge NDI."
 
-#: crates/nd-gui/src/pages/settings.rs:333
+#: crates/nd-gui/src/pages/settings.rs:350
 msgid "Restore defaults"
 msgstr "Gendan standardindstillinger"
 
@@ -631,7 +649,7 @@ msgstr "Gendan standardindstillinger"
 msgid "Resume"
 msgstr "Genoptag"
 
-#: crates/nd-gui/src/pages/settings.rs:316
+#: crates/nd-gui/src/pages/settings.rs:333
 msgid "Saved as you change them"
 msgstr "Gemmes, når du ændrer dem"
 
@@ -643,8 +661,8 @@ msgstr "Scan igen"
 msgid "Screen"
 msgstr "Skærm"
 
-#: crates/nd-gui/src/app.rs:420 crates/nd-gui/src/app.rs:580
-#: crates/nd-gui/src/app.rs:1041
+#: crates/nd-gui/src/app.rs:423 crates/nd-gui/src/app.rs:597
+#: crates/nd-gui/src/app.rs:1081
 msgid "Searching…"
 msgstr "Søger…"
 
@@ -672,19 +690,19 @@ msgstr "Send til"
 msgid "Send to device"
 msgstr "Send til enhed"
 
-#: crates/nd-gui/src/pages/settings.rs:222
+#: crates/nd-gui/src/pages/settings.rs:239
 msgid "Send whatever this computer is playing"
 msgstr "Send det, denne computer afspiller"
 
-#: crates/nd-gui/src/app.rs:1193
+#: crates/nd-gui/src/app.rs:1233
 msgid "Sending files…"
 msgstr "Sender filer…"
 
-#: crates/nd-gui/src/pages/mod.rs:51 crates/nd-gui/src/pages/settings.rs:92
+#: crates/nd-gui/src/pages/mod.rs:51 crates/nd-gui/src/pages/settings.rs:93
 msgid "Settings"
 msgstr "Indstillinger"
 
-#: crates/nd-gui/src/pages/settings.rs:546
+#: crates/nd-gui/src/pages/settings.rs:567
 msgid "Settings cannot be saved on this system."
 msgstr "Indstillinger kan ikke gemmes på dette system."
 
@@ -696,11 +714,11 @@ msgstr "Del medier"
 msgid "Share with a web browser"
 msgstr ""
 
-#: crates/nd-gui/src/app.rs:231
+#: crates/nd-gui/src/app.rs:234
 msgid "Share your screen wirelessly"
 msgstr "Del din skærm trådløst"
 
-#: crates/nd-gui/src/app.rs:1447
+#: crates/nd-gui/src/app.rs:1487
 msgid "Share your screen with a TV, projector or Chromecast."
 msgstr "Del din skærm med et TV, en projektor eller Chromecast."
 
@@ -712,7 +730,7 @@ msgstr ""
 "Deling af et vindue åbner computerens egen vælger. Kun synlige vinduer kan "
 "deles."
 
-#: crates/nd-gui/src/app.rs:538
+#: crates/nd-gui/src/app.rs:555
 msgid ""
 "Sharing with a web browser needs GStreamer's WebRTC plugins, which this "
 "system does not have."
@@ -730,7 +748,7 @@ msgstr ""
 msgid "Status"
 msgstr "Status"
 
-#: crates/nd-gui/src/app.rs:326
+#: crates/nd-gui/src/app.rs:329
 msgid "Stop"
 msgstr "Stop"
 
@@ -738,15 +756,15 @@ msgstr "Stop"
 msgid "Stop sending"
 msgstr "Stop med at sende"
 
-#: crates/nd-gui/src/app.rs:1187
+#: crates/nd-gui/src/app.rs:1227
 msgid "Stop sharing your screen before sending files"
 msgstr "Stop delingen af din skærm, før du sender filer"
 
-#: crates/nd-gui/src/app.rs:1075
+#: crates/nd-gui/src/app.rs:1115
 msgid "Stopping…"
 msgstr "Stopper…"
 
-#: crates/nd-gui/src/pages/mod.rs:194 crates/nd-gui/src/pages/settings.rs:98
+#: crates/nd-gui/src/pages/mod.rs:194 crates/nd-gui/src/pages/settings.rs:99
 msgid "Streaming"
 msgstr "Streamer"
 
@@ -754,7 +772,7 @@ msgstr "Streamer"
 msgid "Streaming at"
 msgstr "Streamer med"
 
-#: crates/nd-gui/src/app.rs:1274
+#: crates/nd-gui/src/app.rs:1314
 msgid "Tap or click the picture for full screen."
 msgstr ""
 
@@ -762,32 +780,38 @@ msgstr ""
 msgid "Test"
 msgstr "Test"
 
-#: crates/nd-gui/src/app.rs:1269
+#: crates/nd-gui/src/app.rs:1309
 msgid "That PIN is not right. Check the computer's screen."
 msgstr ""
 
-#: crates/nd-gui/src/app.rs:1101 crates/nd-gui/src/app.rs:1180
-#: crates/nd-gui/src/app.rs:1197
+#: crates/nd-gui/src/app.rs:1141 crates/nd-gui/src/app.rs:1220
+#: crates/nd-gui/src/app.rs:1237
 msgid "That device is no longer available"
 msgstr "Den enhed er ikke længere tilgængelig"
 
-#: crates/nd-gui/src/app.rs:1142
+#: crates/nd-gui/src/app.rs:1182
 msgid "The NDI runtime is installed but does not support this processor."
+msgstr ""
+
+#: crates/nd-gui/src/app.rs:913
+msgid ""
+"The receiver has not finished disconnecting. The window will stay open; "
+"check the connection and try Stop again."
 msgstr ""
 
 #: crates/nd-gui/src/pages/mod.rs:250
 msgid "The receiver is not answering"
 msgstr "Modtageren svarer ikke"
 
-#: crates/nd-gui/src/app.rs:1273
+#: crates/nd-gui/src/app.rs:1313
 msgid "The sharing has ended."
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:93
+#: crates/nd-gui/src/pages/settings.rs:94
 msgid "These apply to your next session."
 msgstr "Disse gælder for din næste session."
 
-#: crates/nd-gui/src/pages/settings.rs:277
+#: crates/nd-gui/src/pages/settings.rs:294
 msgid "This computer's name"
 msgstr "Denne computers navn"
 
@@ -802,11 +826,11 @@ msgstr ""
 msgid "Tips"
 msgstr "Tips"
 
-#: crates/nd-gui/src/app.rs:1270
+#: crates/nd-gui/src/app.rs:1310
 msgid "Too many attempts. Wait half a minute and try again."
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:130
+#: crates/nd-gui/src/pages/settings.rs:132
 msgid "Very high (1440p)"
 msgstr "Meget høj (1440p)"
 
@@ -814,7 +838,7 @@ msgstr "Meget høj (1440p)"
 msgid "Videos"
 msgstr "Videoer"
 
-#: crates/nd-gui/src/app.rs:854
+#: crates/nd-gui/src/app.rs:876
 msgid "View ndi-sdk in the AUR"
 msgstr "Se ndi-sdk i AUR"
 
@@ -822,7 +846,7 @@ msgstr "Se ndi-sdk i AUR"
 msgid "Waiting for the receiver…"
 msgstr "Venter på modtageren…"
 
-#: crates/nd-gui/src/app.rs:1268
+#: crates/nd-gui/src/app.rs:1308
 msgid "Watch"
 msgstr ""
 
@@ -838,7 +862,7 @@ msgstr ""
 msgid "What do you want to share?"
 msgstr "Hvad vil du dele?"
 
-#: crates/nd-gui/src/pages/settings.rs:105
+#: crates/nd-gui/src/pages/settings.rs:106
 msgid "Which kind of receiver to look for"
 msgstr "Hvilken slags modtager der skal søges efter"
 
@@ -846,7 +870,7 @@ msgstr "Hvilken slags modtager der skal søges efter"
 msgid "Whole screen"
 msgstr "Hele skærmen"
 
-#: crates/nd-gui/src/pages/settings.rs:159
+#: crates/nd-gui/src/pages/settings.rs:161
 msgid "Width (pixels)"
 msgstr "Bredde (pixels)"
 
@@ -878,7 +902,7 @@ msgstr "endnu ikke offentliggjort"
 msgid "quick response"
 msgstr "hurtig respons"
 
-#: crates/nd-gui/src/app.rs:1109
+#: crates/nd-gui/src/app.rs:1149
 msgid "shows up in discovery only"
 msgstr "vises kun i discovery"
 
@@ -901,11 +925,14 @@ msgid_plural "{} receivers"
 msgstr[0] "{} modtager fundet"
 msgstr[1] "{} modtagere fundet"
 
-#: crates/nd-gui/src/app.rs:1046
+#: crates/nd-gui/src/app.rs:1086
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "{} modtager fundet"
 msgstr[1] "{} modtagere fundet"
+
+#~ msgid "Film mode"
+#~ msgstr "Film-tilstand"
 
 #~ msgid "Show the sidebar"
 #~ msgstr "Vis sidepanelet"

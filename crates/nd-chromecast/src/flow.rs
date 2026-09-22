@@ -2,8 +2,7 @@
 //! locally, and never allow an unacknowledged window to reach half that range.
 //! This is a protocol safety limit, NOT an adaptive congestion controller.
 
-use std::collections::VecDeque;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 pub(crate) const MAX_UNACKED_FRAMES: u32 = 120;
 
@@ -81,51 +80,10 @@ impl AckWindow {
     }
 }
 
-/// A second, independent guard in media time. The 120-id wire limit alone
-/// permits four seconds of video at 30 FPS. Keep pending media within the
-/// requested playout budget, with a 66 ms startup floor. This is a
-/// conservative guard, not Open Screen's RTT-based bandwidth estimator.
-#[derive(Debug)]
-pub(crate) struct MediaWindow {
-    limit: Duration,
-    frames: VecDeque<(u32, Duration)>,
-}
-
-impl MediaWindow {
-    pub(crate) fn new(playout_delay: Duration) -> Self {
-        Self {
-            limit: playout_delay.max(Duration::from_millis(66)),
-            frames: VecDeque::new(),
-        }
-    }
-
-    pub(crate) fn has_room(&mut self, next: Duration, acknowledged: i64) -> bool {
-        while self
-            .frames
-            .front()
-            .is_some_and(|(id, _)| i64::from(*id) <= acknowledged)
-        {
-            self.frames.pop_front();
-        }
-        self.frames.front().is_none_or(|(_, oldest)| {
-            next.checked_sub(*oldest)
-                .is_some_and(|duration| duration <= self.limit)
-        })
-    }
-
-    pub(crate) fn is_stale(&self, pts: Duration, now: Duration) -> bool {
-        now.saturating_sub(pts) > self.limit
-    }
-
-    pub(crate) fn sent(&mut self, id: u32, pts: Duration) {
-        debug_assert!(self.frames.len() < MAX_UNACKED_FRAMES as usize);
-        self.frames.push_back((id, pts));
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn startup_is_bounded_even_without_one_feedback_packet() {
@@ -198,24 +156,5 @@ mod tests {
         assert_eq!(window.pending(), 10);
         assert!(window.acknowledge(999u32 as u8, Some(501)));
         assert_eq!(window.pending(), 1);
-    }
-    #[test]
-    fn media_duration_is_bounded_long_before_the_120_id_limit() {
-        let mut media = MediaWindow::new(Duration::from_millis(150));
-        media.sent(0, Duration::ZERO);
-        assert!(media.has_room(Duration::from_millis(150), -1));
-        assert!(!media.has_room(Duration::from_millis(151), -1));
-        // ACK progress releases the old media; there is no sticky throttled state.
-        assert!(media.has_room(Duration::from_secs(10), 0));
-        media.sent(1, Duration::from_secs(10));
-        assert!(!media.has_room(Duration::from_secs(9), 0));
-    }
-
-    #[test]
-    fn stale_encoder_queue_is_not_sent_as_fresh_media() {
-        let media = MediaWindow::new(Duration::from_millis(150));
-        assert!(!media.is_stale(Duration::ZERO, Duration::from_millis(150)));
-        assert!(media.is_stale(Duration::ZERO, Duration::from_millis(151)));
-        assert!(!media.is_stale(Duration::from_secs(1), Duration::ZERO));
     }
 }

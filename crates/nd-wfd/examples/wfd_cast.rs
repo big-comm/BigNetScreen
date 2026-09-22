@@ -93,7 +93,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Real capture or a test pattern, depending on the argument.
         let capture = match source_type {
             Some(source_type) => {
-                backend = Some(nd_capture::select_backend_for(source_type).await);
+                backend = Some(
+                    nd_capture::select_backend_for(
+                        source_type,
+                        Some(nd_wfd::rtsp::MAX_SOURCE_SIZE),
+                    )
+                    .await,
+                );
                 Some(
                     backend
                         .as_ref()

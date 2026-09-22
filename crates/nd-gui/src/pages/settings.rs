@@ -15,6 +15,7 @@ use relm4::adw::{self, prelude::*};
 use relm4::gtk;
 use relm4::prelude::*;
 
+use nd_core::latency::Profile;
 use nd_core::settings::{self, Protocol, Quality, Settings};
 
 use crate::tr;
@@ -46,7 +47,7 @@ pub enum SettingsMsg {
     SetMicrophone(bool),
     SetMicVolume(f64),
     SetAutoDiscovery(bool),
-    SetFilmMode(bool),
+    SetLatency(Profile),
     SetDeviceName(String),
     SetPort(u16),
     Reset,
@@ -123,7 +124,8 @@ impl Component for SettingsPage {
                             add_prefix = &gtk::Image { set_icon_name: Some("view-fullscreen-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
                             set_subtitle: &tr!(
                                 "A ceiling: a smaller screen is sent as it is. Above 1080p \
-                                 not every receiver will accept it."
+                                 is sent only if the receiver accepts it — many Chromecast \
+                                 models mirror at 1080p and will hold it there."
                             ),
                             set_model: Some(&string_list(&[
                                 tr!("Maximum (2160p)"),
@@ -186,7 +188,9 @@ impl Component for SettingsPage {
                             set_title: &tr!("Frame rate"),
                             add_prefix = &gtk::Image { set_icon_name: Some("view-list-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
                             set_subtitle: &tr!(
-                                "60 is smoother and costs about half as much again in bandwidth"
+                                "60 is smoother and costs about half as much again in \
+                                 bandwidth. Many Chromecast models mirror at 30 and will \
+                                 hold it there."
                             ),
                             set_model: Some(&string_list(&[tr!("24 FPS"), tr!("25 FPS"), tr!("30 FPS"), tr!("50 FPS"), tr!("60 FPS")])),
                             connect_selected_notify[sender] => move |row| {
@@ -196,18 +200,31 @@ impl Component for SettingsPage {
                             } @fps_handler,
                         },
 
-                        #[name = "film_mode"]
-                        adw::SwitchRow {
-                            set_title: &tr!("Film mode"),
+                        // One choice, not two switches: the lowest delay and the
+                        // smoothest playback are ends of the same scale, and
+                        // offering each as its own toggle would let someone ask
+                        // for both and leave the product to decide in silence.
+                        #[name = "latency"]
+                        adw::ComboRow {
+                            set_title: &tr!("Delay"),
                             add_prefix = &gtk::Image { set_icon_name: Some("video-x-generic-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
                             set_subtitle: &tr!(
-                                "Buffers the picture so video plays smoothly, at the cost of \
-                                 delay. On Miracast it is applied here; on Chromecast it is a \
-                                 request the receiver may ignore."
+                                "Buffering smooths uneven playback and delays everything, the \
+                                 pointer included. On Miracast it is applied here; on \
+                                 Chromecast it is a request the receiver may ignore."
                             ),
-                            connect_active_notify[sender] => move |row| {
-                                sender.input(SettingsMsg::SetFilmMode(row.is_active()));
-                            } @film_mode_handler,
+                            set_model: Some(&string_list(&[
+                                tr!("Low — for using the computer on the big screen"),
+                                tr!("Balanced — the default"),
+                                tr!("Film — smoothest, for watching"),
+                            ])),
+                            connect_selected_notify[sender] => move |row| {
+                                sender.input(SettingsMsg::SetLatency(match row.selected() {
+                                    0 => Profile::Low,
+                                    2 => Profile::Film,
+                                    _ => Profile::Responsive,
+                                }));
+                            } @latency_handler,
                         },
                     },
 
@@ -383,7 +400,7 @@ impl Component for SettingsPage {
             SettingsMsg::SetMicrophone(on) => self.settings.microphone = on,
             SettingsMsg::SetMicVolume(volume) => self.settings.mic_volume = volume as u8,
             SettingsMsg::SetAutoDiscovery(on) => self.settings.auto_discovery = on,
-            SettingsMsg::SetFilmMode(on) => self.settings.film_mode = on,
+            SettingsMsg::SetLatency(profile) => self.settings.latency = profile,
             SettingsMsg::SetDeviceName(name) => self.settings.device_name = name,
             SettingsMsg::SetPort(port) => self.settings.port = port,
             SettingsMsg::Reset => {
@@ -447,7 +464,7 @@ impl SettingsPage {
             .custom_height
             .block_signal(&widgets.custom_height_handler);
         widgets.fps.block_signal(&widgets.fps_handler);
-        widgets.film_mode.block_signal(&widgets.film_mode_handler);
+        widgets.latency.block_signal(&widgets.latency_handler);
         widgets
             .system_audio
             .block_signal(&widgets.system_audio_handler);
@@ -485,7 +502,11 @@ impl SettingsPage {
                 .position(|fps| *fps == self.settings.fps)
                 .unwrap_or(2) as u32,
         );
-        widgets.film_mode.set_active(self.settings.film_mode);
+        widgets.latency.set_selected(match self.settings.latency {
+            Profile::Low => 0,
+            Profile::Responsive => 1,
+            Profile::Film => 2,
+        });
         widgets.system_audio.set_active(self.settings.system_audio);
         widgets.microphone.set_active(self.settings.microphone);
         widgets
@@ -511,7 +532,7 @@ impl SettingsPage {
             .custom_height
             .unblock_signal(&widgets.custom_height_handler);
         widgets.fps.unblock_signal(&widgets.fps_handler);
-        widgets.film_mode.unblock_signal(&widgets.film_mode_handler);
+        widgets.latency.unblock_signal(&widgets.latency_handler);
         widgets
             .system_audio
             .unblock_signal(&widgets.system_audio_handler);

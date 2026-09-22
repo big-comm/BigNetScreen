@@ -374,7 +374,15 @@ pub async fn run_with_video(
         receivers: None,
     });
 
-    let desc = pipeline::chromecast_pipeline_description(&cfg, &video);
+    // Nothing was promised to this receiver — the Default Media Receiver reads
+    // the resolution out of the stream — so encode what was captured rather
+    // than the portal's compositor-space guess about it. See `VideoTarget`.
+    let ceiling = StreamConfig::preferred_or(pipeline::CHROMECAST_MAX_RESOLUTION);
+    let desc = pipeline::chromecast_pipeline_description(
+        &cfg,
+        &video,
+        pipeline::VideoTarget::UpTo(ceiling),
+    );
     let (built, mut events) = pipeline::build_pipeline(&desc, cfg.latency_ms())?;
     // From here on, any `?` still takes the pipeline down.
     let guard = PipelineGuard::new(built);
@@ -1110,7 +1118,11 @@ mod tests {
         // The pipeline uses mpegtsmux; LOAD must announce the same container,
         // or the Default Media Receiver refuses the media.
         let cfg = StreamConfig::default();
-        let desc = pipeline::chromecast_pipeline_description(&cfg, &pipeline::VideoSource::Test);
+        let desc = pipeline::chromecast_pipeline_description(
+            &cfg,
+            &pipeline::VideoSource::Test,
+            nd_core::pipeline::VideoTarget::Exact((cfg.width, cfg.height)),
+        );
         assert!(desc.contains("mpegtsmux"), "{desc}");
         assert_eq!(CONTENT_TYPE, "video/mp2t");
     }

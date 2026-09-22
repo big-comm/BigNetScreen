@@ -88,7 +88,11 @@ async fn serves_real_mpegts_bytes_to_the_receiver() {
         encoder,
         ..Default::default()
     };
-    let desc = pipeline::chromecast_pipeline_description(&cfg, &VideoSource::Test);
+    let desc = pipeline::chromecast_pipeline_description(
+        &cfg,
+        &VideoSource::Test,
+        nd_core::pipeline::VideoTarget::Exact((cfg.width, cfg.height)),
+    );
     let (gst_pipeline, _events) =
         pipeline::build_pipeline(&desc, cfg.latency_ms()).expect("pipeline");
 
@@ -165,7 +169,11 @@ async fn a_wrong_token_gets_nothing() {
     let addr = server.local_addr();
 
     let cfg = StreamConfig::default();
-    let desc = pipeline::chromecast_pipeline_description(&cfg, &VideoSource::Test);
+    let desc = pipeline::chromecast_pipeline_description(
+        &cfg,
+        &VideoSource::Test,
+        nd_core::pipeline::VideoTarget::Exact((cfg.width, cfg.height)),
+    );
     let (gst_pipeline, _events) =
         pipeline::build_pipeline(&desc, cfg.latency_ms()).expect("pipeline");
     let sink = gst_pipeline.by_name(CHROMECAST_SINK_NAME).expect("sink");

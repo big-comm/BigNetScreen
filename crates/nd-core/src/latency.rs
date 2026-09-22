@@ -40,6 +40,15 @@ use std::sync::atomic::{AtomicU8, Ordering};
 /// What to favour when delay and smoothness pull in opposite directions.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Profile {
+    /// As little delay as the receiver will agree to hold.
+    ///
+    /// Only the Cast paths can go below [`Profile::Responsive`]: on Miracast
+    /// the buffering is ours and responsive already asks for the pipeline's own
+    /// minimum, so there is nothing left to give up. Measured against a 4K
+    /// Google TV Stick on a working network, 50 ms held; a busier network or a
+    /// receiver with less patience will stutter, which is why it is offered
+    /// rather than assumed.
+    Low,
     /// The lowest delay the pipeline can sustain.
     #[default]
     Responsive,
@@ -60,6 +69,13 @@ pub const FILM_RTP_LATENCY_MS: u64 = 200;
 /// The playout delay asked of a Cast receiver in [`Profile::Film`].
 pub const FILM_PLAYOUT_DELAY_MS: u32 = 400;
 
+/// The playout delay asked of a Cast receiver in [`Profile::Low`].
+///
+/// The floor the request is clamped to. Measured holding a session against a
+/// 4K Google TV Stick on a quiet network; the same number on a congested one is
+/// a stutter, which is the trade the person is choosing when they pick it.
+pub const LOW_PLAYOUT_DELAY_MS: u32 = 50;
+
 static PROFILE: AtomicU8 = AtomicU8::new(0);
 
 /// Sets the profile for the whole process. The interface calls this.
@@ -68,6 +84,7 @@ pub fn set(profile: Profile) {
         match profile {
             Profile::Responsive => 0,
             Profile::Film => 1,
+            Profile::Low => 2,
         },
         Ordering::Relaxed,
     );
@@ -78,6 +95,7 @@ pub fn set(profile: Profile) {
 pub fn current() -> Profile {
     match PROFILE.load(Ordering::Relaxed) {
         1 => Profile::Film,
+        2 => Profile::Low,
         _ => Profile::Responsive,
     }
 }
@@ -85,6 +103,19 @@ pub fn current() -> Profile {
 /// Is buffered playback in force?
 pub fn is_film() -> bool {
     current() == Profile::Film
+}
+
+/// The playout delay to ask a Cast receiver for, given the profile.
+///
+/// The only knob where [`Profile::Low`] differs from [`Profile::Responsive`]:
+/// everywhere else responsive already asks for the minimum, and there is
+/// nothing below a minimum to offer.
+pub fn cast_playout_delay_ms(responsive: u32) -> u32 {
+    match current() {
+        Profile::Low => LOW_PLAYOUT_DELAY_MS,
+        Profile::Responsive => responsive,
+        Profile::Film => FILM_PLAYOUT_DELAY_MS,
+    }
 }
 
 #[cfg(test)]
