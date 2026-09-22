@@ -1064,7 +1064,7 @@ async fn start_pipeline(
     let transport = WfdTransport::new(cfg.sink_ip, sink_rtp_port);
     let driver = nd_net::detect_gpu_driver();
 
-    let candidates = pipeline::encoder_candidates(driver);
+    let candidates = pipeline::encoder_candidates(driver, pipeline::Acceleration::preferred());
     if candidates.is_empty() {
         return Err(NdError::Unsupported(
             "no H.264 encoder available — install gst-plugins-ugly (x264) \

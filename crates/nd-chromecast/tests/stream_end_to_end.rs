@@ -81,7 +81,11 @@ async fn serves_real_mpegts_bytes_to_the_receiver() {
     let url = server.url();
     let addr = server.local_addr();
 
-    let encoder = pipeline::best_encoder(pipeline::GpuDriver::Unknown).expect("algum encoder");
+    let encoder = pipeline::best_encoder(
+        pipeline::GpuDriver::Unknown,
+        pipeline::Acceleration::Allowed,
+    )
+    .expect("algum encoder");
     let cfg = StreamConfig {
         width: 640,
         height: 480,

@@ -19,7 +19,25 @@
 //! The screen KWin creates always runs at 60 Hz (`OutputModeline(size, 60000)`
 //! in `drm_virtual_output.cpp`), and the stream it hands to PipeWire is capped
 //! at that rate — a higher fps setting cannot be honoured here, whatever the
-//! screen is doing.
+//! screen is doing. The protocol below has no refresh-rate argument either, so
+//! there is nothing to ask for.
+//!
+//! In practice it delivers about 49, not 60, and the shortfall is not ours.
+//! KWin's capture is driven by damage, never by a clock
+//! (`OutputScreenCastSource` connects to `OutputLayer::repaintScheduled`), so
+//! the rate we measure is the rate the screen is being painted at: a 24 fps
+//! video gives 24, the same video at double speed gives 48. Measured, all
+//! three.
+//!
+//! What caps a *virtual* screen at 49 is that its vblank is a `QTimer`
+//! (`SoftwareVsyncMonitor`, truncating to whole milliseconds against a
+//! 16.666 ms period) feeding a second `QTimer` in the screencast's own pacing.
+//! A real output gets a hardware vblank instead of the first one, and reaches
+//! 88–113 on this machine's 180 Hz panel with the identical pipeline. 1080p
+//! and 1440p both sit at 49, so it is not the cost of the pixels.
+//!
+//! So a log showing 24 is a 24 fps video, not a fault, and closing the gap
+//! between 49 and 60 means patching KWin.
 
 use std::time::{Duration, Instant};
 
@@ -61,6 +79,18 @@ const MIN_VERSION: u32 = 4;
 /// The highest version this code knows how to read. Version 6 adds `serial`,
 /// which is what [`CaptureSource::pipewire_serial`] wants.
 const MAX_VERSION: u32 = 6;
+
+/// The buffer pool to insist on, at the top of what KWin offers.
+///
+/// `screencaststream.cpp` advertises `SPA_POD_CHOICE_RANGE_Int(3, 2, 4)`. Left
+/// to settle on its own the result varied per stream and stayed there, which
+/// is what made one new screen fluid and the next one stutter for no reason
+/// anybody could see — 9 frames a second against 36, with the compositor at 7%
+/// of a core in both.
+///
+/// Four and not more: asking beyond what the producer offers fails the
+/// allocation outright rather than being clamped.
+const KWIN_BUFFER_POOL: u32 = 4;
 
 /// Draw the cursor into the frames (`pointer.embedded`).
 const POINTER_EMBEDDED: u32 = 2;
@@ -278,6 +308,11 @@ impl CaptureBackend for KWinBackend {
             pipewire_serial,
             source_type: SourceType::Virtual,
             size: Some((width, height)),
+            // KWin offers two to four buffers and prefers three, and where the
+            // negotiation lands is fixed for the life of the stream. Pin it to
+            // the top: the compositor can only paint into a buffer we have
+            // given back, and this pipeline holds one by design.
+            min_buffers: Some(KWIN_BUFFER_POOL),
             media: None,
         })
     }

@@ -40,7 +40,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let loopback = IpAddr::V4(Ipv4Addr::LOCALHOST);
     let server = StreamServer::bind(loopback).await?;
 
-    let encoder = pipeline::best_encoder(pipeline::GpuDriver::Unknown)?;
+    let encoder = pipeline::best_encoder(
+        pipeline::GpuDriver::Unknown,
+        pipeline::Acceleration::Allowed,
+    )?;
     let cfg = StreamConfig {
         width: 1280,
         height: 720,

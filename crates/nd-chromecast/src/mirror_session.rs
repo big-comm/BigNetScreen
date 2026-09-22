@@ -866,10 +866,17 @@ pub async fn run(
         // encodes the portal's guess encodes the real thing: the two differ by
         // the compositor's scale factor, not by a capability.
         let driver = crate::session::detect_gpu_driver();
-        cfg.encoder = pipeline::working_encoder(driver, cfg).await?;
+        cfg.encoder = pipeline::working_encoder(driver, pipeline::Acceleration::preferred(), cfg).await?;
         // The candidate list is logged before the probes run; this is the one
         // that actually encoded a frame, which is the only one that matters.
-        tracing::info!(encoder = ?cfg.encoder, "encoder in use");
+        // The thread count is also the slice count for software encoding, and
+        // it was invisible: a report of "still multi-threaded" could not be
+        // answered from a log that never said how many.
+        tracing::info!(
+            encoder = ?cfg.encoder,
+            threads = (!cfg.encoder.is_hardware()).then(pipeline::software_encode_threads),
+            "encoder in use"
+        );
         if *cancel.borrow() {
             return Ok(());
         }

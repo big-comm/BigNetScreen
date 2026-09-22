@@ -625,7 +625,6 @@ pub fn build_configured_pipeline(
     if std::env::var("BIGNETSCREEN_LATENCY").is_ok() {
         instrument_latency(&pipeline);
     }
-    instrument_framerate(&pipeline);
     finish_file_sources(&pipeline);
 
     let (tx, rx) = futures::channel::mpsc::channel(32);
@@ -808,6 +807,34 @@ impl H264Profile {
 }
 
 /// Candidate H.264 encoders, in order of preference.
+///
+/// ## Why `vulkanh264enc` is not one of them
+///
+/// GStreamer 1.28.6 ships it, and it works. Measured here against this list's
+/// own software encoder, 1280x720, same content and target bitrate:
+///
+/// | | x264 | vulkanh264enc |
+/// |---|---|---|
+/// | encoder latency | 0 ms | 4 frames — 133 ms at 30 Hz, 66 ms at 60 Hz |
+/// | slices per frame | one per thread | 1 |
+/// | input it accepts | the capture's own BGRx | `VulkanImage` NV12 only |
+///
+/// The four-frame depth is fixed: `num-ref-frames=1` and `b-frames=0` do not
+/// move it. That is the latency this project spent a week taking out of the
+/// path, and no amount of encoder quality buys it back.
+///
+/// Converting the capture for it is worse than it looks. `vulkancolorconvert`
+/// would do BGRx to NV12 on the card, and **segfaults** — reproducibly, on
+/// this driver, within five frames. So the conversion has to happen on the
+/// CPU, which is the cost the hardware path exists to avoid.
+///
+/// And a crash is not a fallback. [`working_encoder`] probes each candidate
+/// and moves on when one produces no frame; it cannot survive one that takes
+/// the process down, and since the session now lives in a service, that ends
+/// somebody's cast rather than one pipeline.
+///
+/// Worth revisiting when `vulkancolorconvert` stops crashing *and* the
+/// encoder's four-frame depth is gone. Either alone is not enough.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum H264Encoder {
     /// `vah264enc` (the modern `va` plugin) — the best option on Intel/AMD.
@@ -937,16 +964,37 @@ impl H264Encoder {
                     ms => ms,
                 };
                 format!(
-                    // No `sliced-threads`: it splits each frame into several
-                    // slices, and the hardware decoders in TVs and projectors
-                    // expect **one slice per frame** (the reference C forces
-                    // `num-slices=1` on every encoder). It costs a little
-                    // parallelism, but it is an interoperability requirement.
+                    // `threads` decides how many slices each frame is cut
+                    // into, one per thread, and `tune=zerolatency` slices
+                    // whatever this says. `0` means one per core, so a
+                    // sixteen-core machine was sending eleven slices a frame.
+                    //
+                    // Measured at 1280x720, same content and bitrate:
+                    //
+                    // | threads | slices | bytes  | encoder latency |
+                    // |---------|--------|--------|-----------------|
+                    // | 1       | 1      | 42 418 | 0 ms            |
+                    // | 2       | 2      | 43 904 | 0 ms            |
+                    // | 4       | 4      | 46 000 | 0 ms            |
+                    // | 0 (11)  | 11     | 49 883 | 0 ms            |
+                    //
+                    // and at 2560x1440 the throughput is 60 fps on one thread,
+                    // 68 on three, 69 on all sixteen. So past a handful of
+                    // threads every extra slice costs bits and buys nothing:
+                    // four of them reach 68 of those 69 frames while spending
+                    // 8% fewer bits than eleven.
+                    //
+                    // `sliced-threads=false` would give one slice a frame and
+                    // is the trap here: it puts x264 back on frame threading,
+                    // which the same measurement showed declaring **700 ms**
+                    // of latency. One slice is not worth that, and the comment
+                    // this replaces claimed we already had it.
                     "x264enc name=enc tune=zerolatency speed-preset=ultrafast \
                      rc-lookahead=0 sync-lookahead=0 bframes=0 b-adapt=false \
-                     threads=0 aud=true cabac={cabac} ref=1 \
+                     threads={threads} aud=true cabac={cabac} ref=1 \
                      pass=cbr vbv-buf-capacity={vbv} intra-refresh={intra} \
-                     key-int-max={gop} bitrate={kbps}"
+                     key-int-max={gop} bitrate={kbps}",
+                    threads = software_encode_threads()
                 )
             }
             // `bitrate` in kbps. No B-frames and CBR: the VA-API defaults
@@ -1096,6 +1144,52 @@ fn encoder_fits_driver(enc: H264Encoder, driver: GpuDriver) -> bool {
     }
 }
 
+/// How many threads the software encoder gets.
+///
+/// One slice per thread, so this is also how finely each frame is cut. Capped
+/// because the two pull apart: throughput stops improving after about three
+/// threads while every extra slice keeps costing bits, and a hardware decoder
+/// in a television has fewer pieces to reassemble. On a machine with four
+/// cores or fewer it changes nothing — that is already all there is.
+pub fn software_encode_threads() -> u32 {
+    std::thread::available_parallelism()
+        .map(|n| n.get() as u32)
+        .unwrap_or(2)
+        .clamp(1, 4)
+}
+
+/// Whether a session may encode on the graphics card.
+///
+/// A parameter rather than a read of the preferences from in here: this module
+/// is also where the tests for encoder selection live, and a function that
+/// consults the machine's settings file gives a different answer on the
+/// machine of whoever runs them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Acceleration {
+    Allowed,
+    Off,
+}
+
+impl Acceleration {
+    pub fn from_settings(settings: &crate::settings::Settings) -> Self {
+        if settings.hardware_encoding {
+            Acceleration::Allowed
+        } else {
+            Acceleration::Off
+        }
+    }
+
+    /// What the preferences currently say. For the call sites that have no
+    /// `Settings` to hand and want the person's choice anyway.
+    pub fn preferred() -> Self {
+        Self::from_settings(&crate::settings::current())
+    }
+
+    fn permits(self, encoder: H264Encoder) -> bool {
+        self == Acceleration::Allowed || !encoder.is_hardware()
+    }
+}
+
 /// The name given to the encoder element in every description.
 pub const ENCODER_NAME: &str = "enc";
 
@@ -1109,7 +1203,7 @@ pub const ENCODER_NAME: &str = "enc";
 ///
 /// Only the structural filtering stays static: NVENC does not run without an
 /// NVIDIA card, and VA-API does not run under NVIDIA's proprietary driver.
-pub fn encoder_candidates(driver: GpuDriver) -> Vec<H264Encoder> {
+pub fn encoder_candidates(driver: GpuDriver, acceleration: Acceleration) -> Vec<H264Encoder> {
     let available = probe_encoders();
 
     if let Ok(name) = std::env::var("BIGNETSCREEN_ENCODER") {
@@ -1122,10 +1216,10 @@ pub fn encoder_candidates(driver: GpuDriver) -> Vec<H264Encoder> {
 
     let mut candidates: Vec<H264Encoder> = available
         .into_iter()
-        .filter(|enc| encoder_fits_driver(*enc, driver))
+        .filter(|enc| acceleration.permits(*enc) && encoder_fits_driver(*enc, driver))
         .collect();
     candidates.sort_by_key(|enc| std::cmp::Reverse(enc.priority()));
-    tracing::info!(?candidates, ?driver, "encoder attempt order");
+    tracing::info!(?candidates, ?driver, ?acceleration, "encoder attempt order");
     candidates
 }
 
@@ -1234,8 +1328,12 @@ pub fn build_monitored(
 /// with a partial configuration it once validated a pipeline that differed
 /// from the real one in every property but two, so a property the hardware
 /// rejects would have passed here and failed on the screen.
-pub async fn working_encoder(driver: GpuDriver, session: StreamConfig) -> Result<H264Encoder> {
-    for encoder in encoder_candidates(driver) {
+pub async fn working_encoder(
+    driver: GpuDriver,
+    acceleration: Acceleration,
+    session: StreamConfig,
+) -> Result<H264Encoder> {
+    for encoder in encoder_candidates(driver, acceleration) {
         let cfg = StreamConfig { encoder, ..session };
         let description = format!(
             "videotestsrc is-live=true num-buffers=2 ! {} ! {} ! fakesink sync=false",
@@ -1267,20 +1365,29 @@ pub async fn working_encoder(driver: GpuDriver, session: StreamConfig) -> Result
 }
 
 /// Convenience: scans the registry and picks the best encoder for the driver.
-pub fn best_encoder(driver: GpuDriver) -> Result<H264Encoder> {
-    let available = probe_encoders();
+pub fn best_encoder(driver: GpuDriver, acceleration: Acceleration) -> Result<H264Encoder> {
+    let installed = probe_encoders();
 
     // `BIGNETSCREEN_ENCODER=vah264enc` forces a specific encoder. It is there
     // to measure in the field whether a quirk (such as Intel `xe`'s) still
     // holds on current hardware, rather than carrying it forever out of
     // inertia.
+    // Read against everything installed, before the preference is applied.
+    // This variable exists to measure a specific encoder in the field, and a
+    // switch in the preferences silently overruling it makes it useless for
+    // exactly the session somebody is trying to diagnose — which cost one
+    // measurement in the session that wrote this.
     if let Ok(name) = std::env::var("BIGNETSCREEN_ENCODER") {
-        if let Some(forced) = available.iter().copied().find(|e| e.element() == name) {
+        if let Some(forced) = installed.iter().copied().find(|e| e.element() == name) {
             tracing::warn!(?forced, "encoder forced by BIGNETSCREEN_ENCODER");
             return Ok(forced);
         }
-        tracing::warn!(%name, ?available, "BIGNETSCREEN_ENCODER not available; ignoring it");
+        tracing::warn!(%name, ?installed, "BIGNETSCREEN_ENCODER not available; ignoring it");
     }
+    let available: Vec<H264Encoder> = installed
+        .into_iter()
+        .filter(|enc| acceleration.permits(*enc))
+        .collect();
     let chosen = select_encoder(&available, driver);
     tracing::info!(?available, ?driver, ?chosen, "H.264 encoder selection");
     chosen.ok_or_else(|| {
@@ -1313,6 +1420,26 @@ pub enum VideoSource {
         node_id: u32,
         /// Prefer the non-reusable portal serial over the legacy node ID.
         serial: Option<u64>,
+        /// The smallest buffer pool to accept from the producer.
+        ///
+        /// `None` leaves `pipewiresrc`'s own default of one, which lets the
+        /// producer settle anywhere in the range it offers. KWin offers two to
+        /// four and prefers three (`screencaststream.cpp`), and where it lands
+        /// is decided once per stream and kept — which is why a new virtual
+        /// screen came out fluid or stuttering at random and stayed that way,
+        /// with no load to blame: measured at 9 frames a second on a bad one
+        /// and 36 on a good one, with the compositor at 7% of a core both
+        /// times.
+        ///
+        /// A small pool starves the compositor: it can only paint into a
+        /// buffer we have given back, and this pipeline holds one in
+        /// `videorate` by design. With two, that is half the pool.
+        ///
+        /// Only set where the producer's range is known from its source.
+        /// Asking for more than it offers is not clamped — it fails the
+        /// allocation outright, and a capture that will not start is worse
+        /// than one that sometimes stutters.
+        min_buffers: Option<u32>,
         /// The size to demand from the producer, when it must not be left open.
         ///
         /// A **virtual monitor** has no panel to take a resolution from, so
@@ -1378,7 +1505,12 @@ impl VideoSource {
                 node_id,
                 serial,
                 size,
+                min_buffers,
             } => {
+                let pool = match min_buffers {
+                    Some(n) => format!(" min-buffers={n}"),
+                    None => String::new(),
+                };
                 let fd_prop = match fd {
                     Some(fd) => format!("fd={fd} "),
                     None => String::new(),
@@ -1419,7 +1551,7 @@ impl VideoSource {
                 // only their timing is, and regular beats bursty.
                 format!(
                     "pipewiresrc name={CAPTURE_SOURCE_NAME} {fd_prop}{target} \
-                     do-timestamp=true keepalive-time={keepalive} resend-last=true",
+                     do-timestamp=true keepalive-time={keepalive} resend-last=true{pool}",
                     keepalive = capture_keepalive_ms()
                 )
             }
@@ -1849,10 +1981,28 @@ impl StreamConfig {
         // the stall pays for its own continuation.
         //
         // Cap the gap it will fill. Anything longer is a stall, and a stalled
-        // picture should cost nothing until it recovers. `drop-only` is not the
-        // answer despite costing less: this is also what turns the compositor's
-        // variable cadence into a fixed one, and without it encoded frames
-        // carry timestamps the Cast sender cannot map through its segment.
+        // picture should cost nothing until it recovers.
+        //
+        // This element is also the most expensive thing in the path, and it is
+        // staying. Instrumented at 2560x1440 it holds each frame **35 ms**
+        // waiting for the next, against 12 ms for the entire capture and 4 ms
+        // for upload and encode together — removing it measured 57 ms down to
+        // 22. It has been removed twice and put back twice, by two different
+        // routes:
+        //
+        // - `drop-only=true`, which stops it duplicating and therefore holding;
+        // - skipping it for `nvh264enc`, which negotiates `framerate=0/1`
+        //   where `x264enc` and `openh264enc` refuse to link at all.
+        //
+        // Both produce the same failure against a real receiver, and it is not
+        // subtle: `encoded frame has no valid running-time timestamp`, with a
+        // black picture on a shared screen and a session that drops seconds
+        // after a virtual one appears. Turning the compositor's variable
+        // cadence into a fixed one is what lets the Cast sender map an encoded
+        // frame through its segment, and nothing downstream reconstructs that.
+        //
+        // So the 35 ms is the price of the sender working. Anyone going after
+        // it again needs to fix the mapping first, not the cadence.
         let rate = format!("videorate max-duplication-time={MAX_DUPLICATION_NS}");
         // `add-borders=true` is **not** vapostproc's default (unlike
         // videoscale's): without it, a 16:10 screen sent to a 16:9 panel
@@ -2547,6 +2697,7 @@ mod tests {
             node_id: 42,
             serial: None,
             size: None,
+            min_buffers: None,
         }
         .description();
         assert!(
@@ -2785,11 +2936,94 @@ mod tests {
     }
 
     #[test]
+    fn what_each_driver_is_allowed_to_encode_with() {
+        use H264Encoder::*;
+
+        // The machines this ships to mostly have no usable hardware encoder,
+        // so the rule that decides what they get is worth pinning. Reads as a
+        // table on purpose: a change to `encoder_fits_driver` should have to
+        // change a row here and say why.
+        let allowed = |driver: GpuDriver| {
+            H264Encoder::ALL
+                .into_iter()
+                .filter(|enc| encoder_fits_driver(*enc, driver))
+                .collect::<Vec<_>>()
+        };
+
+        // Software is never filtered out, whatever the machine has. It is the
+        // only thing keeping a session possible on hardware we cannot use.
+        for driver in [
+            GpuDriver::I915,
+            GpuDriver::Xe,
+            GpuDriver::Amdgpu,
+            GpuDriver::Nvidia,
+            GpuDriver::Nouveau,
+            GpuDriver::Unknown,
+        ] {
+            let allowed = allowed(driver);
+            assert!(allowed.contains(&X264), "{driver:?} lost x264");
+            assert!(allowed.contains(&OpenH264), "{driver:?} lost openh264");
+        }
+
+        // NVENC only where NVIDIA's own driver is loaded, and VA-API never
+        // alongside it: the NVIDIA stack exposes no usable VA-API encoder.
+        assert!(encoder_fits_driver(NvH264, GpuDriver::Nvidia));
+        assert!(!encoder_fits_driver(VaH264, GpuDriver::Nvidia));
+        assert!(!encoder_fits_driver(VaapiH264, GpuDriver::Nvidia));
+        for driver in [GpuDriver::I915, GpuDriver::Amdgpu, GpuDriver::Unknown] {
+            assert!(!encoder_fits_driver(NvH264, driver), "NVENC on {driver:?}");
+            assert!(
+                encoder_fits_driver(VaH264, driver),
+                "no VA-API on {driver:?}"
+            );
+        }
+
+        // `nouveau` exposes no usable NVENC, so it gets nothing in hardware.
+        assert_eq!(allowed(GpuDriver::Nouveau), vec![X264, OpenH264]);
+
+        // Intel `xe` is the odd one: the enum says VA-API encode hangs there
+        // and software is preferred, and the filter still offers VA-API. That
+        // is deliberate — `working_encoder` probes each candidate and moves on
+        // when it produces no frame — but it costs the probe's timeout on
+        // every session that starts on such a machine, and it is the only
+        // driver where the comment and the filter say different things.
+        assert!(
+            encoder_fits_driver(VaH264, GpuDriver::Xe),
+            "if this ever changes, the probe is no longer what saves an xe machine"
+        );
+    }
+
+    #[test]
+    fn turning_acceleration_off_leaves_only_software() {
+        use H264Encoder::*;
+
+        for enc in [VaH264, VaapiH264, NvH264, V4l2H264] {
+            assert!(Acceleration::Allowed.permits(enc));
+            assert!(
+                !Acceleration::Off.permits(enc),
+                "{enc:?} survived the switch"
+            );
+        }
+        // Turning it off must never leave a session with nothing to encode
+        // with, so software is permitted either way.
+        for enc in [X264, OpenH264] {
+            assert!(Acceleration::Allowed.permits(enc));
+            assert!(Acceleration::Off.permits(enc), "{enc:?} went with it");
+        }
+
+        let settings = crate::settings::Settings {
+            hardware_encoding: false,
+            ..Default::default()
+        };
+        assert_eq!(Acceleration::from_settings(&settings), Acceleration::Off);
+    }
+
+    #[test]
     fn candidates_keep_a_software_backup() {
         // If the GPU produces no frames, the software path has to be in the
         // list to take over — without it the fallback would have nowhere to
         // go.
-        let candidates = encoder_candidates(GpuDriver::Xe);
+        let candidates = encoder_candidates(GpuDriver::Xe, Acceleration::Allowed);
         if candidates.len() < 2 {
             return; // a test machine with only one encoder
         }
@@ -2907,6 +3141,7 @@ mod tests {
             node_id: 42,
             serial: None,
             size: None,
+            min_buffers: None,
         };
         let transport = WfdTransport::new(IpAddr::V4(Ipv4Addr::new(192, 168, 49, 1)), 19000);
         wfd_pipeline_description(cfg, &src, &transport)
@@ -2922,6 +3157,7 @@ mod tests {
             node_id: 42,
             serial: None,
             size: None,
+            min_buffers: None,
         };
         let desc = chromecast_pipeline_description(
             &cfg,
@@ -3236,6 +3472,7 @@ mod tests {
                 node_id: 42,
                 serial: None,
                 size,
+                min_buffers: None,
             }
             .description();
             assert!(
@@ -3506,15 +3743,85 @@ mod tests {
     }
 
     #[test]
-    fn encoders_emit_one_slice_per_frame() {
-        // The hardware decoders in TVs expect one slice per frame.
-        let cfg = StreamConfig::default();
+    fn a_buffer_floor_is_asked_for_only_where_it_was_given() {
+        let source = |min_buffers| {
+            VideoSource::PipeWire {
+                fd: None,
+                node_id: 7,
+                serial: None,
+                size: None,
+                min_buffers,
+            }
+            .description()
+        };
+        // Silence by default: a producer whose advertised range we have not
+        // read is left to the element's own minimum, because asking for more
+        // than it offers fails the allocation instead of being clamped.
+        assert!(!source(None).contains("min-buffers"), "{}", source(None));
         assert!(
-            !cfg.encoder
-                .encoder_description(&cfg)
-                .contains("sliced-threads"),
-            "x264 must not slice the frame"
+            source(Some(4)).contains("min-buffers=4"),
+            "{}",
+            source(Some(4))
         );
+    }
+
+    #[test]
+    fn every_encoder_keeps_the_element_that_fixes_the_cadence() {
+        // Removed twice, for 35 ms, and put back twice: without it the Cast
+        // sender cannot map an encoded frame through its segment, and the
+        // receiver shows black. The cost is deliberate.
+        for encoder in [
+            H264Encoder::NvH264,
+            H264Encoder::X264,
+            H264Encoder::OpenH264,
+            H264Encoder::VaH264,
+        ] {
+            let stage = StreamConfig {
+                encoder,
+                fps: 60,
+                ..Default::default()
+            }
+            .convert_scale(VideoTarget::Exact((1280, 720)));
+            assert!(stage.contains("videorate"), "{encoder:?}: {stage}");
+            assert!(stage.contains("framerate=60/1"), "{encoder:?}: {stage}");
+        }
+    }
+
+    #[test]
+    fn the_software_encoder_is_not_cut_into_a_slice_per_core() {
+        // `threads` is also the slice count, and `0` means one per core. A
+        // sixteen-core machine was sending eleven slices a frame and paying
+        // 14% more bits for the privilege, with no throughput to show for it.
+        let cfg = StreamConfig {
+            encoder: H264Encoder::X264,
+            ..Default::default()
+        };
+        let desc = cfg.encoder.encoder_description(&cfg);
+        let threads: u32 = desc
+            .split("threads=")
+            .nth(1)
+            .and_then(|rest| rest.split_whitespace().next())
+            .and_then(|n| n.parse().ok())
+            .unwrap_or_else(|| panic!("no thread count in {desc}"));
+        assert!(
+            (1..=4).contains(&threads),
+            "{threads} threads means {threads} slices a frame"
+        );
+
+        // The tempting fix for the slice count, and the reason it is not here:
+        // it returns x264 to frame threading, measured declaring 700 ms of
+        // latency. An assertion rather than a comment because the next person
+        // to read "one slice per frame" will reach for exactly this.
+        assert!(
+            !desc.contains("sliced-threads"),
+            "sliced-threads=false costs 700 ms of latency: {desc}"
+        );
+    }
+
+    #[test]
+    fn hardware_encoders_are_told_to_emit_one_slice() {
+        // These take an explicit slice count, so here the interoperability
+        // requirement is something we can actually ask for.
         for enc in [H264Encoder::VaH264, H264Encoder::VaapiH264] {
             let cfg = StreamConfig {
                 encoder: enc,

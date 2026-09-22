@@ -362,7 +362,8 @@ pub async fn run_with_video(
     // Prove encoder startup at the requested mode before opening capture flow,
     // building exactly the encoder this session will stream with.
     let driver = detect_gpu_driver();
-    cfg.encoder = pipeline::working_encoder(driver, cfg).await?;
+    cfg.encoder =
+        pipeline::working_encoder(driver, pipeline::Acceleration::preferred(), cfg).await?;
     // What the session settled on, for the interface to show. The receiver's
     // control port is the one it is reached on, so the same value doubles as
     // the address to measure the link against.

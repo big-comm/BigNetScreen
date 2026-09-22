@@ -78,7 +78,7 @@ async fn main() -> nd_core::Result<()> {
     // The encoder production would pick. Counting frames through x264 says
     // nothing about a machine that casts with NVENC.
     let driver = nd_net::detect_gpu_driver();
-    let encoder = pipeline::best_encoder(driver)?;
+    let encoder = pipeline::best_encoder(driver, pipeline::Acceleration::preferred())?;
     eprintln!("encoder: {encoder:?} (driver {driver:?})");
     let cfg = pipeline::StreamConfig {
         width,

@@ -36,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // The same encoder selection production uses: registry + GPU driver.
     let driver = nd_net_driver();
-    let encoder = pipeline::best_encoder(driver)?;
+    let encoder = pipeline::best_encoder(driver, pipeline::Acceleration::preferred())?;
     println!("encoder escolhido: {encoder:?} (driver {driver:?})");
 
     println!("requesting capture from the portal…");

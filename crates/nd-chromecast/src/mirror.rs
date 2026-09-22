@@ -75,7 +75,11 @@ pub fn target_delay_ms() -> u32 {
 fn resolve_target_delay_ms(default: u32, override_value: Option<&str>) -> u32 {
     match override_value {
         Some(value) => match value.parse::<u32>() {
-            Ok(delay) => delay.clamp(50, 1_000),
+            // No floor. A knob that exists to measure what the receiver will
+            // take cannot refuse the values worth measuring: a session run at
+            // `0` was silently answered with 50, and reported back as "zero
+            // works" when zero had never been sent.
+            Ok(delay) => delay.min(1_000),
             Err(_) => {
                 tracing::warn!(
                     value,
@@ -748,7 +752,10 @@ mod tests {
             nd_core::latency::FILM_PLAYOUT_DELAY_MS,
         ] {
             for (value, expected) in [
-                ("0", 50),
+                // Zero reaches the receiver. It used to be rounded up to 50,
+                // which made every attempt to test a shorter buffer report
+                // success without having tested one.
+                ("0", 0),
                 ("50", 50),
                 ("100", 100),
                 ("1000", 1000),

@@ -73,7 +73,7 @@ pub fn available() -> bool {
 fn apply_encoder_policy(driver: GpuDriver) {
     static APPLIED: OnceLock<()> = OnceLock::new();
     APPLIED.get_or_init(|| {
-        let candidates = pipeline::encoder_candidates(driver);
+        let candidates = pipeline::encoder_candidates(driver, pipeline::Acceleration::preferred());
         let known = [
             H264Encoder::VaH264,
             H264Encoder::VaapiH264,

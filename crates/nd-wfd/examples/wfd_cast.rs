@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("the sink connected from {addr}! negotiating + streaming…");
 
         let driver = nd_net::detect_gpu_driver();
-        let encoder = pipeline::best_encoder(driver)?;
+        let encoder = pipeline::best_encoder(driver, pipeline::Acceleration::preferred())?;
         eprintln!("encoder: {encoder:?} (driver {driver:?})");
 
         // Real capture or a test pattern, depending on the argument.

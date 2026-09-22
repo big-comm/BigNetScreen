@@ -311,6 +311,11 @@ impl CaptureBackend for PortalBackend {
             pipewire_serial,
             source_type,
             size,
+            // The portal fronts whatever compositor is there, and their
+            // advertised buffer ranges are not all in front of us. The element
+            // default stands; asking for more than a producer offers fails the
+            // allocation rather than being clamped.
+            min_buffers: None,
             // A real capture, not a file being played.
             media: None,
         })
@@ -511,6 +516,7 @@ pub(crate) fn pipeline_source(node_id: u32) -> String {
         node_id,
         serial: None,
         size: None,
+        min_buffers: None,
     }
     .description()
 }

@@ -60,6 +60,9 @@ pub struct CaptureSource {
     /// those means Miracast, Cast mirroring, the resolution caps and the stop
     /// button all keep working with no changes of their own.
     pub media: Option<MediaPlayback>,
+    /// The smallest PipeWire buffer pool to accept, where the producer's range
+    /// is known. See [`crate::pipeline::VideoSource::PipeWire::min_buffers`].
+    pub min_buffers: Option<u32>,
 }
 
 /// A file being played to a receiver instead of a screen.
@@ -88,6 +91,7 @@ impl CaptureSource {
             node_id: 0,
             pipewire_serial: None,
             source_type: SourceType::Monitor,
+            min_buffers: None,
             size: Some(size),
             media: Some(playback),
         }
@@ -125,6 +129,7 @@ impl CaptureSource {
             size: (self.source_type == SourceType::Virtual)
                 .then_some(self.size)
                 .flatten(),
+            min_buffers: self.min_buffers,
         }
     }
 
@@ -185,6 +190,7 @@ mod tests {
             node_id: 42,
             pipewire_serial: Some(u64::from(u32::MAX) + 123),
             source_type: SourceType::Monitor,
+            min_buffers: None,
             size: Some((1920, 1080)),
             media: None,
         };

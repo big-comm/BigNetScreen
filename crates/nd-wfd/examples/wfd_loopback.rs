@@ -32,7 +32,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let height: u32 = args.next().and_then(|a| a.parse().ok()).unwrap_or(1080);
     let fps: u32 = args.next().and_then(|a| a.parse().ok()).unwrap_or(60);
 
-    let encoder = pipeline::best_encoder(pipeline::GpuDriver::Unknown)?;
+    let encoder = pipeline::best_encoder(
+        pipeline::GpuDriver::Unknown,
+        pipeline::Acceleration::Allowed,
+    )?;
     let cfg = StreamConfig {
         width,
         height,

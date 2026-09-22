@@ -605,6 +605,10 @@ impl CaptureBackend for MutterBackend {
                 pipewire_serial: None,
                 source_type,
                 size: Some(size),
+                // Mutter's advertised buffer range is not in front of us the way
+                // KWin's is, so this keeps the element's own default rather than
+                // guessing at a floor that could fail the allocation.
+                min_buffers: None,
                 // A real capture, not a file being played.
                 media: None,
             });
@@ -630,6 +634,9 @@ impl CaptureBackend for MutterBackend {
             size: (source_type == SourceType::Virtual).then_some(size),
             // A real capture, not a file being played.
             media: None,
+            // Mutter's advertised buffer range is not in front of us; leave
+            // the element's own default rather than guess at a floor.
+            min_buffers: None,
         })
     }
 

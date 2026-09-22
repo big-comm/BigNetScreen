@@ -511,7 +511,7 @@ pub mod cast {
 
         status.set(SinkState::WaitStreaming);
         let driver = nd_net::detect_gpu_driver();
-        let encoder = pipeline::best_encoder(driver)?;
+        let encoder = pipeline::best_encoder(driver, pipeline::Acceleration::preferred())?;
         // The captured screen's aspect ratio guides the WFD mode choice.
         let mut cfg = WfdCastConfig::new(our_ip, addr.ip(), source.video_source(), encoder)
             .with_audio(source.audio_source())

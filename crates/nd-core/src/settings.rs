@@ -160,6 +160,14 @@ pub struct Settings {
     /// A fixed port for the receiver to connect back to, for a firewall that
     /// is managed by hand. `0` = let the system pick one.
     pub port: u16,
+    /// Encode on the graphics card when one can.
+    ///
+    /// On by default and worth turning off in exactly one situation: a driver
+    /// that accepts the encoder, reports no error and produces a picture that
+    /// is wrong or absent. The startup probe catches an encoder that emits
+    /// nothing; it cannot catch one that emits rubbish, and that is a person's
+    /// judgement to make rather than ours.
+    pub hardware_encoding: bool,
 }
 
 impl Default for Settings {
@@ -177,6 +185,7 @@ impl Default for Settings {
             latency: crate::latency::Profile::Responsive,
             device_name: String::new(),
             port: 0,
+            hardware_encoding: true,
         }
     }
 }
@@ -220,7 +229,8 @@ impl Settings {
              auto_discovery = {}\n\
              latency = {}\n\
              device_name = {}\n\
-             port = {}\n",
+             port = {}\n\
+             hardware_encoding = {}\n",
             self.protocol.as_key(),
             self.quality.as_key(),
             valid_dimension(self.custom_width),
@@ -233,6 +243,7 @@ impl Settings {
             latency_key(self.latency),
             self.device_name.replace(['\n', '\r'], " "),
             self.port,
+            self.hardware_encoding,
         )
     }
 
@@ -270,6 +281,7 @@ impl Settings {
                         settings.fps = fps.clamp(1, 60);
                     }
                 }
+                "hardware_encoding" => settings.hardware_encoding = value == "true",
                 "system_audio" => settings.system_audio = value == "true",
                 "microphone" => settings.microphone = value == "true",
                 // Parsed wide and then clamped, not parsed as `u8`: as a `u8`,
@@ -459,6 +471,17 @@ mod tests {
     }
 
     #[test]
+    fn turning_hardware_encoding_off_survives_the_file() {
+        let off = Settings {
+            hardware_encoding: false,
+            ..Default::default()
+        };
+        assert!(!Settings::from_file(&off.to_file()).hardware_encoding);
+        // And a file from before this key existed keeps the acceleration.
+        assert!(Settings::from_file("fps = 30").hardware_encoding);
+    }
+
+    #[test]
     fn what_is_written_is_what_is_read() {
         let settings = Settings {
             protocol: Protocol::Miracast,
@@ -473,6 +496,9 @@ mod tests {
             port: 31789,
             custom_width: 1920,
             custom_height: 1080,
+            // Every field here is away from its default on purpose: the round
+            // trip only proves anything for a value the parser had to read.
+            hardware_encoding: false,
         };
         assert_eq!(Settings::from_file(&settings.to_file()), settings);
     }

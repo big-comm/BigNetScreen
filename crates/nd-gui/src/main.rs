@@ -56,7 +56,7 @@ fn main() {
 
     // Useful in a bug report: which encoder will actually be used.
     let driver = nd_net::detect_gpu_driver();
-    match nd_core::pipeline::best_encoder(driver) {
+    match nd_core::pipeline::best_encoder(driver, nd_core::pipeline::Acceleration::preferred()) {
         Ok(encoder) => tracing::info!(?driver, ?encoder, "video encoding"),
         Err(err) => tracing::error!(?driver, %err, "no H.264 encoder available"),
     }

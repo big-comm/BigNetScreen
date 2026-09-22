@@ -43,6 +43,7 @@ pub enum SettingsMsg {
     SetFps(u32),
     SetWidth(u32),
     SetHeight(u32),
+    SetHardwareEncoding(bool),
     SetSystemAudio(bool),
     SetMicrophone(bool),
     SetMicVolume(f64),
@@ -226,6 +227,24 @@ impl Component for SettingsPage {
                                 }));
                             } @latency_handler,
                         },
+
+                        // Positive, and on by default. "Disable hardware
+                        // acceleration" as a switch makes turning it off a
+                        // double negative at the moment someone is already
+                        // troubleshooting.
+                        #[name = "hardware_encoding"]
+                        adw::SwitchRow {
+                            set_title: &tr!("Hardware acceleration"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("applications-graphics-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
+                            set_subtitle: &tr!(
+                                "Encode on the graphics card, which is faster and uses far \
+                                 less processor. Turn it off if the picture arrives wrong, \
+                                 broken or not at all."
+                            ),
+                            connect_active_notify[sender] => move |row| {
+                                sender.input(SettingsMsg::SetHardwareEncoding(row.is_active()));
+                            } @hardware_encoding_handler,
+                        },
                     },
 
                     adw::PreferencesGroup {
@@ -396,6 +415,7 @@ impl Component for SettingsPage {
             SettingsMsg::SetHeight(height) => {
                 self.settings.custom_height = settings::valid_dimension(height)
             }
+            SettingsMsg::SetHardwareEncoding(on) => self.settings.hardware_encoding = on,
             SettingsMsg::SetSystemAudio(on) => self.settings.system_audio = on,
             SettingsMsg::SetMicrophone(on) => self.settings.microphone = on,
             SettingsMsg::SetMicVolume(volume) => self.settings.mic_volume = volume as u8,
@@ -466,6 +486,9 @@ impl SettingsPage {
         widgets.fps.block_signal(&widgets.fps_handler);
         widgets.latency.block_signal(&widgets.latency_handler);
         widgets
+            .hardware_encoding
+            .block_signal(&widgets.hardware_encoding_handler);
+        widgets
             .system_audio
             .block_signal(&widgets.system_audio_handler);
         widgets.microphone.block_signal(&widgets.microphone_handler);
@@ -507,6 +530,9 @@ impl SettingsPage {
             Profile::Responsive => 1,
             Profile::Film => 2,
         });
+        widgets
+            .hardware_encoding
+            .set_active(self.settings.hardware_encoding);
         widgets.system_audio.set_active(self.settings.system_audio);
         widgets.microphone.set_active(self.settings.microphone);
         widgets
@@ -533,6 +559,9 @@ impl SettingsPage {
             .unblock_signal(&widgets.custom_height_handler);
         widgets.fps.unblock_signal(&widgets.fps_handler);
         widgets.latency.unblock_signal(&widgets.latency_handler);
+        widgets
+            .hardware_encoding
+            .unblock_signal(&widgets.hardware_encoding_handler);
         widgets
             .system_audio
             .unblock_signal(&widgets.system_audio_handler);
