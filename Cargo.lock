@@ -2138,6 +2138,7 @@ dependencies = [
  "nd-core",
  "nd-ndi",
  "nd-net",
+ "nd-service",
  "nd-webrtc",
  "nd-wfd",
  "qrcode",
@@ -2145,6 +2146,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "zbus",
 ]
 
 [[package]]
@@ -2166,6 +2168,26 @@ version = "0.1.4"
 dependencies = [
  "futures",
  "nd-core",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "zbus",
+]
+
+[[package]]
+name = "nd-service"
+version = "0.1.4"
+dependencies = [
+ "async-trait",
+ "futures",
+ "nd-capture",
+ "nd-chromecast",
+ "nd-core",
+ "nd-ndi",
+ "nd-net",
+ "nd-webrtc",
+ "nd-wfd",
+ "serde",
  "tokio",
  "tracing",
  "tracing-subscriber",

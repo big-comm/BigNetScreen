@@ -357,6 +357,20 @@ pub fn current() -> Settings {
     loaded
 }
 
+/// Re-reads the file, discarding whatever this process had cached.
+///
+/// [`current`] answers from the cache and never looks at the disk again. That
+/// is right for a process that owns its own preferences and wrong for one that
+/// has just been told another process changed them — the session service is
+/// the second kind, and calling `current` there left it running on whatever it
+/// read when it started, latency profile included.
+pub fn reload() -> Settings {
+    if let Ok(mut guard) = CURRENT.write() {
+        *guard = None;
+    }
+    current()
+}
+
 /// Applies new settings and writes them to disk.
 ///
 /// Failing to write is reported and otherwise survivable: the session in front
@@ -405,6 +419,24 @@ pub fn reset() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reload_sees_past_what_this_process_had_cached() {
+        // The service's whole relationship with the preferences file. The
+        // sentinel is a name no file on any machine holds, so the assertion
+        // holds whatever the person running the tests has configured — an
+        // earlier version of this test compared against the defaults and only
+        // passed on a machine with no settings file at all.
+        let restore = current();
+        const SENTINEL: &str = "cache-only-never-written-to-any-file";
+        set_in_memory(&Settings {
+            device_name: SENTINEL.into(),
+            ..restore.clone()
+        });
+        assert_eq!(current().device_name, SENTINEL);
+        assert_ne!(reload().device_name, SENTINEL);
+        set_in_memory(&restore);
+    }
 
     #[test]
     fn custom_resolution_round_trips_and_is_bounded() {

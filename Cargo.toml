@@ -9,6 +9,7 @@ members = [
     "crates/nd-chromecast",
     "crates/nd-wfd",
     "crates/nd-gui",
+    "crates/nd-service",
     "crates/nd-ndi",
     "crates/nd-webrtc",
 ]
@@ -33,6 +34,7 @@ nd-chromecast = { path = "crates/nd-chromecast" }
 nd-wfd = { path = "crates/nd-wfd" }
 nd-ndi = { path = "crates/nd-ndi" }
 nd-webrtc = { path = "crates/nd-webrtc" }
+nd-service = { path = "crates/nd-service" }
 
 # Shared dependencies
 thiserror = "2"

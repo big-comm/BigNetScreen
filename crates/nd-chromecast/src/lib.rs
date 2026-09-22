@@ -13,6 +13,7 @@ pub mod http;
 pub mod media;
 pub mod mirror;
 pub mod mirror_session;
+mod rate;
 pub mod rtcp;
 pub mod rtp;
 pub mod session;

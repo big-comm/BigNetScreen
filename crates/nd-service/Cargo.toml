@@ -1,0 +1,40 @@
+[package]
+name = "nd-service"
+description = "Serviço de sessão (D-Bus) e clientes de linha de comando"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "bignetscreend"
+path = "src/bin/bignetscreend.rs"
+
+[[bin]]
+name = "bignetscreenctl"
+path = "src/bin/bignetscreenctl.rs"
+
+[dependencies]
+nd-core.workspace = true
+nd-capture.workspace = true
+nd-net.workspace = true
+nd-chromecast.workspace = true
+nd-wfd.workspace = true
+nd-ndi.workspace = true
+nd-webrtc.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+futures.workspace = true
+tokio.workspace = true
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+# Already in the tree through `zbus`; named here because the wire types derive
+# from it directly.
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+# `test-util` gives the paused clock: the idle-exit test would otherwise have
+# to wait the real grace period to prove anything.
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util"] }

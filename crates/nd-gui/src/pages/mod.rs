@@ -17,7 +17,7 @@ mod preview;
 pub mod qr;
 pub mod settings;
 
-use nd_core::sink::{SinkInfo, SinkKind, SinkState};
+use nd_core::sink::{SinkKind, SinkState};
 
 use crate::tr;
 
@@ -93,22 +93,30 @@ pub struct DeviceEntry {
 }
 
 impl DeviceEntry {
-    pub fn from_info(
-        info: &SinkInfo,
-        state: SinkState,
-        detail: Option<String>,
-        link: Option<nd_core::sink::StreamLink>,
-    ) -> Self {
+    /// The same row, built from what the service publishes.
+    ///
+    /// An unrecognised protocol keeps its raw name as the label rather than
+    /// being dropped or relabelled: a name this build has no word for still
+    /// belongs to a device somebody can see, and calling it "Test" would be a
+    /// lie. It can only happen when the window and the service are from
+    /// different builds, which is already a broken install.
+    pub fn from_wire(receiver: &nd_service::wire::Receiver) -> Self {
+        let kind = nd_service::wire::kind_from_name(&receiver.kind);
         Self {
-            id: info.id.clone(),
-            name: info.display_name.clone(),
-            protocol: protocol_label(info.kind),
-            address: info.address.clone().unwrap_or_default(),
-            kind: info.kind,
-            castable: info.kind.is_castable(),
-            state,
-            detail: detail.unwrap_or_default(),
-            mode: link.map(describe_link).unwrap_or_default(),
+            id: receiver.id.clone(),
+            name: receiver.display_name.clone(),
+            protocol: kind
+                .map(protocol_label)
+                .unwrap_or_else(|| receiver.kind.clone()),
+            address: receiver.address.clone(),
+            kind: kind.unwrap_or(SinkKind::Dummy),
+            castable: receiver.castable,
+            state: nd_service::wire::state_from_name(&receiver.state)
+                .unwrap_or(SinkState::Disconnected),
+            detail: receiver.detail.clone(),
+            // A row never shows an audience: the count belongs to the session
+            // that is running, not to a receiver sitting in a list.
+            mode: describe_mode(receiver.width, receiver.height, receiver.fps, -1),
         }
     }
 
@@ -149,12 +157,19 @@ impl DeviceEntry {
 /// "1920 × 1080 · 60 Hz", plus how many receivers are watching when the
 /// protocol can tell (NDI publishes to whoever asks, so that number is the
 /// difference between sharing and sharing with nobody).
-pub fn describe_link(link: nd_core::sink::StreamLink) -> String {
-    let mode = link.describe();
-    match link.receivers {
-        None => mode,
-        Some(0) => format!("{mode} · {}", tr!("No receivers yet")),
-        Some(count) => format!(
+/// "1280 × 720 · 60 Hz", with NDI's audience when it has one.
+///
+/// `receivers` is negative for the protocols that cannot tell, which is every
+/// one but NDI: on a point-to-point link "streaming" already means one.
+pub fn describe_mode(width: u32, height: u32, fps: u32, receivers: i32) -> String {
+    if width == 0 {
+        return String::new();
+    }
+    let mode = format!("{width} × {height} · {fps} Hz");
+    match receivers {
+        n if n < 0 => mode,
+        0 => format!("{mode} · {}", tr!("No receivers yet")),
+        count => format!(
             "{mode} · {}",
             crate::tr_n!("{} receiver", "{} receivers", count as usize)
                 .replace("{}", &count.to_string())

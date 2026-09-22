@@ -43,6 +43,7 @@ use nd_core::{NdError, Result};
 use crate::cast::CastChannel;
 use crate::flow::{AckWindow, MAX_UNACKED_FRAMES};
 use crate::mirror::{self, MirrorConfig, Negotiated, OfferedStream, MIRRORING_APP_ID};
+use crate::rate;
 use crate::rtcp::{
     build_sender_report, classify_receiver_packet, ntp_timestamp, parse_cast_feedbacks,
     picture_loss_for, Nack, SenderStats,
@@ -1257,6 +1258,19 @@ async fn stream(
     // single thread tied the audio to the video's cadence: with 10 ms frames,
     // audio has to be drained ~100 times per second, and at 30 fps it was
     // drained 30 — the result was constant overflow and choppy sound.
+    // Where the frames come from and where they stop. Reported every window
+    // beside what the sender managed, because the far end of the pipeline
+    // cannot tell a compositor producing seven frames a second from an encoder
+    // that cannot keep up — and that is the first thing every slow picture
+    // turns out to be.
+    let captured = pipeline::count_buffers(&gst_pipeline, pipeline::CAPTURE_SOURCE_NAME);
+    let encoded = pipeline::count_buffers(&gst_pipeline, pipeline::ENCODER_NAME);
+
+    // What the encoder was told to aim for, and the handle that retunes it.
+    let ceiling_kbps = cfg.bitrate_kbps;
+    let encoder = cfg.encoder;
+    let rate_pipeline = gst_pipeline.clone();
+
     let video_element = gst_pipeline.by_name(MIRROR_VIDEO_SINK);
     let (done_tx, mut done_rx) = tokio::sync::oneshot::channel();
     let done_tx = std::sync::Arc::new(std::sync::Mutex::new(Some(done_tx)));
@@ -1272,6 +1286,9 @@ async fn stream(
         let done_tx = done_tx.clone();
         let receiver_alive = receiver_alive.clone();
         let stopped = workers.stop.clone();
+        let captured = captured.clone();
+        let encoded = encoded.clone();
+        let rate_pipeline = rate_pipeline.clone();
 
         let handle = std::thread::Builder::new()
             .name(format!("cast-{label}"))
@@ -1281,6 +1298,12 @@ async fn stream(
                 let mut packets_resent = 0u64;
                 let mut nacks_expired = 0u64;
                 let mut last_stats = std::time::Instant::now();
+                let mut counted = (0u64, 0u64);
+                // Only video adapts. The audio track is 128 kbit of Opus, and
+                // lowering it would save less than it costs to explain.
+                let mut rate = is_video.then(|| rate::RateControl::new(ceiling_kbps));
+                let mut last_rate = std::time::Instant::now();
+                let mut rate_baseline = (0u64, 0u64, 0u64);
                 let mut last_key_request: Option<std::time::Instant> = None;
                 let started_at = std::time::Instant::now();
                 // State of the receiver's sign of life.
@@ -1382,6 +1405,32 @@ async fn stream(
                         }
                     }
 
+                    if let Some(control) = rate.as_mut() {
+                        if last_rate.elapsed() >= rate::UPDATE_INTERVAL {
+                            last_rate = std::time::Instant::now();
+                            let sent = u64::from(sender.stats.packets);
+                            let seen = rate::Window {
+                                packets_sent: sent.wrapping_sub(rate_baseline.0),
+                                packets_resent: packets_resent - rate_baseline.1,
+                                frames_dropped: sender.frames_dropped - rate_baseline.2,
+                            };
+                            rate_baseline = (sent, packets_resent, sender.frames_dropped);
+                            if let Some(kbps) = control.observe(seen) {
+                                let applied =
+                                    pipeline::set_encoder_bitrate(&rate_pipeline, encoder, kbps);
+                                tracing::info!(
+                                    kbps,
+                                    ceiling_kbps,
+                                    applied,
+                                    resent = seen.packets_resent,
+                                    of = seen.packets_sent,
+                                    dropped = seen.frames_dropped,
+                                    "bitrate adjusted to what the link is carrying"
+                                );
+                            }
+                        }
+                    }
+
                     let window = last_stats.elapsed();
                     if window >= Duration::from_secs(5) {
                         let (frames, pts_jumps, worst_jump, worst_send) = sender.flow.take();
@@ -1414,6 +1463,23 @@ async fn stream(
                             expired = nacks_expired,
                             "backlog control"
                         );
+                        if is_video {
+                            let read =
+                                |counter: &Option<std::sync::Arc<std::sync::atomic::AtomicU64>>| {
+                                    counter.as_ref().map_or(0, |count| {
+                                        count.load(std::sync::atomic::Ordering::Relaxed)
+                                    })
+                                };
+                            let (now_captured, now_encoded) = (read(&captured), read(&encoded));
+                            let seconds = window.as_secs().max(1);
+                            tracing::info!(
+                                captured_fps = (now_captured - counted.0) / seconds,
+                                encoded_fps = (now_encoded - counted.1) / seconds,
+                                sent_fps = frames / seconds,
+                                "pipeline throughput"
+                            );
+                            counted = (now_captured, now_encoded);
+                        }
                         last_stats = std::time::Instant::now();
                     }
                 }

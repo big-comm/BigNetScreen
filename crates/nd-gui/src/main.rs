@@ -4,7 +4,6 @@ mod app;
 mod i18n;
 mod ndi_setup;
 mod pages;
-mod shutdown;
 
 use app::AppModel;
 use relm4::RelmApp;

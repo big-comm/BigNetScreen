@@ -46,6 +46,42 @@ use nd_core::{NdError, Result};
 pub const PORT: u16 = 8009;
 const SOURCE_ID: &str = "sender-0";
 const PLATFORM_DEST: &str = "receiver-0";
+
+/// `CONNECT`, with the fields Chromium's own sender puts in it.
+///
+/// A bare `{"type":"CONNECT"}` opens the virtual connection, which is why it
+/// worked. What it does not do is tell the receiver who is on the other end,
+/// and a receiver that never learned it had a local sender does not always let
+/// go of the session when that sender leaves — reported from use as having to
+/// go into the device's own casting settings before it would take a new
+/// connection.
+///
+/// `connType` 1 is `CONNECTION_TYPE_LOCAL`; `sdkType` 2 and the platform
+/// numbering (6 for Linux) are Chromium's, from
+/// `components/media_router/common/providers/cast/channel/cast_message_util.cc`.
+fn connect_payload() -> String {
+    json!({
+        "type": "CONNECT",
+        "connType": 1,
+        "origin": {},
+        "userAgent": concat!("BigNetScreen/", env!("CARGO_PKG_VERSION")),
+        "senderInfo": {
+            "sdkType": 2,
+            "version": env!("CARGO_PKG_VERSION"),
+            "platform": 6,
+            "connectionType": 1,
+        },
+    })
+    .to_string()
+}
+
+/// `CLOSE`, with the reason that says this was deliberate.
+///
+/// `reasonCode` 5 is Chromium's `kVirtualConnectionClosedByPeer`: "gracefully
+/// closed by the sender". Without it the receiver cannot tell a sender that
+/// left from one whose network died, and it keeps the connection open waiting
+/// for the sender that is never coming back.
+const CLOSE_PAYLOAD: &str = r#"{"type":"CLOSE","reasonCode":5}"#;
 const NS_CONNECTION: &str = "urn:x-cast:com.google.cast.tp.connection";
 const NS_HEARTBEAT: &str = "urn:x-cast:com.google.cast.tp.heartbeat";
 const NS_RECEIVER: &str = "urn:x-cast:com.google.cast.receiver";
@@ -328,7 +364,7 @@ impl CastChannel {
         };
 
         channel
-            .send(NS_CONNECTION, PLATFORM_DEST, r#"{"type":"CONNECT"}"#)
+            .send(NS_CONNECTION, PLATFORM_DEST, &connect_payload())
             .await?;
         tracing::debug!(%ip, "Cast channel established");
         Ok(channel)
@@ -482,7 +518,7 @@ impl CastChannel {
         // If the app launched but its CONNECT fails, still attempt STOP for
         // exactly that session before dropping the platform connection.
         if let Err(err) = self
-            .send(NS_CONNECTION, &app.transport_id, r#"{"type":"CONNECT"}"#)
+            .send(NS_CONNECTION, &app.transport_id, &connect_payload())
             .await
         {
             let _ = self.stop_app(&app).await;
@@ -636,7 +672,7 @@ impl CastChannel {
                 &self.writer,
                 NS_CONNECTION,
                 PLATFORM_DEST,
-                r#"{"type":"CLOSE"}"#,
+                CLOSE_PAYLOAD,
                 true,
             )
             .await;
@@ -655,10 +691,7 @@ impl CastChannel {
     }
 
     async fn close_to(&self, destination: &str) {
-        if let Err(err) = self
-            .send(NS_CONNECTION, destination, r#"{"type":"CLOSE"}"#)
-            .await
-        {
+        if let Err(err) = self.send(NS_CONNECTION, destination, CLOSE_PAYLOAD).await {
             tracing::debug!(%destination, %err, "the receiver did not take the CLOSE");
         }
     }
@@ -908,10 +941,35 @@ async fn reader_loop(
 /// checked; only the anchor's provenance and the host name are waived.
 ///
 /// SECURITY LIMIT: this validates syntax/signatures but does not authenticate
-/// the device's identity. A LAN attacker can present their own chain. Open
-/// Screen separately verifies Cast DeviceAuth against trusted device roots;
-/// this implementation does NOT implement that challenge/response yet. Use
-/// only on a trusted network; certificate validity is not receiver identity.
+/// the device's identity. A LAN attacker can present their own chain and
+/// receive the screen. Certificate validity is not receiver identity.
+///
+/// What closing it takes, from Chromium's own sender
+/// (`cast/channel/cast_auth_util.cc`, `cast/certificate/`):
+///
+/// 1. `DEVICE_AUTH_CHALLENGE` on `urn:x-cast:com.google.cast.tp.deviceauth`
+///    to `receiver-0`, as a **binary** payload — a protobuf, not JSON. Our
+///    `CastMessage` already carries `payload_binary` and `PayloadType::Bin`.
+/// 2. A 16-byte random nonce, checked back against the response.
+/// 3. The signature covers **nonce ‖ the receiver's TLS certificate in DER**
+///    (`cast_auth_util.cc:338`), under SHA-1 or SHA-256 as the response's
+///    `hash_algorithm` says, verified with the device certificate's key.
+/// 4. That certificate chained to an embedded Cast root CA. Not with
+///    `KeyUsage::server_auth()`: Cast device certificates are validated
+///    against Cast's own policy, so the rule this verifier uses for the TLS
+///    handshake is the wrong one to reuse.
+/// 5. Revocation, which in Cast is a signed CRL format of its own with its
+///    own separate root CA (`cast_crl.cc`). Without it a revoked device still
+///    passes, which is a narrower hole than the one above — it takes a
+///    genuine Google-issued device key that has since been revoked.
+///
+/// These do not stage. Steps 1 to 3 on their own prove nothing: an attacker
+/// generates a certificate, signs our nonce with its key, and passes. The
+/// signature only means something once step 4 has established that the key
+/// belongs to a device Google issued. So step 4 is not the polish, it is the
+/// authentication — and it is also where a mistake costs every user their
+/// casting, which is why it wants a pass with a receiver on the bench rather
+/// than a careful guess.
 #[derive(Debug)]
 struct CastCertVerifier(Arc<CryptoProvider>);
 
@@ -997,6 +1055,29 @@ impl ServerCertVerifier for CastCertVerifier {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_handshake_says_who_we_are_and_the_goodbye_says_it_was_deliberate() {
+        // Against Chromium's own sender. A receiver that never learned it had
+        // a local sender kept the session after that sender left, and the
+        // device had to be reset from its own casting settings before it would
+        // take a new connection.
+        let connect: Value = serde_json::from_str(&connect_payload()).unwrap();
+        assert_eq!(connect["type"], "CONNECT");
+        assert_eq!(connect["connType"], 1, "CONNECTION_TYPE_LOCAL");
+        assert!(connect["origin"].is_object());
+        assert_eq!(connect["senderInfo"]["sdkType"], 2);
+        assert_eq!(connect["senderInfo"]["connectionType"], 1);
+        assert_eq!(connect["senderInfo"]["platform"], 6, "Linux");
+        assert!(connect["userAgent"]
+            .as_str()
+            .unwrap()
+            .contains("BigNetScreen"));
+
+        let close: Value = serde_json::from_str(CLOSE_PAYLOAD).unwrap();
+        assert_eq!(close["type"], "CLOSE");
+        assert_eq!(close["reasonCode"], 5, "closed by peer, on purpose");
+    }
 
     #[test]
     fn oversized_length_prefix_is_rejected_before_allocating() {

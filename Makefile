@@ -1,7 +1,8 @@
 # BigNetScreen — native build and installation.
 #
-# `cargo` handles the binary; this Makefile handles what Cargo does not install:
-# the .desktop file, AppStream metainfo, the icon and the compiled translations.
+# `cargo` handles the binaries; this Makefile handles what Cargo does not
+# install: the .desktop file, the D-Bus activation file, AppStream metainfo,
+# the icon and the compiled translations.
 
 PREFIX      ?= /usr
 DESTDIR     ?=
@@ -12,7 +13,9 @@ APPID       := br.com.biglinux.BigNetScreen
 CARGO       ?= cargo
 CARGO_FLAGS ?= --release --locked
 CARGO_TARGET_DIR ?= target
-BINARY ?= $(CARGO_TARGET_DIR)/release/bignetscreen
+BINARY  ?= $(CARGO_TARGET_DIR)/release/bignetscreen
+DAEMON  ?= $(CARGO_TARGET_DIR)/release/bignetscreend
+CTL     ?= $(CARGO_TARGET_DIR)/release/bignetscreenctl
 
 LANGS := $(shell cat po/LINGUAS 2>/dev/null)
 MOFILES := $(patsubst %,build/locale/%/LC_MESSAGES/bignetscreen.mo,$(LANGS))
@@ -39,6 +42,12 @@ run: locale
 
 install: all
 	install -Dm755 "$(BINARY)" "$(BINDIR)/bignetscreen"
+	install -Dm755 "$(DAEMON)" "$(BINDIR)/bignetscreend"
+	install -Dm755 "$(CTL)" "$(BINDIR)/bignetscreenctl"
+	# What makes the service start on demand: a client calls the name, the
+	# bus starts this, and nothing runs while nothing is being shared.
+	install -Dm644 data/$(APPID).Service.service \
+		$(DATADIR)/dbus-1/services/$(APPID).Service.service
 	install -Dm644 data/$(APPID).desktop $(DATADIR)/applications/$(APPID).desktop
 	install -Dm644 data/$(APPID).metainfo.xml $(DATADIR)/metainfo/$(APPID).metainfo.xml
 	install -Dm644 data/icons/$(APPID).svg \
@@ -50,6 +59,9 @@ install: all
 
 uninstall:
 	rm -f $(BINDIR)/bignetscreen
+	rm -f $(BINDIR)/bignetscreend
+	rm -f $(BINDIR)/bignetscreenctl
+	rm -f $(DATADIR)/dbus-1/services/$(APPID).Service.service
 	rm -f $(DATADIR)/applications/$(APPID).desktop
 	rm -f $(DATADIR)/metainfo/$(APPID).metainfo.xml
 	rm -f $(DATADIR)/icons/hicolor/scalable/apps/$(APPID).svg

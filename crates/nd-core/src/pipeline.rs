@@ -24,7 +24,8 @@
 
 use std::net::IpAddr;
 use std::os::fd::RawFd;
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 
 use gst::prelude::*;
 use gstreamer as gst;
@@ -146,6 +147,59 @@ pub fn instrument_framerate(pipeline: &gst::Pipeline) {
             gst::PadProbeReturn::Ok
         });
     }
+}
+
+/// Changes a running encoder's bitrate, in kbit/s.
+///
+/// Lives here because the unit is the encoder's and they disagree — the same
+/// disagreement the module header warns about, which once fed kbit/s to an
+/// element measuring bit/s. A caller adapting the rate should not have to know
+/// which is which.
+///
+/// `false` when this encoder cannot be retuned while it runs: `v4l2h264enc`
+/// carries its bitrate inside `extra-controls`, which is not a property to be
+/// set on a playing pipeline. The session keeps the rate it started with,
+/// which is what it did before any of this existed.
+pub fn set_encoder_bitrate(pipeline: &gst::Pipeline, encoder: H264Encoder, kbps: u32) -> bool {
+    use gst::prelude::*;
+
+    let Some(element) = pipeline.by_name(ENCODER_NAME) else {
+        return false;
+    };
+    match encoder {
+        H264Encoder::X264 | H264Encoder::VaH264 | H264Encoder::VaapiH264 | H264Encoder::NvH264 => {
+            element.set_property_from_str("bitrate", &kbps.to_string());
+            true
+        }
+        H264Encoder::OpenH264 => {
+            element.set_property_from_str("bitrate", &(kbps as u64 * 1000).to_string());
+            true
+        }
+        H264Encoder::V4l2H264 => false,
+    }
+}
+
+/// Counts buffers leaving a named element, for as long as the pipeline lives.
+///
+/// Two atomics, installed unconditionally, because the one question every
+/// report of a slow picture turns on — were those frames ever made? — took a
+/// special run with `BIGNETSCREEN_FPS_LOG=1` to answer, three times over. A
+/// compositor delivering 7 frames a second and an encoder keeping up with it
+/// look identical from the far end of the pipeline.
+///
+/// `None` when the element is not in this pipeline, which is normal: not every
+/// path has a capture.
+pub fn count_buffers(pipeline: &gst::Pipeline, element: &str) -> Option<Arc<AtomicU64>> {
+    use gst::prelude::*;
+
+    let pad = pipeline.by_name(element)?.static_pad("src")?;
+    let count = Arc::new(AtomicU64::new(0));
+    let counter = count.clone();
+    pad.add_probe(gst::PadProbeType::BUFFER, move |_, _| {
+        counter.fetch_add(1, Ordering::Relaxed);
+        gst::PadProbeReturn::Ok
+    });
+    Some(count)
 }
 
 /// The device buffer asked of `pulsesrc`, in microseconds.

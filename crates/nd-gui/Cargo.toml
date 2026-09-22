@@ -22,6 +22,9 @@ nd-chromecast.workspace = true
 nd-wfd.workspace = true
 nd-ndi.workspace = true
 nd-webrtc.workspace = true
+nd-service.workspace = true
+# The window talks to the session service over the bus.
+zbus = { version = "5", default-features = false, features = ["tokio"] }
 nd-net.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

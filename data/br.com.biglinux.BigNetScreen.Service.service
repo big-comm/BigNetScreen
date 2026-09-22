@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=br.com.biglinux.BigNetScreen.Service
+Exec=/usr/bin/bignetscreend
