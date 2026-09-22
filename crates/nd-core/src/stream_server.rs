@@ -1,8 +1,10 @@
-//! The HTTP server that delivers the stream to a Chromecast.
+//! The HTTP server that delivers the stream to a receiver that fetches it.
 //!
-//! The receiver does not get media over the control channel: we send it a
-//! **URL** (`LOAD`) and it opens a `GET` back to us. This module is that other
-//! side.
+//! Two protocols work this way and share every byte of this module. Neither
+//! gets media over its control channel: we hand the receiver a **URL** — Cast's
+//! `LOAD`, DLNA's `SetAVTransportURI` — and it opens a `GET` back to us. This
+//! is that other side. The only difference between them is what the response
+//! says the body is, which is [`MediaType`].
 //!
 //! ## Why hand-written HTTP instead of `hyper`
 //!
@@ -36,15 +38,54 @@ use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 
-use gst::prelude::*;
+use gio::prelude::*;
 use gstreamer as gst;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
-use nd_core::{NdError, Result};
+use crate::{NdError, Result};
 
-/// MIME type of the Cast HTTP fallback (H.264 + AAC in MPEG-TS).
-pub const CONTENT_TYPE: &str = "video/mp2t";
+/// What the response says about the body it is about to stream.
+///
+/// The body itself is the same H.264 + AAC transport stream in both cases; the
+/// receivers just need to be told about it in their own vocabulary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MediaType {
+    pub content_type: &'static str,
+    /// Protocol-specific header lines, each already ending in CRLF. Empty for
+    /// a receiver that needs nothing beyond the standard block.
+    pub extra_headers: &'static str,
+}
+
+/// The Cast HTTP fallback: H.264 + AAC in MPEG-TS, nothing else to declare.
+pub const CAST_MEDIA: MediaType = MediaType {
+    content_type: "video/mp2t",
+    extra_headers: "",
+};
+
+/// The same stream, described the way a DLNA renderer expects.
+///
+/// `transferMode.dlna.org: Streaming` is what the renderer asks for in its
+/// `GET`; answering it is what separates a live stream from a file download.
+/// The flags are the ones a Panasonic VIErA advertised for its own AVC_TS
+/// profiles, and they decode to sender-paced (bit 31) plus s0-increasing and
+/// sn-increasing (bits 27 and 26) — DLNA's signature for content with no fixed
+/// start and no end — plus streaming transfer mode and DLNA 1.5.
+///
+/// `DLNA.ORG_OP=00` says neither seek mode is available, which is the truth
+/// for a live screen and stops a renderer from probing for byte ranges.
+///
+/// No `DLNA.ORG_PN`: the renderer's own `GetProtocolInfo` lists `video/mpeg:*`
+/// and naming an exact profile only narrows what it will accept. Tested
+/// against the explicit `AVC_TS_HD_60_AC3_T` profile with timestamped
+/// 192-byte packets, which the same set also advertises: it played, and the
+/// delay was identical. The simpler stream wins on a tie.
+pub const DLNA_MEDIA: MediaType = MediaType {
+    content_type: "video/mpeg",
+    extra_headers: "transferMode.dlna.org: Streaming\r\n\
+                    contentFeatures.dlna.org: DLNA.ORG_OP=00;\
+                    DLNA.ORG_FLAGS=8d100000000000000000000000000000\r\n",
+};
 
 /// Cap on a request's header size.
 const MAX_REQUEST_BYTES: usize = 8 * 1024;
@@ -59,7 +100,7 @@ fn net_err<E: std::fmt::Display>(e: E) -> NdError {
 ///
 /// Reads from `/dev/urandom` so as not to drag in another dependency for the
 /// sake of 16 bytes.
-pub(crate) fn random_token() -> Result<String> {
+pub fn random_token() -> Result<String> {
     let mut bytes = [0u8; 16];
     std::fs::File::open("/dev/urandom")
         .and_then(|mut f| f.read_exact(&mut bytes))
@@ -147,17 +188,20 @@ fn triage(request: &str, expected_path: &str, allowed: IpAddr, from: IpAddr) -> 
 /// connection closes (the equivalent of the C code's `SOUP_ENCODING_EOF`).
 /// That is what allows streaming indefinitely without knowing the size up
 /// front.
-fn response_headers(verdict: Verdict) -> String {
+fn response_headers(verdict: Verdict, media: MediaType) -> String {
     let status = verdict.status_line();
     match verdict {
         Verdict::Stream | Verdict::HeadOnly => format!(
             "HTTP/1.1 {status}\r\n\
-             Content-Type: {CONTENT_TYPE}\r\n\
+             Content-Type: {content_type}\r\n\
+             {extra}\
              Cache-Control: no-cache, no-store, must-revalidate\r\n\
              Pragma: no-cache\r\n\
              Connection: close\r\n\
              Server: BigNetScreen\r\n\
-             \r\n"
+             \r\n",
+            content_type = media.content_type,
+            extra = media.extra_headers,
         ),
         _ => format!(
             "HTTP/1.1 {status}\r\n\
@@ -172,7 +216,7 @@ fn response_headers(verdict: Verdict) -> String {
 /// Minimal origin-form HTTP/1.x requests, no body or ambiguous framing.
 /// Kept shared with file serving so both token-protected paths reject the same
 /// malformed syntax. These endpoints intentionally do not implement uploads.
-pub(crate) fn request_line(request: &str) -> Option<(&str, &str)> {
+pub fn request_line(request: &str) -> Option<(&str, &str)> {
     if !request.is_ascii() || request.len() > MAX_REQUEST_BYTES {
         return None;
     }
@@ -227,7 +271,7 @@ fn token_char(b: u8) -> bool {
 }
 
 /// The deadline covers the WHOLE request, not a fresh timeout per byte/chunk.
-pub(crate) async fn read_request<R: AsyncRead + Unpin>(stream: &mut R) -> Result<String> {
+pub async fn read_request<R: AsyncRead + Unpin>(stream: &mut R) -> Result<String> {
     read_request_with_timeout(stream, REQUEST_TIMEOUT).await
 }
 
@@ -265,7 +309,7 @@ async fn read_request_with_timeout<R: AsyncRead + Unpin>(
 
 /// Cancelled writes are followed by dropping the connection, never a retry on
 /// the same partially written response. File bodies also have a per-chunk limit.
-pub(crate) async fn write_bounded(stream: &mut TcpStream, bytes: &[u8]) -> Result<()> {
+pub async fn write_bounded(stream: &mut TcpStream, bytes: &[u8]) -> Result<()> {
     tokio::time::timeout(Duration::from_secs(5), stream.write_all(bytes))
         .await
         .map_err(|_| NdError::Network("HTTP peer stopped reading".into()))?
@@ -280,15 +324,16 @@ pub struct StreamServer {
     /// The only IP allowed to fetch the stream.
     allowed: IpAddr,
     local_addr: SocketAddr,
+    media: MediaType,
 }
 
 impl StreamServer {
     /// Brings the server up on an ephemeral port of the IP that reaches `receiver`.
-    pub async fn bind(receiver: IpAddr) -> Result<Self> {
+    pub async fn bind(receiver: IpAddr, media: MediaType) -> Result<Self> {
         let local_ip = local_ip_towards(receiver)?;
         // Port 0 = the kernel picks. Listening on this IP alone keeps the
         // stream off the other interfaces (VPN, docker0, loopback…).
-        let listener = TcpListener::bind((local_ip, nd_core::settings::current().port))
+        let listener = TcpListener::bind((local_ip, crate::settings::current().port))
             .await
             .map_err(net_err)?;
         let local_addr = listener.local_addr().map_err(net_err)?;
@@ -300,10 +345,11 @@ impl StreamServer {
             path,
             allowed: receiver,
             local_addr,
+            media,
         })
     }
 
-    /// URL a enviar no `LOAD` do Chromecast.
+    /// The URL to hand the receiver.
     pub fn url(&self) -> String {
         let host = match self.local_addr.ip() {
             IpAddr::V4(ip) => ip.to_string(),
@@ -335,6 +381,18 @@ impl StreamServer {
     where
         F: FnMut() -> Result<()> + Send,
     {
+        // Closing the descriptor is this side's job once GStreamer gives it
+        // back — it was this side that handed it over. Wired here rather than
+        // by each caller so a second protocol cannot forget it and leak a
+        // socket per disconnect.
+        sink.connect("client-socket-removed", false, |values| {
+            if let Ok(socket) = values[1].get::<gio::Socket>() {
+                let _ = socket.close();
+            }
+            tracing::info!("the receiver disconnected from the stream");
+            None
+        });
+
         let mut cancel = cancel;
         let mut served_any = false;
 
@@ -372,7 +430,7 @@ impl StreamServer {
                     tracing::debug!(%peer, %err, "request discarded");
                     let _ = write_bounded(
                         &mut stream,
-                        response_headers(Verdict::BadRequest).as_bytes(),
+                        response_headers(Verdict::BadRequest, self.media).as_bytes(),
                     )
                     .await;
                     continue;
@@ -389,13 +447,17 @@ impl StreamServer {
                 } else {
                     tracing::debug!(%peer, ?verdict, "request refused");
                 }
-                let _ = write_bounded(&mut stream, response_headers(verdict).as_bytes()).await;
+                let _ = write_bounded(
+                    &mut stream,
+                    response_headers(verdict, self.media).as_bytes(),
+                )
+                .await;
                 // Dropping TcpStream closes it; no unbounded shutdown wait.
                 continue;
             }
 
             // Headers first; only then does GStreamer take the socket over.
-            let headers = response_headers(Verdict::Stream);
+            let headers = response_headers(Verdict::Stream, self.media);
             let written = tokio::select! {
                 result = write_bounded(&mut stream, headers.as_bytes()) => result,
                 _ = cancel.changed() => return Ok(()),
@@ -528,12 +590,34 @@ mod tests {
 
     #[test]
     fn stream_response_has_no_length_so_it_can_run_forever() {
-        let headers = response_headers(Verdict::Stream);
+        let headers = response_headers(Verdict::Stream, CAST_MEDIA);
         assert!(headers.contains("200 OK"), "{headers}");
-        assert!(headers.contains(CONTENT_TYPE), "{headers}");
+        assert!(headers.contains(CAST_MEDIA.content_type), "{headers}");
         assert!(!headers.contains("Content-Length"), "{headers}");
         assert!(!headers.contains("Transfer-Encoding"), "{headers}");
         assert!(headers.contains("Connection: close"), "{headers}");
+        assert!(headers.ends_with("\r\n\r\n"), "{headers}");
+    }
+
+    #[test]
+    fn a_dlna_renderer_is_told_the_stream_is_live() {
+        // A renderer that gets no `transferMode` treats the body as a file to
+        // download, and one that gets no flags has no way to know the content
+        // never ends. Both were verified against a Panasonic VIErA, which
+        // probes with `HEAD` and `getcontentFeatures.dlna.org: 1` before it
+        // fetches a single byte.
+        let headers = response_headers(Verdict::Stream, DLNA_MEDIA);
+        assert!(headers.contains("Content-Type: video/mpeg"), "{headers}");
+        assert!(
+            headers.contains("transferMode.dlna.org: Streaming"),
+            "{headers}"
+        );
+        assert!(
+            headers.contains("DLNA.ORG_FLAGS=8d100000"),
+            "sender-paced, s0- and sn-increasing: {headers}"
+        );
+        // Still no length, or the receiver waits for an end that never comes.
+        assert!(!headers.contains("Content-Length"), "{headers}");
         assert!(headers.ends_with("\r\n\r\n"), "{headers}");
     }
 
@@ -545,7 +629,7 @@ mod tests {
             Verdict::MethodNotAllowed,
             Verdict::BadRequest,
         ] {
-            let headers = response_headers(verdict);
+            let headers = response_headers(verdict, CAST_MEDIA);
             assert!(headers.contains("Content-Length: 0"), "{headers}");
         }
     }
@@ -561,7 +645,8 @@ mod tests {
 
     #[tokio::test]
     async fn url_carries_host_port_and_token() {
-        let Ok(server) = StreamServer::bind(IpAddr::V4(Ipv4Addr::LOCALHOST)).await else {
+        let Ok(server) = StreamServer::bind(IpAddr::V4(Ipv4Addr::LOCALHOST), CAST_MEDIA).await
+        else {
             return;
         };
         let url = server.url();
@@ -577,7 +662,8 @@ mod tests {
 
     #[tokio::test]
     async fn refuses_a_request_on_the_wrong_path() {
-        let Ok(server) = StreamServer::bind(IpAddr::V4(Ipv4Addr::LOCALHOST)).await else {
+        let Ok(server) = StreamServer::bind(IpAddr::V4(Ipv4Addr::LOCALHOST), CAST_MEDIA).await
+        else {
             return;
         };
         let addr = server.local_addr();
@@ -598,7 +684,7 @@ mod tests {
         let request = read_request(&mut stream).await.unwrap();
         let verdict = triage(&request, &server.path, server.allowed, peer.ip());
         stream
-            .write_all(response_headers(verdict).as_bytes())
+            .write_all(response_headers(verdict, CAST_MEDIA).as_bytes())
             .await
             .unwrap();
         drop(stream);

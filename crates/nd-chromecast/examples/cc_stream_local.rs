@@ -19,8 +19,8 @@ use std::time::Duration;
 use gst::prelude::*;
 use gstreamer as gst;
 
-use nd_chromecast::http::StreamServer;
-use nd_core::pipeline::{self, StreamConfig, VideoSource, CHROMECAST_SINK_NAME};
+use nd_core::pipeline::{self, StreamConfig, VideoSource, TS_HTTP_SINK_NAME};
+use nd_core::stream_server::{StreamServer, CAST_MEDIA};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // The "receiver" is localhost itself.
     let loopback = IpAddr::V4(Ipv4Addr::LOCALHOST);
-    let server = StreamServer::bind(loopback).await?;
+    let server = StreamServer::bind(loopback, CAST_MEDIA).await?;
 
     let encoder = pipeline::best_encoder(
         pipeline::GpuDriver::Unknown,
@@ -50,14 +50,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         encoder,
         ..Default::default()
     };
-    let desc = pipeline::chromecast_pipeline_description(
+    let desc = pipeline::ts_http_pipeline_description(
         &cfg,
         &VideoSource::Test,
         nd_core::pipeline::VideoTarget::Exact((cfg.width, cfg.height)),
+        None,
     );
     let (gst_pipeline, _events) = pipeline::build_pipeline(&desc, cfg.latency_ms())?;
     let sink = gst_pipeline
-        .by_name(CHROMECAST_SINK_NAME)
+        .by_name(TS_HTTP_SINK_NAME)
         .expect("multisocketsink no pipeline");
 
     println!("\nencoder: {encoder:?}");

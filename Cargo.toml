@@ -7,6 +7,7 @@ members = [
     "crates/nd-capture",
     "crates/nd-net",
     "crates/nd-chromecast",
+    "crates/nd-dlna",
     "crates/nd-wfd",
     "crates/nd-gui",
     "crates/nd-service",
@@ -34,6 +35,7 @@ nd-chromecast = { path = "crates/nd-chromecast" }
 nd-wfd = { path = "crates/nd-wfd" }
 nd-ndi = { path = "crates/nd-ndi" }
 nd-webrtc = { path = "crates/nd-webrtc" }
+nd-dlna = { path = "crates/nd-dlna" }
 nd-service = { path = "crates/nd-service" }
 
 # Shared dependencies

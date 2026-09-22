@@ -21,6 +21,7 @@ nd-core.workspace = true
 nd-capture.workspace = true
 nd-net.workspace = true
 nd-chromecast.workspace = true
+nd-dlna.workspace = true
 nd-wfd.workspace = true
 nd-ndi.workspace = true
 nd-webrtc.workspace = true

@@ -7,6 +7,7 @@ For changes, start with [architecture](../ARCHITECTURE.md), [contributing](../CO
 - [Development and offline setup](development.md)
 - [Testing and hardware matrix](testing.md)
 - [Cast protocol notes](chromecast.md)
+- [DLNA renderer notes](dlna.md)
 - [NDI setup](ndi.md)
 - [Packaging and rolling releases](packaging.md)
 - [Executor safety](executor-safety.md)

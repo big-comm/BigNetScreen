@@ -27,7 +27,7 @@ pub enum Protocol {
     Auto,
     /// Wi-Fi Direct only (Miracast).
     Miracast,
-    /// Network receivers only (Chromecast/AirPlay discovery).
+    /// Network receivers only (Chromecast, DLNA and AirPlay discovery).
     Cast,
 }
 

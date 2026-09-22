@@ -1,7 +1,7 @@
 # Maintainer: Tales A. Mendonça <talesam@gmail.com>
 
 pkgname=bignetscreen
-pkgdesc="Share your screen over Miracast, Chromecast and NDI"
+pkgdesc="Share your screen over Miracast, Chromecast, DLNA and NDI"
 pkgver=$(date +%y.%m.%d)
 pkgrel=$(date +%H%M)
 arch=('x86_64' 'aarch64')

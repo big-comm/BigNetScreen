@@ -27,19 +27,18 @@
 use std::net::IpAddr;
 use std::time::Duration;
 
-use gio::prelude::*;
 use gst::prelude::*;
 use gstreamer as gst;
 
 use serde_json::{json, Value};
 
 use nd_core::capture::CaptureSource;
-use nd_core::pipeline::{self, StreamConfig, CHROMECAST_SINK_NAME};
+use nd_core::pipeline::{self, StreamConfig, TS_HTTP_SINK_NAME};
 use nd_core::sink::{SinkState, SinkStatus};
 use nd_core::{NdError, Result};
 
 use crate::cast::{CastChannel, DEFAULT_MEDIA_RECEIVER, NS_MEDIA};
-use crate::http::{StreamServer, CONTENT_TYPE};
+use nd_core::stream_server::{StreamServer, CAST_MEDIA};
 
 /// How long to wait for the receiver to open the `GET` after the `LOAD`.
 const FIRST_CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
@@ -332,7 +331,7 @@ pub async fn run_with_video(
     let _radio = nd_core::radio::quiet();
 
     // 1. The stream server, on the IP that reaches this receiver.
-    let server = StreamServer::bind(receiver_ip).await?;
+    let server = StreamServer::bind(receiver_ip, CAST_MEDIA).await?;
     let url = server.url();
     tracing::debug!("stream URL ready");
 
@@ -379,10 +378,11 @@ pub async fn run_with_video(
     // the resolution out of the stream — so encode what was captured rather
     // than the portal's compositor-space guess about it. See `VideoTarget`.
     let ceiling = StreamConfig::preferred_or(pipeline::CHROMECAST_MAX_RESOLUTION);
-    let desc = pipeline::chromecast_pipeline_description(
+    let desc = pipeline::ts_http_pipeline_description(
         &cfg,
         &video,
         pipeline::VideoTarget::UpTo(ceiling),
+        None,
     );
     let (built, mut events) = pipeline::build_pipeline(&desc, cfg.latency_ms())?;
     // From here on, any `?` still takes the pipeline down.
@@ -390,19 +390,8 @@ pub async fn run_with_video(
     let gst_pipeline = guard.get().clone();
 
     let sink = gst_pipeline
-        .by_name(CHROMECAST_SINK_NAME)
-        .ok_or_else(|| NdError::Gst(format!("element {CHROMECAST_SINK_NAME} not found")))?;
-
-    // When the receiver disconnects, GStreamer hands the socket back: closing
-    // it is our responsibility (the C code did the same in
-    // `client_socket_removed`).
-    sink.connect("client-socket-removed", false, |values| {
-        if let Ok(socket) = values[1].get::<gio::Socket>() {
-            let _ = socket.close();
-        }
-        tracing::info!("the receiver disconnected from the stream");
-        None
-    });
+        .by_name(TS_HTTP_SINK_NAME)
+        .ok_or_else(|| NdError::Gst(format!("element {TS_HTTP_SINK_NAME} not found")))?;
 
     // 3. Control channel: start the receiver app and tell it to fetch the URL.
     status.set(SinkState::WaitSocket);
@@ -423,7 +412,9 @@ pub async fn run_with_video(
     };
     let result = async {
         if *cancel.borrow() { return Ok(()); }
-        channel.load_media(&app, &url, CONTENT_TYPE).await?;
+        channel
+            .load_media(&app, &url, CAST_MEDIA.content_type)
+            .await?;
         tracing::info!("LOAD sent; waiting for the receiver to fetch the stream");
 
         // 4. Serve the receiver, and only then hit play.
@@ -444,6 +435,11 @@ pub async fn run_with_video(
                         sink,
                         move || {
                             started.store(true, std::sync::atomic::Ordering::SeqCst);
+                            // The receiver is reading: the picture is on the
+                            // wall from here. Set at the end of the session
+                            // instead, which is where this used to be, it
+                            // announced a state that had just finished.
+                            status.set(SinkState::Streaming);
                             *started_at
                                 .lock()
                                 .unwrap_or_else(std::sync::PoisonError::into_inner) =
@@ -615,10 +611,6 @@ pub async fn run_with_video(
                 _ = cancel.changed() => break Ok(()),
             }
         };
-
-        if started.load(std::sync::atomic::Ordering::SeqCst) {
-            status.set(SinkState::Streaming);
-        }
 
         if let Some(median) = lag.median() {
             tracing::info!(
@@ -1119,12 +1111,13 @@ mod tests {
         // The pipeline uses mpegtsmux; LOAD must announce the same container,
         // or the Default Media Receiver refuses the media.
         let cfg = StreamConfig::default();
-        let desc = pipeline::chromecast_pipeline_description(
+        let desc = pipeline::ts_http_pipeline_description(
             &cfg,
             &pipeline::VideoSource::Test,
             nd_core::pipeline::VideoTarget::Exact((cfg.width, cfg.height)),
+            None,
         );
         assert!(desc.contains("mpegtsmux"), "{desc}");
-        assert_eq!(CONTENT_TYPE, "video/mp2t");
+        assert_eq!(CAST_MEDIA.content_type, "video/mp2t");
     }
 }

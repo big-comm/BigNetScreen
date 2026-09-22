@@ -21,6 +21,9 @@ pub enum SinkKind {
     WebRtc,
     /// Google Chromecast (mDNS + Cast + HTTP).
     Chromecast,
+    /// A DLNA/UPnP renderer — the televisions that predate Cast (SSDP +
+    /// AVTransport + the same MPEG-TS over HTTP).
+    Dlna,
     /// Apple AirPlay (mDNS). Discovered, but casting is out of scope.
     AirPlay,
     /// Wi-Fi Display over Wi-Fi Direct / P2P.
@@ -41,6 +44,7 @@ impl SinkKind {
             SinkKind::Ndi
             | SinkKind::WebRtc
             | SinkKind::Chromecast
+            | SinkKind::Dlna
             | SinkKind::WfdP2p
             | SinkKind::WfdMice => true,
             // AirPlay requires FairPlay/SAP; streaming is out of scope.
@@ -53,6 +57,7 @@ impl SinkKind {
     pub fn as_str(self) -> &'static str {
         match self {
             SinkKind::Chromecast => "chromecast",
+            SinkKind::Dlna => "dlna",
             SinkKind::Ndi => "ndi",
             SinkKind::WebRtc => "webrtc",
             SinkKind::AirPlay => "airplay",

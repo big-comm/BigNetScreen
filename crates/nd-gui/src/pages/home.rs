@@ -954,6 +954,8 @@ fn sink_kind_of(protocol: &str) -> nd_core::sink::SinkKind {
         SinkKind::WfdP2p
     } else if protocol == super::protocol_label(SinkKind::Chromecast) {
         SinkKind::Chromecast
+    } else if protocol == super::protocol_label(SinkKind::Dlna) {
+        SinkKind::Dlna
     } else {
         SinkKind::AirPlay
     }

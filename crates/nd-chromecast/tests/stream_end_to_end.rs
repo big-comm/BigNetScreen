@@ -16,8 +16,8 @@ use gstreamer as gst;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-use nd_chromecast::http::StreamServer;
-use nd_core::pipeline::{self, StreamConfig, VideoSource, CHROMECAST_SINK_NAME};
+use nd_core::pipeline::{self, StreamConfig, VideoSource, TS_HTTP_SINK_NAME};
+use nd_core::stream_server::{StreamServer, CAST_MEDIA};
 
 /// Standard transport-stream packets are 188 bytes with a sync byte.
 const TS_PACKET_BYTES: usize = 188;
@@ -75,7 +75,7 @@ async fn serves_real_mpegts_bytes_to_the_receiver() {
     );
 
     let loopback = IpAddr::V4(Ipv4Addr::LOCALHOST);
-    let server = StreamServer::bind(loopback)
+    let server = StreamServer::bind(loopback, CAST_MEDIA)
         .await
         .expect("servidor do stream");
     let url = server.url();
@@ -92,10 +92,11 @@ async fn serves_real_mpegts_bytes_to_the_receiver() {
         encoder,
         ..Default::default()
     };
-    let desc = pipeline::chromecast_pipeline_description(
+    let desc = pipeline::ts_http_pipeline_description(
         &cfg,
         &VideoSource::Test,
         nd_core::pipeline::VideoTarget::Exact((cfg.width, cfg.height)),
+        None,
     );
     let (gst_pipeline, _events) =
         pipeline::build_pipeline(&desc, cfg.latency_ms()).expect("pipeline");
@@ -110,7 +111,7 @@ async fn serves_real_mpegts_bytes_to_the_receiver() {
     );
 
     let sink = gst_pipeline
-        .by_name(CHROMECAST_SINK_NAME)
+        .by_name(TS_HTTP_SINK_NAME)
         .expect("multisocketsink presente e nomeado");
 
     let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
@@ -169,18 +170,21 @@ async fn a_wrong_token_gets_nothing() {
     );
 
     let loopback = IpAddr::V4(Ipv4Addr::LOCALHOST);
-    let server = StreamServer::bind(loopback).await.expect("servidor");
+    let server = StreamServer::bind(loopback, CAST_MEDIA)
+        .await
+        .expect("servidor");
     let addr = server.local_addr();
 
     let cfg = StreamConfig::default();
-    let desc = pipeline::chromecast_pipeline_description(
+    let desc = pipeline::ts_http_pipeline_description(
         &cfg,
         &VideoSource::Test,
         nd_core::pipeline::VideoTarget::Exact((cfg.width, cfg.height)),
+        None,
     );
     let (gst_pipeline, _events) =
         pipeline::build_pipeline(&desc, cfg.latency_ms()).expect("pipeline");
-    let sink = gst_pipeline.by_name(CHROMECAST_SINK_NAME).expect("sink");
+    let sink = gst_pipeline.by_name(TS_HTTP_SINK_NAME).expect("sink");
 
     let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
     let serving = tokio::spawn(async move { server.serve(sink, || Ok(()), cancel_rx).await });

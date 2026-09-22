@@ -76,15 +76,15 @@ msgstr "Et vindue"
 msgid "About BigNetScreen"
 msgstr "Om BigNetScreen"
 
-#: crates/nd-gui/src/pages/devices.rs:266
+#: crates/nd-gui/src/pages/devices.rs:269
 msgid "Address"
 msgstr "Adresse"
 
-#: crates/nd-gui/src/pages/mod.rs:185
+#: crates/nd-gui/src/pages/mod.rs:188
 msgid "AirPlay"
 msgstr "AirPlay"
 
-#: crates/nd-gui/src/pages/devices.rs:338
+#: crates/nd-gui/src/pages/devices.rs:341
 msgid "All protocols"
 msgstr "Alle protokoller"
 
@@ -117,7 +117,7 @@ msgstr ""
 msgid "Automatic"
 msgstr "Automatisk"
 
-#: crates/nd-gui/src/pages/devices.rs:170
+#: crates/nd-gui/src/pages/devices.rs:173
 #: crates/nd-gui/src/pages/settings.rs:303
 msgid "Automatic discovery"
 msgstr "Automatisk registrering"
@@ -189,7 +189,7 @@ msgstr "Vælg, hvilken enhed der skal sendes til."
 msgid "Chromecast"
 msgstr "Chromecast"
 
-#: crates/nd-gui/src/pages/devices.rs:339
+#: crates/nd-gui/src/pages/devices.rs:342
 msgid "Chromecast / AirPlay"
 msgstr "Chromecast / AirPlay"
 
@@ -197,7 +197,7 @@ msgstr "Chromecast / AirPlay"
 msgid "Chromecast / AirPlay only"
 msgstr "Kun Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/home.rs:940 crates/nd-gui/src/pages/home.rs:1067
+#: crates/nd-gui/src/pages/home.rs:940 crates/nd-gui/src/pages/home.rs:1069
 msgid ""
 "Chromecasts show up on their own. A TV or projector only appears while it is "
 "in screen mirroring mode — on Fire TV, under Settings › Display and Sounds › "
@@ -229,7 +229,7 @@ msgstr "Forbundet til"
 
 #: crates/nd-gui/src/app.rs:378 crates/nd-gui/src/app.rs:715
 #: crates/nd-gui/src/app.rs:1014 crates/nd-gui/src/app.rs:1104
-#: crates/nd-gui/src/pages/mod.rs:205
+#: crates/nd-gui/src/pages/mod.rs:208
 msgid "Connecting…"
 msgstr "Forbinder…"
 
@@ -259,11 +259,11 @@ msgstr "Brugerdefineret opløsning"
 msgid "Delay"
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:49 crates/nd-gui/src/pages/devices.rs:105
+#: crates/nd-gui/src/pages/mod.rs:49 crates/nd-gui/src/pages/devices.rs:108
 msgid "Devices"
 msgstr "Enheder"
 
-#: crates/nd-gui/src/pages/home.rs:435 crates/nd-gui/src/pages/devices.rs:236
+#: crates/nd-gui/src/pages/home.rs:435 crates/nd-gui/src/pages/devices.rs:239
 msgid "Disconnect"
 msgstr "Afbryd forbindelse"
 
@@ -271,8 +271,8 @@ msgstr "Afbryd forbindelse"
 msgid "Discovery and devices"
 msgstr "Registrering og enheder"
 
-#: crates/nd-gui/src/pages/mod.rs:139 crates/nd-gui/src/pages/mod.rs:338
-#: crates/nd-gui/src/pages/devices.rs:459
+#: crates/nd-gui/src/pages/mod.rs:139 crates/nd-gui/src/pages/mod.rs:345
+#: crates/nd-gui/src/pages/devices.rs:462
 msgid "Discovery only"
 msgstr "Kun opdagelse"
 
@@ -296,7 +296,7 @@ msgstr ""
 msgid "Everything on your screen"
 msgstr "Alt på din skærm"
 
-#: crates/nd-gui/src/pages/mod.rs:262
+#: crates/nd-gui/src/pages/mod.rs:269
 msgid "Excellent"
 msgstr "Fremragende"
 
@@ -304,7 +304,7 @@ msgstr "Fremragende"
 msgid "Extra screen"
 msgstr "Ekstra skærm"
 
-#: crates/nd-gui/src/pages/mod.rs:136 crates/nd-gui/src/pages/mod.rs:210
+#: crates/nd-gui/src/pages/mod.rs:136 crates/nd-gui/src/pages/mod.rs:213
 msgid "Failed"
 msgstr "Mislykkedes"
 
@@ -312,7 +312,7 @@ msgstr "Mislykkedes"
 msgid "Film — smoothest, for watching"
 msgstr ""
 
-#: crates/nd-gui/src/pages/devices.rs:106
+#: crates/nd-gui/src/pages/devices.rs:109
 msgid "Find and connect to nearby wireless receivers."
 msgstr "Find og opret forbindelse til nærliggende trådløse modtagere."
 
@@ -341,7 +341,7 @@ msgstr "10 sekunder frem"
 msgid "Frame rate"
 msgstr "Billedhastighed"
 
-#: crates/nd-gui/src/pages/mod.rs:263
+#: crates/nd-gui/src/pages/mod.rs:270
 msgid "Good"
 msgstr "God"
 
@@ -405,7 +405,7 @@ msgstr "Lokal netværks-discovery er ikke tilgængelig"
 msgid "Look for receivers as soon as the app starts"
 msgstr "Søg efter modtagere, så snart appen starter"
 
-#: crates/nd-gui/src/pages/home.rs:1054
+#: crates/nd-gui/src/pages/home.rs:1056
 msgid "Looking for receivers…"
 msgstr "Søger efter modtagere…"
 
@@ -421,7 +421,7 @@ msgstr ""
 msgid "Maximum (2160p)"
 msgstr "Maksimal (2160p)"
 
-#: crates/nd-gui/src/pages/mod.rs:259
+#: crates/nd-gui/src/pages/mod.rs:266
 msgid "Measuring…"
 msgstr "Måler…"
 
@@ -437,7 +437,7 @@ msgstr "Mellem (720p)"
 msgid "Microphone volume"
 msgstr "Mikrofonens lydstyrke"
 
-#: crates/nd-gui/src/pages/mod.rs:186 crates/nd-gui/src/pages/devices.rs:340
+#: crates/nd-gui/src/pages/mod.rs:189 crates/nd-gui/src/pages/devices.rs:343
 msgid "Miracast"
 msgstr "Miracast"
 
@@ -469,7 +469,7 @@ msgstr "Miracast utilgængelig"
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast utilgængelig: dette Wi-Fi-kort understøtter ikke Wi-Fi Direct"
 
-#: crates/nd-gui/src/pages/devices.rs:225
+#: crates/nd-gui/src/pages/devices.rs:228
 msgid "Mirror screen"
 msgstr "Spejling af skærm"
 
@@ -539,7 +539,7 @@ msgstr ""
 "Der er endnu ikke fundet nogen enhed. Tænd dit TV, din projektor eller "
 "Chromecast."
 
-#: crates/nd-gui/src/pages/devices.rs:471
+#: crates/nd-gui/src/pages/devices.rs:474
 msgid "No devices found"
 msgstr "Ingen enheder fundet"
 
@@ -551,7 +551,7 @@ msgstr "Der er ingen musik i din musikmappe. Brug \"Vælg filer\"."
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "Der er ingen billeder i din billedmappe. Brug \"Vælg filer\"."
 
-#: crates/nd-gui/src/app.rs:1012 crates/nd-gui/src/pages/home.rs:1063
+#: crates/nd-gui/src/app.rs:1012 crates/nd-gui/src/pages/home.rs:1065
 msgid "No receivers found"
 msgstr "Ingen modtagere fundet"
 
@@ -580,7 +580,7 @@ msgstr ""
 msgid "One window only"
 msgstr "Kun ét vindue"
 
-#: crates/nd-gui/src/pages/mod.rs:206
+#: crates/nd-gui/src/pages/mod.rs:209
 msgid "Opening the firewall port…"
 msgstr "Åbner firewall-porten…"
 
@@ -604,11 +604,11 @@ msgstr "Vælg filer og vælg, hvor de skal afspilles."
 msgid "Preferred protocol"
 msgstr "Foretrukken protokol"
 
-#: crates/nd-gui/src/pages/mod.rs:208
+#: crates/nd-gui/src/pages/mod.rs:211
 msgid "Preparing the video…"
 msgstr "Forbereder videoen…"
 
-#: crates/nd-gui/src/pages/devices.rs:261
+#: crates/nd-gui/src/pages/devices.rs:264
 msgid "Protocol"
 msgstr "Protokol"
 
@@ -620,7 +620,7 @@ msgstr "Udgiv med NDI"
 msgid "Queue"
 msgstr "Kø"
 
-#: crates/nd-gui/src/pages/devices.rs:458
+#: crates/nd-gui/src/pages/devices.rs:461
 msgid "Ready"
 msgstr "Klar"
 
@@ -632,7 +632,7 @@ msgstr "Klar til at dele"
 msgid "Receivers found"
 msgstr "Fundne modtagere"
 
-#: crates/nd-gui/src/pages/devices.rs:120
+#: crates/nd-gui/src/pages/devices.rs:123
 msgid "Refresh"
 msgstr "Opdater"
 
@@ -664,7 +664,7 @@ msgstr "Genoptag"
 msgid "Saved as you change them"
 msgstr "Gemmes, når du ændrer dem"
 
-#: crates/nd-gui/src/pages/devices.rs:115
+#: crates/nd-gui/src/pages/devices.rs:118
 msgid "Scan again"
 msgstr "Scan igen"
 
@@ -688,7 +688,7 @@ msgstr "Vælg op til 1000 filer ad gangen."
 msgid "Send a folder"
 msgstr "Send en mappe"
 
-#: crates/nd-gui/src/pages/home.rs:658 crates/nd-gui/src/pages/devices.rs:250
+#: crates/nd-gui/src/pages/home.rs:658 crates/nd-gui/src/pages/devices.rs:253
 msgid "Send media"
 msgstr "Send medier"
 
@@ -755,7 +755,7 @@ msgstr ""
 "Lyden går til modtageren og til denne computer. Slå denne computer fra, hvis "
 "du hører ekko."
 
-#: crates/nd-gui/src/pages/devices.rs:277
+#: crates/nd-gui/src/pages/devices.rs:280
 msgid "Status"
 msgstr "Status"
 
@@ -771,11 +771,11 @@ msgstr "Stop med at sende"
 msgid "Stopping…"
 msgstr "Stopper…"
 
-#: crates/nd-gui/src/pages/mod.rs:209 crates/nd-gui/src/pages/settings.rs:100
+#: crates/nd-gui/src/pages/mod.rs:212 crates/nd-gui/src/pages/settings.rs:100
 msgid "Streaming"
 msgstr "Streamer"
 
-#: crates/nd-gui/src/pages/devices.rs:282
+#: crates/nd-gui/src/pages/devices.rs:285
 msgid "Streaming at"
 msgstr "Streamer med"
 
@@ -783,7 +783,7 @@ msgstr "Streamer med"
 msgid "Tap or click the picture for full screen."
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:187
+#: crates/nd-gui/src/pages/mod.rs:190
 msgid "Test"
 msgstr "Test"
 
@@ -795,7 +795,7 @@ msgstr ""
 msgid "That device is no longer available"
 msgstr "Den enhed er ikke længere tilgængelig"
 
-#: crates/nd-gui/src/pages/mod.rs:265
+#: crates/nd-gui/src/pages/mod.rs:272
 msgid "The receiver is not answering"
 msgstr "Modtageren svarer ikke"
 
@@ -842,7 +842,7 @@ msgstr "Videoer"
 msgid "View ndi-sdk in the AUR"
 msgstr "Se ndi-sdk i AUR"
 
-#: crates/nd-gui/src/pages/mod.rs:207
+#: crates/nd-gui/src/pages/mod.rs:210
 msgid "Waiting for the receiver…"
 msgstr "Venter på modtageren…"
 
@@ -850,11 +850,11 @@ msgstr "Venter på modtageren…"
 msgid "Watch"
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:264
+#: crates/nd-gui/src/pages/mod.rs:271
 msgid "Weak signal"
 msgstr "Svagt signal"
 
-#: crates/nd-gui/src/pages/mod.rs:184
+#: crates/nd-gui/src/pages/mod.rs:187
 msgid "Web browser"
 msgstr ""
 
@@ -882,7 +882,11 @@ msgstr "Vindue"
 msgid "and enter the PIN"
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:221
+#: crates/nd-gui/src/pages/mod.rs:229
+msgid "delayed a few seconds"
+msgstr ""
+
+#: crates/nd-gui/src/pages/mod.rs:224
 msgid "instant response"
 msgstr "øjeblikkelig respons"
 
@@ -890,15 +894,15 @@ msgstr "øjeblikkelig respons"
 msgid "item"
 msgstr "element"
 
-#: crates/nd-gui/src/pages/mod.rs:268
+#: crates/nd-gui/src/pages/mod.rs:275
 msgid "ms round trip"
 msgstr "ms rundtur"
 
-#: crates/nd-gui/src/pages/devices.rs:270
+#: crates/nd-gui/src/pages/devices.rs:273
 msgid "not published yet"
 msgstr "endnu ikke offentliggjort"
 
-#: crates/nd-gui/src/pages/mod.rs:222
+#: crates/nd-gui/src/pages/mod.rs:225
 msgid "quick response"
 msgstr "hurtig respons"
 
@@ -906,7 +910,7 @@ msgstr "hurtig respons"
 msgid "shows up in discovery only"
 msgstr "vises kun i discovery"
 
-#: crates/nd-gui/src/pages/devices.rs:473
+#: crates/nd-gui/src/pages/devices.rs:476
 msgid "{} device found"
 msgid_plural "{} devices found"
 msgstr[0] "{} enhed fundet"

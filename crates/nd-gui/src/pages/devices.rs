@@ -35,7 +35,10 @@ impl Filter {
         use nd_core::sink::SinkKind;
         match self {
             Filter::All => true,
-            Filter::Cast => matches!(entry.kind, SinkKind::Chromecast | SinkKind::AirPlay),
+            Filter::Cast => matches!(
+                entry.kind,
+                SinkKind::Chromecast | SinkKind::Dlna | SinkKind::AirPlay
+            ),
             Filter::Miracast => matches!(entry.kind, SinkKind::WfdP2p | SinkKind::WfdMice),
         }
     }

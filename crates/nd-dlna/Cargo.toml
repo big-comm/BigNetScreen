@@ -1,6 +1,6 @@
 [package]
-name = "nd-core"
-description = "GUI-free core: the Provider/Sink/Capture traits, shared types and GStreamer pipeline construction"
+name = "nd-dlna"
+description = "Transmissão para receptores DLNA/UPnP (SSDP + AVTransport + MPEG-TS por HTTP)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,15 +9,14 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-thiserror.workspace = true
+nd-core.workspace = true
+# `detect_gpu_driver`: the same sysfs read every other crate here uses.
+nd-net.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
 futures.workspace = true
 gstreamer.workspace = true
-# `radio`: radio silence shared between discovery and streaming.
 tokio.workspace = true
-# `stream_server`: handing a live TCP socket to `multisocketsink`.
-gio = "0.22"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

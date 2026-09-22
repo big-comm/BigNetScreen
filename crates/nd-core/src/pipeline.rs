@@ -2365,32 +2365,56 @@ pub const CAST_REFERENCE_BITRATE_KBPS: u32 = 10_000;
 /// the line: configure what the component has no way to know, and nothing else.
 pub const CAST_VBV_FRAMES: u32 = 3;
 
-/// The `multisocketsink`'s name in the Chromecast pipeline description.
+/// The `multisocketsink`'s name in the transport-stream pipeline description.
 ///
 /// The HTTP server looks the element up by this name in order to hand it the
 /// receiver's socket with the headers already written.
-pub const CHROMECAST_SINK_NAME: &str = "cc-sink";
+pub const TS_HTTP_SINK_NAME: &str = "cc-sink";
 
-/// Builds the Cast HTTP fallback (H.264 + AAC in MPEG-TS).
+/// The largest picture a DLNA renderer is offered.
 ///
-/// MP2T is an officially supported Cast container. Explicit byte-stream access
-/// units and short mux/queue batches bound sender buffering; the receiver may
-/// still prebuffer seconds. This is not the raw-RTP mirroring path.
+/// A Panasonic VIErA's `GetProtocolInfo` lists `AVC_TS_HD_*` and `MPEG_TS_SD_*`
+/// and stops there — HD is the top of every profile it accepts, with nothing
+/// above it. Sending 1440p would be sending a mode it never advertised.
+pub const DLNA_MAX_RESOLUTION: (u32, u32) = (1920, 1080);
+
+/// Builds an H.264 + AAC transport stream for a receiver that fetches it over
+/// HTTP — the Cast fallback and every DLNA renderer.
+///
+/// MP2T is an officially supported Cast container and the one DLNA profile
+/// family a television is certain to have. Explicit byte-stream access units
+/// and short mux/queue batches bound sender buffering; the receiver may still
+/// prebuffer seconds. This is not the raw-RTP mirroring path.
 /// `multisocketsink` takes the receiver socket after HTTP headers are written.
-pub fn chromecast_pipeline_description(
+///
+/// `mux_bitrate_bps` pads the multiplex with null packets to a constant rate.
+/// `None` sends only real data, which is what Cast gets. **A DLNA renderer
+/// needs the padding**, and the reason is measured rather than assumed: a
+/// Panasonic VIErA prebuffers a fixed number of *bytes*, so the delay it adds
+/// is that buffer divided by the bitrate. Streaming content that happened to
+/// compress to 320 kbit/s put the picture **6 seconds** behind; padding the
+/// same stream to 8 Mbit/s brought it to 2 s, and 20 Mbit/s to 1.5 s. Padding
+/// to what the encoder already targets captures nearly all of that without
+/// spending the network on null packets.
+pub fn ts_http_pipeline_description(
     cfg: &StreamConfig,
     source: &VideoSource,
     target: VideoTarget,
+    mux_bitrate_bps: Option<u32>,
 ) -> String {
     format!(
         "{src} ! {convert} ! {vqueue} ! \
          {enc} ! h264parse config-interval=-1 ! \
          video/x-h264,stream-format=byte-stream,alignment=au ! \
-         mpegtsmux name=mux alignment=7 ! \
+         mpegtsmux name=mux alignment=7{padding} ! \
          queue max-size-buffers=0 max-size-bytes=0 max-size-time=50000000 silent=true ! \
          multisocketsink name={sink} sync=false async=false blocksize=8192 \
          burst-format=buffers sync-method={sync_method} recover-policy=keyframe \
          {audio}",
+        padding = match mux_bitrate_bps {
+            Some(bps) => format!(" bitrate={bps}"),
+            None => String::new(),
+        },
         src = source.description(),
         convert = cfg.convert_scale(target),
         vqueue = if source.is_file() {
@@ -2399,7 +2423,7 @@ pub fn chromecast_pipeline_description(
             cfg.video_queue()
         },
         enc = cfg.encoder_stage(false),
-        sink = CHROMECAST_SINK_NAME,
+        sink = TS_HTTP_SINK_NAME,
         sync_method = chromecast_sync_method(),
         audio = if source.is_file() {
             cfg.audio_branch("mux.")
@@ -3159,10 +3183,11 @@ mod tests {
             size: None,
             min_buffers: None,
         };
-        let desc = chromecast_pipeline_description(
+        let desc = ts_http_pipeline_description(
             &cfg,
             &src,
             VideoTarget::Exact((cfg.width, cfg.height)),
+            None,
         );
         assert!(desc.contains("pipewiresrc name=capture path=42"), "{desc}");
         assert!(!desc.contains("fd="), "{desc}");
@@ -3210,10 +3235,11 @@ mod tests {
     #[test]
     fn chromecast_pipeline_has_audio_track() {
         let cfg = StreamConfig::default();
-        let desc = chromecast_pipeline_description(
+        let desc = ts_http_pipeline_description(
             &cfg,
             &VideoSource::Test,
             VideoTarget::Exact((cfg.width, cfg.height)),
+            None,
         );
         assert!(desc.contains("avenc_aac"), "{desc}");
         assert!(desc.contains("mpegtsmux"), "{desc}");
@@ -3224,10 +3250,11 @@ mod tests {
         // `sync=true` on multisocketsink adds an entire pipeline latency
         // before the byte reaches the socket. The source is already live.
         let cfg = StreamConfig::default();
-        let desc = chromecast_pipeline_description(
+        let desc = ts_http_pipeline_description(
             &cfg,
             &VideoSource::Test,
             VideoTarget::Exact((cfg.width, cfg.height)),
+            None,
         );
         assert!(desc.contains("sync=false"), "{desc}");
         assert!(!desc.contains("sync=true"), "{desc}");
@@ -3336,10 +3363,11 @@ mod tests {
             ..Default::default()
         };
         let mirror = mirror_pipeline_description(&cfg, &VideoSource::Test, (2560, 1440), false);
-        let http = chromecast_pipeline_description(
+        let http = ts_http_pipeline_description(
             &cfg,
             &VideoSource::Test,
             VideoTarget::UpTo((2560, 1440)),
+            None,
         );
         let wfd = wfd_desc(&cfg);
         for desc in [&mirror, &http, &wfd] {
@@ -3585,23 +3613,25 @@ mod tests {
         // The HTTP server locates the element by this name in order to hand it
         // the receiver's socket.
         let cfg = StreamConfig::default();
-        let desc = chromecast_pipeline_description(
+        let desc = ts_http_pipeline_description(
             &cfg,
             &VideoSource::Test,
             VideoTarget::Exact((cfg.width, cfg.height)),
+            None,
         );
         assert!(
-            desc.contains(&format!("name={CHROMECAST_SINK_NAME}")),
+            desc.contains(&format!("name={TS_HTTP_SINK_NAME}")),
             "{desc}"
         );
     }
 
     #[test]
     fn chromecast_uses_supported_transport_stream_framing() {
-        let desc = chromecast_pipeline_description(
+        let desc = ts_http_pipeline_description(
             &StreamConfig::default(),
             &VideoSource::Test,
             VideoTarget::Exact((1920, 1080)),
+            None,
         );
         assert!(desc.contains("mpegtsmux name=mux alignment=7"), "{desc}");
         assert!(
@@ -3851,10 +3881,11 @@ mod tests {
                 ..Default::default()
             };
             for desc in [
-                chromecast_pipeline_description(
+                ts_http_pipeline_description(
                     &cfg,
                     &VideoSource::Test,
                     VideoTarget::Exact((cfg.width, cfg.height)),
+                    None,
                 ),
                 wfd_pipeline_description(
                     &cfg,

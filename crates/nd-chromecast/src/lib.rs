@@ -9,7 +9,6 @@
 pub mod cast;
 pub mod file_server;
 mod flow;
-pub mod http;
 pub mod media;
 pub mod mirror;
 pub mod mirror_session;

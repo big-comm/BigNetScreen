@@ -26,7 +26,7 @@ use nd_core::media::MediaCommand;
 use nd_core::meta::MetaProvider;
 use nd_core::provider::{DiscoveryEvent, Provider};
 use nd_core::settings::{self, Protocol, Settings};
-use nd_core::sink::{Sink, SinkKind};
+use nd_core::sink::{Sink, SinkKind, SinkState};
 use nd_wfd::WfdP2pProvider;
 
 use crate::wire::{self, Issue, Media, Receiver, Session, Status};
@@ -267,6 +267,13 @@ impl Engine {
                 _ = poll.tick() => {
                     self.reap_finished_media();
                     self.measure_link();
+                    // The session's own progress moves no event of its own, so
+                    // without this the status only catches up when discovery
+                    // happens to chatter. An mDNS provider re-announces often
+                    // enough to hide that; an SSDP one, which only speaks when
+                    // something changed, left the status reading "connecting"
+                    // for a session that had been on the wall for a minute.
+                    self.refresh_status();
                 }
             }
             self.publish();
@@ -433,8 +440,17 @@ impl Engine {
     fn refresh_status(&mut self) {
         // A running session outranks the receiver count: "3 receivers found"
         // while one of them is on the wall is true and useless.
+        //
+        // Which of the two it is comes from the sink, not from the mere
+        // existence of one. Reporting "streaming" the moment a cast is
+        // requested says the screen is on the wall before any receiver has
+        // fetched a byte of it.
         if let Some(sink) = &self.active_sink {
-            self.status = Status::about("streaming", sink.info().display_name);
+            let kind = match sink.state() {
+                SinkState::Streaming => "streaming",
+                _ => "connecting",
+            };
+            self.status = Status::about(kind, sink.info().display_name);
             return;
         }
         if self.media_session.is_some() {
@@ -840,6 +856,12 @@ async fn run_discovery(events: mpsc::Sender<Event>, generation: u64, protocol: P
             }
         }
     }
+    if matches!(protocol, Protocol::Auto | Protocol::Cast) {
+        // SSDP, not mDNS: the two discovery protocols share nothing, so a
+        // DLNA television is invisible to the browse above and this one is
+        // invisible to a Chromecast. Both have to run.
+        providers.push(Arc::new(nd_dlna::DlnaProvider));
+    }
     if matches!(protocol, Protocol::Auto | Protocol::Miracast) {
         providers.push(Arc::new(WfdP2pProvider));
     }
@@ -866,8 +888,8 @@ mod tests {
     use nd_core::sink::{SinkInfo, SinkState};
 
     /// The smallest thing that satisfies `Sink`. `nd_core::dummy` keeps its own
-    /// private, and the tests here only ever ask it its name.
-    struct TestSink(String);
+    /// private, and the tests here ask it its name and what it is doing.
+    struct TestSink(String, SinkState);
 
     #[async_trait::async_trait]
     impl Sink for TestSink {
@@ -880,7 +902,7 @@ mod tests {
             }
         }
         fn state(&self) -> SinkState {
-            SinkState::Disconnected
+            self.1
         }
         async fn start_stream(&self, _: nd_core::capture::CaptureSource) -> nd_core::Result<()> {
             Ok(())
@@ -891,7 +913,11 @@ mod tests {
     }
 
     fn sink(id: &str) -> Arc<dyn Sink> {
-        Arc::new(TestSink(id.to_string()))
+        Arc::new(TestSink(id.to_string(), SinkState::Disconnected))
+    }
+
+    fn streaming_sink(id: &str) -> Arc<dyn Sink> {
+        Arc::new(TestSink(id.to_string(), SinkState::Streaming))
     }
 
     fn engine() -> Engine {
@@ -911,7 +937,13 @@ mod tests {
         engine.refresh_status();
         assert_eq!(engine.status, Status::found(1));
 
+        // Chosen but not yet on the wall. Saying "streaming" here would
+        // announce a picture no receiver has fetched a byte of.
         engine.active_sink = Some(sink("a"));
+        engine.refresh_status();
+        assert_eq!(engine.status.kind, "connecting");
+
+        engine.active_sink = Some(streaming_sink("a"));
         engine.refresh_status();
         assert_eq!(engine.status.kind, "streaming");
     }

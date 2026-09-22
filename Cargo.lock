@@ -2093,7 +2093,6 @@ dependencies = [
  "async-trait",
  "ctr",
  "futures",
- "gio",
  "gstreamer",
  "gstreamer-app",
  "mdns-sd",
@@ -2115,8 +2114,23 @@ version = "0.1.4"
 dependencies = [
  "async-trait",
  "futures",
+ "gio",
  "gstreamer",
  "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "nd-dlna"
+version = "0.1.4"
+dependencies = [
+ "async-trait",
+ "futures",
+ "gstreamer",
+ "nd-core",
+ "nd-net",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -2183,6 +2197,7 @@ dependencies = [
  "nd-capture",
  "nd-chromecast",
  "nd-core",
+ "nd-dlna",
  "nd-ndi",
  "nd-net",
  "nd-webrtc",

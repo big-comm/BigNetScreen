@@ -39,7 +39,9 @@ use tokio::net::{TcpListener, TcpStream};
 
 use nd_core::{NdError, Result};
 
-use crate::http::{local_ip_towards, random_token, read_request, request_line, write_bounded};
+use nd_core::stream_server::{
+    local_ip_towards, random_token, read_request, request_line, write_bounded,
+};
 
 /// Copy buffer. Large enough that a film is not sent in tiny writes, small
 /// enough not to hold a megabyte per connection.

@@ -180,6 +180,9 @@ pub fn describe_mode(width: u32, height: u32, fps: u32, receivers: i32) -> Strin
 pub fn protocol_label(kind: SinkKind) -> String {
     match kind {
         SinkKind::Chromecast => tr!("Chromecast"),
+        // A standard's name, like NDI: it is what the television's own menu
+        // calls it, so translating it would make the two disagree.
+        SinkKind::Dlna => "DLNA".into(),
         SinkKind::Ndi => "NDI".into(),
         SinkKind::WebRtc => tr!("Web browser"),
         SinkKind::AirPlay => tr!("AirPlay"),
@@ -190,7 +193,7 @@ pub fn protocol_label(kind: SinkKind) -> String {
 
 pub fn icon_for(kind: SinkKind) -> &'static str {
     match kind {
-        SinkKind::Chromecast => "tv-symbolic",
+        SinkKind::Chromecast | SinkKind::Dlna => "tv-symbolic",
         SinkKind::Ndi => "network-transmit-symbolic",
         SinkKind::WebRtc => "web-browser-symbolic",
         SinkKind::AirPlay => "display-projector-symbolic",
@@ -220,6 +223,10 @@ pub fn latency_hint(kind: SinkKind) -> Option<String> {
     match kind {
         SinkKind::WfdP2p | SinkKind::WfdMice => Some(tr!("instant response")),
         SinkKind::Chromecast | SinkKind::WebRtc => Some(tr!("quick response")),
+        // Measured, not guessed, and the one number that decides whether
+        // somebody picks this: a renderer sets its own prebuffer and DLNA
+        // gives the sender no way to ask for a smaller one.
+        SinkKind::Dlna => Some(tr!("delayed a few seconds")),
         _ => None,
     }
 }
