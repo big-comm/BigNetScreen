@@ -14,7 +14,7 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 "X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/pages/settings.rs:323
+#: crates/nd-gui/src/pages/settings.rs:342
 msgid ""
 "0 lets the system choose. Set one only if you opened a port on your firewall "
 "by hand."
@@ -22,34 +22,34 @@ msgstr ""
 "0 laisse le système choisir. Définissez une valeur uniquement si vous avez "
 "ouvert un port sur votre pare-feu manuellement."
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "24 FPS"
 msgstr "24 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "25 FPS"
 msgstr "25 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "30 FPS"
 msgstr "30 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "50 FPS"
 msgstr "50 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "60 FPS"
 msgstr "60 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:191
+#: crates/nd-gui/src/pages/settings.rs:192
 #, fuzzy
 msgid ""
 "60 is smoother and costs about half as much again in bandwidth. Many "
 "Chromecast models mirror at 30 and will hold it there."
 msgstr "60 est plus fluide et consomme environ moitié plus de bande passante"
 
-#: crates/nd-gui/src/pages/settings.rs:126
+#: crates/nd-gui/src/pages/settings.rs:127
 #, fuzzy
 msgid ""
 "A ceiling: a smaller screen is sent as it is. Above 1080p is sent only if "
@@ -79,6 +79,12 @@ msgstr "À propos de BigNetScreen"
 msgid "Address"
 msgstr "Adresse"
 
+#: crates/nd-gui/src/pages/settings.rs:272
+msgid ""
+"Adds a “BigNetScreen” output. Send that application's sound to it and "
+"nothing else leaves this computer"
+msgstr ""
+
 #: crates/nd-gui/src/pages/mod.rs:188
 msgid "AirPlay"
 msgstr "AirPlay"
@@ -91,7 +97,7 @@ msgstr "Tous les protocoles"
 msgid "An extra desktop, just for this"
 msgstr "Un bureau supplémentaire, réservé à cela"
 
-#: crates/nd-gui/src/pages/settings.rs:175
+#: crates/nd-gui/src/pages/settings.rs:176
 msgid ""
 "Aspect ratio is preserved. Miracast uses a supported mode within these "
 "limits."
@@ -99,7 +105,7 @@ msgstr ""
 "Les proportions sont conservées. Miracast utilise un mode pris en charge "
 "dans ces limites."
 
-#: crates/nd-gui/src/pages/settings.rs:251
+#: crates/nd-gui/src/pages/settings.rs:252
 msgid "Audio"
 msgstr "Audio"
 
@@ -112,12 +118,12 @@ msgstr ""
 "compilation du paquet peuvent prendre quelques minutes. Gardez l’application "
 "ouverte jusqu’à la fin de l’installation."
 
-#: crates/nd-gui/src/pages/settings.rs:109
+#: crates/nd-gui/src/pages/settings.rs:110
 msgid "Automatic"
 msgstr "Automatique"
 
 #: crates/nd-gui/src/pages/devices.rs:173
-#: crates/nd-gui/src/pages/settings.rs:303
+#: crates/nd-gui/src/pages/settings.rs:322
 msgid "Automatic discovery"
 msgstr "Découverte automatique"
 
@@ -137,11 +143,11 @@ msgstr "Retour"
 msgid "Back 10 seconds"
 msgstr "Reculer de 10 secondes"
 
-#: crates/nd-gui/src/pages/settings.rs:219
+#: crates/nd-gui/src/pages/settings.rs:220
 msgid "Balanced — the default"
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:212
+#: crates/nd-gui/src/pages/settings.rs:213
 #, fuzzy
 msgid ""
 "Buffering smooths uneven playback and delays everything, the pointer "
@@ -192,7 +198,7 @@ msgstr "Chromecast"
 msgid "Chromecast / AirPlay"
 msgstr "Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/settings.rs:111
+#: crates/nd-gui/src/pages/settings.rs:112
 msgid "Chromecast / AirPlay only"
 msgstr "Chromecast / AirPlay uniquement"
 
@@ -250,11 +256,11 @@ msgstr ""
 msgid "Could not connect. Make sure both devices are on the same network."
 msgstr "Pour Chromecast, connectez les deux appareils au même réseau Wi-Fi."
 
-#: crates/nd-gui/src/pages/settings.rs:142
+#: crates/nd-gui/src/pages/settings.rs:143
 msgid "Custom resolution"
 msgstr "Résolution personnalisée"
 
-#: crates/nd-gui/src/pages/settings.rs:210
+#: crates/nd-gui/src/pages/settings.rs:211
 msgid "Delay"
 msgstr ""
 
@@ -266,7 +272,7 @@ msgstr "Appareils"
 msgid "Disconnect"
 msgstr "Déconnecter"
 
-#: crates/nd-gui/src/pages/settings.rs:298
+#: crates/nd-gui/src/pages/settings.rs:317
 msgid "Discovery and devices"
 msgstr "Découverte et appareils"
 
@@ -281,7 +287,7 @@ msgstr ""
 "Activez la duplication de l’écran sur votre téléviseur ou projecteur avant "
 "de vous connecter."
 
-#: crates/nd-gui/src/pages/settings.rs:239
+#: crates/nd-gui/src/pages/settings.rs:240
 msgid ""
 "Encode on the graphics card, which is faster and uses far less processor. "
 "Turn it off if the picture arrives wrong, broken or not at all."
@@ -307,7 +313,7 @@ msgstr "Écran supplémentaire"
 msgid "Failed"
 msgstr "Échec"
 
-#: crates/nd-gui/src/pages/settings.rs:220
+#: crates/nd-gui/src/pages/settings.rs:221
 msgid "Film — smoothest, for watching"
 msgstr ""
 
@@ -323,7 +329,7 @@ msgstr "Rechercher des appareils compatibles"
 msgid "Finished"
 msgstr "Terminé"
 
-#: crates/nd-gui/src/pages/settings.rs:321
+#: crates/nd-gui/src/pages/settings.rs:340
 msgid "Fixed port"
 msgstr "Port fixe"
 
@@ -335,7 +341,7 @@ msgstr "Pour Chromecast, connectez les deux appareils au même réseau Wi-Fi."
 msgid "Forward 10 seconds"
 msgstr "Avancer de 10 secondes"
 
-#: crates/nd-gui/src/pages/settings.rs:189
+#: crates/nd-gui/src/pages/settings.rs:190
 msgid "Frame rate"
 msgstr "Fréquence d'images"
 
@@ -347,15 +353,15 @@ msgstr "Bon"
 msgid "Got it"
 msgstr "Compris"
 
-#: crates/nd-gui/src/pages/settings.rs:237
+#: crates/nd-gui/src/pages/settings.rs:238
 msgid "Hardware acceleration"
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:174
+#: crates/nd-gui/src/pages/settings.rs:175
 msgid "Height (pixels)"
 msgstr "Hauteur (pixels)"
 
-#: crates/nd-gui/src/pages/settings.rs:134
+#: crates/nd-gui/src/pages/settings.rs:135
 msgid "High (1080p)"
 msgstr "Élevée (1080p)"
 
@@ -363,11 +369,11 @@ msgstr "Élevée (1080p)"
 msgid "Home"
 msgstr "Accueil"
 
-#: crates/nd-gui/src/pages/settings.rs:256
+#: crates/nd-gui/src/pages/settings.rs:257
 msgid "Include system audio"
 msgstr "Inclure l'audio système"
 
-#: crates/nd-gui/src/pages/settings.rs:266
+#: crates/nd-gui/src/pages/settings.rs:285
 msgid "Include the microphone"
 msgstr "Inclure le micro"
 
@@ -401,7 +407,7 @@ msgstr "Préparez le récepteur"
 msgid "Local network discovery unavailable"
 msgstr "Découverte du réseau local indisponible"
 
-#: crates/nd-gui/src/pages/settings.rs:305
+#: crates/nd-gui/src/pages/settings.rs:324
 msgid "Look for receivers as soon as the app starts"
 msgstr "Chercher des récepteurs dès que l'application démarre"
 
@@ -409,15 +415,15 @@ msgstr "Chercher des récepteurs dès que l'application démarre"
 msgid "Looking for receivers…"
 msgstr "Recherche de récepteurs…"
 
-#: crates/nd-gui/src/pages/settings.rs:136
+#: crates/nd-gui/src/pages/settings.rs:137
 msgid "Low (480p)"
 msgstr "Faible (480p)"
 
-#: crates/nd-gui/src/pages/settings.rs:218
+#: crates/nd-gui/src/pages/settings.rs:219
 msgid "Low — for using the computer on the big screen"
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:132
+#: crates/nd-gui/src/pages/settings.rs:133
 msgid "Maximum (2160p)"
 msgstr "Maximum (2160p)"
 
@@ -429,11 +435,11 @@ msgstr "Mesure…"
 msgid "Media"
 msgstr "Médias"
 
-#: crates/nd-gui/src/pages/settings.rs:135
+#: crates/nd-gui/src/pages/settings.rs:136
 msgid "Medium (720p)"
 msgstr "Moyen (720p)"
 
-#: crates/nd-gui/src/pages/settings.rs:275
+#: crates/nd-gui/src/pages/settings.rs:294
 msgid "Microphone volume"
 msgstr "Volume du micro"
 
@@ -457,7 +463,7 @@ msgstr ""
 "Miracast nécessite un adaptateur Wi-Fi, et cet ordinateur n'en a aucun. La "
 "diffusion sur le réseau fonctionne néanmoins."
 
-#: crates/nd-gui/src/pages/settings.rs:110
+#: crates/nd-gui/src/pages/settings.rs:111
 msgid "Miracast only"
 msgstr "Miracast uniquement"
 
@@ -474,7 +480,7 @@ msgstr ""
 msgid "Mirror screen"
 msgstr "Dupliquer l'écran"
 
-#: crates/nd-gui/src/pages/settings.rs:268
+#: crates/nd-gui/src/pages/settings.rs:287
 msgid "Mix your voice into what is sent"
 msgstr "Mélanger votre voix à ce qui est envoyé"
 
@@ -589,6 +595,10 @@ msgstr ""
 msgid "One window only"
 msgstr "Une seule fenêtre"
 
+#: crates/nd-gui/src/pages/settings.rs:267
+msgid "Only a chosen application"
+msgstr ""
+
 #: crates/nd-gui/src/pages/mod.rs:209
 msgid "Opening the firewall port…"
 msgstr "Ouverture du port du pare-feu…"
@@ -609,7 +619,7 @@ msgstr "Photos, vidéos et musique"
 msgid "Pick files and choose where to play them."
 msgstr "Sélectionnez des fichiers et choisissez où les lire."
 
-#: crates/nd-gui/src/pages/settings.rs:105
+#: crates/nd-gui/src/pages/settings.rs:106
 msgid "Preferred protocol"
 msgstr "Protocole préféré"
 
@@ -654,7 +664,7 @@ msgstr ""
 msgid "Remove from queue"
 msgstr "Retirer de la file d’attente"
 
-#: crates/nd-gui/src/pages/settings.rs:124
+#: crates/nd-gui/src/pages/settings.rs:125
 msgid "Resolution limit"
 msgstr "Résolution maximale"
 
@@ -662,7 +672,7 @@ msgstr "Résolution maximale"
 msgid "Restart BigNetScreen to use NDI."
 msgstr "Redémarrez BigNetScreen pour utiliser NDI."
 
-#: crates/nd-gui/src/pages/settings.rs:369
+#: crates/nd-gui/src/pages/settings.rs:388
 msgid "Restore defaults"
 msgstr "Rétablir les valeurs par défaut"
 
@@ -670,7 +680,7 @@ msgstr "Rétablir les valeurs par défaut"
 msgid "Resume"
 msgstr "Reprendre"
 
-#: crates/nd-gui/src/pages/settings.rs:352
+#: crates/nd-gui/src/pages/settings.rs:371
 msgid "Saved as you change them"
 msgstr "Enregistré automatiquement à chaque modification"
 
@@ -710,7 +720,7 @@ msgstr "Envoyer à"
 msgid "Send to device"
 msgstr "Envoyer vers un appareil"
 
-#: crates/nd-gui/src/pages/settings.rs:258
+#: crates/nd-gui/src/pages/settings.rs:259
 msgid "Send whatever this computer is playing"
 msgstr "Envoyer tout ce que cet ordinateur est en train de lire"
 
@@ -718,11 +728,11 @@ msgstr "Envoyer tout ce que cet ordinateur est en train de lire"
 msgid "Sending files…"
 msgstr "Envoi de fichiers…"
 
-#: crates/nd-gui/src/pages/mod.rs:51 crates/nd-gui/src/pages/settings.rs:94
+#: crates/nd-gui/src/pages/mod.rs:51 crates/nd-gui/src/pages/settings.rs:95
 msgid "Settings"
 msgstr "Paramètres"
 
-#: crates/nd-gui/src/pages/settings.rs:596
+#: crates/nd-gui/src/pages/settings.rs:625
 msgid "Settings cannot be saved on this system."
 msgstr "Les paramètres ne peuvent pas être enregistrés sur ce système."
 
@@ -782,7 +792,7 @@ msgstr "Arrêter l'envoi"
 msgid "Stopping…"
 msgstr "Arrêt…"
 
-#: crates/nd-gui/src/pages/mod.rs:212 crates/nd-gui/src/pages/settings.rs:100
+#: crates/nd-gui/src/pages/mod.rs:212 crates/nd-gui/src/pages/settings.rs:101
 msgid "Streaming"
 msgstr "Streaming"
 
@@ -818,11 +828,11 @@ msgstr ""
 msgid "The sharing service is not responding. Try again."
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:95
+#: crates/nd-gui/src/pages/settings.rs:96
 msgid "These apply to your next session."
 msgstr "Ces paramètres s'appliquent à votre prochaine session."
 
-#: crates/nd-gui/src/pages/settings.rs:313
+#: crates/nd-gui/src/pages/settings.rs:332
 msgid "This computer's name"
 msgstr "Nom de cet ordinateur"
 
@@ -841,7 +851,7 @@ msgstr "Conseils"
 msgid "Too many attempts. Wait half a minute and try again."
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:133
+#: crates/nd-gui/src/pages/settings.rs:134
 msgid "Very high (1440p)"
 msgstr "Très élevé (1440p)"
 
@@ -873,7 +883,7 @@ msgstr ""
 msgid "What do you want to share?"
 msgstr "Que souhaitez-vous partager ?"
 
-#: crates/nd-gui/src/pages/settings.rs:107
+#: crates/nd-gui/src/pages/settings.rs:108
 msgid "Which kind of receiver to look for"
 msgstr "Quel type de récepteur rechercher"
 
@@ -881,7 +891,7 @@ msgstr "Quel type de récepteur rechercher"
 msgid "Whole screen"
 msgstr "Écran entier"
 
-#: crates/nd-gui/src/pages/settings.rs:162
+#: crates/nd-gui/src/pages/settings.rs:163
 msgid "Width (pixels)"
 msgstr "Largeur (pixels)"
 

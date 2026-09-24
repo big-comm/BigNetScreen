@@ -15,6 +15,7 @@ use relm4::gtk::{
 };
 
 const SIZE: i32 = 360;
+const CACHE_BYTES: usize = 16 * 1024 * 1024;
 pub(super) static SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
 static CACHE: LazyLock<Mutex<VecDeque<CacheEntry>>> = LazyLock::new(Mutex::default);
 
@@ -75,8 +76,8 @@ impl Thumbnail {
         loader.pixbuf().map(|image| Self::from_pixbuf(&image))
     }
 
-    pub fn texture(&self) -> gdk::Texture {
-        gdk::Texture::for_pixbuf(&Pixbuf::from_bytes(
+    pub fn texture(&self, size: i32) -> gdk::Texture {
+        let pixbuf = Pixbuf::from_bytes(
             &self.pixels,
             relm4::gtk::gdk_pixbuf::Colorspace::Rgb,
             self.alpha,
@@ -84,7 +85,18 @@ impl Thumbnail {
             self.width,
             self.height,
             self.stride,
-        ))
+        );
+        let factor = f64::from(size) / f64::from(self.width.max(self.height));
+        let scaled = (factor < 1.0)
+            .then(|| {
+                pixbuf.scale_simple(
+                    (f64::from(self.width) * factor).round().max(1.0) as i32,
+                    (f64::from(self.height) * factor).round().max(1.0) as i32,
+                    relm4::gtk::gdk_pixbuf::InterpType::Bilinear,
+                )
+            })
+            .flatten();
+        gdk::Texture::for_pixbuf(scaled.as_ref().unwrap_or(&pixbuf))
     }
 }
 
@@ -106,8 +118,17 @@ pub async fn load(path: PathBuf, kind: MediaKind) -> Result<Preview, String> {
         let preview = decode(&path, kind)?;
         let mut cache = CACHE.lock().unwrap_or_else(|err| err.into_inner());
         cache.retain(|entry| entry.path != path);
-        if cache.len() >= 96 {
-            cache.pop_front();
+        let bytes =
+            |preview: &Preview| preview.image.as_ref().map_or(0, |image| image.pixels.len());
+        let mut retained = cache
+            .iter()
+            .map(|entry| bytes(&entry.preview))
+            .sum::<usize>();
+        while cache.len() >= 96 || retained + bytes(&preview) > CACHE_BYTES {
+            let Some(oldest) = cache.pop_front() else {
+                break;
+            };
+            retained -= bytes(&oldest.preview);
         }
         cache.push_back(CacheEntry {
             path,

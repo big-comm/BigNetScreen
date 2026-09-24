@@ -67,6 +67,9 @@ const DEVICE_TYPE_WIFI_P2P: u32 = 30;
 trait NetworkManager {
     fn get_all_devices(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
 
+    #[zbus(property)]
+    fn active_connections(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
+
     #[allow(clippy::type_complexity)]
     fn add_and_activate_connection2(
         &self,
@@ -137,6 +140,9 @@ trait WifiP2pPeer {
     default_service = "org.freedesktop.NetworkManager"
 )]
 trait ActiveConnection {
+    #[zbus(property, name = "Type")]
+    fn connection_type(&self) -> zbus::Result<String>;
+
     #[zbus(property)]
     fn state(&self) -> zbus::Result<u32>;
 
@@ -264,6 +270,52 @@ fn classify(e: zbus::Error, context: &str) -> NdError {
 // ---------------------------------------------------------------------------
 // Device
 // ---------------------------------------------------------------------------
+
+/// One IPv4 source per active LAN connection, including non-default routes.
+/// Refreshing this list on each SSDP sweep follows Wi-Fi/Ethernet changes.
+pub async fn local_ipv4_addresses() -> zbus::Result<Vec<std::net::Ipv4Addr>> {
+    let conn = Connection::system().await?;
+    let nm = NetworkManagerProxy::new(&conn).await?;
+    let mut addresses = Vec::new();
+    for path in nm.active_connections().await?.into_iter().take(64) {
+        let read = async {
+            let active = ActiveConnectionProxy::builder(&conn)
+                .path(path)?
+                .cache_properties(CacheProperties::No)
+                .build()
+                .await?;
+            // Tunnels and loopback must not divert LAN discovery onto a VPN.
+            if active.state().await? != 2
+                || !matches!(
+                    active.connection_type().await?.as_str(),
+                    "802-3-ethernet" | "802-11-wireless" | "bridge" | "bond" | "vlan"
+                )
+            {
+                return Ok(None);
+            }
+            let ip4 = Ip4ConfigProxy::builder(&conn)
+                .path(active.ip4_config().await?)?
+                .cache_properties(CacheProperties::No)
+                .build()
+                .await?;
+            Ok::<_, zbus::Error>(ip4.address_data().await?.iter().take(64).find_map(|entry| {
+                let address = <&str>::try_from(entry.get("address")?)
+                    .ok()?
+                    .parse::<std::net::Ipv4Addr>()
+                    .ok()?;
+                (!address.is_loopback() && !address.is_unspecified() && !address.is_multicast())
+                    .then_some(address)
+            }))
+        };
+        // One disappearing connection must not hide the other active networks.
+        if let Ok(Some(address)) = read.await {
+            if !addresses.contains(&address) {
+                addresses.push(address);
+            }
+        }
+    }
+    Ok(addresses)
+}
 
 /// A handle to NetworkManager's Wi-Fi P2P device.
 ///

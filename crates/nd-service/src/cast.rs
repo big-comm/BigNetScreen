@@ -48,6 +48,25 @@ pub async fn run(
         return Outcome::ok();
     }
 
+    // The card is normally already there, put up when the switch was turned
+    // on. This covers the switch having been set in a previous run of the
+    // service, or the sound server having been restarted since.
+    //
+    // **Failing here ends the cast rather than falling back.** Asking to send
+    // only what was routed to the card and being given the whole computer's
+    // sound instead is the one outcome worse than not transmitting: it is a
+    // notification, or a private call, leaving the machine. Better to say why
+    // now than to be quietly wrong.
+    let settings = nd_core::settings::current();
+    if settings.system_audio && settings.virtual_audio {
+        if let Err(err) = nd_core::virtual_sink::ensure().await {
+            return Outcome::failed(format!(
+                "the virtual sound card could not be created, and sending the \
+                 computer's whole output instead is not what was asked for: {err}"
+            ));
+        }
+    }
+
     let backend = tokio::select! {
         backend = nd_capture::select_backend_for(source_type, sink.max_source_size()) => backend,
         _ = cancel.changed() => return Outcome::ok(),

@@ -46,21 +46,21 @@ pub enum SettingsMsg {
     SetHardwareEncoding(bool),
     SetSystemAudio(bool),
     SetMicrophone(bool),
+    SetVirtualAudio(bool),
     SetMicVolume(f64),
     SetAutoDiscovery(bool),
     SetLatency(Profile),
     SetDeviceName(String),
     SetPort(u16),
     Reset,
-    /// The settings changed somewhere else (the devices page has the discovery
-    /// switch too).
-    Reload,
+    OpenSound,
 }
 
 #[derive(Debug)]
 pub enum SettingsOutput {
     /// The settings were changed; the root component may need to act on it.
     Changed(Settings),
+    Saved(Result<(), String>),
 }
 
 #[relm4::component(pub)]
@@ -100,34 +100,18 @@ impl Component for SettingsPage {
                         set_title: &tr!("Streaming"),
                         set_margin_top: 12,
 
-                        #[name = "protocol"]
-                        adw::ComboRow {
-                            set_title: &tr!("Preferred protocol"),
-                            add_prefix = &gtk::Image { set_icon_name: Some("video-display-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
-                            set_subtitle: &tr!("Which kind of receiver to look for"),
-                            set_model: Some(&string_list(&[
-                                tr!("Automatic"),
-                                tr!("Miracast only"),
-                                tr!("Chromecast / AirPlay only"),
-                            ])),
-                            connect_selected_notify[sender] => move |row| {
-                                sender.input(SettingsMsg::SetProtocol(match row.selected() {
-                                    1 => Protocol::Miracast,
-                                    2 => Protocol::Cast,
-                                    _ => Protocol::Auto,
-                                }));
-                            } @protocol_handler,
-                        },
+
 
                         #[name = "quality"]
                         adw::ComboRow {
                             set_title: &tr!("Resolution limit"),
                             add_prefix = &gtk::Image { set_icon_name: Some("view-fullscreen-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
-                            set_subtitle: &tr!(
+                            set_use_subtitle: true,
+                            set_tooltip_text: Some(&tr!(
                                 "A ceiling: a smaller screen is sent as it is. Above 1080p \
                                  is sent only if the receiver accepts it — many Chromecast \
                                  models mirror at 1080p and will hold it there."
-                            ),
+                            )),
                             set_model: Some(&string_list(&[
                                 tr!("Maximum (2160p)"),
                                 tr!("Very high (1440p)"),
@@ -184,22 +168,7 @@ impl Component for SettingsPage {
                             },
                         },
 
-                        #[name = "fps"]
-                        adw::ComboRow {
-                            set_title: &tr!("Frame rate"),
-                            add_prefix = &gtk::Image { set_icon_name: Some("view-list-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
-                            set_subtitle: &tr!(
-                                "60 is smoother and costs about half as much again in \
-                                 bandwidth. Many Chromecast models mirror at 30 and will \
-                                 hold it there."
-                            ),
-                            set_model: Some(&string_list(&[tr!("24 FPS"), tr!("25 FPS"), tr!("30 FPS"), tr!("50 FPS"), tr!("60 FPS")])),
-                            connect_selected_notify[sender] => move |row| {
-                                sender.input(SettingsMsg::SetFps(
-                                    [24, 25, 30, 50, 60].get(row.selected() as usize).copied().unwrap_or(30),
-                                ));
-                            } @fps_handler,
-                        },
+
 
                         // One choice, not two switches: the lowest delay and the
                         // smoothest playback are ends of the same scale, and
@@ -209,11 +178,12 @@ impl Component for SettingsPage {
                         adw::ComboRow {
                             set_title: &tr!("Delay"),
                             add_prefix = &gtk::Image { set_icon_name: Some("video-x-generic-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
-                            set_subtitle: &tr!(
+                            set_use_subtitle: true,
+                            set_tooltip_text: Some(&tr!(
                                 "Buffering smooths uneven playback and delays everything, the \
                                  pointer included. On Miracast it is applied here; on \
                                  Chromecast it is a request the receiver may ignore."
-                            ),
+                            )),
                             set_model: Some(&string_list(&[
                                 tr!("Low — for using the computer on the big screen"),
                                 tr!("Balanced — the default"),
@@ -228,23 +198,6 @@ impl Component for SettingsPage {
                             } @latency_handler,
                         },
 
-                        // Positive, and on by default. "Disable hardware
-                        // acceleration" as a switch makes turning it off a
-                        // double negative at the moment someone is already
-                        // troubleshooting.
-                        #[name = "hardware_encoding"]
-                        adw::SwitchRow {
-                            set_title: &tr!("Hardware acceleration"),
-                            add_prefix = &gtk::Image { set_icon_name: Some("applications-graphics-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
-                            set_subtitle: &tr!(
-                                "Encode on the graphics card, which is faster and uses far \
-                                 less processor. Turn it off if the picture arrives wrong, \
-                                 broken or not at all."
-                            ),
-                            connect_active_notify[sender] => move |row| {
-                                sender.input(SettingsMsg::SetHardwareEncoding(row.is_active()));
-                            } @hardware_encoding_handler,
-                        },
                     },
 
                     adw::PreferencesGroup {
@@ -255,10 +208,40 @@ impl Component for SettingsPage {
                         adw::SwitchRow {
                             set_title: &tr!("Include system audio"),
                             add_prefix = &gtk::Image { set_icon_name: Some("audio-volume-high-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
-                            set_subtitle: &tr!("Send whatever this computer is playing"),
+                            set_subtitle: &tr!("Include sound from applications. Choose below whether to share all sound or only routed applications."),
                             connect_active_notify[sender] => move |row| {
                                 sender.input(SettingsMsg::SetSystemAudio(row.is_active()));
                             } @system_audio_handler,
+                        },
+
+                        #[name = "virtual_audio"]
+                        adw::SwitchRow {
+                            set_title: &tr!("Only applications routed to BigNetScreen"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("audio-card-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
+                            // The name has to match what the sound settings
+                            // show, or the instruction sends people looking for
+                            // a device they will not find.
+                            set_subtitle: &tr!("Adds a “BigNetScreen” output. Send that application's sound to it and nothing else leaves this computer"),
+                            // It narrows the switch above; on its own it means
+                            // nothing, so it does not stay pressable when there
+                            // is no system audio to narrow.
+                            #[watch]
+                            set_sensitive: model.settings.system_audio,
+                            connect_active_notify[sender] => move |row| {
+                                sender.input(SettingsMsg::SetVirtualAudio(row.is_active()));
+                            } @virtual_audio_handler,
+                        },
+
+                        adw::ActionRow {
+                            set_title: &tr!("Choose the sound to share"),
+                            set_subtitle: &tr!("In your system sound settings, move each application's playback to the BigNetScreen output. Microphone audio is controlled separately below."),
+                            #[watch]
+                            set_visible: model.settings.system_audio && model.settings.virtual_audio,
+                            add_suffix = &gtk::Button {
+                                set_label: &tr!("Open sound settings"),
+                                set_valign: gtk::Align::Center,
+                                connect_clicked => SettingsMsg::OpenSound,
+                            },
                         },
 
                         #[name = "microphone"]
@@ -317,6 +300,64 @@ impl Component for SettingsPage {
                             } @device_name_handler,
                         },
 
+
+                    },
+
+                    gtk::Expander {
+                        set_label: Some(&tr!("Advanced settings")),
+                        set_margin_top: 18,
+                        #[wrap(Some)]
+                        set_child = &adw::PreferencesGroup {
+                            set_margin_top: 12,
+                        #[name = "protocol"]
+                        adw::ComboRow {
+                            set_title: &tr!("Preferred protocol"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("video-display-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
+                            set_use_subtitle: true,
+                            set_tooltip_text: Some(&tr!("Which kind of receiver to look for")),
+                            set_model: Some(&string_list(&[
+                                tr!("Automatic"),
+                                tr!("Miracast only"),
+                                tr!("Local network only (Chromecast, DLNA, AirPlay)"),
+                            ])),
+                            connect_selected_notify[sender] => move |row| {
+                                sender.input(SettingsMsg::SetProtocol(match row.selected() {
+                                    1 => Protocol::Miracast,
+                                    2 => Protocol::Cast,
+                                    _ => Protocol::Auto,
+                                }));
+                            } @protocol_handler,
+                        },
+                        #[name = "fps"]
+                        adw::ComboRow {
+                            set_title: &tr!("Frame rate"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("view-list-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
+                            set_use_subtitle: true,
+                            set_tooltip_text: Some(&tr!(
+                                "60 is smoother and costs about half as much again in \
+                                 bandwidth. Many Chromecast models mirror at 30 and will \
+                                 hold it there."
+                            )),
+                            set_model: Some(&string_list(&[tr!("24 FPS"), tr!("25 FPS"), tr!("30 FPS"), tr!("50 FPS"), tr!("60 FPS")])),
+                            connect_selected_notify[sender] => move |row| {
+                                sender.input(SettingsMsg::SetFps(
+                                    [24, 25, 30, 50, 60].get(row.selected() as usize).copied().unwrap_or(30),
+                                ));
+                            } @fps_handler,
+                        },
+                        #[name = "hardware_encoding"]
+                        adw::SwitchRow {
+                            set_title: &tr!("Hardware acceleration"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("applications-graphics-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
+                            set_subtitle: &tr!(
+                                "Encode on the graphics card, which is faster and uses far \
+                                 less processor. Turn it off if the picture arrives wrong, \
+                                 broken or not at all."
+                            ),
+                            connect_active_notify[sender] => move |row| {
+                                sender.input(SettingsMsg::SetHardwareEncoding(row.is_active()));
+                            } @hardware_encoding_handler,
+                        },
                         adw::ActionRow {
                             set_title: &tr!("Fixed port"),
                             add_prefix = &gtk::Image { set_icon_name: Some("network-wired-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
@@ -337,6 +378,7 @@ impl Component for SettingsPage {
                                 } @port_handler,
                             },
                         },
+                        },
                     },
 
                     gtk::Box {
@@ -349,16 +391,9 @@ impl Component for SettingsPage {
                             set_hexpand: true,
 
                             gtk::Label {
-                                set_label: &tr!("Saved as you change them"),
+                                set_label: &tr!("Changes are saved automatically"),
                                 set_xalign: 0.0,
                                 add_css_class: "heading",
-                            },
-                            gtk::Label {
-                                #[watch]
-                                set_label: &settings_path_line(),
-                                set_xalign: 0.0,
-                                set_wrap: true,
-                                add_css_class: "dim-label",
                             },
                         },
                         gtk::Button {
@@ -401,11 +436,40 @@ impl Component for SettingsPage {
         // While the widgets are being filled in from the model, their "changed"
         // signals are echoes of what was just written, not the person choosing
         // something. Acting on them would save the file on every reload.
-        if self.loading && !matches!(message, SettingsMsg::Reload) {
+        if self.loading {
             return;
         }
 
         match message {
+            SettingsMsg::OpenSound => {
+                let command = [
+                    ("systemsettings", "systemsettings kcm_pulseaudio"),
+                    ("gnome-control-center", "gnome-control-center sound"),
+                    ("pavucontrol-qt", "pavucontrol-qt"),
+                    ("pavucontrol", "pavucontrol"),
+                ]
+                .into_iter()
+                .find(|(program, _)| gtk::glib::find_program_in_path(program).is_some());
+                let result = command
+                    .ok_or_else(|| {
+                        tr!("Open your desktop's sound settings to choose the BigNetScreen output.")
+                    })
+                    .and_then(|(_, command)| {
+                        gtk::gio::AppInfo::create_from_commandline(
+                            command,
+                            None,
+                            gtk::gio::AppInfoCreateFlags::NONE,
+                        )
+                        .and_then(|app| app.launch(&[], None::<&gtk::gio::AppLaunchContext>))
+                        .map_err(|err| err.to_string())
+                    });
+                if let Err(reason) = result {
+                    let dialog = adw::AlertDialog::new(Some(&tr!("Sound settings")), Some(&reason));
+                    dialog.add_response("close", &tr!("Close"));
+                    dialog.present(Some(_root));
+                }
+                return;
+            }
             SettingsMsg::SetProtocol(protocol) => self.settings.protocol = protocol,
             SettingsMsg::SetQuality(quality) => self.settings.quality = quality,
             SettingsMsg::SetFps(fps) => self.settings.fps = fps,
@@ -417,6 +481,7 @@ impl Component for SettingsPage {
             }
             SettingsMsg::SetHardwareEncoding(on) => self.settings.hardware_encoding = on,
             SettingsMsg::SetSystemAudio(on) => self.settings.system_audio = on,
+            SettingsMsg::SetVirtualAudio(on) => self.settings.virtual_audio = on,
             SettingsMsg::SetMicrophone(on) => self.settings.microphone = on,
             SettingsMsg::SetMicVolume(volume) => self.settings.mic_volume = volume as u8,
             SettingsMsg::SetAutoDiscovery(on) => self.settings.auto_discovery = on,
@@ -424,19 +489,12 @@ impl Component for SettingsPage {
             SettingsMsg::SetDeviceName(name) => self.settings.device_name = name,
             SettingsMsg::SetPort(port) => self.settings.port = port,
             SettingsMsg::Reset => {
-                settings::reset();
-                self.settings = settings::current();
+                self.settings = Settings::default();
                 self.show(widgets);
-            }
-            SettingsMsg::Reload => {
-                self.settings = settings::current();
-                self.show(widgets);
-                self.update_view(widgets, sender);
-                return;
             }
         }
 
-        self.schedule_write();
+        self.schedule_write(sender.output_sender().clone());
         sender
             .output(SettingsOutput::Changed(self.settings.clone()))
             .ok();
@@ -444,10 +502,9 @@ impl Component for SettingsPage {
     }
 
     fn shutdown(&mut self, _widgets: &mut Self::Widgets, _output: relm4::Sender<Self::Output>) {
-        // Nothing chosen may be lost to the timer: flush what is still pending.
+        // The window flushes asynchronously before allowing shutdown.
         if let Some(pending) = self.pending_write.take() {
             pending.remove();
-            settings::persist(&self.settings);
         }
     }
 }
@@ -455,18 +512,23 @@ impl Component for SettingsPage {
 impl SettingsPage {
     /// Applies the settings now and saves them once the controls settle,
     /// off the GTK thread (see [`SAVE_DELAY`]).
-    fn schedule_write(&mut self) {
+    fn schedule_write(&mut self, output: relm4::Sender<SettingsOutput>) {
         settings::set_in_memory(&self.settings);
         if let Some(pending) = self.pending_write.take() {
             pending.remove();
         }
-        let settings = self.settings.clone();
         let slot = self.pending_write.clone();
         let id = gtk::glib::timeout_add_local_once(SAVE_DELAY, move || {
             // The source is gone once it has fired; forget its id so a later
             // cancellation does not try to remove it twice.
             slot.set(None);
-            relm4::spawn_blocking(move || settings::persist(&settings));
+            relm4::spawn(async move {
+                let result = relm4::spawn_blocking(settings::persist)
+                    .await
+                    .map_err(|err| err.to_string())
+                    .and_then(|result| result.map_err(|err| err.to_string()));
+                let _ = output.send(SettingsOutput::Saved(result));
+            });
         });
         self.pending_write.set(Some(id));
     }
@@ -491,6 +553,9 @@ impl SettingsPage {
         widgets
             .system_audio
             .block_signal(&widgets.system_audio_handler);
+        widgets
+            .virtual_audio
+            .block_signal(&widgets.virtual_audio_handler);
         widgets.microphone.block_signal(&widgets.microphone_handler);
         widgets.mic_volume.block_signal(&widgets.mic_volume_handler);
         widgets
@@ -534,6 +599,9 @@ impl SettingsPage {
             .hardware_encoding
             .set_active(self.settings.hardware_encoding);
         widgets.system_audio.set_active(self.settings.system_audio);
+        widgets
+            .virtual_audio
+            .set_active(self.settings.virtual_audio);
         widgets.microphone.set_active(self.settings.microphone);
         widgets
             .mic_volume
@@ -566,6 +634,9 @@ impl SettingsPage {
             .system_audio
             .unblock_signal(&widgets.system_audio_handler);
         widgets
+            .virtual_audio
+            .unblock_signal(&widgets.virtual_audio_handler);
+        widgets
             .microphone
             .unblock_signal(&widgets.microphone_handler);
         widgets
@@ -588,11 +659,4 @@ fn string_list(items: &[String]) -> gtk::StringList {
         list.append(item);
     }
     list
-}
-
-fn settings_path_line() -> String {
-    match settings::path() {
-        Some(path) => path.display().to_string(),
-        None => tr!("Settings cannot be saved on this system."),
-    }
 }

@@ -14,7 +14,7 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 "X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/pages/settings.rs:323
+#: crates/nd-gui/src/pages/settings.rs:342
 msgid ""
 "0 lets the system choose. Set one only if you opened a port on your firewall "
 "by hand."
@@ -22,34 +22,34 @@ msgstr ""
 "0이면 시스템이 선택합니다. 방화벽에서 포트를 직접 열어 놓은 경우에만 설정하세"
 "요."
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "24 FPS"
 msgstr "24 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "25 FPS"
 msgstr "25 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "30 FPS"
 msgstr "30 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "50 FPS"
 msgstr "50 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "60 FPS"
 msgstr "60 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:191
+#: crates/nd-gui/src/pages/settings.rs:192
 #, fuzzy
 msgid ""
 "60 is smoother and costs about half as much again in bandwidth. Many "
 "Chromecast models mirror at 30 and will hold it there."
 msgstr "60이 더 부드럽지만 대역폭은 약 1.5배가 필요합니다"
 
-#: crates/nd-gui/src/pages/settings.rs:126
+#: crates/nd-gui/src/pages/settings.rs:127
 #, fuzzy
 msgid ""
 "A ceiling: a smaller screen is sent as it is. Above 1080p is sent only if "
@@ -79,6 +79,12 @@ msgstr "BigNetScreen 정보"
 msgid "Address"
 msgstr "주소"
 
+#: crates/nd-gui/src/pages/settings.rs:272
+msgid ""
+"Adds a “BigNetScreen” output. Send that application's sound to it and "
+"nothing else leaves this computer"
+msgstr ""
+
 #: crates/nd-gui/src/pages/mod.rs:188
 msgid "AirPlay"
 msgstr "AirPlay"
@@ -91,14 +97,14 @@ msgstr "모든 프로토콜"
 msgid "An extra desktop, just for this"
 msgstr "이 작업만을 위한 추가 바탕 화면"
 
-#: crates/nd-gui/src/pages/settings.rs:175
+#: crates/nd-gui/src/pages/settings.rs:176
 msgid ""
 "Aspect ratio is preserved. Miracast uses a supported mode within these "
 "limits."
 msgstr ""
 "화면 비율이 유지됩니다. Miracast는 이 범위에서 지원되는 모드를 사용합니다."
 
-#: crates/nd-gui/src/pages/settings.rs:251
+#: crates/nd-gui/src/pages/settings.rs:252
 msgid "Audio"
 msgstr "오디오"
 
@@ -110,12 +116,12 @@ msgstr ""
 "인증 요청이 표시되면 인증하세요. 패키지를 다운로드하고 빌드하는 데 몇 분 정"
 "도 걸릴 수 있습니다. 설치가 끝날 때까지 앱을 열어 두세요."
 
-#: crates/nd-gui/src/pages/settings.rs:109
+#: crates/nd-gui/src/pages/settings.rs:110
 msgid "Automatic"
 msgstr "자동"
 
 #: crates/nd-gui/src/pages/devices.rs:173
-#: crates/nd-gui/src/pages/settings.rs:303
+#: crates/nd-gui/src/pages/settings.rs:322
 msgid "Automatic discovery"
 msgstr "자동 검색"
 
@@ -135,11 +141,11 @@ msgstr "뒤로"
 msgid "Back 10 seconds"
 msgstr "10초 뒤로"
 
-#: crates/nd-gui/src/pages/settings.rs:219
+#: crates/nd-gui/src/pages/settings.rs:220
 msgid "Balanced — the default"
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:212
+#: crates/nd-gui/src/pages/settings.rs:213
 #, fuzzy
 msgid ""
 "Buffering smooths uneven playback and delays everything, the pointer "
@@ -190,7 +196,7 @@ msgstr "Chromecast"
 msgid "Chromecast / AirPlay"
 msgstr "Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/settings.rs:111
+#: crates/nd-gui/src/pages/settings.rs:112
 msgid "Chromecast / AirPlay only"
 msgstr "Chromecast / AirPlay 전용"
 
@@ -247,11 +253,11 @@ msgstr ""
 msgid "Could not connect. Make sure both devices are on the same network."
 msgstr "Chromecast를 사용하려면 두 기기를 같은 Wi-Fi 네트워크에 연결하세요."
 
-#: crates/nd-gui/src/pages/settings.rs:142
+#: crates/nd-gui/src/pages/settings.rs:143
 msgid "Custom resolution"
 msgstr "사용자 지정 해상도"
 
-#: crates/nd-gui/src/pages/settings.rs:210
+#: crates/nd-gui/src/pages/settings.rs:211
 msgid "Delay"
 msgstr ""
 
@@ -263,7 +269,7 @@ msgstr "기기"
 msgid "Disconnect"
 msgstr "연결 끊기"
 
-#: crates/nd-gui/src/pages/settings.rs:298
+#: crates/nd-gui/src/pages/settings.rs:317
 msgid "Discovery and devices"
 msgstr "기기 검색 및 설정"
 
@@ -276,7 +282,7 @@ msgstr "검색 전용"
 msgid "Enable screen mirroring on your TV or projector before connecting."
 msgstr "연결하기 전에 TV 또는 프로젝터에서 화면 미러링을 켜세요."
 
-#: crates/nd-gui/src/pages/settings.rs:239
+#: crates/nd-gui/src/pages/settings.rs:240
 msgid ""
 "Encode on the graphics card, which is faster and uses far less processor. "
 "Turn it off if the picture arrives wrong, broken or not at all."
@@ -302,7 +308,7 @@ msgstr "추가 화면"
 msgid "Failed"
 msgstr "실패"
 
-#: crates/nd-gui/src/pages/settings.rs:220
+#: crates/nd-gui/src/pages/settings.rs:221
 msgid "Film — smoothest, for watching"
 msgstr ""
 
@@ -318,7 +324,7 @@ msgstr "호환되는 기기 찾기"
 msgid "Finished"
 msgstr "완료"
 
-#: crates/nd-gui/src/pages/settings.rs:321
+#: crates/nd-gui/src/pages/settings.rs:340
 msgid "Fixed port"
 msgstr "고정 포트"
 
@@ -330,7 +336,7 @@ msgstr "Chromecast를 사용하려면 두 기기를 같은 Wi-Fi 네트워크에
 msgid "Forward 10 seconds"
 msgstr "10초 앞으로"
 
-#: crates/nd-gui/src/pages/settings.rs:189
+#: crates/nd-gui/src/pages/settings.rs:190
 msgid "Frame rate"
 msgstr "프레임 속도"
 
@@ -342,15 +348,15 @@ msgstr "좋음"
 msgid "Got it"
 msgstr "알겠습니다"
 
-#: crates/nd-gui/src/pages/settings.rs:237
+#: crates/nd-gui/src/pages/settings.rs:238
 msgid "Hardware acceleration"
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:174
+#: crates/nd-gui/src/pages/settings.rs:175
 msgid "Height (pixels)"
 msgstr "높이(픽셀)"
 
-#: crates/nd-gui/src/pages/settings.rs:134
+#: crates/nd-gui/src/pages/settings.rs:135
 msgid "High (1080p)"
 msgstr "높음(1080p)"
 
@@ -358,11 +364,11 @@ msgstr "높음(1080p)"
 msgid "Home"
 msgstr "홈"
 
-#: crates/nd-gui/src/pages/settings.rs:256
+#: crates/nd-gui/src/pages/settings.rs:257
 msgid "Include system audio"
 msgstr "시스템 오디오 포함"
 
-#: crates/nd-gui/src/pages/settings.rs:266
+#: crates/nd-gui/src/pages/settings.rs:285
 msgid "Include the microphone"
 msgstr "마이크 포함"
 
@@ -394,7 +400,7 @@ msgstr "수신기를 준비해 두세요"
 msgid "Local network discovery unavailable"
 msgstr "로컬 네트워크 검색을 사용할 수 없음"
 
-#: crates/nd-gui/src/pages/settings.rs:305
+#: crates/nd-gui/src/pages/settings.rs:324
 msgid "Look for receivers as soon as the app starts"
 msgstr "앱 시작 시 수신기 자동 검색"
 
@@ -402,15 +408,15 @@ msgstr "앱 시작 시 수신기 자동 검색"
 msgid "Looking for receivers…"
 msgstr "수신기를 찾는 중…"
 
-#: crates/nd-gui/src/pages/settings.rs:136
+#: crates/nd-gui/src/pages/settings.rs:137
 msgid "Low (480p)"
 msgstr "낮음(480p)"
 
-#: crates/nd-gui/src/pages/settings.rs:218
+#: crates/nd-gui/src/pages/settings.rs:219
 msgid "Low — for using the computer on the big screen"
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:132
+#: crates/nd-gui/src/pages/settings.rs:133
 msgid "Maximum (2160p)"
 msgstr "최대 (2160p)"
 
@@ -422,11 +428,11 @@ msgstr "측정 중…"
 msgid "Media"
 msgstr "미디어"
 
-#: crates/nd-gui/src/pages/settings.rs:135
+#: crates/nd-gui/src/pages/settings.rs:136
 msgid "Medium (720p)"
 msgstr "중간(720p)"
 
-#: crates/nd-gui/src/pages/settings.rs:275
+#: crates/nd-gui/src/pages/settings.rs:294
 msgid "Microphone volume"
 msgstr "마이크 음량"
 
@@ -449,7 +455,7 @@ msgstr ""
 "Miracast에는 Wi-Fi 어댑터가 필요하지만 이 컴퓨터에는 어댑터가 없습니다. 네트"
 "워크를 통한 캐스팅은 계속 작동합니다."
 
-#: crates/nd-gui/src/pages/settings.rs:110
+#: crates/nd-gui/src/pages/settings.rs:111
 msgid "Miracast only"
 msgstr "Miracast만"
 
@@ -466,7 +472,7 @@ msgstr ""
 msgid "Mirror screen"
 msgstr "화면 미러링"
 
-#: crates/nd-gui/src/pages/settings.rs:268
+#: crates/nd-gui/src/pages/settings.rs:287
 msgid "Mix your voice into what is sent"
 msgstr "보내는 내용에 내 목소리 섞기"
 
@@ -570,6 +576,10 @@ msgstr ""
 msgid "One window only"
 msgstr "창 하나만"
 
+#: crates/nd-gui/src/pages/settings.rs:267
+msgid "Only a chosen application"
+msgstr ""
+
 #: crates/nd-gui/src/pages/mod.rs:209
 msgid "Opening the firewall port…"
 msgstr "방화벽 포트를 여는 중…"
@@ -590,7 +600,7 @@ msgstr "사진, 동영상 및 음악"
 msgid "Pick files and choose where to play them."
 msgstr "파일을 선택하고 재생할 위치를 지정하세요."
 
-#: crates/nd-gui/src/pages/settings.rs:105
+#: crates/nd-gui/src/pages/settings.rs:106
 msgid "Preferred protocol"
 msgstr "선호 프로토콜"
 
@@ -634,7 +644,7 @@ msgstr "기기 목록을 새로고침하고 수신기가 켜져 있는지 확인
 msgid "Remove from queue"
 msgstr "재생 대기열에서 제거"
 
-#: crates/nd-gui/src/pages/settings.rs:124
+#: crates/nd-gui/src/pages/settings.rs:125
 msgid "Resolution limit"
 msgstr "해상도 상한"
 
@@ -642,7 +652,7 @@ msgstr "해상도 상한"
 msgid "Restart BigNetScreen to use NDI."
 msgstr "NDI를 사용하려면 BigNetScreen을 다시 시작하세요."
 
-#: crates/nd-gui/src/pages/settings.rs:369
+#: crates/nd-gui/src/pages/settings.rs:388
 msgid "Restore defaults"
 msgstr "기본값 복원"
 
@@ -650,7 +660,7 @@ msgstr "기본값 복원"
 msgid "Resume"
 msgstr "재생 재개"
 
-#: crates/nd-gui/src/pages/settings.rs:352
+#: crates/nd-gui/src/pages/settings.rs:371
 msgid "Saved as you change them"
 msgstr "변경 시 자동 저장됨"
 
@@ -690,7 +700,7 @@ msgstr "보내기 대상"
 msgid "Send to device"
 msgstr "기기로 보내기"
 
-#: crates/nd-gui/src/pages/settings.rs:258
+#: crates/nd-gui/src/pages/settings.rs:259
 msgid "Send whatever this computer is playing"
 msgstr "이 컴퓨터에서 재생 중인 콘텐츠 전송"
 
@@ -698,11 +708,11 @@ msgstr "이 컴퓨터에서 재생 중인 콘텐츠 전송"
 msgid "Sending files…"
 msgstr "파일 전송 중…"
 
-#: crates/nd-gui/src/pages/mod.rs:51 crates/nd-gui/src/pages/settings.rs:94
+#: crates/nd-gui/src/pages/mod.rs:51 crates/nd-gui/src/pages/settings.rs:95
 msgid "Settings"
 msgstr "설정"
 
-#: crates/nd-gui/src/pages/settings.rs:596
+#: crates/nd-gui/src/pages/settings.rs:625
 msgid "Settings cannot be saved on this system."
 msgstr "이 시스템에서는 설정을 저장할 수 없습니다."
 
@@ -760,7 +770,7 @@ msgstr "전송 중지"
 msgid "Stopping…"
 msgstr "중지 중…"
 
-#: crates/nd-gui/src/pages/mod.rs:212 crates/nd-gui/src/pages/settings.rs:100
+#: crates/nd-gui/src/pages/mod.rs:212 crates/nd-gui/src/pages/settings.rs:101
 msgid "Streaming"
 msgstr "스트리밍 중"
 
@@ -796,11 +806,11 @@ msgstr ""
 msgid "The sharing service is not responding. Try again."
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:95
+#: crates/nd-gui/src/pages/settings.rs:96
 msgid "These apply to your next session."
 msgstr "다음 세션에 적용됩니다."
 
-#: crates/nd-gui/src/pages/settings.rs:313
+#: crates/nd-gui/src/pages/settings.rs:332
 msgid "This computer's name"
 msgstr "이 컴퓨터의 이름"
 
@@ -819,7 +829,7 @@ msgstr "팁"
 msgid "Too many attempts. Wait half a minute and try again."
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:133
+#: crates/nd-gui/src/pages/settings.rs:134
 msgid "Very high (1440p)"
 msgstr "매우 높음 (1440p)"
 
@@ -851,7 +861,7 @@ msgstr ""
 msgid "What do you want to share?"
 msgstr "무엇을 공유하시겠습니까?"
 
-#: crates/nd-gui/src/pages/settings.rs:107
+#: crates/nd-gui/src/pages/settings.rs:108
 msgid "Which kind of receiver to look for"
 msgstr "어떤 종류의 수신기를 찾을지"
 
@@ -859,7 +869,7 @@ msgstr "어떤 종류의 수신기를 찾을지"
 msgid "Whole screen"
 msgstr "전체 화면"
 
-#: crates/nd-gui/src/pages/settings.rs:162
+#: crates/nd-gui/src/pages/settings.rs:163
 msgid "Width (pixels)"
 msgstr "너비(픽셀)"
 

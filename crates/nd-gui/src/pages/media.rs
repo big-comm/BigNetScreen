@@ -143,7 +143,7 @@ impl FactoryComponent for MediaTile {
         match message {
             Ok(preview) => {
                 if let Some(image) = &preview.image {
-                    widgets.thumb.set_paintable(Some(&image.texture()));
+                    widgets.thumb.set_paintable(Some(&image.texture(360)));
                 }
                 self.preview = preview;
                 self.update_view(widgets, sender);
@@ -187,6 +187,7 @@ pub struct MediaPage {
     inspection_generation: u64,
     rendered_queue: Vec<PathBuf>,
     queue_thumbnails: std::collections::HashMap<PathBuf, gtk::Image>,
+    queue_preview_cancel: tokio::sync::watch::Sender<()>,
     scan_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -295,9 +296,20 @@ impl Component for MediaPage {
                     connect_clicked => MediaMsg::PickFolder,
                     adw::ButtonContent {
                         set_icon_name: "folder-symbolic",
-                        set_label: &tr!("Send a folder"),
+                        set_label: &tr!("Add a folder"),
                     },
                 },
+            },
+
+            gtk::Label {
+                #[watch]
+                set_label: &model.empty_message(),
+                #[watch]
+                set_visible: model.listed.is_empty(),
+                set_wrap: true,
+                set_margin_top: 24,
+                set_margin_bottom: 24,
+                add_css_class: "dim-label",
             },
 
             gtk::ScrolledWindow {
@@ -321,16 +333,7 @@ impl Component for MediaPage {
                 },
             },
 
-            gtk::Label {
-                #[watch]
-                set_label: &model.empty_message(),
-                #[watch]
-                set_visible: model.listed.is_empty(),
-                set_wrap: true,
-                set_margin_top: 24,
-                set_margin_bottom: 24,
-                add_css_class: "dim-label",
-            },
+
 
             gtk::Box {
                 set_spacing: 8,
@@ -525,6 +528,7 @@ impl Component for MediaPage {
             inspection_generation: 0,
             rendered_queue: Vec::new(),
             queue_thumbnails: Default::default(),
+            queue_preview_cancel: tokio::sync::watch::channel(()).0,
             scan_cancel: Default::default(),
         };
 
@@ -565,7 +569,7 @@ impl Component for MediaPage {
     ) {
         if let (Some(picture), Ok(preview)) = (self.queue_thumbnails.get(&path), preview) {
             if let Some(image) = preview.image {
-                picture.set_paintable(Some(&image.texture()));
+                picture.set_paintable(Some(&image.texture(48)));
             }
         }
     }
@@ -624,9 +628,15 @@ impl Component for MediaPage {
                 self.refused = refused;
                 for file in files {
                     if !self.chosen.iter().any(|f| f.path == file.path) {
+                        if self.chosen.len() >= nd_core::media::MAX_FILES {
+                            self.refused.push(tr!("Select up to 1000 files at a time."));
+                            break;
+                        }
                         self.chosen.push(file.clone());
                     }
-                    if !self.listed.iter().any(|f| f.path == file.path) {
+                    if self.listed.len() < GRID_LIMIT
+                        && !self.listed.iter().any(|f| f.path == file.path)
+                    {
                         self.listed.push(file.clone());
                         self.tiles.guard().push_back(file);
                     }
@@ -747,6 +757,7 @@ impl MediaPage {
         if paths == self.rendered_queue {
             return;
         }
+        self.queue_preview_cancel.send_replace(());
         while let Some(row) = widgets.queue_list.first_child() {
             widgets.queue_list.remove(&row);
         }
@@ -771,9 +782,14 @@ impl MediaPage {
             self.queue_thumbnails.insert(file.path.clone(), picture);
             let path = file.path.clone();
             let kind = file.kind;
-            sender.oneshot_command(async move {
-                let preview = preview::load(path.clone(), kind).await;
-                (path, preview)
+            let mut cancel = self.queue_preview_cancel.subscribe();
+            sender.command(move |out, shutdown| {
+                shutdown.register(async move {
+                    tokio::select! {
+                        preview = preview::load(path.clone(), kind) => { let _ = out.send((path, preview)); },
+                        _ = cancel.changed() => {},
+                    }
+                }).drop_on_shutdown()
             });
             let remove = gtk::Button::from_icon_name("list-remove-symbolic");
             remove.set_valign(gtk::Align::Center);
@@ -924,7 +940,6 @@ impl Drop for MediaPage {
 }
 
 fn inspect_paths(paths: Vec<PathBuf>) -> (Vec<MediaFile>, Vec<String>) {
-    const MAX_SELECTED: usize = 1000;
     let mut files = Vec::new();
     let mut refused = Vec::new();
     for path in paths {
@@ -935,7 +950,7 @@ fn inspect_paths(paths: Vec<PathBuf>) -> (Vec<MediaFile>, Vec<String>) {
                 .flatten()
                 .map(|entry| entry.path())
                 .filter(|path| path.is_file())
-                .take(MAX_SELECTED + 1)
+                .take(nd_core::media::MAX_FILES + 1)
                 .collect();
             paths.sort();
             paths
@@ -943,7 +958,7 @@ fn inspect_paths(paths: Vec<PathBuf>) -> (Vec<MediaFile>, Vec<String>) {
             vec![path]
         };
         for candidate in candidates {
-            if files.len() + refused.len() >= MAX_SELECTED {
+            if files.len() + refused.len() >= nd_core::media::MAX_FILES {
                 refused.push(tr!("Select up to 1000 files at a time."));
                 return (files, refused);
             }
@@ -1105,7 +1120,9 @@ mod tests {
             assert_eq!((thumbnail.width, thumbnail.height), (360, 180));
             assert!(thumbnail.alpha);
             assert_eq!(&thumbnail.pixels.as_ref()[..4], &[0x12, 0x34, 0x56, 0x80]);
-            let texture = thumbnail.texture();
+            let texture = thumbnail.texture(360);
+            let queue_texture = thumbnail.texture(48);
+            assert!(queue_texture.width() <= 48 && queue_texture.height() <= 48);
             assert_eq!((texture.width(), texture.height()), (360, 180));
 
             std::fs::write(&path, b"invalid image").expect("invalid fixture");
@@ -1193,6 +1210,7 @@ mod tests {
                 duration: Some(180.0),
                 can_pause: true,
                 can_seek: true,
+                ..Default::default()
             },
             ..Default::default()
         })));

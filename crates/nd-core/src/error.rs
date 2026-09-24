@@ -17,6 +17,15 @@ pub enum NdError {
     #[error("capture: {0}")]
     Capture(String),
 
+    /// Sound server failure (`pactl`, the virtual card).
+    ///
+    /// Its own domain because the prefix is what the person reads: a sound
+    /// server that refused is neither a capture failure nor an unsupported
+    /// feature, and labelling it as either sends them looking in the wrong
+    /// place.
+    #[error("audio: {0}")]
+    Audio(String),
+
     /// Protocol failure (WFD/RTSP negotiation, Cast channel).
     #[error("protocol: {0}")]
     Protocol(String),

@@ -116,8 +116,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let audio = if let Ok(path) = std::env::var("WFD_TEST_MEDIA") {
-            video = VideoSource::MediaFile {
-                path: path.into(),
+            video = VideoSource::Media {
+                source: nd_core::media::MediaSource::File(path.into()),
                 kind: nd_core::media::MediaKind::Video,
                 title: "BigNetScreen test".into(),
             };

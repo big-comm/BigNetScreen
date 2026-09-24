@@ -27,5 +27,6 @@ pub mod radio;
 pub mod settings;
 pub mod sink;
 pub mod stream_server;
+pub mod virtual_sink;
 
 pub use error::{NdError, Result};

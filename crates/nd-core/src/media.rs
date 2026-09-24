@@ -6,6 +6,25 @@
 //! has no sound, a song has no picture, and a film may have either missing —
 //! each of which stalls a pipeline built for the other.
 
+/// Maximum files in one playback queue, including additions to a selection.
+pub const MAX_FILES: usize = 1000;
+
+#[derive(Clone, PartialEq, Eq)]
+pub enum MediaSource {
+    File(std::path::PathBuf),
+    Url(String),
+}
+
+impl std::fmt::Debug for MediaSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::File(path) => f.debug_tuple("File").field(path).finish(),
+            // Stream URLs can contain credentials and temporary access tokens.
+            Self::Url(_) => f.write_str("Url(<redacted>)"),
+        }
+    }
+}
+
 /// What a media file contains.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MediaKind {
@@ -55,7 +74,11 @@ mod tests {
 #[derive(Clone, Debug, PartialEq)]
 pub enum MediaCommand {
     TogglePause,
+    SetPaused(bool),
     SeekRelative(f64),
+    SeekTo(f64),
+    SetVolume(f64),
+    SetMute(bool),
     Next,
     Remove(std::path::PathBuf),
 }
@@ -67,6 +90,31 @@ pub struct PlaybackState {
     pub duration: Option<f64>,
     pub can_pause: bool,
     pub can_seek: bool,
+    /// Per-media level, 0..=1. None means this output cannot report/control it.
+    pub volume: Option<f64>,
+    pub muted: Option<bool>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PlaybackStart {
+    pub seconds: f64,
+    pub paused: bool,
+    pub volume: f64,
+    pub muted: bool,
+}
+
+impl PlaybackStart {
+    pub fn validate(self) -> crate::Result<Self> {
+        if !self.volume.is_finite()
+            || !(0.0..=1.0).contains(&self.volume)
+            || gstreamer::ClockTime::try_from_seconds_f64(self.seconds).is_err()
+        {
+            return Err(crate::NdError::Unsupported(
+                "invalid initial playback position or volume".into(),
+            ));
+        }
+        Ok(self)
+    }
 }
 
 pub fn seek_target(seconds: f64, offset: f64, duration: Option<f64>) -> Option<f64> {
@@ -97,6 +145,34 @@ impl FilePlaybackControl {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .set(Some(pipeline));
+    }
+
+    /// Prepare on a worker before a receiver can consume any buffers.
+    pub fn prepare(&self, start: PlaybackStart) -> crate::Result<()> {
+        use gstreamer::{self as gst, prelude::*};
+        let start = start.validate()?;
+        self.command(&MediaCommand::SetVolume(start.volume))?;
+        self.command(&MediaCommand::SetMute(start.muted))?;
+        if start.seconds > 0.0 {
+            let pipeline = self
+                .pipeline()
+                .ok_or_else(|| crate::NdError::Gst("media pipeline is not ready".into()))?;
+            pipeline
+                .set_state(gst::State::Paused)
+                .map_err(|e| crate::NdError::Gst(e.to_string()))?;
+            let decoder = pipeline
+                .by_name("filedec")
+                .ok_or_else(|| crate::NdError::Gst("media decoder is missing".into()))?;
+            // Synthetic live tracks let the pipeline reach PAUSED while an
+            // HTTP decoder is still discovering its streams.
+            let (result, state, _) = decoder.state(gst::ClockTime::from_seconds(10));
+            result.map_err(|e| crate::NdError::Gst(e.to_string()))?;
+            if state != gst::State::Paused {
+                return Err(crate::NdError::Gst("media preparation timed out".into()));
+            }
+            self.command(&MediaCommand::SeekTo(start.seconds))?;
+        }
+        Ok(())
     }
 
     fn pipeline(&self) -> Option<gstreamer::Pipeline> {
@@ -130,6 +206,10 @@ impl FilePlaybackControl {
                 .map(|v| v.seconds_f64()),
             can_pause: true,
             can_seek,
+            volume: pipeline
+                .by_name("file-volume")
+                .map(|v| v.property("volume")),
+            muted: pipeline.by_name("file-volume").map(|v| v.property("mute")),
         }
     }
 
@@ -141,27 +221,55 @@ impl FilePlaybackControl {
             .ok_or_else(|| crate::NdError::Gst("media pipeline is not ready".into()))?;
         let state = self.state();
         match command {
-            MediaCommand::TogglePause if state.can_pause => {
+            MediaCommand::TogglePause | MediaCommand::SetPaused(_) if state.can_pause => {
+                let paused = match command {
+                    MediaCommand::SetPaused(paused) => *paused,
+                    _ => !state.paused,
+                };
                 pipeline
-                    .set_state(if state.paused {
-                        gst::State::Playing
-                    } else {
+                    .set_state(if paused {
                         gst::State::Paused
+                    } else {
+                        gst::State::Playing
                     })
                     .map_err(|err| crate::NdError::Gst(err.to_string()))?;
             }
-            MediaCommand::SeekRelative(offset) if state.can_seek => {
-                let target = seek_target(state.seconds, *offset, state.duration)
-                    .ok_or_else(|| crate::NdError::Gst("invalid seek position".into()))?;
+            MediaCommand::SeekRelative(_) | MediaCommand::SeekTo(_) if state.can_seek => {
+                let target = match command {
+                    MediaCommand::SeekRelative(offset) => {
+                        seek_target(state.seconds, *offset, state.duration)
+                    }
+                    MediaCommand::SeekTo(seconds) => seek_target(0.0, *seconds, state.duration),
+                    _ => unreachable!(),
+                }
+                .ok_or_else(|| crate::NdError::Gst("invalid seek position".into()))?;
                 let decoder = pipeline
                     .by_name("filedec")
                     .ok_or_else(|| crate::NdError::Gst("media decoder is missing".into()))?;
+                let precision = if matches!(command, MediaCommand::SeekTo(_)) {
+                    gst::SeekFlags::ACCURATE
+                } else {
+                    gst::SeekFlags::KEY_UNIT
+                };
                 decoder
                     .seek_simple(
-                        gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
-                        gst::ClockTime::from_seconds_f64(target),
+                        gst::SeekFlags::FLUSH | precision,
+                        gst::ClockTime::try_from_seconds_f64(target)
+                            .map_err(|err| crate::NdError::Gst(err.to_string()))?,
                     )
                     .map_err(|err| crate::NdError::Gst(err.to_string()))?;
+            }
+            MediaCommand::SetVolume(level) if level.is_finite() && (0.0..=1.0).contains(level) => {
+                let volume = pipeline.by_name("file-volume").ok_or_else(|| {
+                    crate::NdError::Unsupported("media volume is unavailable".into())
+                })?;
+                volume.set_property("volume", *level);
+            }
+            MediaCommand::SetMute(muted) => {
+                let volume = pipeline.by_name("file-volume").ok_or_else(|| {
+                    crate::NdError::Unsupported("media mute is unavailable".into())
+                })?;
+                volume.set_property("mute", *muted);
             }
             _ => {
                 return Err(crate::NdError::Unsupported(
@@ -177,6 +285,56 @@ impl FilePlaybackControl {
 mod playback_tests {
     use super::*;
     use gstreamer::{self as gst, prelude::*};
+
+    #[test]
+    fn media_volume_and_mute_change_encoded_input_samples() {
+        use crate::pipeline::{AudioSource, PipelineGuard};
+        gst::init().unwrap();
+        let description = format!("audiotestsrc is-live=true samplesperbuffer=480 ! audio/x-raw,rate=48000 ! identity name=filedec {} ! audio/x-raw,format=F32LE ! appsink name=measure sync=false max-buffers=1 drop=true", AudioSource::MediaFile.description());
+        let pipeline = gst::parse::launch(&description)
+            .unwrap()
+            .downcast::<gst::Pipeline>()
+            .unwrap();
+        let _guard = PipelineGuard::new(pipeline.clone());
+        let control = FilePlaybackControl::default();
+        control.attach(&pipeline);
+        pipeline.set_state(gst::State::Playing).unwrap();
+        pipeline.state(gst::ClockTime::from_seconds(2)).0.unwrap();
+        let sink = pipeline.by_name("measure").unwrap();
+        let rms = || {
+            let mut result = 0.0;
+            // Discard frames already in flight when the command was applied.
+            for _ in 0..8 {
+                let sample = sink
+                    .emit_by_name::<Option<gst::Sample>>(
+                        "try-pull-sample",
+                        &[&gst::ClockTime::from_seconds(1)],
+                    )
+                    .expect("audio frame");
+                let buffer = sample.buffer().unwrap().map_readable().unwrap();
+                let samples: Vec<f64> = buffer
+                    .as_slice()
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|b| f64::from(f32::from_le_bytes(*b)))
+                    .collect();
+                result = (samples.iter().map(|v| v * v).sum::<f64>() / samples.len() as f64).sqrt();
+            }
+            result
+        };
+        let full = rms();
+        assert!(full > 0.1);
+        control.command(&MediaCommand::SetVolume(0.25)).unwrap();
+        assert!((rms() / full - 0.25).abs() < 0.02);
+        assert!(control.command(&MediaCommand::SetVolume(f64::NAN)).is_err());
+        control.command(&MediaCommand::SetMute(true)).unwrap();
+        assert_eq!(rms(), 0.0);
+        control.command(&MediaCommand::SetMute(false)).unwrap();
+        assert!((rms() / full - 0.25).abs() < 0.02);
+        assert_eq!(control.state().volume, Some(0.25));
+        assert_eq!(control.state().muted, Some(false));
+    }
 
     #[test]
     fn seeking_clamps_and_rejects_invalid_positions() {
@@ -257,8 +415,8 @@ mod playback_tests {
             })
             .collect();
         receiver.set_state(gst::State::Playing).unwrap();
-        let source = VideoSource::MediaFile {
-            path: path.clone(),
+        let source = VideoSource::Media {
+            source: crate::media::MediaSource::File(path.clone()),
             kind: MediaKind::Video,
             title: "test".into(),
         };
@@ -389,8 +547,8 @@ mod playback_tests {
             .unwrap();
         assert_eq!(message.type_(), gst::MessageType::Eos, "{message:?}");
         drop(guard);
-        let video = VideoSource::MediaFile {
-            path: path.clone(),
+        let video = VideoSource::Media {
+            source: crate::media::MediaSource::File(path.clone()),
             kind: MediaKind::Video,
             title: "test".into(),
         };
@@ -422,11 +580,17 @@ mod playback_tests {
         pipeline.state(gst::ClockTime::from_seconds(2)).0.unwrap();
         assert!(control.state().paused);
         let before = control.state().seconds;
+        control.command(&MediaCommand::SetPaused(true)).unwrap();
+        pipeline.state(gst::ClockTime::from_seconds(2)).0.unwrap();
+        assert!(control.state().paused, "explicit pause is idempotent");
         std::thread::sleep(Duration::from_millis(200));
         assert!((control.state().seconds - before).abs() < 0.1);
         control.command(&MediaCommand::SeekRelative(4.0)).unwrap();
         pipeline.state(gst::ClockTime::from_seconds(2)).0.unwrap();
         assert!(control.state().paused, "seek must preserve pause");
+        control.command(&MediaCommand::SeekTo(4.0)).unwrap();
+        pipeline.state(gst::ClockTime::from_seconds(2)).0.unwrap();
+        assert!(control.state().paused, "absolute seek must preserve pause");
         control.command(&MediaCommand::TogglePause).unwrap();
         pipeline.state(gst::ClockTime::from_seconds(2)).0.unwrap();
         let before_counts: Vec<_> = counts.iter().map(|c| c.load(Ordering::Relaxed)).collect();

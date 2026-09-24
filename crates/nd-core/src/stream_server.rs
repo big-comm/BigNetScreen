@@ -381,6 +381,15 @@ impl StreamServer {
     where
         F: FnMut() -> Result<()> + Send,
     {
+        let (slow_client, mut slow_client_rx) = tokio::sync::watch::channel(false);
+        sink.connect("client-removed", false, move |values| {
+            if gst::glib::EnumValue::from_value(&values[2])
+                .is_some_and(|(_, status)| status.nick() == "slow")
+            {
+                slow_client.send_replace(true);
+            }
+            None
+        });
         // Closing the descriptor is this side's job once GStreamer gives it
         // back — it was this side that handed it over. Wired here rather than
         // by each caller so a second protocol cannot forget it and leak a
@@ -402,6 +411,11 @@ impl StreamServer {
             }
             let accepted = tokio::select! {
                 result = self.listener.accept() => result,
+                _ = slow_client_rx.changed() => {
+                    return Err(NdError::Network(
+                        "the receiver stopped reading fast enough; the stream queue limit was reached".into(),
+                    ));
+                }
                 _ = cancel.changed() => {
                     tracing::debug!("stream server stopped on request");
                     return Ok(());
@@ -738,5 +752,78 @@ mod tests {
                 .await
                 .is_err()
         );
+    }
+
+    #[tokio::test]
+    async fn a_stalled_dlna_reader_ends_with_a_bounded_queue_error() {
+        use crate::pipeline::{self, PipelineGuard, StreamConfig, VideoSource, VideoTarget};
+        use gst::prelude::*;
+
+        let cfg = StreamConfig {
+            width: 320,
+            height: 240,
+            ..Default::default()
+        };
+        let description = pipeline::ts_http_pipeline_description(
+            &cfg,
+            &VideoSource::Test,
+            VideoTarget::Exact((320, 240)),
+            Some(8_000_000),
+        );
+        let (built, _events) = pipeline::build_pipeline(&description, cfg.latency_ms()).unwrap();
+        let guard = PipelineGuard::new(built);
+        let sink = guard
+            .pipeline()
+            .by_name(pipeline::TS_HTTP_SINK_NAME)
+            .unwrap();
+        // A small OS receive window makes a stopped TV deterministic on loopback.
+        let server = StreamServer {
+            listener: TcpListener::bind("127.0.0.1:0").await.unwrap(),
+            path: "/test".into(),
+            allowed: IpAddr::V4(Ipv4Addr::LOCALHOST),
+            local_addr: "127.0.0.1:0".parse().unwrap(),
+            media: DLNA_MEDIA,
+        };
+        let client = gio::Socket::new(
+            gio::SocketFamily::Ipv4,
+            gio::SocketType::Stream,
+            gio::SocketProtocol::Tcp,
+        )
+        .unwrap();
+        // SOL_SOCKET/SO_RCVBUF on Linux; production socket options stay untouched.
+        client.set_option(1, 8, 4096).unwrap();
+        let address = server.listener.local_addr().unwrap();
+        gio::prelude::SocketExt::connect(
+            &client,
+            &gio::InetSocketAddress::from_string("127.0.0.1", address.port().into()).unwrap(),
+            gio::Cancellable::NONE,
+        )
+        .unwrap();
+        client
+            .send(
+                b"GET /test HTTP/1.1\r\nHost: localhost\r\n\r\n",
+                gio::Cancellable::NONE,
+            )
+            .unwrap();
+        let (_cancel, cancelled) = tokio::sync::watch::channel(false);
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            server.serve(
+                sink.clone(),
+                || {
+                    guard
+                        .pipeline()
+                        .set_state(gst::State::Playing)
+                        .map(|_| ())
+                        .map_err(|err| NdError::Gst(err.to_string()))
+                },
+                cancelled,
+            ),
+        )
+        .await
+        .expect("a stalled receiver must be disconnected");
+        assert!(result.unwrap_err().to_string().contains("queue limit"));
+        assert!(u64::from(sink.property::<u32>("buffers-queued")) * 1316 < 2_100_000);
+        client.close().unwrap();
     }
 }

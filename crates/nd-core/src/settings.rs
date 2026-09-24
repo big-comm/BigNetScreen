@@ -17,7 +17,7 @@
 //! application from starting.
 
 use std::path::PathBuf;
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 
 /// Which protocol to prefer when a receiver offers more than one.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -142,6 +142,14 @@ pub struct Settings {
     pub fps: u32,
     /// Send what the computer is playing.
     pub system_audio: bool,
+    /// Offer a virtual sound card and send only what is routed to it.
+    ///
+    /// Narrows [`Self::system_audio`] rather than replacing it: with this on,
+    /// "the computer's sound" means the card's monitor instead of the default
+    /// output's, so a notification or a private call stays on the computer.
+    /// The microphone switch is unaffected — that is the person's own voice,
+    /// not something an application routes anywhere.
+    pub virtual_audio: bool,
     /// Mix the microphone into the audio that is sent.
     pub microphone: bool,
     /// The microphone's gain, 0..=100.
@@ -179,6 +187,10 @@ impl Default for Settings {
             custom_height: 1080,
             fps: 30,
             system_audio: true,
+            // Off by default: it only helps somebody who has decided which
+            // application to send, and it costs a device in everybody else's
+            // sound settings.
+            virtual_audio: false,
             microphone: false,
             mic_volume: 80,
             auto_discovery: true,
@@ -224,6 +236,7 @@ impl Settings {
              custom_height = {}\n\
              fps = {}\n\
              system_audio = {}\n\
+             virtual_audio = {}\n\
              microphone = {}\n\
              mic_volume = {}\n\
              auto_discovery = {}\n\
@@ -237,6 +250,7 @@ impl Settings {
             valid_dimension(self.custom_height),
             self.fps,
             self.system_audio,
+            self.virtual_audio,
             self.microphone,
             self.mic_volume,
             self.auto_discovery,
@@ -283,6 +297,7 @@ impl Settings {
                 }
                 "hardware_encoding" => settings.hardware_encoding = value == "true",
                 "system_audio" => settings.system_audio = value == "true",
+                "virtual_audio" => settings.virtual_audio = value == "true",
                 "microphone" => settings.microphone = value == "true",
                 // Parsed wide and then clamped, not parsed as `u8`: as a `u8`,
                 // 150 would be accepted and clamped while 900 was rejected and
@@ -385,12 +400,10 @@ pub fn reload() -> Settings {
 
 /// Applies new settings and writes them to disk.
 ///
-/// Failing to write is reported and otherwise survivable: the session in front
-/// of the person keeps the settings they just chose, and only the memory of
-/// them across restarts is lost.
-pub fn set(settings: Settings) {
+/// Returns a persistence error so the caller can keep the change visible.
+pub fn set(settings: Settings) -> std::io::Result<()> {
     set_in_memory(&settings);
-    persist(&settings);
+    persist()
 }
 
 /// Applies new settings to the running process without touching the disk.
@@ -405,27 +418,18 @@ pub fn set_in_memory(settings: &Settings) {
     }
 }
 
-/// Writes the settings to disk. Blocking (it syncs the file); see [`set`] for
-/// how failures are treated.
-pub fn persist(settings: &Settings) {
-    let Some(path) = path() else {
-        tracing::warn!("no configuration directory; settings will not persist");
-        return;
-    };
-    if let Some(parent) = path.parent() {
-        if let Err(err) = std::fs::create_dir_all(parent) {
-            tracing::warn!(%err, "could not create the configuration directory");
-            return;
-        }
-    }
-    if let Err(err) = crate::persistence::write_private(&path, settings.to_file().as_bytes()) {
-        tracing::warn!(%err, path = %path.display(), "could not save the settings");
-    }
+/// Saves the latest in-memory settings. Blocking: call off the GUI thread.
+/// Serializing before reading prevents a delayed writer restoring old values.
+pub fn persist() -> std::io::Result<()> {
+    static WRITER: Mutex<()> = Mutex::new(());
+    let _writer = WRITER.lock().unwrap_or_else(|err| err.into_inner());
+    let path = path().ok_or_else(|| std::io::Error::other("no configuration directory"))?;
+    crate::persistence::write_private(&path, current().to_file().as_bytes())
 }
 
 /// Resets everything to the defaults, on disk as well.
-pub fn reset() {
-    set(Settings::default());
+pub fn reset() -> std::io::Result<()> {
+    set(Settings::default())
 }
 
 #[cfg(test)]
@@ -488,6 +492,7 @@ mod tests {
             quality: Quality::Medium,
             fps: 60,
             system_audio: false,
+            virtual_audio: true,
             microphone: true,
             mic_volume: 42,
             auto_discovery: false,

@@ -69,7 +69,8 @@ pub struct CaptureSource {
 #[derive(Clone, Debug)]
 pub struct MediaPlayback {
     pub control: Option<crate::media::FilePlaybackControl>,
-    pub path: std::path::PathBuf,
+    pub start: Option<crate::media::PlaybackStart>,
+    pub source: crate::media::MediaSource,
     pub kind: crate::media::MediaKind,
     /// The name to show when the file has no picture of its own.
     pub title: String,
@@ -113,8 +114,8 @@ impl CaptureSource {
     /// A serial is never truncated or replaced by a reusable node ID.
     pub fn video_source(&self) -> VideoSource {
         if let Some(playback) = &self.media {
-            return VideoSource::MediaFile {
-                path: playback.path.clone(),
+            return VideoSource::Media {
+                source: playback.source.clone(),
                 kind: playback.kind,
                 title: playback.title.clone(),
             };
@@ -147,8 +148,8 @@ impl CaptureSource {
     /// second PipeWire connection cannot be used to ask early: the portal's
     /// node is not resolvable from one, which nineteen consecutive attempts
     /// per session established before this went back to the announced size.
-    /// The Cast mirroring path no longer uses this for the size it encodes at:
-    /// it builds the pipeline first and reads the negotiated caps back.
+    /// Cast mirroring and DLNA instead use the pipeline's negotiated caps
+    /// for the encoded dimensions.
     pub fn size_or(&self, default: (u32, u32)) -> (u32, u32) {
         self.size.unwrap_or(default)
     }
@@ -207,7 +208,8 @@ mod tests {
         let source = CaptureSource::media_file(
             MediaPlayback {
                 control: None,
-                path: "/nonexistent.mp4".into(),
+                start: None,
+                source: crate::media::MediaSource::File("/nonexistent.mp4".into()),
                 kind: crate::media::MediaKind::Video,
                 title: String::new(),
             },

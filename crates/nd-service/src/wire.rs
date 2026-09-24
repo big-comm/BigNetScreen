@@ -224,6 +224,18 @@ impl Media {
     }
 }
 
+/// Additive player API. The original Media D-Bus tuple remains unchanged.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Type, Value, OwnedValue)]
+pub struct PlayerSession {
+    pub id: String,
+    pub owner: String,
+    pub receiver: String,
+    pub volume: f64,
+    pub muted: bool,
+    pub can_volume: bool,
+    pub can_mute: bool,
+}
+
 pub fn kind_name(kind: SinkKind) -> &'static str {
     match kind {
         SinkKind::Ndi => "ndi",

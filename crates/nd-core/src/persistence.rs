@@ -24,7 +24,8 @@ pub fn write_private(path: &Path, contents: &[u8]) -> std::io::Result<()> {
     let result = (|| {
         file.write_all(contents)?;
         file.sync_all()?;
-        std::fs::rename(&temporary, path)
+        std::fs::rename(&temporary, path)?;
+        std::fs::File::open(parent)?.sync_all()
     })();
     if result.is_err() {
         let _ = std::fs::remove_file(temporary);

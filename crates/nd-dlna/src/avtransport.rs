@@ -5,16 +5,10 @@
 //! `GetTransportInfo` to notice when the television was turned off or the
 //! viewer pressed stop on its own remote.
 //!
-//! There is deliberately nothing here about buffering. The renderer's entire
-//! UPnP surface was read off a real television — every action and every state
-//! variable of `AVTransport`, `RenderingControl` and `ConnectionManager` — and
-//! it holds no control over playback delay, prebuffer or latency of any kind.
-//! Unlike Cast, which negotiates a `targetDelay` we set to zero, DLNA gives the
-//! sender no say: the receiver buffers what it decides to buffer. Measured at
-//! roughly 1.5 s on a Panasonic VIErA over Ethernet, once the stream's bitrate
-//! was high enough to fill its byte-counted buffer quickly. That is the floor,
-//! and it is the reason this protocol is offered for watching rather than for
-//! working on the big screen.
+//! These AVTransport:1 actions provide no playback-buffer setting. Sender
+//! queues, encoding and transport remain tunable; receiver buffering must be
+//! measured per model. Optional AVTransport:3 CLOCKSYNC controls and vendor
+//! extensions are not a portable way to tune an HTTP player's prebuffer.
 
 use nd_core::Result;
 
@@ -61,7 +55,12 @@ pub async fn stop(control: &Endpoint) -> Result<()> {
 /// response belong here too — one says what the response is, the other says
 /// what the item is, and a renderer that sees them disagree believes the
 /// metadata.
-pub async fn set_uri(control: &Endpoint, url: &str, title: &str, size: (u32, u32)) -> Result<()> {
+pub async fn set_uri(
+    control: &Endpoint,
+    url: &str,
+    title: &str,
+    size: Option<(u32, u32)>,
+) -> Result<()> {
     let metadata = didl_lite(url, title, size);
     let arguments = format!(
         "<InstanceID>0</InstanceID>\
@@ -105,7 +104,12 @@ pub async fn transport_state(control: &Endpoint) -> Result<TransportState> {
 /// Returned unescaped: it travels inside a SOAP string argument, so the caller
 /// escapes it once as a whole. Escaping here as well would double it, and a
 /// renderer shown `&amp;lt;` finds no item at all.
-fn didl_lite(url: &str, title: &str, size: (u32, u32)) -> String {
+fn didl_lite(url: &str, title: &str, size: Option<(u32, u32)>) -> String {
+    // Resolution is optional in DIDL-Lite. It is not known until the TV's GET
+    // starts capture; advertising logical portal coordinates would be false.
+    let resolution = size
+        .map(|(width, height)| format!(" resolution=\"{width}x{height}\""))
+        .unwrap_or_default();
     format!(
         "<DIDL-Lite xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\" \
          xmlns:dc=\"http://purl.org/dc/elements/1.1/\" \
@@ -114,14 +118,11 @@ fn didl_lite(url: &str, title: &str, size: (u32, u32)) -> String {
          <dc:title>{title}</dc:title>\
          <upnp:class>object.item.videoItem</upnp:class>\
          <res protocolInfo=\"http-get:*:{content_type}:DLNA.ORG_OP=00;\
-         DLNA.ORG_FLAGS=8d100000000000000000000000000000\" \
-         resolution=\"{width}x{height}\">{url}</res>\
+         DLNA.ORG_FLAGS=8d100000000000000000000000000000\"{resolution}>{url}</res>\
          </item></DIDL-Lite>",
         title = upnp::escape(title),
         url = upnp::escape(url),
         content_type = nd_core::stream_server::DLNA_MEDIA.content_type,
-        width = size.0,
-        height = size.1,
     )
 }
 
@@ -131,11 +132,10 @@ mod tests {
 
     #[test]
     fn the_item_describes_a_live_stream_with_no_seeking() {
-        let didl = didl_lite("http://192.168.1.41:7236/abc", "BigNetScreen", (1920, 1080));
-        // Declared, not left to be inferred: the renderer scales to whatever
-        // geometry it believes the item has, and the one thing we know for
-        // certain is what the encoder was told to produce.
-        assert!(didl.contains(r#"resolution="1920x1080""#), "{didl}");
+        let didl = didl_lite("http://192.168.1.41:7236/abc", "BigNetScreen", None);
+        assert!(!didl.contains("resolution="), "{didl}");
+        let known = didl_lite("http://x/y", "BigNetScreen", Some((1920, 1080)));
+        assert!(known.contains(r#"resolution="1920x1080""#), "{known}");
         assert!(didl.contains("object.item.videoItem"), "{didl}");
         assert!(didl.contains("http-get:*:video/mpeg:"), "{didl}");
         assert!(didl.contains("DLNA.ORG_OP=00"), "{didl}");
@@ -153,7 +153,7 @@ mod tests {
         let didl = didl_lite(
             "http://x/y",
             "</dc:title><upnp:class>object.item</upnp:class>",
-            (1920, 1080),
+            None,
         );
         assert!(
             !didl.contains("</dc:title><upnp:class>object.item<"),

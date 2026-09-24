@@ -10,11 +10,12 @@
 //! nothing but the idea of multicast.
 
 use std::collections::HashMap;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use futures::stream::BoxStream;
+use futures::stream::{self, BoxStream, StreamExt};
 
 use nd_core::provider::{DiscoveryEvent, Provider};
 use nd_core::sink::Sink;
@@ -92,14 +93,43 @@ pub fn parse_reply(reply: &str) -> Option<Announcement> {
 /// because only renderers answer it, where `ssdp:all` also brings in every
 /// router, printer and set-top box on the network for us to discard.
 pub async fn search() -> Result<Vec<Announcement>> {
-    // `0.0.0.0` on purpose, unlike the stream server: discovery has no
-    // receiver to route towards yet, and binding one interface would hide the
-    // televisions on the others.
-    let socket = tokio::net::UdpSocket::bind("0.0.0.0:0")
-        .await
-        .map_err(|e| NdError::Network(format!("SSDP socket: {e}")))?;
-    // The default of 1 does not leave the machine on some configurations.
-    let _ = socket.set_multicast_ttl_v4(4);
+    search_announcements(None).await
+}
+
+async fn search_announcements(
+    deliver: Option<tokio::sync::mpsc::Sender<Announcement>>,
+) -> Result<Vec<Announcement>> {
+    let mut addresses =
+        tokio::time::timeout(Duration::from_secs(2), nd_net::p2p::local_ipv4_addresses())
+            .await
+            .ok()
+            .and_then(std::result::Result::ok)
+            .unwrap_or_default();
+    // NetworkManager is optional for LAN sharing, including under Flatpak.
+    if addresses.is_empty() {
+        addresses.push(Ipv4Addr::UNSPECIFIED);
+    }
+    search_on(
+        &addresses,
+        SocketAddr::from(([239, 255, 255, 250], 1900)),
+        deliver,
+    )
+    .await
+}
+
+async fn search_on(
+    addresses: &[Ipv4Addr],
+    target: SocketAddr,
+    deliver: Option<tokio::sync::mpsc::Sender<Announcement>>,
+) -> Result<Vec<Announcement>> {
+    let mut sockets = Vec::new();
+    for address in addresses {
+        if let Ok(socket) = tokio::net::UdpSocket::bind((*address, 0)).await {
+            // Linux uses the bound local source to choose the multicast interface.
+            let _ = socket.set_multicast_ttl_v4(4);
+            sockets.push(socket);
+        }
+    }
 
     let probe = format!(
         "M-SEARCH * HTTP/1.1\r\n\
@@ -111,30 +141,61 @@ pub async fn search() -> Result<Vec<Announcement>> {
 
     // Twice: the probe is UDP and a lost one costs a whole sweep.
     for _ in 0..2 {
-        socket
-            .send_to(probe.as_bytes(), "239.255.255.250:1900")
-            .await
-            .map_err(|e| NdError::Network(format!("SSDP M-SEARCH: {e}")))?;
+        let mut working = Vec::new();
+        for socket in sockets {
+            if socket.send_to(probe.as_bytes(), target).await.is_ok() {
+                working.push(socket);
+            }
+        }
+        sockets = working;
+        if sockets.is_empty() {
+            return Err(NdError::Network(
+                "SSDP has no reachable network interface".into(),
+            ));
+        }
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
 
     let mut found: Vec<Announcement> = Vec::new();
     let deadline = Instant::now() + LISTEN;
-    let mut buffer = [0u8; MAX_REPLY_BYTES];
     while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
-        let Ok(Ok((read, _from))) =
-            tokio::time::timeout(remaining, socket.recv_from(&mut buffer)).await
+        if sockets.is_empty() {
+            break;
+        }
+        let receives = sockets.iter().map(|socket| {
+            Box::pin(async move {
+                let mut buffer = [0u8; MAX_REPLY_BYTES];
+                let (read, _) = socket.recv_from(&mut buffer).await?;
+                Ok::<_, std::io::Error>(
+                    std::str::from_utf8(&buffer[..read])
+                        .ok()
+                        .and_then(parse_reply),
+                )
+            })
+        });
+        let Ok((received, index, pending)) =
+            tokio::time::timeout(remaining, futures::future::select_all(receives)).await
         else {
             break;
         };
-        let Some(announcement) = std::str::from_utf8(&buffer[..read])
-            .ok()
-            .and_then(parse_reply)
-        else {
-            continue;
+        drop(pending);
+        let announcement = match received {
+            Ok(Some(announcement)) => announcement,
+            Ok(None) => continue,
+            Err(_) => {
+                sockets.swap_remove(index);
+                continue;
+            }
         };
         // A device answers both probes; keep the first.
-        if !found.iter().any(|a| a.usn == announcement.usn) {
+        if found.len() < nd_core::provider::MAX_RECEIVERS
+            && !found.iter().any(|a| a.usn == announcement.usn)
+        {
+            if let Some(deliver) = &deliver {
+                if deliver.try_send(announcement.clone()).is_err() {
+                    break;
+                }
+            }
             found.push(announcement);
         }
     }
@@ -157,79 +218,100 @@ impl Provider for DlnaProvider {
     async fn discover(&self) -> Result<BoxStream<'static, DiscoveryEvent>> {
         let (events, receiver) = tokio::sync::mpsc::channel(32);
         tokio::spawn(async move {
-            let _ = events
-                .send(DiscoveryEvent::ProviderReady { provider: "dlna" })
-                .await;
-            // How many sweeps in a row each known device has been missing.
-            let mut known: HashMap<String, (Arc<DlnaSink>, u32)> = HashMap::new();
-            loop {
-                match search().await {
-                    Ok(found) => {
-                        for announcement in &found {
-                            match known.get_mut(&announcement.usn) {
-                                Some((sink, misses)) => {
-                                    *misses = 0;
-                                    // Re-announcing the same device is normal
-                                    // and says nothing new; only report it
-                                    // when the address actually moved.
-                                    if sink.location() != announcement.location {
-                                        let refreshed = match DlnaSink::describe(announcement).await
-                                        {
-                                            Ok(sink) => Arc::new(sink),
-                                            Err(err) => {
-                                                tracing::debug!(%err, "renderer did not describe itself");
-                                                continue;
-                                            }
-                                        };
-                                        *sink = refreshed.clone();
-                                        let _ =
-                                            events.send(DiscoveryEvent::Updated(refreshed)).await;
+            let scan = async {
+                let mut known: HashMap<String, (Arc<DlnaSink>, u32)> = HashMap::new();
+                loop {
+                    let locations: HashMap<_, _> = known
+                        .iter()
+                        .map(|(usn, (sink, _))| (usn.clone(), sink.location().to_string()))
+                        .collect();
+                    let (deliver, mut announcements) =
+                        tokio::sync::mpsc::channel(nd_core::provider::MAX_RECEIVERS);
+                    let describe = async {
+                        let mut descriptions =
+                            stream::poll_fn(move |cx| announcements.poll_recv(cx))
+                                .filter(|announcement: &Announcement| {
+                                    futures::future::ready(
+                                        locations.get(&announcement.usn)
+                                            != Some(&announcement.location),
+                                    )
+                                })
+                                .map(|announcement| async move {
+                                    let result = DlnaSink::describe(&announcement).await;
+                                    (announcement.usn, result)
+                                })
+                                .buffer_unordered(4);
+                        while let Some((usn, result)) = descriptions.next().await {
+                            match result {
+                                Ok(sink) => {
+                                    let updated = known.contains_key(&usn);
+                                    if !updated && known.len() >= nd_core::provider::MAX_RECEIVERS {
+                                        continue;
+                                    }
+                                    let sink = Arc::new(sink);
+                                    known.insert(usn, (sink.clone(), 0));
+                                    let event = if updated {
+                                        DiscoveryEvent::Updated(sink)
+                                    } else {
+                                        DiscoveryEvent::Added(sink)
+                                    };
+                                    if events.send(event).await.is_err() {
+                                        return;
                                     }
                                 }
-                                None => match DlnaSink::describe(announcement).await {
-                                    Ok(sink) => {
-                                        let sink = Arc::new(sink);
-                                        known.insert(announcement.usn.clone(), (sink.clone(), 0));
-                                        if events.send(DiscoveryEvent::Added(sink)).await.is_err() {
-                                            return;
-                                        }
-                                    }
-                                    // A device that answers SSDP but has no
-                                    // AVTransport cannot be played to, so it
-                                    // is not offered. Logged, not shown: the
-                                    // user did not ask about it.
-                                    Err(err) => tracing::debug!(
-                                        usn = %announcement.usn, %err,
-                                        "ignoring a renderer we cannot drive"
-                                    ),
-                                },
+                                Err(err) => {
+                                    tracing::debug!(%err, "renderer did not describe itself")
+                                }
                             }
                         }
-                        let mut gone = Vec::new();
-                        for (usn, (sink, misses)) in known.iter_mut() {
-                            if found.iter().any(|a| &a.usn == usn) {
-                                continue;
+                    };
+                    let (found, ()) = tokio::join!(search_announcements(Some(deliver)), describe);
+                    match found {
+                        Ok(found) => {
+                            if events
+                                .send(DiscoveryEvent::ProviderReady { provider: "dlna" })
+                                .await
+                                .is_err()
+                            {
+                                return;
                             }
-                            *misses += 1;
-                            if *misses >= MISSES_BEFORE_REMOVAL {
-                                gone.push((usn.clone(), sink.info().id));
+                            let mut gone = Vec::new();
+                            for (usn, (sink, misses)) in &mut known {
+                                if found.iter().any(|a| &a.usn == usn) {
+                                    *misses = 0;
+                                    continue;
+                                }
+                                *misses += 1;
+                                if *misses >= MISSES_BEFORE_REMOVAL {
+                                    gone.push((usn.clone(), sink.info().id));
+                                }
+                            }
+                            for (usn, id) in gone {
+                                known.remove(&usn);
+                                if events.send(DiscoveryEvent::Removed(id)).await.is_err() {
+                                    return;
+                                }
                             }
                         }
-                        for (usn, id) in gone {
-                            known.remove(&usn);
-                            let _ = events.send(DiscoveryEvent::Removed(id)).await;
+                        Err(err) => {
+                            if events
+                                .send(DiscoveryEvent::ProviderUnavailable {
+                                    provider: "dlna",
+                                    reason: err.to_string(),
+                                })
+                                .await
+                                .is_err()
+                            {
+                                return;
+                            }
                         }
                     }
-                    Err(err) => {
-                        let _ = events
-                            .send(DiscoveryEvent::ProviderUnavailable {
-                                provider: "dlna",
-                                reason: err.to_string(),
-                            })
-                            .await;
-                    }
+                    tokio::time::sleep(SWEEP_INTERVAL).await;
                 }
-                tokio::time::sleep(SWEEP_INTERVAL).await;
+            };
+            tokio::select! {
+                _ = events.closed() => {},
+                _ = scan => {},
             }
         });
         Ok(Box::pin(tokio_stream(receiver)))
@@ -255,6 +337,50 @@ mod tests {
         ST: urn:schemas-upnp-org:device:MediaRenderer:1\r\n\
         USN: uuid:4D454930-0100-1000-8001-80C755DF58D9::\
         urn:schemas-upnp-org:device:MediaRenderer:1\r\n\r\n";
+
+    #[tokio::test]
+    async fn searches_each_source_and_delivers_before_the_sweep_ends() {
+        let receiver = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let target = receiver.local_addr().unwrap();
+        let replies = tokio::spawn(async move {
+            let mut sources = std::collections::HashSet::new();
+            let mut buffer = [0; 2048];
+            for _ in 0..4 {
+                let (_, source) =
+                    tokio::time::timeout(Duration::from_secs(2), receiver.recv_from(&mut buffer))
+                        .await
+                        .unwrap()
+                        .unwrap();
+                sources.insert(source.ip());
+                receiver.send_to(REPLY.as_bytes(), source).await.unwrap();
+            }
+            sources
+        });
+        let (deliver, mut events) = tokio::sync::mpsc::channel(8);
+        let search = tokio::spawn(async move {
+            search_on(
+                &[Ipv4Addr::new(127, 0, 0, 1), Ipv4Addr::new(127, 0, 0, 2)],
+                target,
+                Some(deliver),
+            )
+            .await
+        });
+        let first = tokio::time::timeout(Duration::from_secs(1), events.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(first, parse_reply(REPLY).unwrap());
+        assert!(
+            !search.is_finished(),
+            "receivers must appear before the reply window ends"
+        );
+        assert_eq!(replies.await.unwrap().len(), 2);
+        assert_eq!(search.await.unwrap().unwrap(), vec![first]);
+        assert!(
+            events.recv().await.is_none(),
+            "one receiver on two networks is still one receiver"
+        );
+    }
 
     #[test]
     fn a_real_reply_yields_its_identity_and_description_url() {

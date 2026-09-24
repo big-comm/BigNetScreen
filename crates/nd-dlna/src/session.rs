@@ -45,8 +45,7 @@ const STATE_POLL_INTERVAL: Duration = Duration::from_secs(3);
 /// playing on some firmware, and ending the session there would make it
 /// impossible to ever start one.
 const IDLE_POLLS_BEFORE_ENDING: u32 = 2;
-/// How long after starting to ask the pipeline what size it settled on.
-const SIZE_REPORT_DELAY: Duration = Duration::from_secs(2);
+const SIZE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// What the renderer shows as the item's title.
 ///
@@ -62,9 +61,7 @@ pub async fn run(
     status: &SinkStatus,
     cancel: tokio::sync::watch::Receiver<bool>,
 ) -> Result<()> {
-    let video = source.video_source();
-    let size = source.size_or(pipeline::DLNA_MAX_RESOLUTION);
-    let result = stream(receiver, control, video, size, status, cancel).await;
+    let result = stream(receiver, control, &source, status, cancel).await;
     drop(source);
     result
 }
@@ -72,8 +69,7 @@ pub async fn run(
 async fn stream(
     receiver: IpAddr,
     control: &Endpoint,
-    video: pipeline::VideoSource,
-    size: (u32, u32),
+    source: &CaptureSource,
     status: &SinkStatus,
     mut cancel: tokio::sync::watch::Receiver<bool>,
 ) -> Result<()> {
@@ -83,56 +79,52 @@ async fn stream(
     let server = StreamServer::bind(receiver, DLNA_MEDIA).await?;
     let url = server.url();
 
-    // The screen rarely has the television's aspect ratio; shrinking to fit
-    // keeps the picture from being stretched or rescaled on the panel.
-    let (width, height) = StreamConfig::fit_within(
-        size,
-        StreamConfig::preferred_or(pipeline::DLNA_MAX_RESOLUTION),
-    );
-    if (width, height) != size {
-        tracing::info!(
-            source = format!("{}x{}", size.0, size.1),
-            sent = format!("{width}x{height}"),
-            "resolution adjusted for the renderer"
-        );
-    }
+    // Portal dimensions use compositor coordinates, not necessarily pixels.
+    // Let the scaler negotiate from the actual capture up to the preference.
+    let (width, height) = StreamConfig::preferred_or(pipeline::DLNA_MAX_RESOLUTION);
     let mut cfg = StreamConfig {
         width,
         height,
-        // A renderer negotiates nothing about frame rate, so this is a
-        // ceiling rather than an agreement — and the ceiling is the person's
-        // own setting. 60 because the television says so: its `GetProtocolInfo`
-        // lists `AVC_TS_HD_60_AC3`, and the `_24`/`_50`/`_60` in those profile
-        // names *are* the frame rate. Capping at 30 here overrode a setting of
-        // 60 with a number nothing asked for.
+        // An encoding target, not a frame rate negotiated with the TV.
         fps: StreamConfig::capped_fps(60),
-        audio: pipeline::AudioSource::detect(),
+        audio: source.audio_source(),
         ..Default::default()
     };
     let driver = nd_net::detect_gpu_driver();
     cfg.encoder =
         pipeline::working_encoder(driver, pipeline::Acceleration::preferred(), cfg).await?;
 
-    status.set_link(StreamLink {
-        width: cfg.width,
-        height: cfg.height,
-        fps: cfg.fps,
-        endpoint: Some(control.addr),
-        receivers: None,
-    });
-
     // The padding is what keeps the renderer's byte-counted prebuffer short;
     // see `ts_http_pipeline_description` for the measurements behind it.
     let mux_bitrate = cfg.scaled_bitrate_kbps().saturating_mul(1_000);
     let desc = pipeline::ts_http_pipeline_description(
         &cfg,
-        &video,
-        pipeline::VideoTarget::Exact((cfg.width, cfg.height)),
+        &source.video_source(),
+        pipeline::VideoTarget::UpTo((cfg.width, cfg.height)),
         Some(mux_bitrate),
     );
     let (built, mut events) = pipeline::build_pipeline(&desc, cfg.latency_ms())?;
     let guard = PipelineGuard::new(built);
     let gst_pipeline = guard.pipeline().clone();
+    if let Some(control) = source
+        .media
+        .as_ref()
+        .and_then(|media| media.control.as_ref())
+    {
+        control.attach(&gst_pipeline);
+        if let Some(start) = source.media.as_ref().and_then(|media| media.start) {
+            let control = control.clone();
+            let mut prepare = tokio::task::spawn_blocking(move || control.prepare(start));
+            tokio::select! {
+                result = &mut prepare => result.map_err(|err| NdError::Gst(err.to_string()))??,
+                _ = cancel.changed() => {
+                    let _ = gst_pipeline.set_state(gst::State::Null);
+                    let _ = prepare.await;
+                    return Ok(());
+                }
+            }
+        }
+    }
 
     let sink = gst_pipeline
         .by_name(TS_HTTP_SINK_NAME)
@@ -144,7 +136,6 @@ async fn stream(
     }
 
     tracing::info!(%receiver, "handing the renderer the stream URL");
-    let asked = (cfg.width, cfg.height);
     let outcome = serve_until_over(
         &server,
         sink,
@@ -154,7 +145,7 @@ async fn stream(
         control,
         status,
         &url,
-        asked,
+        cfg,
     )
     .await;
 
@@ -188,7 +179,7 @@ async fn serve_until_over(
     control: &Endpoint,
     status: &SinkStatus,
     url: &str,
-    asked: (u32, u32),
+    mut cfg: StreamConfig,
 ) -> Result<()> {
     let started = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let serve = {
@@ -220,13 +211,10 @@ async fn serve_until_over(
     let deadline = tokio::time::sleep(FIRST_CLIENT_TIMEOUT);
     tokio::pin!(deadline);
 
-    // Caps do not exist until frames flow, so asking before the renderer
-    // connects only ever answers `None` — which reads like a fault and is
-    // just a question asked too early. This fires once, shortly after the
-    // stream starts, and is the only place that can say whether the capture
-    // was rescaled on the way to the encoder.
-    let measure = tokio::time::sleep(SIZE_REPORT_DELAY);
-    tokio::pin!(measure);
+    // Some TVs fetch only after a slow SetAVTransportURI/Play handshake.
+    // Read caps after that fetch, never publish the initial ceiling as fact.
+    let mut measure = tokio::time::interval(SIZE_POLL_INTERVAL);
+    measure.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut measured = false;
 
     let renderer_done = until_renderer_stops(control);
@@ -239,7 +227,7 @@ async fn serve_until_over(
         if let Err(err) = avtransport::stop(control).await {
             tracing::debug!(%err, "the renderer had nothing to stop, or would not");
         }
-        avtransport::set_uri(control, url, ITEM_TITLE, asked).await?;
+        avtransport::set_uri(control, url, ITEM_TITLE, None).await?;
         avtransport::play(control).await
     };
     tokio::pin!(handshake);
@@ -255,8 +243,10 @@ async fn serve_until_over(
             result = &mut handshake, if !handed_over => {
                 result?;
                 handed_over = true;
-                status.set(SinkState::WaitStreaming);
-                tracing::info!("Play accepted; waiting for the renderer to fetch the stream");
+                if !started.load(std::sync::atomic::Ordering::SeqCst) {
+                    status.set(SinkState::WaitStreaming);
+                }
+                tracing::info!("Play accepted by the renderer");
             }
 
             // The viewer pressed stop on the remote, or switched the set off.
@@ -280,13 +270,32 @@ async fn serve_until_over(
                     .reset(tokio::time::Instant::now() + Duration::from_secs(86_400));
             }
 
-            () = &mut measure, if !measured => {
+            _ = measure.tick(), if !measured => {
+                if !started.load(std::sync::atomic::Ordering::SeqCst) {
+                    continue;
+                }
+                let Some((width, height)) = pipeline::negotiated_video_size(
+                    gst_pipeline, std::time::Instant::now(),
+                ) else {
+                    continue;
+                };
                 measured = true;
+                (cfg.width, cfg.height) = (width, height);
+                let kbps = cfg.scaled_bitrate_kbps();
+                if pipeline::set_encoder_bitrate(gst_pipeline, cfg.encoder, kbps) {
+                    if let Some(mux) = gst_pipeline.by_name("mux") {
+                        mux.set_property("bitrate", u64::from(kbps) * 1_000);
+                    }
+                }
+                status.set_link(StreamLink {
+                    width, height, fps: cfg.fps,
+                    endpoint: Some(control.addr), receivers: None,
+                });
                 let delivered = pipeline::delivered_capture_size(gst_pipeline);
                 tracing::info!(
                     delivered = ?delivered.map(|(w, h)| format!("{w}x{h}")),
-                    encoding = format!("{}x{}", asked.0, asked.1),
-                    rescaled = delivered.is_some_and(|d| d != asked),
+                    encoding = format!("{width}x{height}"),
+                    rescaled = delivered.is_some_and(|d| d != (width, height)),
                     "capture negotiated"
                 );
             }
@@ -349,5 +358,169 @@ async fn until_renderer_stops(control: &Endpoint) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::{TcpListener, TcpStream};
+
+    #[tokio::test]
+    async fn delayed_renderer_get_reports_actual_pixels_and_stays_streaming() {
+        pipeline::init().unwrap();
+        let path = std::env::temp_dir().join(format!("bns-dlna-media-{}.webm", std::process::id()));
+        let fixture = gst::parse::launch(&format!(
+            "webmmux name=mux ! filesink location=\"{}\" videotestsrc num-buffers=360 ! video/x-raw,width=320,height=240,framerate=30/1 ! vp8enc deadline=1 ! mux. audiotestsrc num-buffers=563 ! audio/x-raw,rate=48000 ! vorbisenc ! mux.", path.display()
+        )).unwrap().downcast::<gst::Pipeline>().unwrap();
+        let guard = PipelineGuard::new(fixture.clone());
+        fixture.set_state(gst::State::Playing).unwrap();
+        let message = fixture
+            .bus()
+            .unwrap()
+            .timed_pop_filtered(
+                gst::ClockTime::from_seconds(10),
+                &[gst::MessageType::Eos, gst::MessageType::Error],
+            )
+            .unwrap();
+        assert_eq!(message.type_(), gst::MessageType::Eos, "{message:?}");
+        drop(guard);
+        let playback = nd_core::media::FilePlaybackControl::default();
+        let source = CaptureSource::media_file(
+            nd_core::capture::MediaPlayback {
+                control: Some(playback.clone()),
+                start: Some(nd_core::media::PlaybackStart {
+                    seconds: 1.0,
+                    paused: false,
+                    volume: 0.25,
+                    muted: true,
+                }),
+                source: nd_core::media::MediaSource::File(path.clone()),
+                kind: nd_core::media::MediaKind::Video,
+                title: "DLNA test".into(),
+            },
+            (320, 240),
+        );
+        let previous = nd_core::settings::current();
+        nd_core::settings::set_in_memory(&nd_core::settings::Settings {
+            port: 0,
+            system_audio: false,
+            microphone: false,
+            hardware_encoding: false,
+            ..Default::default()
+        });
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let control = Endpoint::parse(&format!(
+            "http://{}/control",
+            listener.local_addr().unwrap()
+        ))
+        .unwrap();
+        let status = SinkStatus::new();
+        let (cancel, cancelled) = tokio::sync::watch::channel(false);
+        let renderer = async {
+            let mut media = None;
+            let mut stops = 0;
+            loop {
+                let (socket, _) = listener.accept().await.unwrap();
+                let mut socket = BufReader::new(socket);
+                let mut headers = String::new();
+                let mut length = 0;
+                loop {
+                    let mut line = String::new();
+                    assert!(socket.read_line(&mut line).await.unwrap() > 0);
+                    if line == "\r\n" {
+                        break;
+                    }
+                    if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                        length = value.trim().parse::<usize>().unwrap();
+                    }
+                    headers.push_str(&line);
+                }
+                let mut body = vec![0; length];
+                socket.read_exact(&mut body).await.unwrap();
+                let body = String::from_utf8(body).unwrap();
+                if headers.contains("#SetAVTransportURI") {
+                    assert!(!body.contains("resolution="));
+                    // Fetch inside SetAVTransportURI, after the old two-second
+                    // one-shot caps measurement would already have fired.
+                    tokio::time::sleep(Duration::from_millis(2100)).await;
+                    let url = crate::upnp::tag_text(&body, "CurrentURI").unwrap();
+                    let endpoint = Endpoint::parse(url).unwrap();
+                    let mut client = TcpStream::connect(endpoint.addr).await.unwrap();
+                    client
+                        .write_all(
+                            format!(
+                                "GET {} HTTP/1.1\r\nHost: {}\r\n\r\n",
+                                endpoint.path, endpoint.authority
+                            )
+                            .as_bytes(),
+                        )
+                        .await
+                        .unwrap();
+                    let mut client = BufReader::new(client);
+                    loop {
+                        let mut line = String::new();
+                        assert!(client.read_line(&mut line).await.unwrap() > 0);
+                        if line == "\r\n" {
+                            break;
+                        }
+                    }
+                    let mut packet = [0; 188];
+                    client.read_exact(&mut packet).await.unwrap();
+                    assert_eq!(packet[0], 0x47, "receiver must get MPEG-TS");
+                    media = Some(client);
+                }
+                socket
+                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+                    .await
+                    .unwrap();
+                if headers.contains("#Play") {
+                    let link = tokio::time::timeout(Duration::from_secs(3), async {
+                        loop {
+                            if let Some(link) = status.link() {
+                                break link;
+                            }
+                            tokio::time::sleep(Duration::from_millis(25)).await;
+                        }
+                    })
+                    .await
+                    .expect("caps must be reported after the late GET");
+                    assert_eq!(
+                        (link.width, link.height),
+                        (320, 240),
+                        "test source must not be enlarged to the preference ceiling"
+                    );
+                    assert_eq!(status.state(), SinkState::Streaming);
+                    use nd_core::media::MediaCommand;
+                    assert!(playback.state().can_pause);
+                    assert!((playback.state().volume.unwrap() - 0.25).abs() < 0.000_001);
+                    assert_eq!(playback.state().muted, Some(true));
+                    assert!(playback.state().seconds >= 0.9);
+                    playback.command(&MediaCommand::SetVolume(0.37)).unwrap();
+                    playback.command(&MediaCommand::SetMute(false)).unwrap();
+                    assert!((playback.state().volume.unwrap() - 0.37).abs() < 0.000_001);
+                    assert_eq!(playback.state().muted, Some(false));
+                    cancel.send_replace(true);
+                }
+                if headers.contains("#Stop") {
+                    stops += 1;
+                    if stops == 2 {
+                        break;
+                    }
+                }
+            }
+            drop(media);
+        };
+        let result = tokio::time::timeout(Duration::from_secs(15), async {
+            tokio::join!(
+                stream(control.addr.ip(), &control, &source, &status, cancelled),
+                renderer
+            )
+        })
+        .await;
+        nd_core::settings::set_in_memory(&previous);
+        std::fs::remove_file(path).unwrap();
+        result.expect("DLNA handshake must not deadlock").0.unwrap();
     }
 }

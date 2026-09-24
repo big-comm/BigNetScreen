@@ -574,25 +574,26 @@ impl CastChannel {
     /// - **metadata**. Without it the receiver shows a bare URL — the token and
     ///   an index — which tells the room nothing. `metadataType` 0 is the
     ///   generic one, understood by every receiver.
-    pub async fn load_file(
+    pub async fn load_item(
         &self,
         app: &LaunchedApp,
         url: &str,
-        file: &crate::file_server::MediaFile,
+        file: &crate::media::MediaItem,
         sender_name: &str,
+        start: Option<nd_core::media::PlaybackStart>,
     ) -> Result<Value> {
-        let response = self
+        let mut response = self
             .request(
                 NS_MEDIA,
                 &app.transport_id,
                 json!({
                     "type": "LOAD",
                     "sessionId": app.session_id,
-                    "autoplay": true,
-                    "currentTime": 0,
+                    "autoplay": start.is_none(),
+                    "currentTime": start.map(|s| s.seconds).unwrap_or(0.0),
                     "media": {
                         "contentId": url,
-                        "contentType": file.content_type,
+                        "contentType": file.content_type(),
                         "streamType": "BUFFERED",
                         "metadata": {
                             "metadataType": 0,
@@ -619,6 +620,53 @@ impl CastChannel {
             return Err(NdError::Protocol(
                 "receiver did not acknowledge the media LOAD".into(),
             ));
+        }
+        if let Some(start) = start {
+            let session = response
+                .pointer("/status/0/mediaSessionId")
+                .and_then(Value::as_i64)
+                .ok_or_else(|| NdError::Protocol("LOAD returned no media session".into()))?;
+            // Load paused so initial mute/volume precede the first sound.
+            if file.kind() != nd_core::media::MediaKind::Photo {
+                response = self
+                    .request(
+                        NS_MEDIA,
+                        &app.transport_id,
+                        json!({
+                            "type": "SET_VOLUME", "mediaSessionId": session,
+                            "volume": {"level": start.volume, "muted": start.muted},
+                        }),
+                    )
+                    .await?;
+                let entry =
+                    crate::media::active_status(&response, session, url).ok_or_else(|| {
+                        NdError::Protocol("receiver did not confirm initial volume".into())
+                    })?;
+                if entry.pointer("/volume/muted").and_then(Value::as_bool) != Some(start.muted)
+                    || !entry
+                        .pointer("/volume/level")
+                        .and_then(Value::as_f64)
+                        .is_some_and(|level| (level - start.volume).abs() < 0.001)
+                {
+                    return Err(NdError::Unsupported(
+                        "receiver did not apply initial volume and mute".into(),
+                    ));
+                }
+            }
+            if !start.paused {
+                response = self
+                    .request(
+                        NS_MEDIA,
+                        &app.transport_id,
+                        json!({"type":"PLAY", "mediaSessionId": session}),
+                    )
+                    .await?;
+                if crate::media::active_status(&response, session, url).is_none() {
+                    return Err(NdError::Protocol(
+                        "receiver did not acknowledge playback".into(),
+                    ));
+                }
+            }
         }
         Ok(response)
     }

@@ -74,12 +74,11 @@
   color: @accent_fg_color;
   background: linear-gradient(135deg, @accent_bg_color, shade(@accent_bg_color, 0.8));
 }
-.action-tile { border-radius: 14px; padding: 22px; min-height: 162px; background-color: alpha(currentColor, 0.05); border: 1px solid alpha(currentColor, 0.08); }
+.action-tile { border-radius: 14px; padding: 16px; min-height: 96px; background-color: alpha(currentColor, 0.05); border: 1px solid alpha(currentColor, 0.08); }
 .action-tile:hover { background-color: alpha(currentColor, 0.09); }
 .action-tile .heading { font-size: 1.22rem; }
 .action-tile .caption { font-size: 1rem; }
 .tile-arrow { border-radius: 50%; min-width: 32px; min-height: 32px; background-color: alpha(currentColor, 0.08); }
-.tips-card { min-height: 210px; }
 .tip-icon { color: @accent_color; min-width: 44px; min-height: 44px; border-radius: 50%; background-color: alpha(@accent_bg_color, 0.18); }
 .ndi-card { margin-top: 20px; }
 .ndi-card button { padding: 10px 18px; }
@@ -108,19 +107,18 @@
 .settings-page .boxed-list { border-radius: 16px; }
 .settings-page preferencesgroup > box > box > label { font-size: 1.15rem; }
 .settings-icon { min-width: 42px; min-height: 42px; border-radius: 12px; background-color: alpha(currentColor, 0.06); }
-.signal-good { color: @success_color; font-weight: 700; }
-.signal-weak { color: @warning_color; font-weight: 700; }
 
-/* Home dashboard: matched panels, compact NDI actions. */
-.home-page .page-heading { margin-top: 12px; margin-bottom: 26px; }
-.home-columns { min-height: 430px; }
+/* Home: destinations first, then browser and NDI sharing. */
+.home-page .page-heading { margin-top: 0; margin-bottom: 16px; }
+.home-columns { min-height: 0; }
 .receivers-card { padding: 16px; border: 1px solid alpha(currentColor, 0.12); border-radius: 16px; background-color: alpha(currentColor, 0.025); }
 .receivers-card > box { margin: 0 8px; }
 .receiver-count { padding: 3px 11px; border-radius: 999px; background-color: alpha(currentColor, 0.07); }
 .receivers-card .device-row { padding: 4px 8px; }
 .receivers-card .device-icon { min-width: 34px; min-height: 40px; background: none; }
-.home-tips { padding: 24px 20px; }
-.home-tip-hero { border-radius: 50%; background-color: alpha(@accent_bg_color, 0.3); color: @accent_color; }
-.home-tip-symbol { border-radius: 12px; background-color: alpha(@accent_bg_color, 0.12); color: @window_fg_color; }
-.home-page .ndi-card { margin-top: 14px; padding: 20px; }
+.home-page .ndi-card { margin-top: 8px; padding: 16px; }
 .home-page .ndi-card button { min-width: 96px; min-height: 32px; padding: 8px 16px; border-radius: 12px; }
+
+/* Keep instructional text readable in both light and dark desktop themes. */
+.bns-window .dim-label, .bns-window .page-subtitle { opacity: 0.85; }
+.bns-window .subtitle { opacity: 0.85; }

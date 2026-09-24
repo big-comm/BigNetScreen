@@ -294,7 +294,12 @@ impl VideoTarget {
         match self {
             VideoTarget::Exact((w, h)) => format!("width={w},height={h}"),
             VideoTarget::UpTo((w, h)) => {
-                format!("width=[2,{}],height=[2,{}]", w.max(2), h.max(2))
+                // 4:2:0 H.264 needs even dimensions, including odd-sized windows.
+                format!(
+                    "width=[2,{},2],height=[2,{},2]",
+                    w.max(2) & !1,
+                    h.max(2) & !1
+                )
             }
         }
     }
@@ -600,9 +605,19 @@ pub fn build_configured_pipeline(
     configure: impl FnOnce(&gst::Pipeline) -> Result<()>,
 ) -> Result<(gst::Pipeline, PipelineEvents)> {
     init()?;
-    tracing::debug!(%description, latency_ms, "building the pipeline");
+    tracing::debug!(latency_ms, "building the pipeline");
 
-    let element = gst::parse::launch(description).map_err(|e| NdError::Gst(e.to_string()))?;
+    let remote_media = description.contains("uridecodebin ");
+    let element = gst::parse::launch(description).map_err(|e| {
+        NdError::Gst(if remote_media {
+            format!(
+                "could not build online media pipeline ({:?})",
+                e.kind::<gst::ParseError>()
+            )
+        } else {
+            e.to_string()
+        })
+    })?;
     let pipeline = element
         .downcast::<gst::Pipeline>()
         .map_err(|_| NdError::Gst("the description did not produce a Pipeline".into()))?;
@@ -634,8 +649,14 @@ pub fn build_configured_pipeline(
         bus.set_sync_handler(move |_, msg| {
             match msg.view() {
                 gst::MessageView::Error(err) => {
-                    let message = err.error().to_string();
-                    let details = err.debug().map(|d| d.to_string()).unwrap_or_default();
+                    // HTTP diagnostics can repeat credentials or redirected
+                    // URLs. Publish categories, not the upstream strings.
+                    let (message, details) = if remote_media {
+                        ("Could not read or decode the online media. Check the link and connection.".into(),
+                         format!("resource={:?}; stream={:?}", err.error().kind::<gst::ResourceError>(), err.error().kind::<gst::StreamError>()))
+                    } else {
+                        (err.error().to_string(), err.debug().map(|d| d.to_string()).unwrap_or_default())
+                    };
                     tracing::error!(%message, %details, "pipeline error");
                     let _ = tx
                         .lock()
@@ -646,7 +667,9 @@ pub fn build_configured_pipeline(
                         });
                 }
                 gst::MessageView::Warning(w) => {
-                    let message = w.error().to_string();
+                    let message = if remote_media {
+                        format!("online media warning (resource={:?}; stream={:?})", w.error().kind::<gst::ResourceError>(), w.error().kind::<gst::StreamError>())
+                    } else { w.error().to_string() };
                     tracing::warn!(%message, "pipeline warning");
                 }
                 gst::MessageView::Eos(_) => {
@@ -1464,8 +1487,8 @@ pub enum VideoSource {
     /// the sound from the **same** decoder: decoding a film twice to split its
     /// two tracks would double the cost of the thing that is already the most
     /// expensive part.
-    MediaFile {
-        path: std::path::PathBuf,
+    Media {
+        source: crate::media::MediaSource,
         kind: crate::media::MediaKind,
         /// What to write across a file that has no picture of its own.
         title: String,
@@ -1482,12 +1505,12 @@ pub enum VideoSource {
 }
 
 impl VideoSource {
-    /// Is this a file being played, rather than something being captured?
+    /// Is this local or online media, rather than a captured desktop?
     ///
     /// The distinction decides pacing: a capture arrives at the pace of the
     /// thing it captures, and a file arrives as fast as it can be read.
-    pub fn is_file(&self) -> bool {
-        matches!(self, VideoSource::MediaFile { .. })
+    pub fn is_media(&self) -> bool {
+        matches!(self, VideoSource::Media { .. })
     }
 
     /// The GStreamer fragment that produces this source's frames.
@@ -1560,25 +1583,38 @@ impl VideoSource {
                  timeoverlay halignment=center valignment=center font-desc=\"Sans 48\" \
                  time-mode=running-time"
                 .to_string(),
-            VideoSource::MediaFile { path, kind, title } => {
-                let location = escape_location(path);
+            VideoSource::Media {
+                source,
+                kind,
+                title,
+            } => {
+                let decoder = match source {
+                    crate::media::MediaSource::File(path) => format!(
+                        "filesrc location={} ! decodebin name=filedec",
+                        escape_location(path)
+                    ),
+                    crate::media::MediaSource::Url(uri) => format!(
+                        "uridecodebin uri={} name=filedec",
+                        escape_location(std::path::Path::new(uri))
+                    ),
+                };
                 match kind {
                     // A photo is one frame. Sent once, a receiver expecting a
                     // video stream shows nothing at all, so `imagefreeze`
                     // repeats it for as long as the session lasts.
                     crate::media::MediaKind::Photo => format!(
-                        "filesrc location={location} ! decodebin name=filedec \
+                        "{decoder} \
                          filedec. ! queue ! imagefreeze name=file-photo ! videoconvert"
                     ),
                     crate::media::MediaKind::Video => format!(
-                        "filesrc location={location} ! decodebin name=filedec \
+                        "{decoder} \
                          filedec. ! queue ! identity sync=true ! videoconvert"
                     ),
                     // A song has no picture. The decoder is still declared —
                     // the audio branch takes its sound from it — and the screen
                     // gets the one thing worth showing: what is playing.
                     crate::media::MediaKind::Music => format!(
-                        "filesrc location={location} ! decodebin name=filedec \
+                        "{decoder} \
                          videotestsrc name=file-picture is-live=true pattern=black \
                          ! textoverlay text={title} halignment=center valignment=center \
                            font-desc=\"Sans 32\" ! videoconvert",
@@ -1598,19 +1634,49 @@ pub enum AudioSource {
     /// **Not optional on WFD:** the sink declares an A/V session and discards
     /// the programme if it arrives with video alone.
     Silence,
-    /// System audio: the default output's *monitor*, that is, whatever is
-    /// playing on the computer.
-    System,
+    /// System audio: an output's *monitor*, that is, what is playing through
+    /// it. Which output is [`Monitor`].
+    System(Monitor),
     /// The microphone alone, at the given gain (`1.0` = as captured).
     ///
     /// For narrating over what is on screen without sending the computer's own
     /// sound back through the receiver's speakers.
     Mic { volume: f64 },
     /// The computer's sound and the microphone, mixed.
-    SystemAndMic { volume: f64 },
+    SystemAndMic { monitor: Monitor, volume: f64 },
     /// The sound of the media file being played, from the same decoder that
     /// produces its picture.
     MediaFile,
+}
+
+/// Which output's monitor "the computer's sound" means.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Monitor {
+    /// The default output. Resolved by the server, so it follows the person
+    /// when they switch device mid-session, and it carries **everything** the
+    /// computer is playing.
+    Default,
+    /// The virtual card's monitor: only what an application was routed to it.
+    Virtual,
+}
+
+impl Monitor {
+    fn device(self) -> &'static str {
+        match self {
+            // Resolved by the server (PulseAudio, or PipeWire's compatibility
+            // mode) — there is nothing for us to query.
+            Monitor::Default => "@DEFAULT_MONITOR@",
+            Monitor::Virtual => crate::virtual_sink::MONITOR,
+        }
+    }
+
+    pub fn from_settings(settings: &crate::settings::Settings) -> Self {
+        if settings.virtual_audio {
+            Monitor::Virtual
+        } else {
+            Monitor::Default
+        }
+    }
 }
 
 impl AudioSource {
@@ -1640,13 +1706,14 @@ impl AudioSource {
         // the honest answer is the system audio, not a pipeline that fails to
         // build at the moment the person hits cast.
         let can_mix = gst::ElementFactory::find("audiomixer").is_some();
+        let monitor = Monitor::from_settings(settings);
         match (settings.system_audio, settings.microphone) {
-            (true, true) if can_mix => AudioSource::SystemAndMic { volume },
+            (true, true) if can_mix => AudioSource::SystemAndMic { monitor, volume },
             (true, true) => {
                 tracing::warn!("no `audiomixer`; sending system audio without the microphone");
-                AudioSource::System
+                AudioSource::System(monitor)
             }
-            (true, false) => AudioSource::System,
+            (true, false) => AudioSource::System(monitor),
             (false, true) => AudioSource::Mic { volume },
             (false, false) => AudioSource::Silence,
         }
@@ -1662,19 +1729,15 @@ impl AudioSource {
             AudioSource::Silence => {
                 "audiotestsrc is-live=true wave=silence samplesperbuffer=480".to_string()
             }
-            // `@DEFAULT_MONITOR@` is resolved by the server (PulseAudio or
-            // PipeWire's compatibility mode) to the default output's monitor —
-            // it follows whatever device the user switches to mid-session,
-            // with nothing for us to query.
-            //
             // `provide-clock=false`: the screen capture sets the pace; a second
             // clock in the pipeline fights with it.
             //
             // `buffer-time`: see `CAPTURE_AUDIO_BUFFER_MS`. This branch reports
             // the pipeline's largest latency, so it decides when the picture
             // arrives.
-            AudioSource::System => format!(
-                "pulsesrc device=@DEFAULT_MONITOR@ provide-clock=false do-timestamp=true{buffer}",
+            AudioSource::System(monitor) => format!(
+                "pulsesrc device={device} provide-clock=false do-timestamp=true{buffer}",
+                device = monitor.device(),
                 buffer = audio_buffer_property()
             ),
             // `@DEFAULT_SOURCE@`, the counterpart of `@DEFAULT_MONITOR@`: the
@@ -1695,14 +1758,15 @@ impl AudioSource {
             // - `latency=20000000` (20 ms) is how long the mixer waits for a
             //   late source before outputting without it. The default, 0, makes
             //   a microphone that hiccups drop the system audio with it.
-            AudioSource::SystemAndMic { volume } => format!(
+            AudioSource::SystemAndMic { monitor, volume } => format!(
                 "audiomixer name=micmix latency=20000000 \
-                 pulsesrc device=@DEFAULT_MONITOR@ provide-clock=false do-timestamp=true{buffer} \
+                 pulsesrc device={device} provide-clock=false do-timestamp=true{buffer} \
                  ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! micmix. \
                  pulsesrc device=@DEFAULT_SOURCE@ provide-clock=false do-timestamp=true{buffer} \
                  ! audioconvert ! audioresample ! volume volume={volume:.2} \
                  ! audio/x-raw,rate=48000,channels=2 ! micmix. \
                  micmix.",
+                device = monitor.device(),
                 buffer = audio_buffer_property()
             ),
             // Mixed with silence, and that is not belt and braces: a film with
@@ -1715,7 +1779,7 @@ impl AudioSource {
                  ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! filemix. \
                  filedec. ! queue name=file-audio-queue ! identity sync=true ! audioconvert ! audioresample \
                  ! audio/x-raw,rate=48000,channels=2 ! filemix. \
-                 filemix."
+                 filemix. ! volume name=file-volume"
                 .to_string(),
         }
     }
@@ -2201,7 +2265,7 @@ pub fn wfd_pipeline_description(
         // Wi-Fi Display agreed a mode with the sink in M3/M4; sending any
         // other size is a mode it never accepted.
         convert = cfg.convert_scale(VideoTarget::Exact((cfg.width, cfg.height))),
-        vqueue = if source.is_file() {
+        vqueue = if source.is_media() {
             cfg.video_queue().replace("leaky=downstream", "leaky=no")
         } else {
             cfg.video_queue()
@@ -2213,7 +2277,7 @@ pub fn wfd_pipeline_description(
         // `sync=false` a decoder reads a film as fast as the disc allows and
         // the receiver is sent an hour of video in a few seconds. So the file
         // is the one case that has to be paced.
-        sync = if rtp_sink_syncs_to_clock() || source.is_file() {
+        sync = if rtp_sink_syncs_to_clock() || source.is_media() {
             "true"
         } else {
             "false"
@@ -2221,7 +2285,7 @@ pub fn wfd_pipeline_description(
         ip = transport.sink_ip,
         port = transport.rtp_port,
         local = transport.local_rtp_port,
-        audio = if source.is_file() {
+        audio = if source.is_media() {
             cfg.audio_branch(&format!("mux.sink_{}", WFD_AUDIO_PID))
                 .replace("leaky=downstream", "leaky=no")
         } else {
@@ -2312,7 +2376,7 @@ alignment=au ! \
         } else {
             cfg.convert_scale(VideoTarget::UpTo(ceiling))
         },
-        vqueue = if source.is_file() {
+        vqueue = if source.is_media() {
             cfg.video_queue().replace("leaky=downstream", "leaky=no")
         } else {
             cfg.video_queue()
@@ -2371,11 +2435,8 @@ pub const CAST_VBV_FRAMES: u32 = 3;
 /// receiver's socket with the headers already written.
 pub const TS_HTTP_SINK_NAME: &str = "cc-sink";
 
-/// The largest picture a DLNA renderer is offered.
-///
-/// A Panasonic VIErA's `GetProtocolInfo` lists `AVC_TS_HD_*` and `MPEG_TS_SD_*`
-/// and stops there — HD is the top of every profile it accepts, with nothing
-/// above it. Sending 1440p would be sending a mode it never advertised.
+/// Conservative DLNA default when the user has not selected a higher ceiling.
+/// This is not a capability negotiated with the receiver.
 pub const DLNA_MAX_RESOLUTION: (u32, u32) = (1920, 1080);
 
 /// Builds an H.264 + AAC transport stream for a receiver that fetches it over
@@ -2402,6 +2463,20 @@ pub fn ts_http_pipeline_description(
     target: VideoTarget,
     mux_bitrate_bps: Option<u32>,
 ) -> String {
+    // MPEG-TS buffers do not preserve H.264 DELTA_UNIT flags. A soft-limit
+    // "keyframe" resync would cut arbitrary TS/PES packets, corrupting decode.
+    // Bound DLNA backlog by bytes instead: about two seconds at the target
+    // rate, at most 8 MiB. Disconnect a stalled reader rather than grow forever.
+    let sink_policy = match mux_bitrate_bps {
+        Some(bps) => format!(
+            "sync-method=latest recover-policy=none unit-format=bytes units-max={}",
+            (u64::from(bps) / 4).clamp(1_048_576, 8_388_608)
+        ),
+        None => format!(
+            "sync-method={} recover-policy=keyframe",
+            chromecast_sync_method()
+        ),
+    };
     format!(
         "{src} ! {convert} ! {vqueue} ! \
          {enc} ! h264parse config-interval=-1 ! \
@@ -2409,7 +2484,7 @@ pub fn ts_http_pipeline_description(
          mpegtsmux name=mux alignment=7{padding} ! \
          queue max-size-buffers=0 max-size-bytes=0 max-size-time=50000000 silent=true ! \
          multisocketsink name={sink} sync=false async=false blocksize=8192 \
-         burst-format=buffers sync-method={sync_method} recover-policy=keyframe \
+         burst-format=buffers {sink_policy} \
          {audio}",
         padding = match mux_bitrate_bps {
             Some(bps) => format!(" bitrate={bps}"),
@@ -2417,15 +2492,14 @@ pub fn ts_http_pipeline_description(
         },
         src = source.description(),
         convert = cfg.convert_scale(target),
-        vqueue = if source.is_file() {
+        vqueue = if source.is_media() {
             cfg.video_queue().replace("leaky=downstream", "leaky=no")
         } else {
             cfg.video_queue()
         },
         enc = cfg.encoder_stage(false),
         sink = TS_HTTP_SINK_NAME,
-        sync_method = chromecast_sync_method(),
-        audio = if source.is_file() {
+        audio = if source.is_media() {
             cfg.audio_branch("mux.")
                 .replace("leaky=downstream", "leaky=no")
         } else {
@@ -2436,6 +2510,60 @@ pub fn ts_http_pipeline_description(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn dlna_ts_negotiates_physical_pixels_within_the_ceiling() {
+        use gst::prelude::*;
+
+        for (source, ceiling, expected) in [
+            ((2560, 1440), (2560, 1440), (2560, 1440)),
+            ((1280, 720), (2560, 1440), (1280, 720)),
+            ((2560, 1440), (1920, 1080), (1920, 1080)),
+            ((931, 601), (2560, 1440), (930, 600)),
+        ] {
+            let cfg = StreamConfig {
+                width: ceiling.0,
+                height: ceiling.1,
+                ..Default::default()
+            };
+            let description = ts_http_pipeline_description(
+                &cfg,
+                &VideoSource::Test,
+                VideoTarget::UpTo(ceiling),
+                Some(8_000_000),
+            )
+            .replacen(
+                "videotestsrc is-live=true",
+                &format!(
+                    "videotestsrc is-live=true ! video/x-raw,width={},height={}",
+                    source.0, source.1
+                ),
+                1,
+            );
+            let (pipeline, _events) = build_pipeline(&description, cfg.latency_ms()).unwrap();
+            let frames = count_buffers(&pipeline, ENCODER_NAME).unwrap();
+            let guard = PipelineGuard::new(pipeline);
+            guard.pipeline().set_state(gst::State::Playing).unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while frames.load(std::sync::atomic::Ordering::Relaxed) == 0
+                && std::time::Instant::now() < deadline
+            {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            assert!(
+                frames.load(std::sync::atomic::Ordering::Relaxed) > 0,
+                "encoder must produce H.264 for {source:?}"
+            );
+            assert_eq!(
+                negotiated_video_size(
+                    guard.pipeline(),
+                    std::time::Instant::now() + std::time::Duration::from_secs(5)
+                ),
+                Some(expected),
+                "source={source:?}, ceiling={ceiling:?}"
+            );
+        }
+    }
+
     #[test]
     fn diagnostics_map_the_encoder_pts_offset_through_its_segment() {
         use gst::prelude::*;
@@ -2477,8 +2605,8 @@ mod tests {
             .unwrap();
         assert_eq!(msg.type_(), gst::MessageType::Eos, "{msg:?}");
         drop(fixture_guard);
-        let source = VideoSource::MediaFile {
-            path: path.clone(),
+        let source = VideoSource::Media {
+            source: crate::media::MediaSource::File(path.clone()),
             kind: crate::media::MediaKind::Music,
             title: "Regression".into(),
         };
@@ -2527,8 +2655,8 @@ mod tests {
                 .unwrap();
             assert_eq!(msg.type_(), gst::MessageType::Eos, "{msg:?}");
             drop(fixture);
-            let video = VideoSource::MediaFile {
-                path: path.clone(),
+            let video = VideoSource::Media {
+                source: crate::media::MediaSource::File(path.clone()),
                 kind: crate::media::MediaKind::Video,
                 title: "Test".into(),
             };
@@ -3214,6 +3342,54 @@ mod tests {
     }
 
     #[test]
+    fn the_virtual_card_replaces_the_default_monitor_rather_than_adding_to_it() {
+        // The whole point of the option is what is *not* captured. A branch
+        // that read both would send the private call the person switched the
+        // card on to avoid, and would look perfectly healthy doing it.
+        let virtual_only = AudioSource::System(Monitor::Virtual).description();
+        assert!(
+            virtual_only.contains(crate::virtual_sink::MONITOR),
+            "{virtual_only}"
+        );
+        assert!(
+            !virtual_only.contains("@DEFAULT_MONITOR@"),
+            "the default monitor is still being captured: {virtual_only}"
+        );
+
+        // And the microphone still mixes on top, which is the answer to
+        // "only what is routed to it": a person's own voice is not something
+        // an application routes anywhere.
+        let with_mic = AudioSource::SystemAndMic {
+            monitor: Monitor::Virtual,
+            volume: 0.8,
+        }
+        .description();
+        assert!(
+            with_mic.contains(crate::virtual_sink::MONITOR),
+            "{with_mic}"
+        );
+        assert!(with_mic.contains("@DEFAULT_SOURCE@"), "{with_mic}");
+        assert!(
+            !with_mic.contains("@DEFAULT_MONITOR@"),
+            "the default monitor leaked into the mix: {with_mic}"
+        );
+    }
+
+    #[test]
+    fn the_switch_is_what_chooses_the_monitor() {
+        let off = crate::settings::Settings {
+            virtual_audio: false,
+            ..Default::default()
+        };
+        assert_eq!(Monitor::from_settings(&off), Monitor::Default);
+        let on = crate::settings::Settings {
+            virtual_audio: true,
+            ..Default::default()
+        };
+        assert_eq!(Monitor::from_settings(&on), Monitor::Virtual);
+    }
+
+    #[test]
     fn wfd_pipeline_has_audio_and_baseline_profile() {
         let desc = wfd_desc(&StreamConfig::default());
         assert!(
@@ -3383,7 +3559,10 @@ mod tests {
         // Cast path, so there the capture's own size stands.
         assert!(wfd.contains("width=1920,height=1080"), "{wfd}");
         for desc in [&mirror, &http] {
-            assert!(desc.contains("width=[2,2560],height=[2,1440]"), "{desc}");
+            assert!(
+                desc.contains("width=[2,2560,2],height=[2,1440,2]"),
+                "{desc}"
+            );
         }
     }
 
@@ -3471,7 +3650,7 @@ mod tests {
         let desc = mirror_pipeline_description(&cfg, &VideoSource::Test, (2560, 1440), false);
         assert!(
             desc.contains("capsfilter name=scale-caps")
-                && desc.contains("width=[2,2560],height=[2,1440]"),
+                && desc.contains("width=[2,2560,2],height=[2,1440,2]"),
             "{desc}"
         );
         // The portal's numbers must not reach the scaler at all.

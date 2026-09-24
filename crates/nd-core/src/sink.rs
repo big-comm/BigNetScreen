@@ -35,6 +35,14 @@ pub enum SinkKind {
 }
 
 impl SinkKind {
+    /// Direct Cast playback needs an IP; Miracast creates its link on demand.
+    pub fn can_receive_files(self, address: &str) -> bool {
+        match self {
+            Self::Chromecast => address.parse::<std::net::IpAddr>().is_ok(),
+            Self::WfdP2p | Self::WfdMice => true,
+            _ => false,
+        }
+    }
     /// Whether streaming to this kind is implemented.
     ///
     /// The UI uses this so it never offers "Cast" where only an error awaits:

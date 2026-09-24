@@ -214,15 +214,9 @@ pub fn state_label(state: SinkState) -> String {
     }
 }
 
-/// The delay to expect, per protocol.
-///
-/// Not decoration: the two paths differ by an order of magnitude, and the
-/// person choosing needs to know that **before** they choose, not after the
-/// pointer starts lagging.
+/// Warns about receiver-controlled buffering without promising unmeasured latency.
 pub fn latency_hint(kind: SinkKind) -> Option<String> {
     match kind {
-        SinkKind::WfdP2p | SinkKind::WfdMice => Some(tr!("instant response")),
-        SinkKind::Chromecast | SinkKind::WebRtc => Some(tr!("quick response")),
         // Measured, not guessed, and the one number that decides whether
         // somebody picks this: a renderer sets its own prebuffer and DLNA
         // gives the sender no way to ask for a smaller one.
@@ -248,43 +242,23 @@ pub struct SessionInfo {
     /// count on. Rather than show a measurement that cannot be taken, the
     /// quality is left out entirely for the protocols where it cannot.
     pub measurable: bool,
-    /// How the link measured, once it has been measured.
-    pub quality: Option<nd_net::probe::Quality>,
+    pub probe_failed: bool,
     /// The measured round trip to the receiver, in milliseconds.
     pub round_trip_ms: Option<u64>,
     /// How receivers join, when this session is hosted here (web browsers).
     pub access: Option<nd_core::sink::SinkAccess>,
 }
 
-/// The quality in words, with the number that produced it.
-///
-/// The number is always shown next to the word: "Excellent" on its own is an
-/// opinion, "Excellent · 8 ms round trip" is a measurement someone can check.
+/// A TCP handshake measures network response, not signal or display latency.
 pub fn quality_line(info: &SessionInfo) -> String {
-    use nd_net::probe::Quality;
-    let Some(quality) = info.quality else {
-        return tr!("Measuring…");
-    };
-    let word = match quality {
-        Quality::Excellent => tr!("Excellent"),
-        Quality::Good => tr!("Good"),
-        Quality::Weak => tr!("Weak signal"),
-        Quality::Unreachable => return tr!("The receiver is not answering"),
-    };
+    if info.probe_failed {
+        return tr!("The receiver did not answer the connection check");
+    }
     match info.round_trip_ms {
-        Some(ms) => format!("{word} · {ms} {}", tr!("ms round trip")),
-        None => word,
+        Some(ms) => tr!("Network response: {} ms. This is not the picture delay.")
+            .replace("{}", &ms.to_string()),
+        None => tr!("Measuring…"),
     }
-}
-
-/// Signal strength drawn as text, so it needs nothing from the icon theme.
-pub fn quality_bars(quality: Option<nd_net::probe::Quality>) -> String {
-    let filled = quality.map(|q| q.bars()).unwrap_or(0);
-    let mut bars = String::new();
-    for step in 0..4 {
-        bars.push(if step < filled { '▮' } else { '▯' });
-    }
-    bars
 }
 
 #[cfg(test)]

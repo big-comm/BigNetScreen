@@ -14,40 +14,40 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/pages/settings.rs:323
+#: crates/nd-gui/src/pages/settings.rs:342
 msgid ""
 "0 lets the system choose. Set one only if you opened a port on your firewall "
 "by hand."
 msgstr "0 מאפשר למערכת לבחור. הגדר ערך רק אם פתחת port בחומת האש ידנית."
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "24 FPS"
 msgstr "24 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "25 FPS"
 msgstr "25 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "30 FPS"
 msgstr "30 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "50 FPS"
 msgstr "50 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:196
+#: crates/nd-gui/src/pages/settings.rs:197
 msgid "60 FPS"
 msgstr "60 FPS"
 
-#: crates/nd-gui/src/pages/settings.rs:191
+#: crates/nd-gui/src/pages/settings.rs:192
 #, fuzzy
 msgid ""
 "60 is smoother and costs about half as much again in bandwidth. Many "
 "Chromecast models mirror at 30 and will hold it there."
 msgstr "60 חלק יותר ועולה בערך חצי יותר ברוחב פס"
 
-#: crates/nd-gui/src/pages/settings.rs:126
+#: crates/nd-gui/src/pages/settings.rs:127
 #, fuzzy
 msgid ""
 "A ceiling: a smaller screen is sent as it is. Above 1080p is sent only if "
@@ -75,6 +75,12 @@ msgstr "אודות BigNetScreen"
 msgid "Address"
 msgstr "כתובת"
 
+#: crates/nd-gui/src/pages/settings.rs:272
+msgid ""
+"Adds a “BigNetScreen” output. Send that application's sound to it and "
+"nothing else leaves this computer"
+msgstr ""
+
 #: crates/nd-gui/src/pages/mod.rs:188
 msgid "AirPlay"
 msgstr "AirPlay"
@@ -87,13 +93,13 @@ msgstr "כל הפרוטוקולים"
 msgid "An extra desktop, just for this"
 msgstr "שולחן עבודה נוסף, רק בשביל זה"
 
-#: crates/nd-gui/src/pages/settings.rs:175
+#: crates/nd-gui/src/pages/settings.rs:176
 msgid ""
 "Aspect ratio is preserved. Miracast uses a supported mode within these "
 "limits."
 msgstr "יחס הגובה-רוחב נשמר. Miracast משתמש במצב נתמך במסגרת המגבלות האלה."
 
-#: crates/nd-gui/src/pages/settings.rs:251
+#: crates/nd-gui/src/pages/settings.rs:252
 msgid "Audio"
 msgstr "שמע"
 
@@ -105,12 +111,12 @@ msgstr ""
 "הזדהו כשתתבקשו. הורדת החבילה ובנייתה עשויות להימשך כמה דקות. השאירו את "
 "היישום פתוח עד לסיום ההתקנה."
 
-#: crates/nd-gui/src/pages/settings.rs:109
+#: crates/nd-gui/src/pages/settings.rs:110
 msgid "Automatic"
 msgstr "אוטומטי"
 
 #: crates/nd-gui/src/pages/devices.rs:173
-#: crates/nd-gui/src/pages/settings.rs:303
+#: crates/nd-gui/src/pages/settings.rs:322
 msgid "Automatic discovery"
 msgstr "גילוי אוטומטי"
 
@@ -130,11 +136,11 @@ msgstr "חזרה"
 msgid "Back 10 seconds"
 msgstr "10 שניות אחורה"
 
-#: crates/nd-gui/src/pages/settings.rs:219
+#: crates/nd-gui/src/pages/settings.rs:220
 msgid "Balanced — the default"
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:212
+#: crates/nd-gui/src/pages/settings.rs:213
 #, fuzzy
 msgid ""
 "Buffering smooths uneven playback and delays everything, the pointer "
@@ -184,7 +190,7 @@ msgstr "Chromecast"
 msgid "Chromecast / AirPlay"
 msgstr "Chromecast / AirPlay"
 
-#: crates/nd-gui/src/pages/settings.rs:111
+#: crates/nd-gui/src/pages/settings.rs:112
 msgid "Chromecast / AirPlay only"
 msgstr "Chromecast / AirPlay בלבד"
 
@@ -240,11 +246,11 @@ msgstr ""
 msgid "Could not connect. Make sure both devices are on the same network."
 msgstr "כדי להשתמש ב‑Chromecast, חברו את שני המכשירים לאותה רשת Wi-Fi."
 
-#: crates/nd-gui/src/pages/settings.rs:142
+#: crates/nd-gui/src/pages/settings.rs:143
 msgid "Custom resolution"
 msgstr "רזולוציה מותאמת אישית"
 
-#: crates/nd-gui/src/pages/settings.rs:210
+#: crates/nd-gui/src/pages/settings.rs:211
 msgid "Delay"
 msgstr ""
 
@@ -256,7 +262,7 @@ msgstr "מכשירים"
 msgid "Disconnect"
 msgstr "התנתק"
 
-#: crates/nd-gui/src/pages/settings.rs:298
+#: crates/nd-gui/src/pages/settings.rs:317
 msgid "Discovery and devices"
 msgstr "גילוי ומכשירים"
 
@@ -269,7 +275,7 @@ msgstr "גילוי בלבד"
 msgid "Enable screen mirroring on your TV or projector before connecting."
 msgstr "הפעילו שיקוף מסך בטלוויזיה או במקרן לפני ההתחברות."
 
-#: crates/nd-gui/src/pages/settings.rs:239
+#: crates/nd-gui/src/pages/settings.rs:240
 msgid ""
 "Encode on the graphics card, which is faster and uses far less processor. "
 "Turn it off if the picture arrives wrong, broken or not at all."
@@ -295,7 +301,7 @@ msgstr "מסך נוסף"
 msgid "Failed"
 msgstr "נכשל"
 
-#: crates/nd-gui/src/pages/settings.rs:220
+#: crates/nd-gui/src/pages/settings.rs:221
 msgid "Film — smoothest, for watching"
 msgstr ""
 
@@ -311,7 +317,7 @@ msgstr "חיפוש מכשירים תואמים"
 msgid "Finished"
 msgstr "הושלם"
 
-#: crates/nd-gui/src/pages/settings.rs:321
+#: crates/nd-gui/src/pages/settings.rs:340
 msgid "Fixed port"
 msgstr "פורט קבוע"
 
@@ -323,7 +329,7 @@ msgstr "כדי להשתמש ב‑Chromecast, חברו את שני המכשירי
 msgid "Forward 10 seconds"
 msgstr "10 שניות קדימה"
 
-#: crates/nd-gui/src/pages/settings.rs:189
+#: crates/nd-gui/src/pages/settings.rs:190
 msgid "Frame rate"
 msgstr "קצב פריימים"
 
@@ -335,15 +341,15 @@ msgstr "טוב"
 msgid "Got it"
 msgstr "הבנתי"
 
-#: crates/nd-gui/src/pages/settings.rs:237
+#: crates/nd-gui/src/pages/settings.rs:238
 msgid "Hardware acceleration"
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:174
+#: crates/nd-gui/src/pages/settings.rs:175
 msgid "Height (pixels)"
 msgstr "גובה (פיקסלים)"
 
-#: crates/nd-gui/src/pages/settings.rs:134
+#: crates/nd-gui/src/pages/settings.rs:135
 msgid "High (1080p)"
 msgstr "גבוה (1080p)"
 
@@ -351,11 +357,11 @@ msgstr "גבוה (1080p)"
 msgid "Home"
 msgstr "בית"
 
-#: crates/nd-gui/src/pages/settings.rs:256
+#: crates/nd-gui/src/pages/settings.rs:257
 msgid "Include system audio"
 msgstr "כלול שמע מערכת"
 
-#: crates/nd-gui/src/pages/settings.rs:266
+#: crates/nd-gui/src/pages/settings.rs:285
 msgid "Include the microphone"
 msgstr "כלול מיקרופון"
 
@@ -386,7 +392,7 @@ msgstr "הכינו את המקלט"
 msgid "Local network discovery unavailable"
 msgstr "גילוי רשת מקומית אינו זמין"
 
-#: crates/nd-gui/src/pages/settings.rs:305
+#: crates/nd-gui/src/pages/settings.rs:324
 msgid "Look for receivers as soon as the app starts"
 msgstr "חפש מקלטים מיד עם הפעלת האפליקציה"
 
@@ -394,15 +400,15 @@ msgstr "חפש מקלטים מיד עם הפעלת האפליקציה"
 msgid "Looking for receivers…"
 msgstr "מחפש מקלטים…"
 
-#: crates/nd-gui/src/pages/settings.rs:136
+#: crates/nd-gui/src/pages/settings.rs:137
 msgid "Low (480p)"
 msgstr "נמוך (480p)"
 
-#: crates/nd-gui/src/pages/settings.rs:218
+#: crates/nd-gui/src/pages/settings.rs:219
 msgid "Low — for using the computer on the big screen"
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:132
+#: crates/nd-gui/src/pages/settings.rs:133
 msgid "Maximum (2160p)"
 msgstr "מקסימלי (2160p)"
 
@@ -414,11 +420,11 @@ msgstr "מודד…"
 msgid "Media"
 msgstr "מדיה"
 
-#: crates/nd-gui/src/pages/settings.rs:135
+#: crates/nd-gui/src/pages/settings.rs:136
 msgid "Medium (720p)"
 msgstr "בינוני (720p)"
 
-#: crates/nd-gui/src/pages/settings.rs:275
+#: crates/nd-gui/src/pages/settings.rs:294
 msgid "Microphone volume"
 msgstr "עוצמת מיקרופון"
 
@@ -440,7 +446,7 @@ msgid ""
 msgstr ""
 "Miracast דורש מתאם Wi‑Fi, ולמחשב זה אין כזה. שידור דרך הרשת עדיין פועל."
 
-#: crates/nd-gui/src/pages/settings.rs:110
+#: crates/nd-gui/src/pages/settings.rs:111
 msgid "Miracast only"
 msgstr "Miracast בלבד"
 
@@ -456,7 +462,7 @@ msgstr "Miracast אינו זמין: כרטיס ה-Wi-Fi הזה אינו תומך
 msgid "Mirror screen"
 msgstr "שיקוף מסך"
 
-#: crates/nd-gui/src/pages/settings.rs:268
+#: crates/nd-gui/src/pages/settings.rs:287
 msgid "Mix your voice into what is sent"
 msgstr "ערבב את קולך עם מה שנשלח"
 
@@ -560,6 +566,10 @@ msgstr ""
 msgid "One window only"
 msgstr "חלון אחד בלבד"
 
+#: crates/nd-gui/src/pages/settings.rs:267
+msgid "Only a chosen application"
+msgstr ""
+
 #: crates/nd-gui/src/pages/mod.rs:209
 msgid "Opening the firewall port…"
 msgstr "פותח את יציאת חומת האש…"
@@ -580,7 +590,7 @@ msgstr "תמונות, סרטונים ומוזיקה"
 msgid "Pick files and choose where to play them."
 msgstr "בחר קבצים ובחר היכן לנגן אותם."
 
-#: crates/nd-gui/src/pages/settings.rs:105
+#: crates/nd-gui/src/pages/settings.rs:106
 msgid "Preferred protocol"
 msgstr "פרוטוקול מועדף"
 
@@ -624,7 +634,7 @@ msgstr "רעננו את רשימת המכשירים ובדקו שהמקלט מו
 msgid "Remove from queue"
 msgstr "הסר מרשימת ההשמעה"
 
-#: crates/nd-gui/src/pages/settings.rs:124
+#: crates/nd-gui/src/pages/settings.rs:125
 msgid "Resolution limit"
 msgstr "מגבלת רזולוציה"
 
@@ -632,7 +642,7 @@ msgstr "מגבלת רזולוציה"
 msgid "Restart BigNetScreen to use NDI."
 msgstr "הפעילו מחדש את BigNetScreen כדי להשתמש ב‑NDI."
 
-#: crates/nd-gui/src/pages/settings.rs:369
+#: crates/nd-gui/src/pages/settings.rs:388
 msgid "Restore defaults"
 msgstr "שחזור ברירות מחדל"
 
@@ -640,7 +650,7 @@ msgstr "שחזור ברירות מחדל"
 msgid "Resume"
 msgstr "המשך"
 
-#: crates/nd-gui/src/pages/settings.rs:352
+#: crates/nd-gui/src/pages/settings.rs:371
 msgid "Saved as you change them"
 msgstr "נשמר אוטומטית בעת שינוי"
 
@@ -680,7 +690,7 @@ msgstr "שליחה אל"
 msgid "Send to device"
 msgstr "שליחה למכשיר"
 
-#: crates/nd-gui/src/pages/settings.rs:258
+#: crates/nd-gui/src/pages/settings.rs:259
 msgid "Send whatever this computer is playing"
 msgstr "שליחת כל מה שמתנגן במחשב זה"
 
@@ -688,11 +698,11 @@ msgstr "שליחת כל מה שמתנגן במחשב זה"
 msgid "Sending files…"
 msgstr "שולח קבצים…"
 
-#: crates/nd-gui/src/pages/mod.rs:51 crates/nd-gui/src/pages/settings.rs:94
+#: crates/nd-gui/src/pages/mod.rs:51 crates/nd-gui/src/pages/settings.rs:95
 msgid "Settings"
 msgstr "הגדרות"
 
-#: crates/nd-gui/src/pages/settings.rs:596
+#: crates/nd-gui/src/pages/settings.rs:625
 msgid "Settings cannot be saved on this system."
 msgstr "לא ניתן לשמור הגדרות במערכת זו."
 
@@ -748,7 +758,7 @@ msgstr "הפסק שליחה"
 msgid "Stopping…"
 msgstr "מפסיק…"
 
-#: crates/nd-gui/src/pages/mod.rs:212 crates/nd-gui/src/pages/settings.rs:100
+#: crates/nd-gui/src/pages/mod.rs:212 crates/nd-gui/src/pages/settings.rs:101
 msgid "Streaming"
 msgstr "מזרים"
 
@@ -784,11 +794,11 @@ msgstr ""
 msgid "The sharing service is not responding. Try again."
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:95
+#: crates/nd-gui/src/pages/settings.rs:96
 msgid "These apply to your next session."
 msgstr "אלה יחולו על הפגישה הבאה שלך."
 
-#: crates/nd-gui/src/pages/settings.rs:313
+#: crates/nd-gui/src/pages/settings.rs:332
 msgid "This computer's name"
 msgstr "השם של מחשב זה"
 
@@ -806,7 +816,7 @@ msgstr "טיפים"
 msgid "Too many attempts. Wait half a minute and try again."
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:133
+#: crates/nd-gui/src/pages/settings.rs:134
 msgid "Very high (1440p)"
 msgstr "גבוה מאוד (1440p)"
 
@@ -838,7 +848,7 @@ msgstr ""
 msgid "What do you want to share?"
 msgstr "מה תרצה לשתף?"
 
-#: crates/nd-gui/src/pages/settings.rs:107
+#: crates/nd-gui/src/pages/settings.rs:108
 msgid "Which kind of receiver to look for"
 msgstr "איזה סוג מקלט לחפש"
 
@@ -846,7 +856,7 @@ msgstr "איזה סוג מקלט לחפש"
 msgid "Whole screen"
 msgstr "מסך מלא"
 
-#: crates/nd-gui/src/pages/settings.rs:162
+#: crates/nd-gui/src/pages/settings.rs:163
 msgid "Width (pixels)"
 msgstr "רוחב (פיקסלים)"
 

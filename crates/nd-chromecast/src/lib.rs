@@ -124,7 +124,7 @@ impl Provider for MdnsProvider {
     }
 
     async fn discover(&self) -> Result<BoxStream<'static, DiscoveryEvent>> {
-        let (tx, rx) = futures::channel::mpsc::unbounded::<DiscoveryEvent>();
+        let (tx, rx) = futures::channel::mpsc::channel::<DiscoveryEvent>(32);
 
         for service in &self.services {
             // `browse` returns a synchronous flume channel; one thread per
@@ -132,7 +132,7 @@ impl Provider for MdnsProvider {
             // down the channel closes and the thread ends on its own.
             let events = self.daemon.browse(service.service_type).map_err(net_err)?;
             let kind = service.kind;
-            let tx = tx.clone();
+            let mut tx = tx.clone();
 
             std::thread::Builder::new()
                 .name(format!("mdns-{}", service.kind.as_str()))
@@ -166,7 +166,9 @@ impl Provider for MdnsProvider {
                             _ => None,
                         };
                         if let Some(msg) = msg {
-                            if tx.unbounded_send(msg).is_err() {
+                            if futures::executor::block_on(futures::SinkExt::send(&mut tx, msg))
+                                .is_err()
+                            {
                                 break; // the stream consumer was dropped
                             }
                         }

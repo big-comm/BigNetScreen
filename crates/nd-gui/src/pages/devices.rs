@@ -163,7 +163,7 @@ impl Component for DevicesPage {
 
                             gtk::Label {
                                 #[watch]
-                                set_label: &found_summary(model.all.len()),
+                                set_label: &found_summary(model.devices.len()),
                                 set_hexpand: true,
                                 set_xalign: 0.0,
                                 add_css_class: "dim-label",
@@ -240,11 +240,9 @@ impl Component for DevicesPage {
                                 },
                             },
                             gtk::Button {
-                                // Only a Chromecast plays a file we send; the
-                                // rest of the protocols have no such notion.
                                 #[watch]
                                 set_visible: model.field_bool(|d| {
-                                    d.kind == nd_core::sink::SinkKind::Chromecast
+                                    d.kind.can_receive_files(&d.address)
                                 }),
                                 connect_clicked => DevicesMsg::SendMedia,
 
@@ -337,11 +335,7 @@ impl Component for DevicesPage {
         );
         root.add_breakpoint(compact);
 
-        for label in [
-            tr!("All protocols"),
-            tr!("Chromecast / AirPlay"),
-            tr!("Miracast"),
-        ] {
+        for label in [tr!("All protocols"), tr!("Local network"), tr!("Miracast")] {
             widgets
                 .filter_group
                 .add(adw::Toggle::builder().label(&label).build());
@@ -425,6 +419,13 @@ impl Component for DevicesPage {
 
 impl DevicesPage {
     fn apply_filter(&mut self) {
+        if self
+            .selected
+            .as_ref()
+            .is_some_and(|entry| !self.filter.matches(entry))
+        {
+            self.selected = None;
+        }
         let visible: Vec<DeviceEntry> = self
             .all
             .iter()
@@ -520,6 +521,18 @@ mod tests {
             [false],
             "user change must be emitted once"
         );
+        let mut cast = entry(nd_core::sink::SinkKind::Chromecast);
+        cast.id = "cast".into();
+        let mut miracast = entry(nd_core::sink::SinkKind::WfdP2p);
+        miracast.id = "miracast".into();
+        page.emit(DevicesMsg::Devices(vec![cast, miracast]));
+        page.emit(DevicesMsg::Selected("cast".into()));
+        flush();
+        assert_eq!(page.model().selected.as_ref().unwrap().id, "cast");
+        page.emit(DevicesMsg::SetFilter(Filter::Miracast));
+        flush();
+        assert!(page.model().selected.is_none());
+        assert_eq!(page.model().devices.len(), 1);
     }
 
     fn entry(kind: SinkKind) -> DeviceEntry {

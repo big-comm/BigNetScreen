@@ -373,7 +373,8 @@ mod tests {
 
     async fn fixture(bytes: &[u8], label: &str) -> (FileServer, String, String, PathBuf) {
         let path = std::env::temp_dir().join(format!("nd-http-{}-{label}.mp4", std::process::id()));
-        std::fs::write(&path, bytes).unwrap();
+        std::fs::write(&path, bytes)
+            .unwrap_or_else(|err| panic!("could not write fixture {}: {err}", path.display()));
         let server = FileServer::start(
             "127.0.0.1".parse().unwrap(),
             0,

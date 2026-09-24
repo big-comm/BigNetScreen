@@ -4,6 +4,7 @@
 //! after the last thing it was doing finished. Run it by hand to watch it
 //! work; `--foreground` only changes whether it exits when idle.
 
+use futures::StreamExt;
 use std::time::Duration;
 
 /// How long to stay after the last session ends.
@@ -32,15 +33,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let engine = nd_service::engine::start();
-    let _connection = nd_service::dbus::serve(engine.clone()).await?;
+    let connection = nd_service::dbus::serve(engine.clone()).await?;
     tracing::info!(name = nd_service::BUS_NAME, "session service ready");
 
-    if foreground {
-        std::future::pending::<()>().await;
-        return Ok(());
+    let mut messages = zbus::MessageStream::from(&connection);
+    // Being asked to stop (the session ending, the service manager, Ctrl+C) goes
+    // through the same shutdown as going idle. A signal that killed the process
+    // outright skipped it, and with it the removal of the virtual sound card.
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    tokio::select! {
+        _ = async { while let Some(Ok(_)) = messages.next().await {} } => {
+            tracing::info!("session bus disconnected; stopping the service");
+        }
+        _ = terminate.recv() => {
+            tracing::info!("asked to stop; stopping the service");
+        }
+        _ = tokio::signal::ctrl_c() => {
+            tracing::info!("interrupted; stopping the service");
+        }
+        _ = nd_service::dbus::idle_after(engine.subscribe(), IDLE_GRACE), if !foreground => {
+            tracing::info!("idle; exiting until something asks again");
+        }
     }
-    nd_service::dbus::idle_after(engine.subscribe(), IDLE_GRACE).await;
-    tracing::info!("idle; exiting until something asks again");
+    let mut snapshots = engine.subscribe();
     let _ = engine.send(nd_service::engine::Command::Shutdown).await;
+    // Keep Tokio alive until the engine's session owners finish STOP/CLOSE.
+    while snapshots.changed().await.is_ok() {}
     Ok(())
 }

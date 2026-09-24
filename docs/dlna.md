@@ -1,47 +1,42 @@
 # DLNA / UPnP renderers
 
-## What this protocol is for
+`nd-dlna` discovers renderers and controls playback; `nd-core` captures, encodes and serves the live MPEG-TS stream. Capture permissions, bounded queues and valid H.264 decoding must survive changes to the transport. Build with `cargo build --locked -p nd-service`; validate with `cargo test --locked -p nd-core -p nd-dlna`.
 
-Reach, not responsiveness. A DLNA renderer is the television that predates Chromecast, AirPlay and Miracast, it is driven over ordinary Ethernet, and it needs no Wi-Fi adapter on the sending machine. The picture arrives about a second and a half late and **nothing on our side can make it arrive sooner**, so the interface labels it `delayed a few seconds` beside the existing `instant response` and `quick response`. Offer it for watching a screen, never for working on one.
+---
 
-## Why the delay cannot be tuned
+## Resolution is measured in pixels
 
-The renderer decides its own prebuffer and exposes no way to ask for a smaller one. The whole UPnP surface of a Panasonic 75GX880 was read action by action — `AVTransport`, `RenderingControl`, `ConnectionManager` — and none of them carries a buffer, delay or latency control. Cast is different only because it negotiates a `targetDelay` we set to zero; DLNA has no equivalent field anywhere, and the DLNA flag bits (`libdlna`, `GUPnP`, guidelines §7.3.37.2) describe the *content*, not a latency request.
+A portal can announce compositor coordinates instead of physical pixels. A 2560×1440 desktop at fractional scaling announced 2327×1309: using that announcement as the encoding size reduced the transmitted image to 2326×1308.
 
-What the sender does control is how fast that buffer fills, because it is counted in **bytes**. Measured on the same television and content, changing only the multiplex rate:
+The DLNA path now negotiates `VideoTarget::UpTo` against the actual video caps. The preference is a ceiling: a smaller source stays smaller, and a larger one is scaled within that ceiling. The conservative default is 1080p; an explicit higher preference is allowed. This is sender policy, not a mode negotiated with the television. The frame-rate setting is likewise an encoding target, not confirmation of the TV's displayed frame rate.
 
-| multiplex rate | delay |
-|---|---|
-| ~0.32 Mbit/s (unpadded, trivially compressible) | 6 s |
-| 8 Mbit/s | 2 s |
-| 20 Mbit/s | 1.5 s |
+Capture starts on the receiver's first valid GET so its first keyframe is retained. Before then, the actual resolution is unknown. The optional DIDL-Lite `res@resolution` attribute is omitted rather than populated with logical coordinates or a guessed ceiling. The bitstream carries the encoded dimensions. Once caps arrive, the session publishes them and updates the encoder/multiplex rate where the encoder supports live changes. A slow handshake must not miss this update or put a streaming session back into “preparing”.
 
-Hence `mux_bitrate_bps` on `ts_http_pipeline_description`: the muxer pads with null packets to what the encoder already targets. Cast passes `None` — that path was never measured with padding, and a rate is not a thing to change on a guess.
+## What determines delay
 
-The timestamped `_T` profile family (`video/vnd.dlna.mpeg-tts`, 192-byte packets, `m2ts-mode`) was tried with an explicit `DLNA.ORG_PN` and AC-3 audio on the theory that a television routes it through its broadcast path. It played and the delay was identical, so the simpler 188-byte stream with a wildcard profile wins on the tie.
+The path is capture → encoding → MPEG-TS → HTTP/TCP → the receiver's media player. Shortening a sender queue cannot directly empty a buffer already inside the TV. Network round-trip time is not picture delay.
 
-## Resolution and frame rate come from the device's own profile list
+The sender already uses H.264 without B-frames, periodic keyframes and repeated codec headers, small upstream queues, and an unsynchronized socket sink. It declares a live, non-seekable stream in both HTTP and DIDL-Lite. Keep those declarations consistent; a file-download transfer mode or invented duration/length does not request lower latency.
 
-`GetProtocolInfo` is the answer to both, and it has to be read carefully. A
-Panasonic 75GX880 — a 4K set — declares only `AVC_TS_HD_*` and `MPEG_TS_SD_*`,
-nothing above HD, which is why `DLNA_MAX_RESOLUTION` is 1920x1080. That ceiling
-is the television's, not ours.
+AVTransport:1 has no portable playback-buffer control. AVTransport:3's optional `SyncOffset` belongs to the ConnectionManager CLOCKSYNC feature; it is not a universal prebuffer setting for HTTP playback. Vendor extensions must be read from the particular receiver and verified before use. The Panasonic VIErA examined on 2026-09-22 advertises neither a buffer control nor CLOCKSYNC controls. This observation does not establish a minimum delay for other receivers. See the [AVTransport specification, §5.2.31](https://openconnectivity.org/wp-content/uploads/2015/11/UPnP-av-AVTransport-Service.pdf).
 
-The frame rate is in the profile *name*: the `_24`, `_50` and `_60` in
-`AVC_TS_HD_24_AC3`, `AVC_TS_HD_50_AC3` and `AVC_TS_HD_60_AC3` are hertz, and
-this set lists all three. Reading those families as a resolution class and
-capping at 30 overrode a person's setting of 60 with a number nothing had asked
-for.
+## Formats and receiver compatibility
 
-It may matter for more than smoothness. At 30 the picture overflowed the panel;
-at 60 it fit, with the geometry provably identical on our side — 1920x1080
-encoded from a 1920x1080 capture, `rescaled=false` in the log. One observation
-each way, so treat it as a correlation and not a mechanism. The plausible
-reading is that 30 matched none of the profiles the set declares and it fell
-into a different scaling path. If a renderer ever scales oddly, check the frame
-rate against its profile list before suspecting anything else, and remember that
-`<res resolution="WxH">` is what tells it the geometry rather than leaving it to
-be inferred.
+| Option | Current decision and evidence limit |
+| --- | --- |
+| H.264/AAC in 188-byte MPEG-TS over continuous HTTP | Retained. It starts without a completed file or media segment; packet and codec headers are repeated. Current field reception and local tests cover this path. |
+| Constant multiplex rate using null TS packets | Retained. It prevents nearly static screens from producing too few bytes to fill a byte-counted receiver buffer. The [muxer documents this padding](https://gstreamer.freedesktop.org/documentation/mpegtsmux/GstBaseTsMux.html). Padding spends bandwidth and is not a congestion controller. |
+| 192-byte timestamped MPEG-TS / AC-3 | Earlier project notes report playback with no latency improvement on one Panasonic. Not rerun in this revision; not evidence for every receiver or a reason to change the default. |
+| Fragmented MP4 or HLS | Possible only where the receiver supports the complete live format, not merely ordinary MP4 files. Fragment/segment accumulation can add delay; no measured improvement justifies changing the default. |
+| Advertised DLNA profile names | Do not claim a specific profile unless codec, audio, dimensions, level and transport all conform. Reading one model's profile list cannot establish limits for thousands of other receivers. |
+
+Earlier field notes reported roughly 6 seconds with a 0.32 Mbit/s unpadded stream, 2 seconds at 8 Mbit/s and 1.5 seconds at 20 Mbit/s on a Panasonic 75GX880. Those are historical observations, not measurements repeated by this revision or a protocol-wide latency floor. New format or padding changes require same-content, same-receiver before/after measurements.
+
+## Sender queue limits
+
+The DLNA socket queue has a byte limit calculated from two seconds at the initial target multiplex rate, clamped to 1–8 MiB. This limits retained media; it is neither reserved memory nor extra playback delay. The small mux output queue remains non-leaky.
+
+`mpegtsmux` output does not preserve the H.264 `DELTA_UNIT` markings expected by `multisocketsink` keyframe recovery. A soft-limit jump could therefore cut into a transport/PES packet sequence rather than resume at a complete decodable keyframe. DLNA uses no such recovery: a reader exceeding the hard limit is disconnected, the server returns a queue-limit error, and the session tears down normally. Restarting the transmission starts a fresh stream. Healthy readers keep the same continuous stream and incur no intentional waiting for this limit. See [GStreamer's socket queue semantics](https://gstreamer.freedesktop.org/documentation/tcp/multisocketsink.html).
 
 ## Discovery is SSDP, not mDNS
 

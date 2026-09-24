@@ -48,6 +48,7 @@ use crate::{tr, tr_n};
 pub(crate) struct ServiceState {
     receivers: Vec<wire::Receiver>,
     session: wire::Session,
+    link_probe: String,
     status: wire::Status,
     issues: Vec<wire::Issue>,
     media: wire::Media,
@@ -59,6 +60,7 @@ impl Default for ServiceState {
         Self {
             receivers: Vec::new(),
             session: wire::Session::idle(),
+            link_probe: "pending".into(),
             status: wire::Status::of("searching"),
             issues: Vec::new(),
             media: wire::Media::idle(),
@@ -80,6 +82,8 @@ pub struct AppModel {
     state: ServiceState,
     /// The sentence under the window title, in the person's language.
     status: String,
+    failure: Option<String>,
+    settings_changed: bool,
     /// Issues the person has dismissed, so the banner does not come back for
     /// something they have already read.
     dismissed: Vec<wire::Issue>,
@@ -106,8 +110,11 @@ pub enum AppMsg {
     Stop,
     Rescan,
     DismissIssues,
+    ShowIssues,
+    ShowFailure,
     SetAutoDiscovery(bool),
     SettingsChanged(Settings),
+    SettingsSaved(Result<(), String>),
     /// Send these files to the receiver with this id.
     SendMedia(Vec<MediaFile>, String),
     CancelMedia,
@@ -141,6 +148,8 @@ pub enum AppCmd {
     State(Box<ServiceState>),
     /// A call the service refused.
     Refused(String),
+    Done,
+    PreferencesFlushed(Result<(), String>),
 }
 
 #[relm4::component(pub)]
@@ -153,11 +162,10 @@ impl Component for AppModel {
     view! {
         adw::ApplicationWindow {
             set_title: Some("BigNetScreen"),
-            // Keep navigation visible alongside compact page layouts.
             add_css_class: "bns-window",
             set_default_width: 1280,
             set_default_height: 860,
-            set_width_request: 760,
+            set_width_request: 480,
             set_height_request: 480,
 
             #[name = "split"]
@@ -280,6 +288,13 @@ impl Component for AppModel {
                     add_top_bar = &adw::HeaderBar {
                         add_css_class: "flat",
 
+                        #[name = "navigation_button"]
+                        pack_start = &gtk::Button {
+                            set_icon_name: "sidebar-show-symbolic",
+                            set_tooltip_text: Some(&tr!("Show navigation")),
+                            set_visible: false,
+                        },
+
                         #[wrap(Some)]
                         set_title_widget = &adw::WindowTitle {
                             #[watch]
@@ -306,8 +321,17 @@ impl Component for AppModel {
                             set_revealed: !model.issues_summary().is_empty(),
                             #[watch]
                             set_title: &model.issues_summary(),
-                            set_button_label: Some(&tr!("Got it")),
-                            connect_button_clicked => AppMsg::DismissIssues,
+                            set_button_label: Some(&tr!("Details")),
+                            connect_button_clicked => AppMsg::ShowIssues,
+                        },
+
+                        adw::Banner {
+                            #[watch]
+                            set_revealed: model.failure.is_some() || model.state.status.kind == "error",
+                            #[watch]
+                            set_title: &describe_refusal(model.failure.as_deref().unwrap_or(&model.state.status.detail)),
+                            set_button_label: Some(&tr!("Details")),
+                            connect_button_clicked => AppMsg::ShowFailure,
                         },
 
                         #[name = "stack"]
@@ -343,6 +367,7 @@ impl Component for AppModel {
                 HomeOutput::SendMedia(id) => AppMsg::MediaTarget(id),
                 HomeOutput::Stop => AppMsg::Stop,
                 HomeOutput::Rescan => AppMsg::Rescan,
+                HomeOutput::AudioSettings => AppMsg::Navigate(Page::Settings),
             });
         let devices = DevicesPage::builder()
             .launch(())
@@ -364,10 +389,13 @@ impl Component for AppModel {
             sender.input_sender(),
             |output| match output {
                 SettingsOutput::Changed(settings) => AppMsg::SettingsChanged(settings),
+                SettingsOutput::Saved(result) => AppMsg::SettingsSaved(result),
             },
         );
 
         let model = AppModel {
+            failure: None,
+            settings_changed: false,
             home,
             devices,
             media,
@@ -385,6 +413,21 @@ impl Component for AppModel {
         };
 
         let widgets = view_output!();
+        let compact = adw::Breakpoint::new(
+            adw::BreakpointCondition::parse("max-width: 1000px").expect("valid breakpoint"),
+        );
+        compact.add_setter(&widgets.split, "collapsed", Some(&true.to_value()));
+        compact.add_setter(&widgets.split, "show-sidebar", Some(&false.to_value()));
+        compact.add_setter(
+            &widgets.navigation_button,
+            "visible",
+            Some(&true.to_value()),
+        );
+        root.add_breakpoint(compact);
+        let split = widgets.split.clone();
+        widgets
+            .navigation_button
+            .connect_clicked(move |_| split.set_show_sidebar(true));
 
         let ndi_installing = model.ndi_installing.clone();
         let allow_close = model.allow_close.clone();
@@ -453,6 +496,9 @@ impl Component for AppModel {
         widgets.stack.set_visible_child_name(model.page.id());
 
         model.home.emit(HomeMsg::Searching(current.auto_discovery));
+        model
+            .home
+            .emit(HomeMsg::AudioSummary(audio_summary(&current)));
         follow_the_service(&sender);
 
         ComponentParts { model, widgets }
@@ -467,13 +513,36 @@ impl Component for AppModel {
     ) {
         match message {
             AppMsg::CloseRequested => {
-                // Closing the window no longer ends the session — that is the
-                // point of the service. Nothing to wait for, so nothing to
-                // keep the window open for.
-                self.allow_close.set(true);
-                root.close();
+                if !self.settings_changed {
+                    self.allow_close.set(true);
+                    root.close();
+                    return;
+                }
+                let service = self.service.clone();
+                sender.oneshot_command(async move {
+                    let result = relm4::spawn_blocking(settings::persist)
+                        .await
+                        .map_err(|err| err.to_string())
+                        .and_then(|result| result.map_err(|err| err.to_string()));
+                    if result.is_ok() {
+                        if let Some(service) = service {
+                            // Closing before the debounce fires must still notify the service.
+                            let _ = tokio::time::timeout(
+                                Duration::from_secs(10),
+                                service.reload_settings(),
+                            )
+                            .await;
+                        }
+                    }
+                    AppCmd::PreferencesFlushed(result)
+                });
             }
-            AppMsg::Navigate(page) => self.page = page,
+            AppMsg::Navigate(page) => {
+                self.page = page;
+                if widgets.split.is_collapsed() {
+                    widgets.split.set_show_sidebar(false);
+                }
+            }
             AppMsg::Cast(id) => self.begin_cast(id, &sender),
             AppMsg::PublishNdi(source) => {
                 if self.ndi_installing.get() {
@@ -521,47 +590,70 @@ impl Component for AppModel {
                 self.begin_cast(id, &sender);
             }
             AppMsg::Stop | AppMsg::CancelMedia => {
+                self.failure = None;
                 self.status = tr!("Stopping…");
                 self.call(&sender, |service| async move { service.stop().await });
             }
             AppMsg::Rescan => {
+                self.failure = None;
                 self.dismissed.clear();
                 self.status = tr!("Searching…");
                 self.call(&sender, |service| async move { service.rescan().await });
             }
             AppMsg::DismissIssues => self.dismissed = self.state.issues.clone(),
-            AppMsg::SetAutoDiscovery(on) => {
-                self.settings.auto_discovery = on;
-                settings::set(self.settings.clone());
-                self.settings_page.emit(SettingsMsg::Reload);
-                self.call(&sender, move |service| async move {
-                    service.set_auto_discovery(on).await
+            AppMsg::ShowIssues => {
+                let details = self
+                    .state
+                    .issues
+                    .iter()
+                    .map(|issue| format!("{}: {}", issue.provider, issue.reason))
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+                let dialog =
+                    adw::AlertDialog::new(Some(&tr!("Connection details")), Some(&details));
+                dialog.add_response("close", &tr!("Close"));
+                dialog.add_response("dismiss", &tr!("Got it"));
+                let input = sender.input_sender().clone();
+                dialog.connect_response(Some("dismiss"), move |_, _| {
+                    input.emit(AppMsg::DismissIssues)
                 });
+                dialog.present(Some(root));
+            }
+            AppMsg::ShowFailure => {
+                let detail = self.failure.as_deref().unwrap_or(&self.state.status.detail);
+                let dialog = adw::AlertDialog::new(
+                    Some(&tr!("Sharing could not be completed")),
+                    Some(detail),
+                );
+                dialog.add_response("close", &tr!("Close"));
+                dialog.add_response("settings", &tr!("Settings"));
+                let input = sender.input_sender().clone();
+                dialog.connect_response(Some("settings"), move |_, _| {
+                    input.emit(AppMsg::Navigate(Page::Settings))
+                });
+                dialog.present(Some(root));
+            }
+            AppMsg::SetAutoDiscovery(on) => {
+                self.settings_page.emit(SettingsMsg::SetAutoDiscovery(on));
             }
             AppMsg::SettingsChanged(new) => {
-                let looks_elsewhere = new.protocol != self.settings.protocol
-                    || new.auto_discovery != self.settings.auto_discovery;
+                self.settings_changed = true;
+                self.failure = None;
+                self.home.emit(HomeMsg::AudioSummary(audio_summary(&new)));
                 self.settings = new;
                 self.devices
                     .emit(DevicesMsg::SyncAutoDiscovery(self.settings.auto_discovery));
-                // Everything else the service re-reads when a session starts,
-                // which is when it matters. Discovery cannot wait for that:
-                // the list on screen is the result of the old choice.
-                //
-                // Written here and now rather than left to the page's delayed
-                // save, because the service reads the file: telling it to
-                // reload before the bytes are there had it keep the old
-                // answer. These two are a switch and a combo, so there is no
-                // stream of values to coalesce.
-                if looks_elsewhere {
-                    let settings = self.settings.clone();
-                    settings::persist(&settings);
-                    self.call(
-                        &sender,
-                        |service| async move { service.reload_settings().await },
-                    );
-                }
             }
+            AppMsg::SettingsSaved(result) => match result {
+                Ok(()) => self.call(
+                    &sender,
+                    |service| async move { service.reload_settings().await },
+                ),
+                Err(reason) => {
+                    self.failure = Some(format!("could not save settings: {reason}"));
+                    self.status = tr!("Could not save settings");
+                }
+            },
             AppMsg::MediaTarget(id) => {
                 // Chosen on the devices page: the media page opens with that
                 // receiver already selected, because the person just said so.
@@ -573,7 +665,7 @@ impl Component for AppModel {
                     .iter()
                     .map(|file| file.path.display().to_string())
                     .collect();
-                self.call(&sender, move |service| async move {
+                self.call_with_settings(&sender, move |service| async move {
                     service.send_media(&target, &paths).await
                 });
             }
@@ -581,6 +673,14 @@ impl Component for AppModel {
                 use nd_core::media::MediaCommand;
                 let (name, value, path) = match command {
                     MediaCommand::TogglePause => ("toggle-pause", 0.0, PathBuf::new()),
+                    MediaCommand::SetPaused(paused) => {
+                        (if paused { "pause" } else { "play" }, 0.0, PathBuf::new())
+                    }
+                    MediaCommand::SeekTo(seconds) => ("seek-to", seconds, PathBuf::new()),
+                    MediaCommand::SetVolume(level) => ("volume", level, PathBuf::new()),
+                    MediaCommand::SetMute(muted) => {
+                        (if muted { "mute" } else { "unmute" }, 0.0, PathBuf::new())
+                    }
                     MediaCommand::Next => ("next", 0.0, PathBuf::new()),
                     MediaCommand::SeekRelative(seconds) => ("seek", seconds, PathBuf::new()),
                     MediaCommand::Remove(path) => ("remove", 0.0, path),
@@ -635,33 +735,80 @@ impl Component for AppModel {
                 AppCmd::Unreachable(_) => "unreachable",
                 AppCmd::State(_) => "state",
                 AppCmd::Refused(_) => "refused",
+                AppCmd::Done => "done",
+                AppCmd::PreferencesFlushed(_) => "preferences-flushed",
             },
             "command output arrived"
         );
         match message {
+            AppCmd::Done => return,
+            AppCmd::PreferencesFlushed(result) => match result {
+                Ok(()) => {
+                    self.allow_close.set(true);
+                    root.close();
+                }
+                Err(reason) => {
+                    let dialog =
+                        adw::AlertDialog::new(Some(&tr!("Could not save settings")), Some(&reason));
+                    dialog.add_response("back", &tr!("Keep open"));
+                    dialog.add_response("close", &tr!("Close without saving"));
+                    dialog.set_default_response(Some("back"));
+                    dialog.set_close_response("back");
+                    let allow_close = self.allow_close.clone();
+                    let window = root.clone();
+                    dialog.connect_response(Some("close"), move |_, _| {
+                        allow_close.set(true);
+                        window.close();
+                    });
+                    dialog.present(Some(root));
+                }
+            },
             AppCmd::NdiInstalled(result) => self.ndi_installed(result, &sender, root),
             AppCmd::Connected(connection) => {
+                self.failure = None;
                 tracing::info!("connected to the session service");
                 self.service = Some(connection.0);
             }
             AppCmd::Unreachable(reason) => {
                 tracing::error!(%reason, "the session service could not be reached");
                 self.service = None;
+                self.state = ServiceState::default();
+                self.home.emit(HomeMsg::Searching(false));
+                self.home.emit(HomeMsg::VirtualAvailable(false));
+                self.push_devices();
+                self.push_media_status();
                 self.status = tr!("The sharing service is not responding. Try again.");
             }
-            AppCmd::Refused(reason) => self.status = describe_refusal(&reason),
+            AppCmd::Refused(reason) => {
+                self.status = describe_refusal(&reason);
+                self.failure = Some(reason);
+            }
             AppCmd::State(state) => {
+                let receivers_changed = state.receivers != self.state.receivers;
+                let session_changed = state.session != self.state.session
+                    || state.link_probe != self.state.link_probe;
+                let media_changed = state.media != self.state.media;
+                let searching_changed = state.status.kind != self.state.status.kind;
+                let virtual_changed = state.virtual_available != self.state.virtual_available;
                 let ndi_missing = state.status.kind == "ndi-runtime-missing"
                     && self.state.status.kind != "ndi-runtime-missing";
                 let was_streaming = !self.state.session.is_idle();
                 self.state = *state;
                 self.status = describe_status(&self.state.status, &self.state.session);
-                self.home
-                    .emit(HomeMsg::VirtualAvailable(self.state.virtual_available));
-                self.home
-                    .emit(HomeMsg::Searching(self.state.status.kind == "searching"));
-                self.push_devices();
-                self.push_media_status();
+                if virtual_changed {
+                    self.home
+                        .emit(HomeMsg::VirtualAvailable(self.state.virtual_available));
+                }
+                if searching_changed {
+                    self.home
+                        .emit(HomeMsg::Searching(self.state.status.kind == "searching"));
+                }
+                if receivers_changed || session_changed {
+                    self.push_devices();
+                }
+                if media_changed {
+                    self.push_media_status();
+                }
                 if ndi_missing {
                     self.offer_ndi_install(&sender, root);
                 }
@@ -697,13 +844,34 @@ impl AppModel {
         };
         sender.oneshot_command(async move {
             match call(service).await {
-                Ok(()) => AppCmd::Refused(String::new()),
+                Ok(()) => AppCmd::Done,
                 Err(err) => AppCmd::Refused(err.to_string()),
             }
         });
     }
 
+    fn call_with_settings<F, Fut>(&self, sender: &ComponentSender<Self>, call: F)
+    where
+        F: FnOnce(ServiceProxy<'static>) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = zbus::Result<()>> + Send,
+    {
+        let settings_changed = self.settings_changed;
+        self.call(sender, move |service| async move {
+            if settings_changed {
+                relm4::spawn_blocking(settings::persist)
+                    .await
+                    .map_err(|err| zbus::Error::Failure(err.to_string()))?
+                    .map_err(|err| {
+                        zbus::Error::Failure(format!("could not save settings: {err}"))
+                    })?;
+            }
+            service.reload_settings().await?;
+            call(service).await
+        });
+    }
+
     fn begin_cast(&mut self, id: String, sender: &ComponentSender<Self>) {
+        self.failure = None;
         if self.is_busy() {
             self.status = tr!("A stream is already running");
             return;
@@ -713,7 +881,7 @@ impl AppModel {
         // a client, so the service cannot write it: it has no locale. This does.
         let page_text = web_page_text();
         self.status = tr!("Connecting…");
-        self.call(sender, move |service| async move {
+        self.call_with_settings(sender, move |service| async move {
             service.cast(&id, &source, &page_text).await
         });
     }
@@ -755,7 +923,7 @@ impl AppModel {
             return None;
         }
         let kind = wire::kind_from_name(&session.kind);
-        let round_trip = (session.round_trip_ms > 0).then_some(session.round_trip_ms);
+        let round_trip = (self.state.link_probe == "available").then_some(session.round_trip_ms);
         Some(SessionInfo {
             id: session.id.clone(),
             name: session.display_name.clone(),
@@ -775,8 +943,7 @@ impl AppModel {
             state: wire::state_from_name(&session.state)
                 .unwrap_or(nd_core::sink::SinkState::Disconnected),
             measurable: session.measurable,
-            quality: round_trip
-                .map(|ms| nd_net::probe::Quality::of(Some(Duration::from_millis(ms)))),
+            probe_failed: self.state.link_probe == "unreachable",
             round_trip_ms: round_trip,
             access: (!session.url.is_empty()).then(|| nd_core::sink::SinkAccess {
                 url: session.url.clone(),
@@ -887,112 +1054,121 @@ impl AppModel {
     }
 }
 
-/// Connects to the service and then follows everything it publishes.
-///
-/// One subscription, not six: `PropertiesChanged` fires for the whole
-/// interface, and `zbus` keeps the proxy's properties cached from those same
-/// signals, so re-reading all of them afterwards costs no round trip.
+/// Subscribes before reading, then applies only the properties that changed.
 fn follow_the_service(sender: &ComponentSender<AppModel>) {
     sender.command(|out, shutdown| {
-        shutdown
-            .register(async move {
-                let connection = match zbus::Connection::session().await {
-                    Ok(connection) => connection,
-                    Err(err) => {
-                        let _ = out.send(AppCmd::Unreachable(err.to_string()));
-                        return;
-                    }
-                };
-                // Property caching off. With it on there is no way to read
-                // the cache that is both correct and safe: a second
-                // subscription to `PropertiesChanged` races the update and
-                // returns the state before it, and subscribing through the
-                // proxy's own streams deadlocks the first read — six streams
-                // registered as listeners and none of them polled while the
-                // read waits on the cache they feed. Uncached, every read is
-                // a call to the service and says what is true now. The bus is
-                // local and the service only publishes when something moved.
-                let service = match ServiceProxy::builder(&connection)
-                    .cache_properties(zbus::proxy::CacheProperties::No)
-                    .build()
-                    .await
-                {
-                    Ok(service) => service,
-                    Err(err) => {
-                        let _ = out.send(AppCmd::Unreachable(err.to_string()));
-                        return;
-                    }
-                };
-                let properties = match zbus::fdo::PropertiesProxy::builder(&connection)
-                    .destination(nd_service::BUS_NAME)
-                    .and_then(|builder| builder.path(nd_service::OBJECT_PATH))
-                {
-                    Ok(builder) => match builder.build().await {
-                        Ok(properties) => properties,
-                        Err(err) => {
-                            let _ = out.send(AppCmd::Unreachable(err.to_string()));
-                            return;
-                        }
-                    },
-                    Err(err) => {
-                        let _ = out.send(AppCmd::Unreachable(err.to_string()));
-                        return;
-                    }
-                };
-                let mut changes = match properties.receive_properties_changed().await {
-                    Ok(changes) => changes,
-                    Err(err) => {
-                        let _ = out.send(AppCmd::Unreachable(err.to_string()));
-                        return;
-                    }
-                };
-
-                let _ = out.send(AppCmd::Connected(Box::new(Connection(service.clone()))));
-                if let Some(state) = read_state(&service).await {
-                    let _ = out.send(AppCmd::State(Box::new(state)));
-                }
-                while changes.next().await.is_some() {
-                    if let Some(state) = read_state(&service).await {
-                        if out.send(AppCmd::State(Box::new(state))).is_err() {
-                            break;
+        shutdown.register(async move {
+            let mut retry = Duration::from_secs(2);
+            loop {
+                let result: Result<(), String> = async {
+                    let connection = zbus::Connection::session().await.map_err(|e| e.to_string())?;
+                    let service = ServiceProxy::builder(&connection)
+                        .cache_properties(zbus::proxy::CacheProperties::No)
+                        .build().await.map_err(|e| e.to_string())?;
+                    let properties = zbus::fdo::PropertiesProxy::builder(&connection)
+                        .destination(nd_service::BUS_NAME).map_err(|e| e.to_string())?
+                        .path(nd_service::OBJECT_PATH).map_err(|e| e.to_string())?
+                        .build().await.map_err(|e| e.to_string())?;
+                    let mut changes = properties.receive_properties_changed().await.map_err(|e| e.to_string())?;
+                    let bus = zbus::fdo::DBusProxy::new(&connection).await.map_err(|e| e.to_string())?;
+                    let mut owners = bus.receive_name_owner_changed_with_args(&[(0, nd_service::BUS_NAME)])
+                        .await.map_err(|e| e.to_string())?;
+                    let mut state = read_state(&properties).await?;
+                    retry = Duration::from_secs(2);
+                    out.send(AppCmd::Connected(Box::new(Connection(service.clone())))).map_err(|_| "window closed")?;
+                    out.send(AppCmd::State(Box::new(state.clone()))).map_err(|_| "window closed")?;
+                    let mut heartbeat = tokio::time::interval(Duration::from_secs(60));
+                    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                    loop {
+                        tokio::select! {
+                            change = changes.next() => {
+                                let change = change.ok_or("service subscription ended")?;
+                                let args = change.args().map_err(|e| e.to_string())?;
+                                if args.interface_name().as_str() != nd_service::dbus::INTERFACE { continue; }
+                                if args.invalidated_properties().is_empty() {
+                                    for (name, value) in args.changed_properties() {
+                                        state.apply_property(name, value.try_to_owned().map_err(|e| e.to_string())?)?;
+                                    }
+                                } else {
+                                    state = read_state(&properties).await?;
+                                }
+                                out.send(AppCmd::State(Box::new(state.clone()))).map_err(|_| "window closed")?;
+                            }
+                            owner = owners.next() => {
+                                let owner = owner.ok_or("session bus subscription ended")?;
+                                let args = owner.args().map_err(|e| e.to_string())?;
+                                if args.new_owner().is_none() || args.old_owner().is_some() {
+                                    return Err("sharing service disconnected".into());
+                                }
+                            }
+                            _ = heartbeat.tick() => {
+                                tokio::time::timeout(Duration::from_secs(5), service.keep_alive()).await
+                                    .map_err(|_| "sharing service did not answer")?
+                                    .map_err(|e| e.to_string())?;
+                            }
                         }
                     }
-                }
-            })
-            .drop_on_shutdown()
+                }.await;
+                if out.send(AppCmd::Unreachable(result.unwrap_err())).is_err() { return; }
+                tokio::time::sleep(retry).await;
+                retry = (retry * 2).min(Duration::from_secs(30));
+            }
+        }).drop_on_shutdown()
     });
 }
 
-async fn read_state(service: &ServiceProxy<'_>) -> Option<ServiceState> {
-    /// Says which property went wrong instead of returning a bare `None`.
-    ///
-    /// The first version used `?` on each read, so a single failing property
-    /// produced a window with no state and a log with nothing in it at all.
-    macro_rules! read {
-        ($name:literal, $call:expr) => {
-            match tokio::time::timeout(std::time::Duration::from_secs(5), $call).await {
-                Err(_) => {
-                    tracing::warn!(property = $name, "the service did not answer in time");
-                    return None;
-                }
-                Ok(answer) => match answer {
-                    Ok(value) => value,
-                    Err(err) => {
-                        tracing::warn!(property = $name, %err, "the service would not answer");
-                        return None;
-                    }
-                },
+impl ServiceState {
+    fn apply_property(
+        &mut self,
+        name: &str,
+        value: zbus::zvariant::OwnedValue,
+    ) -> Result<(), String> {
+        use zbus::zvariant::Error;
+        match name {
+            "Receivers" => self.receivers = value.try_into().map_err(|e: Error| e.to_string())?,
+            "Session" => self.session = value.try_into().map_err(|e: Error| e.to_string())?,
+            "LinkProbe" => self.link_probe = value.try_into().map_err(|e: Error| e.to_string())?,
+            "Status" => self.status = value.try_into().map_err(|e: Error| e.to_string())?,
+            "Issues" => self.issues = value.try_into().map_err(|e: Error| e.to_string())?,
+            "Media" => self.media = value.try_into().map_err(|e: Error| e.to_string())?,
+            "VirtualAvailable" => {
+                self.virtual_available = value.try_into().map_err(|e: Error| e.to_string())?
             }
-        };
+            _ => {}
+        }
+        Ok(())
     }
-    Some(ServiceState {
-        receivers: read!("Receivers", service.receivers()),
-        session: read!("Session", service.session()),
-        status: read!("Status", service.status()),
-        issues: read!("Issues", service.issues()),
-        media: read!("Media", service.media()),
-        virtual_available: read!("VirtualAvailable", service.virtual_available()),
-    })
+}
+
+async fn read_state(properties: &zbus::fdo::PropertiesProxy<'_>) -> Result<ServiceState, String> {
+    let values = tokio::time::timeout(
+        Duration::from_secs(5),
+        properties.get_all(
+            nd_service::dbus::INTERFACE
+                .try_into()
+                .map_err(|e: zbus::names::Error| e.to_string())?,
+        ),
+    )
+    .await
+    .map_err(|_| "sharing service did not answer")?
+    .map_err(|e| e.to_string())?;
+    let mut state = ServiceState::default();
+    for required in [
+        "Receivers",
+        "Session",
+        "Status",
+        "Issues",
+        "Media",
+        "VirtualAvailable",
+    ] {
+        if !values.contains_key(required) {
+            return Err(format!("service is missing {required}"));
+        }
+    }
+    for (name, value) in values {
+        state.apply_property(&name, value)?;
+    }
+    Ok(state)
 }
 
 /// The service's shape, in the person's language.
@@ -1039,6 +1215,12 @@ fn describe_refusal(reason: &str) -> String {
     if reason.is_empty() {
         return String::new();
     }
+    if reason.contains("virtual sound card") {
+        return tr!("Could not prepare the BigNetScreen sound output. Check the audio options in Settings and try again.");
+    }
+    if reason.contains("could not save settings") {
+        return tr!("Could not save settings");
+    }
     let tail = reason.rsplit(": ").next().unwrap_or(reason);
     match tail {
         "unknown-receiver" => tr!("That device is no longer available"),
@@ -1049,8 +1231,24 @@ fn describe_refusal(reason: &str) -> String {
              does not have."
         ),
         "a stream is already running" => tr!("A stream is already running"),
-        _ => reason.to_string(),
+        _ => tr!("Sharing could not be completed. Open Details to see the reason."),
     }
+}
+
+fn audio_summary(settings: &Settings) -> String {
+    let sound = if !settings.system_audio {
+        tr!("Application sound off")
+    } else if settings.virtual_audio {
+        tr!("Sound routed to BigNetScreen")
+    } else {
+        tr!("All computer sound")
+    };
+    let microphone = if settings.microphone {
+        tr!("Microphone on")
+    } else {
+        tr!("Microphone off")
+    };
+    format!("{sound} · {microphone}")
 }
 
 /// Turns a provider's technical error into something a person can act on.
@@ -1077,12 +1275,14 @@ fn friendly_reason(provider: &str, reason: &str) -> String {
         if reason.contains("Wi-Fi P2P") || reason.contains("Wi-Fi Direct") {
             return tr!("Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct");
         }
-        return format!("{}: {reason}", tr!("Miracast unavailable"));
+        return tr!(
+            "Miracast is unavailable. Check that Wi-Fi is enabled, or share with a web browser."
+        );
     }
-    if provider == "mdns" {
-        return format!("{}: {reason}", tr!("Local network discovery unavailable"));
+    if matches!(provider, "mdns" | "dlna") {
+        return tr!("Local network discovery is unavailable. Check your network connection.");
     }
-    reason.to_string()
+    tr!("Device discovery is unavailable. Open Details to see the reason.")
 }
 
 /// What the web page says, in the application's language.
@@ -1130,6 +1330,7 @@ fn media_status(media: &wire::Media) -> MediaStatus {
             duration: (media.duration_ms > 0).then(|| media.duration_ms as f64 / 1000.0),
             can_pause: media.can_pause,
             can_seek: media.can_seek,
+            ..Default::default()
         },
         finished: media.finished,
         error: (!media.detail.is_empty()).then(|| media.detail.clone()),
@@ -1190,8 +1391,10 @@ mod tests {
             describe_refusal("unknown-receiver")
         );
         assert!(!describe_refusal(wrapped).is_empty());
-        // Anything we have no sentence for is passed through, not dropped.
-        assert_eq!(describe_refusal("something odd"), "something odd");
+        assert_eq!(
+            describe_refusal("something odd"),
+            tr!("Sharing could not be completed. Open Details to see the reason.")
+        );
         assert!(describe_refusal("").is_empty());
     }
 

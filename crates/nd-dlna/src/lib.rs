@@ -17,20 +17,10 @@
 //! What this crate adds is the two halves DLNA does differently — finding the
 //! device ([`ssdp`]) and driving it ([`avtransport`]).
 //!
-//! ## What this protocol is for, and what it is not for
-//!
-//! **The picture arrives about a second and a half late, and nothing here can
-//! make it arrive sooner.** That is not a defect to be fixed later: a DLNA
-//! renderer decides its own prebuffer and exposes no way to ask for a smaller
-//! one — the whole UPnP surface of a real television was read action by action
-//! and there is no buffer, delay or latency control in any of its three
-//! services. Cast is different only because it negotiates a `targetDelay` that
-//! we set to zero.
-//!
-//! So this is for **watching** on a big screen, not for working on one. Its
-//! value is reach: it runs over ordinary Ethernet, needs no Wi-Fi adapter, and
-//! covers a large installed base of televisions that have neither Chromecast
-//! nor AirPlay nor Miracast.
+//! DLNA reaches receivers over the existing LAN without a Wi-Fi Direct
+//! adapter. End-to-end delay depends on both sender and receiver buffering;
+//! one television's measured delay is not a protocol-wide floor. See
+//! `docs/dlna.md` for the transport choices and their validation limits.
 
 pub mod avtransport;
 pub mod session;
@@ -134,10 +124,6 @@ impl Sink for DlnaSink {
 
     fn link(&self) -> Option<nd_core::sink::StreamLink> {
         self.status.link()
-    }
-
-    fn max_source_size(&self) -> Option<(u32, u32)> {
-        Some(nd_core::pipeline::DLNA_MAX_RESOLUTION)
     }
 
     async fn start_stream(&self, source: CaptureSource) -> Result<()> {

@@ -10,8 +10,7 @@
 //! M1–M7 negotiation → the MPEG-TS/RTP pipeline from `nd_core::pipeline`.
 //!
 //! Unavailable under Flatpak (it depends on NetworkManager on the system bus);
-//! in that case [`Provider::discover`] returns `Err` with an explanatory
-//! message that `MetaProvider` turns into a banner visible in the UI.
+//! failures are reported in the discovery stream and retried with backoff.
 
 pub mod rtsp;
 
@@ -47,33 +46,40 @@ impl Provider for WfdP2pProvider {
     }
 
     async fn discover(&self) -> Result<BoxStream<'static, DiscoveryEvent>> {
-        // The first open is synchronous: if the environment has no Miracast
-        // support (Flatpak, a card without Wi-Fi Direct), the error surfaces
-        // right away and MetaProvider turns it into a message for the user.
-        let device = P2pDevice::open().await?;
-        let (tx, rx) = futures::channel::mpsc::unbounded::<DiscoveryEvent>();
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<DiscoveryEvent>(32);
 
         tokio::spawn(async move {
             static DISCOVERY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-            let _serial = DISCOVERY_LOCK.lock().await;
-            if tx.is_closed() {
-                return;
-            }
-            let mut device = device;
+            let _serial = tokio::select! {
+                guard = DISCOVERY_LOCK.lock() => guard,
+                _ = tx.closed() => return,
+            };
             let mut backoff = RETRY_BASE;
             let mut known: HashSet<String> = HashSet::new();
 
             loop {
-                if tx.is_closed() {
-                    let _ = device.stop_find().await;
-                    return;
-                }
-                let outcome = async {
-                    device.start_find().await?;
-                    run_discovery(&device, &tx, &mut known).await
-                }
-                .await;
-                let _ = device.stop_find().await;
+                let opened = tokio::select! {
+                    result = tokio::time::timeout(Duration::from_secs(15), P2pDevice::open()) =>
+                        result.unwrap_or_else(|_| Err(NdError::Network("NetworkManager did not answer".into()))),
+                    _ = tx.closed() => return,
+                };
+                let outcome = match opened {
+                    Ok(device) => {
+                        let result = tokio::select! {
+                            result = async {
+                                device.start_find().await?;
+                                backoff = RETRY_BASE;
+                                let _ = tx.send(DiscoveryEvent::ProviderReady { provider: "wfd-p2p" }).await;
+                                run_discovery(&device, &tx, &mut known).await
+                            } => result,
+                            _ = tx.closed() => Ok(()),
+                        };
+                        let _ =
+                            tokio::time::timeout(Duration::from_secs(5), device.stop_find()).await;
+                        result
+                    }
+                    Err(err) => Err(err),
+                };
                 match outcome {
                     // The consumer went away: shut down for good.
                     Ok(()) => return,
@@ -83,10 +89,11 @@ impl Provider for WfdP2pProvider {
                         // "Searching…" forever.
                         tracing::warn!(%err, "P2P discovery failed; retrying");
                         if tx
-                            .unbounded_send(DiscoveryEvent::ProviderUnavailable {
+                            .send(DiscoveryEvent::ProviderUnavailable {
                                 provider: "wfd-p2p",
                                 reason: format!("{err} — reconnecting"),
                             })
+                            .await
                             .is_err()
                         {
                             return;
@@ -95,38 +102,22 @@ impl Provider for WfdP2pProvider {
                         // Known sinks may no longer exist after reconnecting:
                         // clear the UI list.
                         for id in known.drain() {
-                            if tx.unbounded_send(DiscoveryEvent::Removed(id)).is_err() {
+                            if tx.send(DiscoveryEvent::Removed(id)).await.is_err() {
                                 return;
                             }
                         }
 
-                        let until = tokio::time::Instant::now() + backoff;
-                        while tokio::time::Instant::now() < until {
-                            if tx.is_closed() {
-                                return;
-                            }
-                            tokio::time::sleep(Duration::from_millis(200)).await;
+                        tokio::select! {
+                            _ = tokio::time::sleep(backoff) => {},
+                            _ = tx.closed() => return,
                         }
                         backoff = (backoff * 2).min(RETRY_MAX);
-
-                        match P2pDevice::open().await {
-                            Ok(fresh) => {
-                                if fresh.start_find().await.is_ok() {
-                                    device = fresh;
-                                    backoff = RETRY_BASE;
-                                    let _ = tx.unbounded_send(DiscoveryEvent::ProviderReady {
-                                        provider: "wfd-p2p",
-                                    });
-                                }
-                            }
-                            Err(err) => tracing::debug!(%err, "P2P device still unavailable"),
-                        }
                     }
                 }
             }
         });
 
-        Ok(rx.boxed())
+        Ok(futures::stream::poll_fn(move |cx| rx.poll_recv(cx)).boxed())
     }
 }
 
@@ -136,7 +127,7 @@ impl Provider for WfdP2pProvider {
 /// communication with NetworkManager failed (the caller retries).
 async fn run_discovery(
     device: &P2pDevice,
-    tx: &futures::channel::mpsc::UnboundedSender<DiscoveryEvent>,
+    tx: &tokio::sync::mpsc::Sender<DiscoveryEvent>,
     known: &mut HashSet<String>,
 ) -> Result<()> {
     use futures::future::FutureExt;
@@ -154,10 +145,10 @@ async fn run_discovery(
         if tx.is_closed() {
             return Ok(());
         }
-        let event = futures::select! {
-            _ = tokio::time::sleep(Duration::from_millis(200)).fuse() => continue,
-            event = events.next().fuse() => event,
-            () = renew => unreachable!("keep_finding runs forever"),
+        let event = tokio::select! {
+            _ = tx.closed() => return Ok(()),
+            event = events.next() => event,
+            () = &mut renew => unreachable!("keep_finding runs forever"),
         };
 
         let Some(event) = event else {
@@ -177,7 +168,9 @@ async fn run_discovery(
                     // Fire TV only advertises WFD while its Display Mirroring
                     // screen is open, and that had people concluding the app
                     // could not see their device at all.
-                    if seen_without_wfd.insert(peer.path.clone()) {
+                    if seen_without_wfd.len() < nd_core::provider::MAX_RECEIVERS
+                        && seen_without_wfd.insert(peer.path.clone())
+                    {
                         tracing::info!(
                             name = %peer.name,
                             mac = %peer.hw_address,
@@ -189,13 +182,16 @@ async fn run_discovery(
                     }
                     continue;
                 }
-                if !known.insert(peer.path.clone()) {
+                if known.len() >= nd_core::provider::MAX_RECEIVERS
+                    || !known.insert(peer.path.clone())
+                {
                     continue;
                 }
                 tracing::info!(name = %peer.name, mac = %peer.hw_address, "Miracast sink found");
                 DiscoveryEvent::Added(Arc::new(WfdSink::new(&peer)) as Arc<dyn Sink>)
             }
             PeerEvent::Removed { path } => {
+                seen_without_wfd.remove(&path);
                 if !known.remove(&path) {
                     continue;
                 }
@@ -203,7 +199,7 @@ async fn run_discovery(
             }
         };
 
-        if tx.unbounded_send(message).is_err() {
+        if tx.send(message).await.is_err() {
             return Ok(());
         }
     }

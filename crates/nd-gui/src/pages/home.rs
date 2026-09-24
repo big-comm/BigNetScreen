@@ -52,8 +52,6 @@ impl FactoryComponent for DeviceRow {
             set_subtitle: &self.subtitle(),
             #[watch]
             set_activatable: self.entry.castable && !self.entry.state.is_busy(),
-            #[watch]
-            set_sensitive: self.entry.castable,
 
             add_prefix = &gtk::Image {
                 #[watch]
@@ -108,6 +106,9 @@ impl DeviceRow {
     /// Protocol, address, and — when there is one — what the receiver is doing
     /// or why it failed.
     fn subtitle(&self) -> String {
+        if self.entry.kind == nd_core::sink::SinkKind::AirPlay {
+            return tr!("This device is visible, but AirPlay sharing is not supported.");
+        }
         if self.entry.state == SinkState::Error && !self.entry.detail.is_empty() {
             return self.entry.detail.clone();
         }
@@ -144,8 +145,10 @@ pub struct HomePage {
     /// The receiver picked in the first step.
     chosen: Option<DeviceEntry>,
     session: Option<SessionInfo>,
+    audio_summary: String,
     /// The "extra screen" button, whose availability depends on the desktop.
     virtual_button: gtk::Button,
+    media_button: gtk::Button,
     /// Is there any receiver at all in the list?
     empty: bool,
     /// Still worth saying "searching"?
@@ -164,6 +167,8 @@ pub enum HomeMsg {
     Session(Option<SessionInfo>),
     Searching(bool),
     VirtualAvailable(bool),
+    AudioSummary(String),
+    AudioSettings,
     /// A receiver was picked: move on to what to send it.
     Selected(String),
     /// Back to the list of receivers.
@@ -183,6 +188,7 @@ pub enum HomeMsg {
 
 #[derive(Debug)]
 pub enum HomeOutput {
+    AudioSettings,
     PublishNdi(SourceType),
     PublishWeb(SourceType),
     /// Start streaming this to this receiver.
@@ -228,11 +234,25 @@ impl Component for HomePage {
                     },
                 },
 
+                gtk::Button {
+                    set_halign: gtk::Align::Start,
+                    set_margin_bottom: 10,
+                    #[watch]
+                    set_visible: model.session.is_none(),
+                    set_tooltip_text: Some(&tr!("Choose the sound to share")),
+                    connect_clicked => HomeMsg::AudioSettings,
+                    adw::ButtonContent {
+                        set_icon_name: "audio-volume-high-symbolic",
+                        #[watch]
+                        set_label: &model.audio_summary,
+                    },
+                },
+
                 #[name = "columns"]
                 gtk::Box {
                     set_spacing: 20,
                     add_css_class: "home-columns",
-                    set_orientation: gtk::Orientation::Horizontal,
+                    set_orientation: gtk::Orientation::Vertical,
 
                     gtk::Box {
                         set_orientation: gtk::Orientation::Vertical,
@@ -334,7 +354,6 @@ impl Component for HomePage {
                     gtk::Box {
                         set_orientation: gtk::Orientation::Vertical,
                         set_spacing: 14,
-                        set_width_request: 320,
                         set_valign: gtk::Align::Fill,
 
                         gtk::Box {
@@ -453,23 +472,13 @@ impl Component for HomePage {
                                 gtk::Label {
                                     #[watch]
                                     set_label: &if model.measurable() {
-                                        tr!("Connection quality")
+                                        tr!("Network response")
                                     } else {
                                         tr!("Connection")
                                     },
                                     set_hexpand: true,
                                     set_xalign: 0.0,
                                     add_css_class: "heading",
-                                },
-                                gtk::Label {
-                                    #[watch]
-                                    set_label: &super::quality_bars(
-                                        model.session.as_ref().and_then(|s| s.quality)
-                                    ),
-                                    #[watch]
-                                    set_visible: model.measurable(),
-                                    #[watch]
-                                    set_css_classes: &[model.signal_class()],
                                 },
                             },
                             gtk::Label {
@@ -481,57 +490,26 @@ impl Component for HomePage {
                             },
                         },
 
-                        gtk::Box {
-                            set_orientation: gtk::Orientation::Vertical,
-                            set_spacing: 22,
-                            set_vexpand: true,
-                            add_css_class: "info-card",
-                            add_css_class: "home-tips",
-                            gtk::Box {
-                                set_spacing: 16,
-                                #[name = "bulb_icon"]
-                                gtk::DrawingArea { set_width_request: 62, set_height_request: 62, set_valign: gtk::Align::Center, add_css_class: "home-tip-hero" },
-                                gtk::Box {
-                                    set_orientation: gtk::Orientation::Vertical, set_spacing: 6,
-                                    gtk::Label { set_label: &tr!("Tips"), set_xalign: 0.0, add_css_class: "title-3" },
-                                    gtk::Label { set_label: &tr!("Keep every device on the same Wi-Fi network for the best results."), set_xalign: 0.0, set_wrap: true, set_max_width_chars: 24, add_css_class: "dim-label" },
+                        gtk::Expander {
+                            set_label: Some(&tr!("Help connecting a device")),
+                            set_expanded: false,
+                            #[wrap(Some)]
+                            set_child = &gtk::Box {
+                                set_orientation: gtk::Orientation::Vertical,
+                                set_spacing: 12,
+                                set_margin_all: 12,
+                                gtk::Label {
+                                    set_label: &tr!("For Chromecast and DLNA, connect both devices to the same network."),
+                                    set_xalign: 0.0, set_wrap: true,
                                 },
-                            },
-                            gtk::Separator {},
-                            gtk::Box {
-                                set_spacing: 16,
-                                #[name = "network_icon"]
-                                gtk::DrawingArea { set_width_request: 42, set_height_request: 42, set_valign: gtk::Align::Start, add_css_class: "home-tip-symbol" },
-                                gtk::Box {
-                                    set_orientation: gtk::Orientation::Vertical, set_spacing: 6,
-                                    gtk::Label { set_label: &tr!("Connect to the same network"), set_xalign: 0.0, set_wrap: true, set_max_width_chars: 28, add_css_class: "heading" },
-                                    gtk::Label { set_label: &tr!("For Chromecast, connect both devices to the same Wi-Fi network."), set_xalign: 0.0, set_wrap: true, set_max_width_chars: 28, add_css_class: "dim-label" },
+                                gtk::Label {
+                                    set_label: &tr!("For Miracast, open screen mirroring on the TV or projector, then refresh the device list."),
+                                    set_xalign: 0.0, set_wrap: true,
                                 },
-                            },
-                            gtk::Box {
-                                set_spacing: 16,
-                                #[name = "ready_icon"]
-                                gtk::DrawingArea { set_width_request: 42, set_height_request: 42, set_valign: gtk::Align::Start, add_css_class: "home-tip-symbol" },
-                                gtk::Box {
-                                    set_orientation: gtk::Orientation::Vertical, set_spacing: 6,
-                                    gtk::Label { set_label: &tr!("Keep the receiver ready"), set_xalign: 0.0, set_wrap: true, set_max_width_chars: 28, add_css_class: "heading" },
-                                    gtk::Label { set_label: &tr!("Enable screen mirroring on your TV or projector before connecting."), set_xalign: 0.0, set_wrap: true, set_max_width_chars: 28, add_css_class: "dim-label" },
+                                gtk::Label {
+                                    set_label: &tr!("You can also share with a web browser using the option below."),
+                                    set_xalign: 0.0, set_wrap: true,
                                 },
-                            },
-                            gtk::Box {
-                                set_spacing: 16,
-                                #[name = "search_icon"]
-                                gtk::DrawingArea { set_width_request: 42, set_height_request: 42, set_valign: gtk::Align::Start, add_css_class: "home-tip-symbol" },
-                                gtk::Box {
-                                    set_orientation: gtk::Orientation::Vertical, set_spacing: 6,
-                                    gtk::Label { set_label: &tr!("Can't find your device?"), set_xalign: 0.0, set_wrap: true, set_max_width_chars: 28, add_css_class: "heading" },
-                                    gtk::Label { set_label: &tr!("Refresh the device list and check that your receiver is turned on."), set_xalign: 0.0, set_wrap: true, set_max_width_chars: 28, add_css_class: "dim-label" },
-                                },
-                            },
-                            gtk::Label {
-                                #[watch] set_visible: model.session.is_some() || (model.empty && !model.searching),
-                                #[watch] set_label: &model.tip(),
-                                set_xalign: 0.0, set_wrap: true, set_max_width_chars: 36, add_css_class: "dim-label",
                             },
                         },
                     },
@@ -542,13 +520,13 @@ impl Component for HomePage {
                     add_css_class: "info-card",
                     add_css_class: "ndi-card",
                     #[watch] set_visible: model.step == Step::Device,
-                    gtk::Image { set_icon_name: Some("web-browser-symbolic"), set_pixel_size: 52, set_valign: gtk::Align::Start, add_css_class: "page-icon" },
+                    gtk::Image { set_icon_name: Some("web-browser-symbolic"), set_pixel_size: 32, set_valign: gtk::Align::Start, add_css_class: "page-icon" },
                     gtk::Box {
                         set_orientation: gtk::Orientation::Vertical,
                         set_spacing: 8,
                         set_hexpand: true,
                         gtk::Label { set_label: &tr!("Share with a web browser"), set_xalign: 0.0, add_css_class: "title-3" },
-                        gtk::Label { set_label: &tr!("No app needed: a TV, phone or computer on this network opens a short address, types the PIN shown here and sees your screen. Works in OBS as a browser source."), set_xalign: 0.0, set_wrap: true, set_max_width_chars: 80, add_css_class: "dim-label" },
+                        gtk::Label { set_label: &tr!("Choose what to share. Then open the address and enter the PIN on a TV, phone or computer on the same network."), set_xalign: 0.0, set_wrap: true, set_max_width_chars: 80, add_css_class: "dim-label" },
                         #[name = "web_buttons"]
                         gtk::Box {
                             set_spacing: 12,
@@ -578,8 +556,7 @@ impl Component for HomePage {
                     add_css_class: "info-card",
                     add_css_class: "ndi-card",
                     #[watch] set_visible: model.step == Step::Device,
-                    #[name = "broadcast_icon"]
-                    gtk::DrawingArea { set_width_request: 68, set_height_request: 68, set_valign: gtk::Align::Start, add_css_class: "page-icon" },
+                    gtk::Image { set_icon_name: Some("network-transmit-symbolic"), set_pixel_size: 32, set_valign: gtk::Align::Start, add_css_class: "page-icon" },
                     gtk::Box {
                         set_orientation: gtk::Orientation::Vertical,
                         set_spacing: 8,
@@ -630,6 +607,7 @@ impl Component for HomePage {
         // loop says that once.
         let action_grid = gtk::FlowBox::new();
         let mut virtual_button = None;
+        let mut media_button = None;
         for (icon, colour, title, subtitle, message) in [
             (
                 "video-display-symbolic",
@@ -667,15 +645,20 @@ impl Component for HomePage {
             if colour == "virtual" {
                 virtual_button = Some(button.clone());
             }
+            if colour == "media" {
+                media_button = Some(button.clone());
+            }
             action_grid.append(&button);
         }
 
         let model = HomePage {
             devices,
             virtual_button: virtual_button.expect("the extra-screen button is always built"),
+            media_button: media_button.expect("the media button is always built"),
             step: Step::Device,
             chosen: None,
             session: None,
+            audio_summary: tr!("Audio"),
             empty: true,
             searching: true,
             virtual_available: false,
@@ -684,7 +667,7 @@ impl Component for HomePage {
         model
             .devices
             .widget()
-            .set_placeholder(Some(&searching_placeholder()));
+            .set_placeholder(Some(&discovery_placeholder(true)));
 
         let device_list = model.devices.widget();
         let action_grid = &action_grid;
@@ -728,15 +711,6 @@ impl Component for HomePage {
             Some(&gtk::Orientation::Vertical.to_value()),
         );
         root.add_breakpoint(compact);
-        for (area, icon) in [
-            (&widgets.bulb_icon, HomeIcon::Bulb),
-            (&widgets.network_icon, HomeIcon::Network),
-            (&widgets.ready_icon, HomeIcon::Link),
-            (&widgets.search_icon, HomeIcon::Sparkles),
-            (&widgets.broadcast_icon, HomeIcon::Broadcast),
-        ] {
-            draw_home_icon(area, icon);
-        }
 
         ComponentParts { model, widgets }
     }
@@ -749,6 +723,10 @@ impl Component for HomePage {
         _root: &Self::Root,
     ) {
         match message {
+            HomeMsg::AudioSummary(summary) => self.audio_summary = summary,
+            HomeMsg::AudioSettings => {
+                let _ = sender.output(HomeOutput::AudioSettings);
+            }
             HomeMsg::Devices(entries) => {
                 self.empty = entries.is_empty();
                 // The receiver being acted on may change state, or leave.
@@ -782,11 +760,9 @@ impl Component for HomePage {
             }
             HomeMsg::Searching(searching) => {
                 self.searching = searching;
-                self.devices.widget().set_placeholder(Some(&if searching {
-                    searching_placeholder()
-                } else {
-                    nothing_found_placeholder()
-                }));
+                self.devices
+                    .widget()
+                    .set_placeholder(Some(&discovery_placeholder(searching)));
             }
             HomeMsg::VirtualAvailable(available) => {
                 self.virtual_available = available;
@@ -853,6 +829,11 @@ impl Component for HomePage {
                 sender.output(HomeOutput::Stop).ok();
             }
         }
+        self.media_button.set_visible(
+            self.chosen
+                .as_ref()
+                .is_some_and(|device| device.kind.can_receive_files(&device.address)),
+        );
         self.update_view(widgets, sender);
     }
 }
@@ -861,7 +842,7 @@ impl HomePage {
     /// The heading, which follows the step.
     fn title(&self) -> String {
         match self.step {
-            Step::Device => tr!("Ready to share"),
+            Step::Device => tr!("Where do you want to share?"),
             Step::Action => tr!("What do you want to share?"),
         }
     }
@@ -918,32 +899,6 @@ impl HomePage {
             parts.push(hint);
         }
         parts.join(" · ")
-    }
-
-    /// The colour of the bars: green while the link is fine, amber when not.
-    fn signal_class(&self) -> &'static str {
-        use nd_net::probe::Quality;
-        match self.session.as_ref().and_then(|s| s.quality) {
-            Some(Quality::Excellent) | Some(Quality::Good) => "signal-good",
-            _ => "signal-weak",
-        }
-    }
-
-    fn tip(&self) -> String {
-        if self.session.is_some() {
-            return tr!(
-                "Sound goes to the receiver and to this computer. Mute this computer if you \
-                 hear an echo."
-            );
-        }
-        if self.empty && !self.searching {
-            return tr!(
-                "Chromecasts show up on their own. A TV or projector only appears while it \
-                 is in screen mirroring mode — on Fire TV, under Settings › Display and \
-                 Sounds › Display Mirroring."
-            );
-        }
-        tr!("Keep every device on the same Wi-Fi network for the best results.")
     }
 }
 
@@ -1050,131 +1005,29 @@ pub fn sync_rows(factory: &mut FactoryVecDeque<DeviceRow>, entries: Vec<DeviceEn
     }
 }
 
-fn searching_placeholder() -> adw::StatusPage {
-    let page = adw::StatusPage::builder()
-        .icon_name("video-display-symbolic")
-        .title(tr!("Looking for receivers…"))
+fn discovery_placeholder(searching: bool) -> gtk::Box {
+    let content = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(8)
+        .margin_top(20)
+        .margin_bottom(20)
+        .margin_start(16)
+        .margin_end(16)
         .build();
-    page.add_css_class("compact");
-    page
-}
-
-fn nothing_found_placeholder() -> adw::StatusPage {
-    let page = adw::StatusPage::builder()
-        .icon_name("video-display-symbolic")
-        .title(tr!("No receivers found"))
-        // Written "Display and Sounds", not "Display & Sounds": the description
-        // is parsed as Pango markup, and a bare ampersand makes the whole
-        // string fail to render.
-        .description(tr!(
-            "Chromecasts show up on their own. A TV or projector only appears while it is \
-             in screen mirroring mode — on Fire TV, under Settings › Display and Sounds › \
-             Display Mirroring."
-        ))
+    let title = gtk::Label::builder()
+        .label(if searching {
+            tr!("Looking for receivers…")
+        } else {
+            tr!("No receivers found")
+        })
+        .wrap(true)
+        .css_classes(["heading"])
         .build();
-    page.add_css_class("compact");
-    page
-}
-
-#[derive(Clone, Copy)]
-enum HomeIcon {
-    Bulb,
-    Network,
-    Link,
-    Sparkles,
-    Broadcast,
-}
-
-/// Small vector marks inherit the widget's theme color, independent of icon themes.
-fn draw_home_icon(area: &gtk::DrawingArea, icon: HomeIcon) {
-    area.set_draw_func(move |widget, context, width, height| {
-        let color = widget.color();
-        context.set_source_rgba(
-            color.red().into(),
-            color.green().into(),
-            color.blue().into(),
-            color.alpha().into(),
-        );
-        let size = f64::from(width.min(height)) * 0.57;
-        context.translate(
-            (f64::from(width) - size) / 2.0,
-            (f64::from(height) - size) / 2.0,
-        );
-        context.scale(size / 24.0, size / 24.0);
-        context.set_line_width(1.8);
-        context.set_line_cap(gtk::cairo::LineCap::Round);
-        context.set_line_join(gtk::cairo::LineJoin::Round);
-        match icon {
-            HomeIcon::Bulb => {
-                context.move_to(8.0, 17.0);
-                context.curve_to(8.0, 14.0, 4.0, 13.0, 4.0, 8.0);
-                context.curve_to(4.0, -1.0, 20.0, -1.0, 20.0, 8.0);
-                context.curve_to(20.0, 13.0, 16.0, 14.0, 16.0, 17.0);
-                context.close_path();
-                context.move_to(9.0, 20.0);
-                context.line_to(15.0, 20.0);
-                context.move_to(10.0, 23.0);
-                context.line_to(14.0, 23.0);
-            }
-            HomeIcon::Network => {
-                for (y, extent) in [(7.0, 10.0), (12.0, 7.0), (17.0, 3.5)] {
-                    context.move_to(12.0 - extent, y);
-                    context.curve_to(
-                        12.0 - extent / 2.0,
-                        y - 4.0,
-                        12.0 + extent / 2.0,
-                        y - 4.0,
-                        12.0 + extent,
-                        y,
-                    );
-                }
-                context.move_to(12.0, 21.0);
-                context.line_to(12.0, 21.1);
-            }
-            HomeIcon::Link => {
-                context.move_to(10.0, 7.0);
-                context.line_to(13.0, 4.0);
-                context.curve_to(19.0, -1.0, 26.0, 6.0, 20.0, 12.0);
-                context.line_to(17.0, 15.0);
-                context.move_to(7.0, 10.0);
-                context.line_to(4.0, 13.0);
-                context.curve_to(-1.0, 19.0, 6.0, 26.0, 12.0, 20.0);
-                context.line_to(15.0, 17.0);
-                context.move_to(8.0, 16.0);
-                context.line_to(16.0, 8.0);
-            }
-            HomeIcon::Sparkles => {
-                for (x, y, r) in [(8.0, 11.0, 7.0), (19.0, 5.0, 3.0), (18.0, 20.0, 3.0)] {
-                    context.move_to(x, y - r);
-                    context.line_to(x + r * 0.3, y - r * 0.3);
-                    context.line_to(x + r, y);
-                    context.line_to(x + r * 0.3, y + r * 0.3);
-                    context.line_to(x, y + r);
-                    context.line_to(x - r * 0.3, y + r * 0.3);
-                    context.line_to(x - r, y);
-                    context.line_to(x - r * 0.3, y - r * 0.3);
-                    context.close_path();
-                }
-            }
-            HomeIcon::Broadcast => {
-                context.arc(12.0, 12.0, 1.5, 0.0, std::f64::consts::TAU);
-                let _ = context.fill();
-                for radius in [6.0, 10.5] {
-                    context.new_sub_path();
-                    context.arc(12.0, 12.0, radius, -0.9, 0.9);
-                    context.new_sub_path();
-                    context.arc(
-                        12.0,
-                        12.0,
-                        radius,
-                        std::f64::consts::PI - 0.9,
-                        std::f64::consts::PI + 0.9,
-                    );
-                }
-                context.move_to(12.0, 16.0);
-                context.line_to(12.0, 22.0);
-            }
-        }
-        let _ = context.stroke();
-    });
+    content.append(&title);
+    if !searching {
+        content.append(&gtk::Label::builder()
+            .label(tr!("Turn on your TV or projector and open screen mirroring, or share with a web browser below."))
+            .wrap(true).max_width_chars(70).build());
+    }
+    content
 }

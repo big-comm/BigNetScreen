@@ -13,6 +13,9 @@ use futures::stream::BoxStream;
 use crate::sink::Sink;
 use crate::Result;
 
+/// Bounds receiver lists and discovery caches fed by network announcements.
+pub const MAX_RECEIVERS: usize = 256;
+
 /// A discovery event emitted by a provider.
 ///
 /// The diagnostic variants exist so that **failures are visible**: before them,
