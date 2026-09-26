@@ -34,8 +34,8 @@ use std::time::Duration;
 use gst::prelude::*;
 use gstreamer as gst;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::TcpStream;
+use tokio::net::tcp::OwnedWriteHalf;
 
 use nd_core::pipeline::{self, StreamConfig, VideoSource, WfdTransport};
 use nd_core::sink::{SinkStatus, StreamLink};
@@ -296,14 +296,13 @@ impl SinkCaps {
         // The sink's native mode beats everything when it fits the cap: it is
         // the panel's real resolution, and sending anything else only makes
         // the device rescale (losing sharpness) or refuse.
-        if let Some(native) = self.native {
-            if !native.interlaced
-                && native.width <= max.0
-                && native.height <= max.1
-                && self.modes.contains(&native)
-            {
-                return Some(native);
-            }
+        if let Some(native) = self.native
+            && !native.interlaced
+            && native.width <= max.0
+            && native.height <= max.1
+            && self.modes.contains(&native)
+        {
+            return Some(native);
         }
 
         let (src_w, src_h) = source;
@@ -1018,10 +1017,10 @@ pub async fn cast_to_sink(
 
     drop(playing);
     // If the pipeline reported an error, it is more informative than the protocol's.
-    if let Some(mut events) = pipeline_events {
-        if let Ok(nd_core::pipeline::PipelineEvent::Error { message, .. }) = events.try_recv() {
-            return Err(NdError::Gst(message));
-        }
+    if let Some(mut events) = pipeline_events
+        && let Ok(nd_core::pipeline::PipelineEvent::Error { message, .. }) = events.try_recv()
+    {
+        return Err(NdError::Gst(message));
     }
 
     result

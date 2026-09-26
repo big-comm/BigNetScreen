@@ -9,7 +9,7 @@
 use std::time::Duration;
 
 use nd_net::p2p::P2pDevice;
-use nd_wfd::rtsp::{negotiate_caps, RTSP_PORT};
+use nd_wfd::rtsp::{RTSP_PORT, negotiate_caps};
 use tokio::net::TcpListener;
 
 #[tokio::main]

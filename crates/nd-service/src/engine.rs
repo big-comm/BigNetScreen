@@ -17,9 +17,9 @@ use std::time::Duration;
 use futures::StreamExt;
 use tokio::sync::{mpsc, oneshot, watch};
 
+use nd_chromecast::MdnsProvider;
 use nd_chromecast::file_server::MediaFile;
 use nd_chromecast::media::{MediaItem, MediaSession};
-use nd_chromecast::MdnsProvider;
 use nd_core::capture::SourceType;
 use nd_core::media::MediaCommand;
 use nd_core::meta::MetaProvider;
@@ -424,10 +424,10 @@ impl Engine {
                 ));
             }
             Command::ControlMedia(command) => {
-                if let Some(session) = &self.media_session {
-                    if let Err(err) = session.command(command) {
-                        self.status = Status::error(err.to_string());
-                    }
+                if let Some(session) = &self.media_session
+                    && let Err(err) = session.command(command)
+                {
+                    self.status = Status::error(err.to_string());
                 }
             }
             Command::StartPlayer {
@@ -1290,9 +1290,11 @@ mod tests {
         });
         for (sender, id) in [(":1.11", "current-session"), (":1.10", "previous-session")] {
             assert!(engine.control_player(sender, id, None).is_err());
-            assert!(engine
-                .control_player(sender, id, Some(MediaCommand::SetPaused(true)))
-                .is_err());
+            assert!(
+                engine
+                    .control_player(sender, id, Some(MediaCommand::SetPaused(true)))
+                    .is_err()
+            );
         }
         assert_ne!(engine.status.kind, "stopping");
         engine
@@ -1444,10 +1446,12 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(id, "session-a");
-            assert!(proxy
-                .control_player(&id, "volume", f64::NAN, "")
-                .await
-                .is_err());
+            assert!(
+                proxy
+                    .control_player(&id, "volume", f64::NAN, "")
+                    .await
+                    .is_err()
+            );
             proxy.control_player(&id, "volume", 0.37, "").await.unwrap();
             let id = proxy
                 .start_player_url(

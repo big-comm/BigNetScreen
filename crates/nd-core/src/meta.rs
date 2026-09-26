@@ -11,7 +11,7 @@
 
 use std::sync::Arc;
 
-use futures::stream::{select_all, BoxStream, StreamExt};
+use futures::stream::{BoxStream, StreamExt, select_all};
 
 use crate::provider::{DiscoveryEvent, Provider};
 
@@ -161,9 +161,11 @@ mod tests {
     async fn one_failing_provider_does_not_kill_the_others() {
         let meta = MetaProvider::new(vec![Arc::new(FailingProvider), Arc::new(OneSinkProvider)]);
         let events = meta.discover().await.collect::<Vec<_>>().await;
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, DiscoveryEvent::ProviderUnavailable { .. })));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, DiscoveryEvent::ProviderUnavailable { .. }))
+        );
         assert!(events.iter().any(|e| matches!(e, DiscoveryEvent::Added(_))));
     }
 

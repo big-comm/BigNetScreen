@@ -14,7 +14,7 @@ use std::time::Duration;
 use nd_core::pipeline::{self, AudioSource, VideoSource};
 use nd_net::firewall;
 use nd_net::p2p::P2pDevice;
-use nd_wfd::rtsp::{cast_to_sink, WfdCastConfig, RTSP_PORT};
+use nd_wfd::rtsp::{RTSP_PORT, WfdCastConfig, cast_to_sink};
 use tokio::net::TcpListener;
 
 #[tokio::main]
@@ -131,14 +131,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_audio(audio);
         // `WFD_MAX_RES=1280x720` caps the negotiated mode — handy for bisecting
         // interoperability problems with a specific sink.
-        if let Ok(spec) = std::env::var("WFD_MAX_RES") {
-            if let Some((w, h)) = spec.split_once('x') {
-                if let (Ok(w), Ok(h)) = (w.parse::<u32>(), h.parse::<u32>()) {
-                    eprintln!("capping the mode at {w}x{h} (WFD_MAX_RES)");
-                    cfg.max_resolution = (w, h);
-                    cfg.source_size = (w, h);
-                }
-            }
+        if let Ok(spec) = std::env::var("WFD_MAX_RES")
+            && let Some((w, h)) = spec.split_once('x')
+            && let (Ok(w), Ok(h)) = (w.parse::<u32>(), h.parse::<u32>())
+        {
+            eprintln!("capping the mode at {w}x{h} (WFD_MAX_RES)");
+            cfg.max_resolution = (w, h);
+            cfg.source_size = (w, h);
         }
         let result = cast_to_sink(stream, cfg, &status).await;
         eprintln!("negotiated link: {:?}", status.link());
@@ -162,10 +161,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    if let Some(backend) = backend {
-        if let Err(err) = backend.stop().await {
-            eprintln!("capture cleanup failed: {err}");
-        }
+    if let Some(backend) = backend
+        && let Err(err) = backend.stop().await
+    {
+        eprintln!("capture cleanup failed: {err}");
     }
     firewall::release(lease).await;
     let disconnected = device.disconnect(&active).await;

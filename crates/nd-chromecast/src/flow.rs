@@ -57,10 +57,10 @@ impl AckWindow {
     /// XR reference time additionally distinguishes older datagrams across
     /// whole 256-frame cycles when the receiver supplies it.
     pub(crate) fn acknowledge(&mut self, wire: u8, reference_time: Option<u64>) -> bool {
-        if let (Some(new), Some(old)) = (reference_time, self.newest_reference_time) {
-            if new < old {
-                return false;
-            }
+        if let (Some(new), Some(old)) = (reference_time, self.newest_reference_time)
+            && new < old
+        {
+            return false;
         }
         let mut expanded = (self.last_sent & !0xff) | i64::from(wire);
         if expanded > self.last_sent {

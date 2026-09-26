@@ -148,11 +148,10 @@ impl NdiPublisher {
             tokio::select! {
                 _ = cancelled.changed() => break Ok(()),
                 _ = poll.tick() => {
-                    if let Some(count) = sink.as_ref().map(|sink| sink.property::<i32>("connections")) {
-                        if count >= 0 {
+                    if let Some(count) = sink.as_ref().map(|sink| sink.property::<i32>("connections"))
+                        && count >= 0 {
                             self.status.set_receivers(count as u32);
                         }
-                    }
                 }
                 event = events.next() => match event {
                     Some(PipelineEvent::Error { message, .. }) => break Err(NdError::Gst(message)),
@@ -300,8 +299,8 @@ mod tests {
     #[ignore = "Requires the NDI runtime, Avahi and network access"]
     fn ndi_loopback_receives_video_and_audio() {
         use std::sync::{
-            atomic::{AtomicUsize, Ordering},
             Arc,
+            atomic::{AtomicUsize, Ordering},
         };
         use std::time::{Duration, Instant};
 

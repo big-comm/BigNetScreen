@@ -9,7 +9,7 @@
 use std::net::IpAddr;
 
 use nd_chromecast::cast::CastChannel;
-use nd_chromecast::mirror::{self, MirrorConfig, MIRRORING_APP_ID};
+use nd_chromecast::mirror::{self, MIRRORING_APP_ID, MirrorConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

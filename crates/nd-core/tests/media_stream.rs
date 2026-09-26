@@ -155,7 +155,7 @@ fn the_position_is_what_is_playing_not_what_was_read() {
 
 #[test]
 fn the_original_size_is_read_from_the_file() {
-    use nd_core::media::{tv_frame, MediaSource};
+    use nd_core::media::{MediaSource, tv_frame};
     pipeline::init().unwrap();
     let path = std::env::temp_dir().join(format!("nd-tv-frame-{}.webm", std::process::id()));
     let fixture = gst::parse::launch(&format!(

@@ -18,7 +18,7 @@ use nd_core::settings;
 use nd_core::sink::SinkState;
 
 use super::home::{DeviceRow, DeviceRowOutput};
-use super::{latency_hint, state_label, DeviceEntry};
+use super::{DeviceEntry, latency_hint, state_label};
 use crate::tr;
 
 /// Which protocols the list shows.

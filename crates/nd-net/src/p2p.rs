@@ -24,9 +24,9 @@ use std::net::IpAddr;
 use std::time::Duration;
 
 use futures::stream::{Stream, StreamExt};
+use zbus::Connection;
 use zbus::proxy::CacheProperties;
 use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
-use zbus::Connection;
 
 use nd_core::{NdError, Result};
 
@@ -308,10 +308,10 @@ pub async fn local_ipv4_addresses() -> zbus::Result<Vec<std::net::Ipv4Addr>> {
             }))
         };
         // One disappearing connection must not hide the other active networks.
-        if let Ok(Some(address)) = read.await {
-            if !addresses.contains(&address) {
-                addresses.push(address);
-            }
+        if let Ok(Some(address)) = read.await
+            && !addresses.contains(&address)
+        {
+            addresses.push(address);
         }
     }
     Ok(addresses)
@@ -720,12 +720,12 @@ impl P2pDevice {
 
         let mut addresses = Vec::new();
         for entry in &data {
-            if let Some(value) = entry.get("address") {
-                if let Ok(text) = String::try_from(value.clone()) {
-                    match text.parse::<IpAddr>() {
-                        Ok(ip) => addresses.push(ip),
-                        Err(e) => tracing::warn!(%text, %e, "invalid address from NM"),
-                    }
+            if let Some(value) = entry.get("address")
+                && let Ok(text) = String::try_from(value.clone())
+            {
+                match text.parse::<IpAddr>() {
+                    Ok(ip) => addresses.push(ip),
+                    Err(e) => tracing::warn!(%text, %e, "invalid address from NM"),
                 }
             }
         }
@@ -900,11 +900,7 @@ impl FlattenEmpty for Option<String> {
 
 impl FlattenEmpty for String {
     fn flatten_empty(self) -> Option<String> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(self)
-        }
+        if self.is_empty() { None } else { Some(self) }
     }
 }
 
@@ -914,15 +910,15 @@ impl FlattenEmpty for String {
 /// through `/etc/passwd` only when necessary. If nothing works, the
 /// connection's permissions are omitted (NM accepts that).
 fn current_username() -> Option<String> {
-    if let Ok(user) = std::env::var("USER") {
-        if !user.is_empty() {
-            return Some(user);
-        }
+    if let Ok(user) = std::env::var("USER")
+        && !user.is_empty()
+    {
+        return Some(user);
     }
-    if let Ok(user) = std::env::var("LOGNAME") {
-        if !user.is_empty() {
-            return Some(user);
-        }
+    if let Ok(user) = std::env::var("LOGNAME")
+        && !user.is_empty()
+    {
+        return Some(user);
     }
     // A last resort with no extra dependency: resolve the uid in /etc/passwd.
     let uid = unsafe { libc_getuid() };
@@ -1064,8 +1060,7 @@ fn parse_arp(table: &str, interface: &str) -> Vec<String> {
 mod arp_tests {
     use super::parse_arp;
 
-    const TABLE: &str =
-        "IP address       HW type     Flags       HW address            Mask     Device\n\
+    const TABLE: &str = "IP address       HW type     Flags       HW address            Mask     Device\n\
 192.168.68.115   0x1         0x2         dc:a3:a2:08:73:2f     *        wlp2s0\n\
 10.42.0.215      0x1         0x2         56:44:a3:49:c2:ae     *        p2p-wlp2s0-0\n\
 10.42.0.99       0x1         0x0         00:00:00:00:00:00     *        p2p-wlp2s0-0\n";

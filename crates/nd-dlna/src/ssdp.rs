@@ -21,8 +21,8 @@ use nd_core::provider::{DiscoveryEvent, Provider};
 use nd_core::sink::Sink;
 use nd_core::{NdError, Result};
 
-use crate::upnp::Endpoint;
 use crate::DlnaSink;
+use crate::upnp::Endpoint;
 
 /// The device type worth answering: something that can be played *to*.
 ///
@@ -191,10 +191,10 @@ async fn search_on(
         if found.len() < nd_core::provider::MAX_RECEIVERS
             && !found.iter().any(|a| a.usn == announcement.usn)
         {
-            if let Some(deliver) = &deliver {
-                if deliver.try_send(announcement.clone()).is_err() {
-                    break;
-                }
+            if let Some(deliver) = &deliver
+                && deliver.try_send(announcement.clone()).is_err()
+            {
+                break;
             }
             found.push(announcement);
         }

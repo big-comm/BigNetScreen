@@ -524,15 +524,15 @@ impl Component for AppModel {
                         .await
                         .map_err(|err| err.to_string())
                         .and_then(|result| result.map_err(|err| err.to_string()));
-                    if result.is_ok() {
-                        if let Some(service) = service {
-                            // Closing before the debounce fires must still notify the service.
-                            let _ = tokio::time::timeout(
-                                Duration::from_secs(10),
-                                service.reload_settings(),
-                            )
-                            .await;
-                        }
+                    if result.is_ok()
+                        && let Some(service) = service
+                    {
+                        // Closing before the debounce fires must still notify the service.
+                        let _ = tokio::time::timeout(
+                            Duration::from_secs(10),
+                            service.reload_settings(),
+                        )
+                        .await;
                     }
                     AppCmd::PreferencesFlushed(result)
                 });
@@ -572,7 +572,9 @@ impl Component for AppModel {
                 self.ndi_installing.set(true);
                 let dialog = adw::AlertDialog::new(
                     Some(&tr!("Installing NDI…")),
-                    Some(&tr!("Authenticate when prompted. Downloading and building the package may take a few minutes. Keep the app open until installation finishes.")),
+                    Some(&tr!(
+                        "Authenticate when prompted. Downloading and building the package may take a few minutes. Keep the app open until installation finishes."
+                    )),
                 );
                 dialog.set_can_close(false);
                 let spinner = gtk::Spinner::new();
@@ -703,10 +705,10 @@ impl Component for AppModel {
             .iter()
             .position(|page| *page == self.page)
             .unwrap_or(0) as i32;
-        if widgets.nav.selected_row().map(|row| row.index()) != Some(index) {
-            if let Some(row) = widgets.nav.row_at_index(index) {
-                widgets.nav.select_row(Some(&row));
-            }
+        if widgets.nav.selected_row().map(|row| row.index()) != Some(index)
+            && let Some(row) = widgets.nav.row_at_index(index)
+        {
+            widgets.nav.select_row(Some(&row));
         }
 
         self.update_view(widgets, sender);
@@ -996,7 +998,9 @@ impl AppModel {
                 tracing::warn!(%error, "NDI installation failed or was cancelled");
                 let dialog = adw::AlertDialog::new(
                     Some(&tr!("NDI installation did not finish")),
-                    Some(&tr!("Installation failed or authentication was cancelled. You can try again or install the library manually.")),
+                    Some(&tr!(
+                        "Installation failed or authentication was cancelled. You can try again or install the library manually."
+                    )),
                 );
                 let details = gtk::TextView::builder()
                     .editable(false)
@@ -1023,9 +1027,13 @@ impl AppModel {
     fn offer_ndi_install(&self, sender: &ComponentSender<Self>, root: &adw::ApplicationWindow) {
         let can_install = crate::ndi_setup::can_install();
         let body = if can_install {
-            tr!("NDI needs a proprietary library that is not included with BigNetScreen. Install ndi-sdk from the AUR and the required build tools? Your system will ask for administrator authentication. Other sharing methods work without it.")
+            tr!(
+                "NDI needs a proprietary library that is not included with BigNetScreen. Install ndi-sdk from the AUR and the required build tools? Your system will ask for administrator authentication. Other sharing methods work without it."
+            )
         } else {
-            tr!("NDI needs a proprietary library that is not included with BigNetScreen. Install the NDI 5 or 6 runtime for your distribution, then restart the app. Other sharing methods work without it.")
+            tr!(
+                "NDI needs a proprietary library that is not included with BigNetScreen. Install the NDI 5 or 6 runtime for your distribution, then restart the app. Other sharing methods work without it."
+            )
         };
         let dialog = adw::AlertDialog::new(Some(&tr!("NDI runtime required")), Some(&body));
         dialog.add_response("close", &tr!("Close"));
@@ -1216,7 +1224,9 @@ fn describe_refusal(reason: &str) -> String {
         return String::new();
     }
     if reason.contains("virtual sound card") {
-        return tr!("Could not prepare the BigNetScreen sound output. Check the audio options in Settings and try again.");
+        return tr!(
+            "Could not prepare the BigNetScreen sound output. Check the audio options in Settings and try again."
+        );
     }
     if reason.contains("could not save settings") {
         return tr!("Could not save settings");

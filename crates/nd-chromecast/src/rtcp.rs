@@ -443,14 +443,13 @@ impl Nack {
         }
         let mut ids = vec![self.packet_id];
         for bit in 0..8u16 {
-            if self.bitmask & (1 << bit) != 0 {
-                if let Some(id) = self
+            if self.bitmask & (1 << bit) != 0
+                && let Some(id) = self
                     .packet_id
                     .checked_add(bit + 1)
                     .filter(|id| *id != 0xFFFF)
-                {
-                    ids.push(id);
-                }
+            {
+                ids.push(id);
             }
         }
         Some(ids)

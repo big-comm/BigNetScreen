@@ -24,8 +24,8 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use gstreamer::prelude::*;
 use tokio::sync::Mutex;
-use zbus::zvariant::{OwnedObjectPath, Value};
 use zbus::Connection;
+use zbus::zvariant::{OwnedObjectPath, Value};
 
 use nd_core::capture::{CaptureBackend, CaptureSource, SourceType};
 use nd_core::{NdError, Result};
@@ -573,13 +573,13 @@ impl CaptureBackend for MutterBackend {
                         // it was, since `stop()` has nothing in `active` yet.
                         let _ = keep_alive.set_state(gstreamer::State::Null);
                         let _ = session.stop().await;
-                        if let Some(layout) = self.layout.lock().await.take() {
-                            if let Err(err) = layout.restore(&conn).await {
-                                tracing::warn!(
-                                    %err,
-                                    "could not restore the previous desktop layout"
-                                );
-                            }
+                        if let Some(layout) = self.layout.lock().await.take()
+                            && let Err(err) = layout.restore(&conn).await
+                        {
+                            tracing::warn!(
+                                %err,
+                                "could not restore the previous desktop layout"
+                            );
                         }
                         return Err(err);
                     }
@@ -644,19 +644,17 @@ impl CaptureBackend for MutterBackend {
         let Some(active) = self.active.lock().await.take() else {
             return Ok(());
         };
-        if let Some(connector) = &active.virtual_connector {
-            if let Some(current) =
+        if let Some(connector) = &active.virtual_connector
+            && let Some(current) =
                 crate::display_config::LayoutSnapshot::capture(&active.conn_for_stop).await
-            {
-                *self.layout.lock().await = current.without(connector);
-            }
+        {
+            *self.layout.lock().await = current.without(connector);
         }
         if let Ok(builder) =
             ScreenCastSessionProxy::builder(&active.conn_for_stop).path(active.session)
+            && let Ok(session) = builder.build().await
         {
-            if let Ok(session) = builder.build().await {
-                let _ = session.stop().await;
-            }
+            let _ = session.stop().await;
         }
 
         // The keep-alive pipeline and the virtual session go last: dropping
@@ -665,14 +663,12 @@ impl CaptureBackend for MutterBackend {
         if let Some(keep_alive) = active.keep_alive {
             let _ = keep_alive.set_state(gstreamer::State::Null);
         }
-        if let Some(virtual_session) = active.virtual_session {
-            if let Ok(builder) =
+        if let Some(virtual_session) = active.virtual_session
+            && let Ok(builder) =
                 ScreenCastSessionProxy::builder(&active.conn_for_stop).path(virtual_session)
-            {
-                if let Ok(proxy) = builder.build().await {
-                    let _ = proxy.stop().await;
-                }
-            }
+            && let Ok(proxy) = builder.build().await
+        {
+            let _ = proxy.stop().await;
         }
 
         // Removing the monitor changes the set again, so Mutter regenerates a

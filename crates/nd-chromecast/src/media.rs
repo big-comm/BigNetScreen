@@ -7,19 +7,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::sync::{mpsc, watch};
 
 use nd_core::capture::{CaptureSource, MediaPlayback};
 use nd_core::media::{
-    seek_target, FilePlaybackControl, MediaCommand, MediaSource, PlaybackStart, PlaybackState,
+    FilePlaybackControl, MediaCommand, MediaSource, PlaybackStart, PlaybackState, seek_target,
 };
 use nd_core::sink::{Sink, UpnpRenderer};
 use nd_core::{NdError, Result};
 use nd_dlna::avtransport::{self, TransportState};
-use nd_dlna::renderer::{accepts, Renderer};
+use nd_dlna::renderer::{Renderer, accepts};
 
-use crate::cast::{CastChannel, LaunchedApp, DEFAULT_MEDIA_RECEIVER, NS_MEDIA};
+use crate::cast::{CastChannel, DEFAULT_MEDIA_RECEIVER, LaunchedApp, NS_MEDIA};
 use crate::file_server::{FileServer, MediaFile, MediaKind};
 
 pub const PHOTO_SECONDS: u64 = 8;
@@ -886,24 +886,22 @@ async fn play_upnp_queue(
                 }
                 _ = poll.tick() => {
                     polls += 1;
-                    if polls.is_multiple_of(3) {
-                        if let Some((volume, muted)) = tv.volume().await {
+                    if polls.is_multiple_of(3)
+                        && let Some((volume, muted)) = tv.volume().await {
                             playback.volume = Some(volume);
                             playback.muted = Some(muted);
                         }
-                    }
                     let state = avtransport::transport_state(control).await;
                     match state {
                         Ok(TransportState::Playing | TransportState::Paused) => {
                             ever_played = true;
                             idle_polls = 0;
                             playback.paused = matches!(state, Ok(TransportState::Paused));
-                            if let Some(seconds) = pending_seek.take() {
-                                if avtransport::seek(control, seconds).await.is_ok() {
+                            if let Some(seconds) = pending_seek.take()
+                                && avtransport::seek(control, seconds).await.is_ok() {
                                     playback.seconds = seconds;
                                     clock = None;
                                 }
-                            }
                             if std::mem::take(&mut pending_pause)
                                 && avtransport::pause(control).await.is_ok()
                             {
@@ -1007,7 +1005,7 @@ async fn upnp_command(
         _ => {
             return Err(NdError::Unsupported(
                 "playback control is not available for this item".into(),
-            ))
+            ));
         }
     }
     Ok(())

@@ -7,8 +7,8 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use ashpd::desktop::{screencast::Screencast, Session};
 use ashpd::WindowIdentifier;
+use ashpd::desktop::{Session, screencast::Screencast};
 use futures::StreamExt;
 use nd_core::{NdError, Result};
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};

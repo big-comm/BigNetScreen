@@ -234,10 +234,10 @@ async fn check_pin(shared: &Shared, peer: SocketAddr, request: Request<Incoming>
             .guard
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(until) = guard.locked_until {
-            if Instant::now() < until {
-                return reply(StatusCode::TOO_MANY_REQUESTS, "");
-            }
+        if let Some(until) = guard.locked_until
+            && Instant::now() < until
+        {
+            return reply(StatusCode::TOO_MANY_REQUESTS, "");
         }
     }
     let Some(body) = read_body(request).await else {

@@ -25,11 +25,11 @@ mod portal_start;
 
 use std::path::PathBuf;
 
+use ashpd::WindowIdentifier;
 use ashpd::desktop::screencast::{
     CursorMode, Screencast, SelectSourcesOptions, SourceType as PortalSourceType,
 };
 use ashpd::desktop::{PersistMode, Session};
-use ashpd::WindowIdentifier;
 use async_trait::async_trait;
 use tokio::sync::Mutex;
 
@@ -85,11 +85,11 @@ fn store_restore_token(source_type: SourceType, token: &str) {
     let Some(path) = restore_token_path(source_type) else {
         return;
     };
-    if let Some(dir) = path.parent() {
-        if let Err(err) = std::fs::create_dir_all(dir) {
-            tracing::warn!(%err, "could not create the token directory");
-            return;
-        }
+    if let Some(dir) = path.parent()
+        && let Err(err) = std::fs::create_dir_all(dir)
+    {
+        tracing::warn!(%err, "could not create the token directory");
+        return;
     }
     if let Err(err) = nd_core::persistence::write_private(&path, token.as_bytes()) {
         tracing::warn!(%err, "could not save the restore token");
@@ -280,10 +280,8 @@ impl CaptureBackend for PortalBackend {
 
         // Only keep a token for sources worth restoring. A window token would
         // be handed back on the next cast and skip the picker.
-        if restorable {
-            if let Some(token) = streams.restore_token.as_deref() {
-                store_restore_token(source_type, token);
-            }
+        if restorable && let Some(token) = streams.restore_token.as_deref() {
+            store_restore_token(source_type, token);
         }
 
         let node_id = streams.node_id;
@@ -322,12 +320,12 @@ impl CaptureBackend for PortalBackend {
     }
 
     async fn stop(&self) -> Result<()> {
-        if let Some(session) = self.session.lock().await.take() {
-            if let Err(err) = session.close().await {
-                // It may already have been closed by the compositor:
-                // informational, not fatal — teardown must not fail over it.
-                tracing::debug!(%err, "the portal session was already closed");
-            }
+        if let Some(session) = self.session.lock().await.take()
+            && let Err(err) = session.close().await
+        {
+            // It may already have been closed by the compositor:
+            // informational, not fatal — teardown must not fail over it.
+            tracing::debug!(%err, "the portal session was already closed");
         }
         Ok(())
     }

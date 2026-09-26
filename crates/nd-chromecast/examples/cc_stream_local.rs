@@ -19,8 +19,8 @@ use std::time::Duration;
 use gst::prelude::*;
 use gstreamer as gst;
 
-use nd_core::pipeline::{self, StreamConfig, VideoSource, TS_HTTP_SINK_NAME};
-use nd_core::stream_server::{StreamServer, CAST_MEDIA};
+use nd_core::pipeline::{self, StreamConfig, TS_HTTP_SINK_NAME, VideoSource};
+use nd_core::stream_server::{CAST_MEDIA, StreamServer};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

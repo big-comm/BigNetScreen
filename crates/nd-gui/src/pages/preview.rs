@@ -203,44 +203,41 @@ fn decode(path: &Path, kind: MediaKind) -> Result<Preview, String> {
             );
             let _ = pipeline.state(gst::ClockTime::from_seconds(2));
         }
-        if let Some(sample) = pipeline.property::<Option<gst::Sample>>("sample") {
-            if let Some(info) = sample
+        if let Some(sample) = pipeline.property::<Option<gst::Sample>>("sample")
+            && let Some(info) = sample
                 .caps()
                 .and_then(|caps| gstreamer_video::VideoInfo::from_caps(caps).ok())
+        {
+            let ratio = f64::from(info.width()) * f64::from(info.par().numer())
+                / (f64::from(info.height()) * f64::from(info.par().denom()));
+            let (width, height) = if ratio >= 1.0 {
+                (SIZE, (f64::from(SIZE) / ratio).round().max(1.0) as i32)
+            } else {
+                ((f64::from(SIZE) * ratio).round().max(1.0) as i32, SIZE)
+            };
+            let caps = gst::Caps::builder("video/x-raw")
+                .field("format", "RGB")
+                .field("width", width)
+                .field("height", height)
+                .field("pixel-aspect-ratio", gst::Fraction::new(1, 1))
+                .build();
+            if let Some(sample) =
+                pipeline.emit_by_name::<Option<gst::Sample>>("convert-sample", &[&caps])
+                && let (Some(buffer), Some(info)) = (
+                    sample.buffer(),
+                    sample
+                        .caps()
+                        .and_then(|caps| gstreamer_video::VideoInfo::from_caps(caps).ok()),
+                )
+                && let Ok(map) = buffer.map_readable()
             {
-                let ratio = f64::from(info.width()) * f64::from(info.par().numer())
-                    / (f64::from(info.height()) * f64::from(info.par().denom()));
-                let (width, height) = if ratio >= 1.0 {
-                    (SIZE, (f64::from(SIZE) / ratio).round().max(1.0) as i32)
-                } else {
-                    ((f64::from(SIZE) * ratio).round().max(1.0) as i32, SIZE)
-                };
-                let caps = gst::Caps::builder("video/x-raw")
-                    .field("format", "RGB")
-                    .field("width", width)
-                    .field("height", height)
-                    .field("pixel-aspect-ratio", gst::Fraction::new(1, 1))
-                    .build();
-                if let Some(sample) =
-                    pipeline.emit_by_name::<Option<gst::Sample>>("convert-sample", &[&caps])
-                {
-                    if let (Some(buffer), Some(info)) = (
-                        sample.buffer(),
-                        sample
-                            .caps()
-                            .and_then(|caps| gstreamer_video::VideoInfo::from_caps(caps).ok()),
-                    ) {
-                        if let Ok(map) = buffer.map_readable() {
-                            image = Some(Thumbnail {
-                                pixels: glib::Bytes::from_owned(map.as_slice().to_vec()),
-                                width: info.width() as i32,
-                                height: info.height() as i32,
-                                stride: info.stride()[0],
-                                alpha: false,
-                            });
-                        }
-                    }
-                }
+                image = Some(Thumbnail {
+                    pixels: glib::Bytes::from_owned(map.as_slice().to_vec()),
+                    width: info.width() as i32,
+                    height: info.height() as i32,
+                    stride: info.stride()[0],
+                    alpha: false,
+                });
             }
         }
     } else if image.is_none() {

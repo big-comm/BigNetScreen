@@ -16,8 +16,8 @@ use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 
 use async_trait::async_trait;
 
-use crate::pipeline::VideoSource;
 use crate::Result;
+use crate::pipeline::VideoSource;
 
 /// What is going to be captured.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -125,12 +125,12 @@ fn nd_net_driver() -> nd_core::pipeline::GpuDriver {
     names.sort();
     for card in names {
         let link = format!("/sys/class/drm/{card}/device/driver");
-        if let Ok(target) = std::fs::read_link(&link) {
-            if let Some(module) = target.file_name().and_then(|n| n.to_str()) {
-                let driver = GpuDriver::from_kernel_module(module);
-                if driver != GpuDriver::Unknown {
-                    return driver;
-                }
+        if let Ok(target) = std::fs::read_link(&link)
+            && let Some(module) = target.file_name().and_then(|n| n.to_str())
+        {
+            let driver = GpuDriver::from_kernel_module(module);
+            if driver != GpuDriver::Unknown {
+                return driver;
             }
         }
     }

@@ -10,8 +10,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures::stream::BoxStream;
 
-use crate::sink::Sink;
 use crate::Result;
+use crate::sink::Sink;
 
 /// Bounds receiver lists and discovery caches fed by network announcements.
 pub const MAX_RECEIVERS: usize = 256;

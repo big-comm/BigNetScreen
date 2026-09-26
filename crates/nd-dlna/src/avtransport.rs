@@ -14,8 +14,8 @@
 //! measured per model. Optional AVTransport:3 CLOCKSYNC controls and vendor
 //! extensions are not a portable way to tune an HTTP player's prebuffer.
 
-use nd_core::stream_server::MediaType;
 use nd_core::Result;
+use nd_core::stream_server::MediaType;
 
 use crate::upnp::{self, Endpoint};
 
@@ -257,9 +257,11 @@ mod tests {
             didl.contains("DLNA.ORG_OP=00;DLNA.ORG_FLAGS=8d300000"),
             "{didl}"
         );
-        assert!(DLNA_FILE_MEDIA
-            .extra_headers
-            .contains("DLNA.ORG_FLAGS=8d300000"));
+        assert!(
+            DLNA_FILE_MEDIA
+                .extra_headers
+                .contains("DLNA.ORG_FLAGS=8d300000")
+        );
     }
 
     #[test]

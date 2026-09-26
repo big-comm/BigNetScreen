@@ -31,7 +31,9 @@ fn main() {
                 return;
             }
             Some("--help") | Some("-h") => {
-                println!("BigNetScreen — share a Linux screen with network receivers.\n\nUsage: bignetscreen [--version | --help]\n\nWithout arguments, opens the graphical application.");
+                println!(
+                    "BigNetScreen — share a Linux screen with network receivers.\n\nUsage: bignetscreen [--version | --help]\n\nWithout arguments, opens the graphical application."
+                );
                 return;
             }
             _ => {}

@@ -9,8 +9,8 @@ use std::sync::{Mutex, PoisonError};
 
 use async_trait::async_trait;
 
-use crate::capture::CaptureSource;
 use crate::Result;
+use crate::capture::CaptureSource;
 
 /// The receiver's protocol.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -220,11 +220,11 @@ impl SinkStatus {
     /// Quiet unless the number changes: the poll behind it runs every second.
     pub fn set_receivers(&self, receivers: u32) {
         let mut guard = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(link) = guard.link.as_mut() {
-            if link.receivers != Some(receivers) {
-                tracing::info!(receivers, "receiver count changed");
-                link.receivers = Some(receivers);
-            }
+        if let Some(link) = guard.link.as_mut()
+            && link.receivers != Some(receivers)
+        {
+            tracing::info!(receivers, "receiver count changed");
+            link.receivers = Some(receivers);
         }
     }
 

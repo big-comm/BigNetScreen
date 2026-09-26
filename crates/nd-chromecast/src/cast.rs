@@ -29,15 +29,15 @@ use std::time::Duration;
 
 use prost::Message as _;
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::crypto::{verify_tls12_signature, verify_tls13_signature, CryptoProvider};
+use rustls::crypto::{CryptoProvider, verify_tls12_signature, verify_tls13_signature};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{DigitallySignedStruct, SignatureScheme};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc, oneshot};
-use tokio_rustls::client::TlsStream;
 use tokio_rustls::TlsConnector;
+use tokio_rustls::client::TlsStream;
 
 use nd_core::{NdError, Result};
 
@@ -1117,10 +1117,12 @@ mod tests {
         assert_eq!(connect["senderInfo"]["sdkType"], 2);
         assert_eq!(connect["senderInfo"]["connectionType"], 1);
         assert_eq!(connect["senderInfo"]["platform"], 6, "Linux");
-        assert!(connect["userAgent"]
-            .as_str()
-            .unwrap()
-            .contains("BigNetScreen"));
+        assert!(
+            connect["userAgent"]
+                .as_str()
+                .unwrap()
+                .contains("BigNetScreen")
+        );
 
         let close: Value = serde_json::from_str(CLOSE_PAYLOAD).unwrap();
         assert_eq!(close["type"], "CLOSE");
@@ -1202,17 +1204,19 @@ mod tests {
         let mut prefix = [0; 4];
         peer.read_exact(&mut prefix).await.unwrap();
         assert_eq!(&prefix, b"part");
-        assert!(write_frame(
-            &stream,
-            &closed,
-            &closing,
-            b"STOP",
-            false,
-            false,
-            Duration::from_secs(1)
-        )
-        .await
-        .is_err());
+        assert!(
+            write_frame(
+                &stream,
+                &closed,
+                &closing,
+                b"STOP",
+                false,
+                false,
+                Duration::from_secs(1)
+            )
+            .await
+            .is_err()
+        );
     }
 
     #[tokio::test]
@@ -1289,17 +1293,19 @@ mod tests {
         let mut received = [0; 5];
         peer.read_exact(&mut received).await.unwrap();
         assert_eq!(&received, b"CLOSE"); // PING was not written.
-        assert!(write_frame(
-            &stream,
-            &closed,
-            &closing,
-            b"LOAD",
-            false,
-            false,
-            Duration::from_secs(1)
-        )
-        .await
-        .is_err());
+        assert!(
+            write_frame(
+                &stream,
+                &closed,
+                &closing,
+                b"LOAD",
+                false,
+                false,
+                Duration::from_secs(1)
+            )
+            .await
+            .is_err()
+        );
     }
 
     #[tokio::test]

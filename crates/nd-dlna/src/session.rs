@@ -26,7 +26,7 @@ use gstreamer as gst;
 use nd_core::capture::CaptureSource;
 use nd_core::pipeline::{self, PipelineGuard, StreamConfig, TS_HTTP_SINK_NAME};
 use nd_core::sink::{SinkState, SinkStatus, StreamLink};
-use nd_core::stream_server::{MediaType, StreamServer, DLNA_FILE_MEDIA, DLNA_MEDIA};
+use nd_core::stream_server::{DLNA_FILE_MEDIA, DLNA_MEDIA, MediaType, StreamServer};
 use nd_core::{NdError, Result};
 
 use crate::avtransport::{self, TransportState};
@@ -338,11 +338,10 @@ async fn serve_until_over(
                 measured = true;
                 (cfg.width, cfg.height) = (width, height);
                 let kbps = cfg.scaled_bitrate_kbps();
-                if pipeline::set_encoder_bitrate(gst_pipeline, cfg.encoder, kbps) {
-                    if let Some(mux) = gst_pipeline.by_name("mux") {
+                if pipeline::set_encoder_bitrate(gst_pipeline, cfg.encoder, kbps)
+                    && let Some(mux) = gst_pipeline.by_name("mux") {
                         mux.set_property("bitrate", u64::from(kbps) * 1_000);
                     }
-                }
                 status.set_link(StreamLink {
                     width, height, fps: cfg.fps,
                     endpoint: Some(control.addr), receivers: None,

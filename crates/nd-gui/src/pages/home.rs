@@ -12,7 +12,7 @@ use relm4::factory::{DynamicIndex, FactoryComponent, FactorySender, FactoryVecDe
 use relm4::gtk;
 use relm4::prelude::*;
 
-use super::{latency_hint, DeviceEntry, SessionInfo};
+use super::{DeviceEntry, SessionInfo, latency_hint};
 use crate::tr;
 
 // ----------------------------------------------------------------------------

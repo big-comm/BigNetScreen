@@ -550,12 +550,11 @@ fn finish_file_sources(pipeline: &gst::Pipeline) {
     if let Some(queue) = pipeline.by_name("file-audio-queue") {
         let weak = queue.downgrade();
         decoder.connect_no_more_pads(move |_| {
-            if let Some(queue) = weak.upgrade() {
-                if let Some(pad) = queue.static_pad("sink") {
-                    if !pad.is_linked() {
-                        pad.send_event(gst::event::Eos::new());
-                    }
-                }
+            if let Some(queue) = weak.upgrade()
+                && let Some(pad) = queue.static_pad("sink")
+                && !pad.is_linked()
+            {
+                pad.send_event(gst::event::Eos::new());
             }
         });
     }
@@ -575,16 +574,15 @@ fn finish_file_sources(pipeline: &gst::Pipeline) {
                 .is_some_and(|event| event.type_() == gst::EventType::Eos)
                 && !ended.swap(true, std::sync::atomic::Ordering::SeqCst)
                 && remaining.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1
+                && let Some(pipeline) = weak.upgrade()
             {
-                if let Some(pipeline) = weak.upgrade() {
-                    pipeline.call_async(|pipeline| {
-                        for name in ["file-silence", "file-picture"] {
-                            if let Some(source) = pipeline.by_name(name) {
-                                source.send_event(gst::event::Eos::new());
-                            }
+                pipeline.call_async(|pipeline| {
+                    for name in ["file-silence", "file-picture"] {
+                        if let Some(source) = pipeline.by_name(name) {
+                            source.send_event(gst::event::Eos::new());
                         }
-                    });
-                }
+                    }
+                });
             }
             gst::PadProbeReturn::Ok
         });
@@ -924,11 +922,7 @@ impl H264Encoder {
     /// Hardware encoders consume NV12 natively; handing them I420 forces an
     /// extra conversion inside the driver.
     pub fn preferred_format(self) -> &'static str {
-        if self.is_hardware() {
-            "NV12"
-        } else {
-            "I420"
-        }
+        if self.is_hardware() { "NV12" } else { "I420" }
     }
 
     /// Every raw format this encoder takes, as a caps list.
@@ -1992,10 +1986,10 @@ impl StreamConfig {
     /// path's own answer, because Cast asks for a key frame rather than
     /// scheduling one.
     pub fn gop(&self) -> u32 {
-        if let Ok(value) = std::env::var("BIGNETSCREEN_GOP") {
-            if let Ok(gop) = value.parse::<u32>() {
-                return gop.max(1);
-            }
+        if let Ok(value) = std::env::var("BIGNETSCREEN_GOP")
+            && let Ok(gop) = value.parse::<u32>()
+        {
+            return gop.max(1);
         }
         if self.gop_seconds == 0 {
             return 0;
@@ -2008,10 +2002,10 @@ impl StreamConfig {
     /// `BIGNETSCREEN_PIPELINE_LATENCY_MS` overrides it, for bisecting
     /// interoperability problems in the field.
     pub fn latency_ms(&self) -> u64 {
-        if let Ok(value) = std::env::var("BIGNETSCREEN_PIPELINE_LATENCY_MS") {
-            if let Ok(ms) = value.parse::<u64>() {
-                return ms;
-            }
+        if let Ok(value) = std::env::var("BIGNETSCREEN_PIPELINE_LATENCY_MS")
+            && let Ok(ms) = value.parse::<u64>()
+        {
+            return ms;
         }
         let encoder_latency = self.encoder.pipeline_latency_ms();
         if crate::latency::is_film() {
@@ -2665,7 +2659,11 @@ mod tests {
             title: "Regression".into(),
         };
         // Exercise the finite decoder, silence mixer and synthetic picture without network or encoders.
-        let description = format!("{} ! video/x-raw,width=320,height=240 ! fakesink sync=true {} ! audioconvert ! fakesink sync=true", source.description(), AudioSource::MediaFile.description());
+        let description = format!(
+            "{} ! video/x-raw,width=320,height=240 ! fakesink sync=true {} ! audioconvert ! fakesink sync=true",
+            source.description(),
+            AudioSource::MediaFile.description()
+        );
         let (pipeline, mut events) = build_pipeline(&description, 0).unwrap();
         let guard = PipelineGuard::new(pipeline.clone());
         pipeline.set_state(gst::State::Playing).unwrap();
@@ -2692,7 +2690,10 @@ mod tests {
             } else {
                 ""
             };
-            let description = format!("videotestsrc num-buffers=15 ! video/x-raw,width=320,height=240,framerate=30/1 ! vp8enc deadline=1 ! matroskamux name=mux ! filesink location={} {audio}", escape_location(&path));
+            let description = format!(
+                "videotestsrc num-buffers=15 ! video/x-raw,width=320,height=240,framerate=30/1 ! vp8enc deadline=1 ! matroskamux name=mux ! filesink location={} {audio}",
+                escape_location(&path)
+            );
             let make = gst::parse::launch(&description)
                 .unwrap()
                 .downcast::<gst::Pipeline>()
@@ -4154,11 +4155,15 @@ mod tests {
             profile: H264Profile::High,
             ..Default::default()
         };
-        assert!(H264Encoder::V4l2H264
-            .encoder_description(&cfg)
-            .contains("h264_profile=4,"));
-        assert!(H264Encoder::V4l2H264
-            .encoder_description(&StreamConfig::default())
-            .contains("h264_profile=0,"));
+        assert!(
+            H264Encoder::V4l2H264
+                .encoder_description(&cfg)
+                .contains("h264_profile=4,")
+        );
+        assert!(
+            H264Encoder::V4l2H264
+                .encoder_description(&StreamConfig::default())
+                .contains("h264_profile=0,")
+        );
     }
 }

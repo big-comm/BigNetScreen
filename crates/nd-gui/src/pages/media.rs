@@ -567,10 +567,10 @@ impl Component for MediaPage {
         _sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
-        if let (Some(picture), Ok(preview)) = (self.queue_thumbnails.get(&path), preview) {
-            if let Some(image) = preview.image {
-                picture.set_paintable(Some(&image.texture(48)));
-            }
+        if let (Some(picture), Ok(preview)) = (self.queue_thumbnails.get(&path), preview)
+            && let Some(image) = preview.image
+        {
+            picture.set_paintable(Some(&image.texture(48)));
         }
     }
 
@@ -598,10 +598,10 @@ impl Component for MediaPage {
                     return;
                 }
                 if selected {
-                    if let Some(file) = self.listed.iter().find(|f| f.path == path) {
-                        if !self.chosen.iter().any(|f| f.path == path) {
-                            self.chosen.push(file.clone());
-                        }
+                    if let Some(file) = self.listed.iter().find(|f| f.path == path)
+                        && !self.chosen.iter().any(|f| f.path == path)
+                    {
+                        self.chosen.push(file.clone());
                     }
                 } else {
                     self.chosen.retain(|f| f.path != path);
@@ -659,12 +659,12 @@ impl Component for MediaPage {
                     return;
                 }
                 self.inspection_generation += 1;
-                if let Some(target) = self.chosen_target.clone() {
-                    if !self.chosen.is_empty() {
-                        sender
-                            .output(MediaOutput::Send(self.chosen.clone(), target))
-                            .ok();
-                    }
+                if let Some(target) = self.chosen_target.clone()
+                    && !self.chosen.is_empty()
+                {
+                    sender
+                        .output(MediaOutput::Send(self.chosen.clone(), target))
+                        .ok();
                 }
             }
             MediaMsg::Cancel => {
@@ -675,10 +675,10 @@ impl Component for MediaPage {
                     self.targets = targets;
                     // A receiver that has gone off the network cannot stay
                     // selected: the send button would point at nothing.
-                    if let Some(chosen) = &self.chosen_target {
-                        if !self.targets.iter().any(|(id, _)| id == chosen) {
-                            self.chosen_target = None;
-                        }
+                    if let Some(chosen) = &self.chosen_target
+                        && !self.targets.iter().any(|(id, _)| id == chosen)
+                    {
+                        self.chosen_target = None;
                     }
                     self.fill_chooser(widgets);
                 }
@@ -1036,10 +1036,10 @@ fn open_file_dialog(root: &impl IsA<gtk::Widget>, sender: relm4::Sender<MediaMsg
             window.as_ref(),
             gtk::gio::Cancellable::NONE,
             move |result| {
-                if let Ok(file) = result {
-                    if let Some(path) = file.path() {
-                        sender.emit(MediaMsg::Picked(vec![path]));
-                    }
+                if let Ok(file) = result
+                    && let Some(path) = file.path()
+                {
+                    sender.emit(MediaMsg::Picked(vec![path]));
                 }
             },
         );
@@ -1126,10 +1126,12 @@ mod tests {
             assert_eq!((texture.width(), texture.height()), (360, 180));
 
             std::fs::write(&path, b"invalid image").expect("invalid fixture");
-            assert!(relm4::spawn(preview::load(path.clone(), MediaKind::Photo))
-                .await
-                .expect("worker completed")
-                .is_err());
+            assert!(
+                relm4::spawn(preview::load(path.clone(), MediaKind::Photo))
+                    .await
+                    .expect("worker completed")
+                    .is_err()
+            );
         });
         std::fs::remove_file(path).expect("remove fixture");
 
@@ -1218,10 +1220,10 @@ mod tests {
         assert!(page.model().playing());
         assert!(page.model().queue_line().contains("0:42 / 3:00"));
         fn button(widget: &gtk::Widget, tooltip: &str) -> Option<gtk::Button> {
-            if let Ok(button) = widget.clone().downcast::<gtk::Button>() {
-                if button.tooltip_text().as_deref() == Some(tooltip) {
-                    return Some(button);
-                }
+            if let Ok(button) = widget.clone().downcast::<gtk::Button>()
+                && button.tooltip_text().as_deref() == Some(tooltip)
+            {
+                return Some(button);
             }
             let mut child = widget.first_child();
             while let Some(widget) = child {
@@ -1238,9 +1240,11 @@ mod tests {
             tr!("Forward 10 seconds"),
             tr!("Next file"),
         ] {
-            assert!(button(page.widget().upcast_ref(), &tooltip)
-                .expect("playback control")
-                .is_sensitive());
+            assert!(
+                button(page.widget().upcast_ref(), &tooltip)
+                    .expect("playback control")
+                    .is_sensitive()
+            );
         }
 
         let window = gtk::Window::builder()

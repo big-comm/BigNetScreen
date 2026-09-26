@@ -23,7 +23,7 @@ use futures::stream::{BoxStream, StreamExt};
 
 use nd_core::capture::CaptureSource;
 use nd_core::provider::{DiscoveryEvent, Provider};
-use nd_core::sink::{sanitize_name, Sink, SinkInfo, SinkKind, SinkState, SinkStatus};
+use nd_core::sink::{Sink, SinkInfo, SinkKind, SinkState, SinkStatus, sanitize_name};
 use nd_core::{NdError, Result};
 use nd_net::p2p::{P2pDevice, P2pPeer, PeerEvent};
 
@@ -322,7 +322,7 @@ pub mod cast {
     use nd_net::firewall;
     use tokio::net::TcpListener;
 
-    use crate::rtsp::{cast_to_sink, WfdCastConfig, RTSP_PORT};
+    use crate::rtsp::{RTSP_PORT, WfdCastConfig, cast_to_sink};
 
     /// Attempts at forming the P2P group (Realtek drivers tear down the first one).
     const CONNECT_ATTEMPTS: u32 = 4;
@@ -418,7 +418,7 @@ pub mod cast {
                     last = Some(NdError::Protocol(reason));
                 }
                 Err(NdError::SinkNeverConnected { reason, .. }) => {
-                    return Err(NdError::Protocol(reason))
+                    return Err(NdError::Protocol(reason));
                 }
                 Err(err) => return Err(err),
             }

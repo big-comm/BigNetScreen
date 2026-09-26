@@ -16,8 +16,8 @@ use gstreamer as gst;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-use nd_core::pipeline::{self, StreamConfig, VideoSource, TS_HTTP_SINK_NAME};
-use nd_core::stream_server::{StreamServer, CAST_MEDIA};
+use nd_core::pipeline::{self, StreamConfig, TS_HTTP_SINK_NAME, VideoSource};
+use nd_core::stream_server::{CAST_MEDIA, StreamServer};
 
 /// Standard transport-stream packets are 188 bytes with a sync byte.
 const TS_PACKET_BYTES: usize = 188;
@@ -50,10 +50,10 @@ async fn read_http_response(stream: &mut TcpStream, want: usize) -> (String, Vec
         };
         buffer.extend_from_slice(&chunk[..read]);
 
-        if let Some(split) = buffer.windows(4).position(|w| w == b"\r\n\r\n") {
-            if buffer.len() >= split + 4 + want {
-                break;
-            }
+        if let Some(split) = buffer.windows(4).position(|w| w == b"\r\n\r\n")
+            && buffer.len() >= split + 4 + want
+        {
+            break;
         }
     }
 

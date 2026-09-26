@@ -73,7 +73,7 @@ fn media_command(command: &str, argument: f64, path: &str) -> zbus::fdo::Result<
         other => {
             return Err(zbus::fdo::Error::InvalidArgs(format!(
                 "unknown media command `{other}`"
-            )))
+            )));
         }
     })
 }

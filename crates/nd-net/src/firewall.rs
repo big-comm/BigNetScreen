@@ -154,10 +154,10 @@ fn forget() {
     let Some(path) = lease_path() else {
         return;
     };
-    if let Err(err) = std::fs::remove_file(&path) {
-        if err.kind() != std::io::ErrorKind::NotFound {
-            tracing::debug!(%err, "could not remove the firewall lease record");
-        }
+    if let Err(err) = std::fs::remove_file(&path)
+        && err.kind() != std::io::ErrorKind::NotFound
+    {
+        tracing::debug!(%err, "could not remove the firewall lease record");
     }
 }
 
@@ -350,16 +350,15 @@ pub async fn release(lease: FirewallLease) {
     }
     if complete {
         // Do not erase a different lease that another operation has written.
-        if let Some(path) = lease_path() {
-            if std::fs::read_to_string(path)
+        if let Some(path) = lease_path()
+            && std::fs::read_to_string(path)
                 .ok()
                 .as_deref()
                 .and_then(FirewallLease::from_file)
                 .as_ref()
                 == Some(&lease)
-            {
-                forget();
-            }
+        {
+            forget();
         }
     }
 }

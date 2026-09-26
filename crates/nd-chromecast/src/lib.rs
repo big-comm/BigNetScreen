@@ -26,7 +26,7 @@ use mdns_sd::{ResolvedService, ServiceDaemon, ServiceEvent};
 
 use nd_core::capture::CaptureSource;
 use nd_core::provider::{DiscoveryEvent, Provider};
-use nd_core::sink::{sanitize_name, Sink, SinkInfo, SinkKind, SinkState, SinkStatus};
+use nd_core::sink::{Sink, SinkInfo, SinkKind, SinkState, SinkStatus, sanitize_name};
 use nd_core::{NdError, Result};
 
 const CHROMECAST_SERVICE: &str = "_googlecast._tcp.local.";
@@ -165,12 +165,11 @@ impl Provider for MdnsProvider {
                             }
                             _ => None,
                         };
-                        if let Some(msg) = msg {
-                            if futures::executor::block_on(futures::SinkExt::send(&mut tx, msg))
+                        if let Some(msg) = msg
+                            && futures::executor::block_on(futures::SinkExt::send(&mut tx, msg))
                                 .is_err()
-                            {
-                                break; // the stream consumer was dropped
-                            }
+                        {
+                            break; // the stream consumer was dropped
                         }
                     }
                 })

@@ -34,7 +34,7 @@ use std::sync::{Mutex, PoisonError};
 use async_trait::async_trait;
 
 use nd_core::capture::CaptureSource;
-use nd_core::sink::{sanitize_name, Sink, SinkInfo, SinkKind, SinkState, SinkStatus};
+use nd_core::sink::{Sink, SinkInfo, SinkKind, SinkState, SinkStatus, sanitize_name};
 use nd_core::{NdError, Result};
 
 use crate::ssdp::Announcement;

@@ -58,13 +58,14 @@ pub async fn run(
     // notification, or a private call, leaving the machine. Better to say why
     // now than to be quietly wrong.
     let settings = nd_core::settings::current();
-    if settings.system_audio && settings.virtual_audio {
-        if let Err(err) = nd_core::virtual_sink::ensure().await {
-            return Outcome::failed(format!(
-                "the virtual sound card could not be created, and sending the \
+    if settings.system_audio
+        && settings.virtual_audio
+        && let Err(err) = nd_core::virtual_sink::ensure().await
+    {
+        return Outcome::failed(format!(
+            "the virtual sound card could not be created, and sending the \
                  computer's whole output instead is not what was asked for: {err}"
-            ));
-        }
+        ));
     }
 
     let backend = tokio::select! {

@@ -30,7 +30,7 @@ use std::time::Duration;
 use gst::prelude::*;
 use gstreamer as gst;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use nd_core::capture::CaptureSource;
 use nd_core::pipeline::{self, StreamConfig, TS_HTTP_SINK_NAME};
@@ -38,7 +38,7 @@ use nd_core::sink::{SinkState, SinkStatus};
 use nd_core::{NdError, Result};
 
 use crate::cast::{CastChannel, DEFAULT_MEDIA_RECEIVER, NS_MEDIA};
-use nd_core::stream_server::{StreamServer, CAST_MEDIA};
+use nd_core::stream_server::{CAST_MEDIA, StreamServer};
 
 /// How long to wait for the receiver to open the `GET` after the `LOAD`.
 const FIRST_CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
@@ -575,8 +575,8 @@ pub async fn run_with_video(
                     {
                         {
                             let wanted = drain.wanted_rate(current);
-                            if let Some(rate) = wanted {
-                                if (rate - playback_rate).abs() > f64::EPSILON {
+                            if let Some(rate) = wanted
+                                && (rate - playback_rate).abs() > f64::EPSILON {
                                     match channel
                                         .request(
                                             NS_MEDIA,
@@ -603,7 +603,6 @@ pub async fn run_with_video(
                                         }
                                     }
                                 }
-                            }
                         }
                     }
                 }
@@ -812,12 +811,12 @@ pub(crate) fn detect_gpu_driver() -> pipeline::GpuDriver {
 
     for card in cards {
         let link = format!("/sys/class/drm/{card}/device/driver");
-        if let Ok(target) = std::fs::read_link(&link) {
-            if let Some(module) = target.file_name().and_then(|n| n.to_str()) {
-                let driver = GpuDriver::from_kernel_module(module);
-                if driver != GpuDriver::Unknown {
-                    return driver;
-                }
+        if let Ok(target) = std::fs::read_link(&link)
+            && let Some(module) = target.file_name().and_then(|n| n.to_str())
+        {
+            let driver = GpuDriver::from_kernel_module(module);
+            if driver != GpuDriver::Unknown {
+                return driver;
             }
         }
     }

@@ -30,10 +30,11 @@ pub fn lan_ip() -> Result<IpAddr> {
         Ipv4Addr::new(8, 8, 8, 8),
         Ipv4Addr::new(192, 168, 1, 1),
     ] {
-        if let Ok(ip) = source_towards(IpAddr::V4(probe)) {
-            if !ip.is_loopback() && !ip.is_unspecified() {
-                return Ok(ip);
-            }
+        if let Ok(ip) = source_towards(IpAddr::V4(probe))
+            && !ip.is_loopback()
+            && !ip.is_unspecified()
+        {
+            return Ok(ip);
         }
     }
     Err(NdError::Network(

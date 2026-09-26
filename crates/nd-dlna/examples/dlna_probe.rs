@@ -11,7 +11,7 @@
 //! ```
 
 use nd_core::sink::Sink;
-use nd_dlna::{avtransport, ssdp, upnp, DlnaSink};
+use nd_dlna::{DlnaSink, avtransport, ssdp, upnp};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

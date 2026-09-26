@@ -395,7 +395,7 @@ impl FilePlaybackControl {
             _ => {
                 return Err(crate::NdError::Unsupported(
                     "playback control is not available for this item".into(),
-                ))
+                ));
             }
         }
         Ok(())
@@ -411,7 +411,10 @@ mod playback_tests {
     fn media_volume_and_mute_change_encoded_input_samples() {
         use crate::pipeline::{AudioSource, PipelineGuard};
         gst::init().unwrap();
-        let description = format!("audiotestsrc is-live=true samplesperbuffer=480 ! audio/x-raw,rate=48000 ! identity name=filedec {} ! audio/x-raw,format=F32LE ! appsink name=measure sync=false max-buffers=1 drop=true", AudioSource::MediaFile.description());
+        let description = format!(
+            "audiotestsrc is-live=true samplesperbuffer=480 ! audio/x-raw,rate=48000 ! identity name=filedec {} ! audio/x-raw,format=F32LE ! appsink name=measure sync=false max-buffers=1 drop=true",
+            AudioSource::MediaFile.description()
+        );
         let pipeline = gst::parse::launch(&description)
             .unwrap()
             .downcast::<gst::Pipeline>()
@@ -472,8 +475,8 @@ mod playback_tests {
             self, AudioSource, H264Encoder, PipelineGuard, StreamConfig, VideoSource, WfdTransport,
         };
         use std::sync::{
-            atomic::{AtomicUsize, Ordering},
             Arc,
+            atomic::{AtomicUsize, Ordering},
         };
         use std::time::{Duration, Instant};
         pipeline::init().unwrap();
@@ -620,11 +623,13 @@ mod playback_tests {
                         .collect::<Vec<_>>()
                 );
                 for pipeline in [&sender, &receiver] {
-                    assert!(pipeline
-                        .bus()
-                        .unwrap()
-                        .pop_filtered(&[gst::MessageType::Error])
-                        .is_none());
+                    assert!(
+                        pipeline
+                            .bus()
+                            .unwrap()
+                            .pop_filtered(&[gst::MessageType::Error])
+                            .is_none()
+                    );
                 }
                 std::thread::sleep(Duration::from_millis(50));
             }
@@ -647,8 +652,8 @@ mod playback_tests {
     fn local_file_pause_seek_and_resume_preserve_audio_and_video() {
         use crate::pipeline::{self, AudioSource, PipelineGuard, VideoSource};
         use std::sync::{
-            atomic::{AtomicUsize, Ordering},
             Arc,
+            atomic::{AtomicUsize, Ordering},
         };
         use std::time::Duration;
         pipeline::init().unwrap();
@@ -673,7 +678,11 @@ mod playback_tests {
             kind: MediaKind::Video,
             title: "test".into(),
         };
-        let description = format!("{} ! fakesink name=video sync=true signal-handoffs=true {} ! fakesink name=audio sync=true signal-handoffs=true", video.description(), AudioSource::MediaFile.description());
+        let description = format!(
+            "{} ! fakesink name=video sync=true signal-handoffs=true {} ! fakesink name=audio sync=true signal-handoffs=true",
+            video.description(),
+            AudioSource::MediaFile.description()
+        );
         let (pipeline, _) = pipeline::build_pipeline(&description, 0).unwrap();
         let guard = PipelineGuard::new(pipeline.clone());
         let counts: Vec<_> = ["video", "audio"]

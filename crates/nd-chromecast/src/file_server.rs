@@ -299,7 +299,9 @@ async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> R
         .filter(|_| method == "GET");
     let range = requested.and_then(|value| parse_range(value, total));
     if requested.is_some() && range.is_none() {
-        let header = format!("HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */{total}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        let header = format!(
+            "HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */{total}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
         write_bounded(&mut stream, header.as_bytes()).await?;
         return Ok(());
     }
@@ -488,9 +490,11 @@ mod tests {
         let decodable = MediaFile::inspect_decodable(&film).unwrap();
         assert_eq!(decodable.kind, MediaKind::Video);
         assert!(!decodable.plays_natively());
-        assert!(MediaFile::inspect_decodable(&clip)
-            .unwrap()
-            .plays_natively());
+        assert!(
+            MediaFile::inspect_decodable(&clip)
+                .unwrap()
+                .plays_natively()
+        );
         assert!(MediaFile::inspect_decodable(&notes).is_err());
         assert!(MediaFile::inspect_decodable(&dir).is_err());
         std::fs::remove_dir_all(&dir).unwrap();

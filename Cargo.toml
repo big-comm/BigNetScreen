@@ -20,7 +20,7 @@ exclude = ["vendor/gst-plugin-ndi"]
 
 [workspace.package]
 version = "0.1.4"
-edition = "2021"
+edition = "2024"
 license = "GPL-3.0-or-later"
 authors = ["Tales A. Mendonça", "BigCommunity"]
 repository = "https://github.com/big-comm/BigNetScreen"

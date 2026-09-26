@@ -36,19 +36,19 @@ use gst::prelude::*;
 use gstreamer as gst;
 use gstreamer_app as gst_app;
 
-use nd_core::pipeline::{self, StreamConfig, MIRROR_AUDIO_SINK, MIRROR_VIDEO_SINK};
+use nd_core::pipeline::{self, MIRROR_AUDIO_SINK, MIRROR_VIDEO_SINK, StreamConfig};
 use nd_core::sink::{SinkState, SinkStatus};
 use nd_core::{NdError, Result};
 
 use crate::cast::CastChannel;
 use crate::flow::{AckWindow, MAX_UNACKED_FRAMES};
-use crate::mirror::{self, MirrorConfig, Negotiated, OfferedStream, MIRRORING_APP_ID};
+use crate::mirror::{self, MIRRORING_APP_ID, MirrorConfig, Negotiated, OfferedStream};
 use crate::rate;
 use crate::rtcp::{
-    build_sender_report, classify_receiver_packet, ntp_timestamp, parse_cast_feedbacks,
-    picture_loss_for, Nack, SenderStats,
+    Nack, SenderStats, build_sender_report, classify_receiver_packet, ntp_timestamp,
+    parse_cast_feedbacks, picture_loss_for,
 };
-use crate::rtp::{encrypt_frame, Frame, Packetizer};
+use crate::rtp::{Frame, Packetizer, encrypt_frame};
 
 /// How long to wait for a frame before checking for cancellation.
 const PULL_TIMEOUT: Duration = Duration::from_millis(20);
@@ -634,10 +634,9 @@ impl StreamSender {
                 .history
                 .back()
                 .and_then(|(_, _, packets)| packets.last())
+                && self.pacer.send(&self.socket, packet).is_ok()
             {
-                if self.pacer.send(&self.socket, packet).is_ok() {
-                    self.stats.record(packet.len().saturating_sub(12));
-                }
+                self.stats.record(packet.len().saturating_sub(12));
             }
         }
     }
@@ -977,7 +976,8 @@ pub async fn run(
             endpoint: Some(std::net::SocketAddr::new(receiver_ip, receiver_port)),
             receivers: None,
         });
-        let result = {
+
+        {
             let (stop, mut stopped) = tokio::sync::watch::channel(*cancel.borrow());
             let streaming = stream(&cfg, gst_pipeline.clone(), events, &session, status,
                 &mut stopped);
@@ -1003,13 +1003,10 @@ pub async fn run(
                     }
                 }
             }
-        };
-
-        result
+        }
     }.await;
 
-    let result = channel.finish_app(&app, result).await;
-    result
+    channel.finish_app(&app, result).await
 }
 
 /// Stops the pipeline before joining workers, including failed startup.
@@ -1137,12 +1134,10 @@ async fn stream(
         (MIRROR_VIDEO_SINK, session.video().is_some()),
         (MIRROR_AUDIO_SINK, session.audio().is_some()),
     ] {
-        if !accepted {
-            if let Some(element) = gst_pipeline.by_name(name) {
-                element.set_property("drop", true);
-                element.set_property("max-buffers", 1u32);
-                element.set_property("wait-on-eos", false);
-            }
+        if !accepted && let Some(element) = gst_pipeline.by_name(name) {
+            element.set_property("drop", true);
+            element.set_property("max-buffers", 1u32);
+            element.set_property("wait-on-eos", false);
         }
     }
     if senders.is_empty() {
@@ -1200,13 +1195,12 @@ async fn stream(
                 if classify_receiver_packet(&buf[..size]).is_none() {
                     continue;
                 }
-                if let Some(sender_ssrc) = video_ssrc {
-                    if let Some(receiver_ssrc) = receiver_ssrcs.get(&sender_ssrc) {
-                        if picture_loss_for(&buf[..size], *receiver_ssrc, sender_ssrc) {
-                            key_flag.store(true, std::sync::atomic::Ordering::Relaxed);
-                            alive_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        }
-                    }
+                if let Some(sender_ssrc) = video_ssrc
+                    && let Some(receiver_ssrc) = receiver_ssrcs.get(&sender_ssrc)
+                    && picture_loss_for(&buf[..size], *receiver_ssrc, sender_ssrc)
+                {
+                    key_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                    alive_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
                 for feedback in parse_cast_feedbacks(&buf[..size]) {
                     if receiver_ssrcs.get(&feedback.sender_ssrc) != Some(&feedback.receiver_ssrc) {
@@ -1226,13 +1220,13 @@ async fn stream(
                     if feedback.nacks.is_empty() {
                         continue;
                     }
-                    if let Some(inbox) = nack_inboxes.get(&feedback.sender_ssrc) {
-                        if matches!(
+                    if let Some(inbox) = nack_inboxes.get(&feedback.sender_ssrc)
+                        && matches!(
                             inbox.try_send(feedback.nacks),
                             Err(std::sync::mpsc::TrySendError::Disconnected(_))
-                        ) {
-                            break;
-                        }
+                        )
+                    {
+                        break;
                     }
                 }
             }
@@ -1359,12 +1353,12 @@ async fn stream(
                         last_seen = seen;
                         last_seen_at = std::time::Instant::now();
                     } else if last_seen_at.elapsed() > RECEIVER_SILENCE_TIMEOUT {
-                        if let Ok(mut slot) = done_tx.lock() {
-                            if let Some(tx) = slot.take() {
-                                let _ = tx.send(Err(NdError::Protocol(
-                                    "the receiver stopped responding".into(),
-                                )));
-                            }
+                        if let Ok(mut slot) = done_tx.lock()
+                            && let Some(tx) = slot.take()
+                        {
+                            let _ = tx.send(Err(NdError::Protocol(
+                                "the receiver stopped responding".into(),
+                            )));
                         }
                         return;
                     }
@@ -1403,38 +1397,38 @@ async fn stream(
                         Ok(true) => {}
                         Ok(false) => break,
                         Err(err) => {
-                            if let Ok(mut slot) = done_tx.lock() {
-                                if let Some(tx) = slot.take() {
-                                    let _ = tx.send(Err(err));
-                                }
+                            if let Ok(mut slot) = done_tx.lock()
+                                && let Some(tx) = slot.take()
+                            {
+                                let _ = tx.send(Err(err));
                             }
                             return;
                         }
                     }
 
-                    if let Some(control) = rate.as_mut() {
-                        if last_rate.elapsed() >= rate::UPDATE_INTERVAL {
-                            last_rate = std::time::Instant::now();
-                            let sent = u64::from(sender.stats.packets);
-                            let seen = rate::Window {
-                                packets_sent: sent.wrapping_sub(rate_baseline.0),
-                                packets_resent: packets_resent - rate_baseline.1,
-                                frames_dropped: sender.frames_dropped - rate_baseline.2,
-                            };
-                            rate_baseline = (sent, packets_resent, sender.frames_dropped);
-                            if let Some(kbps) = control.observe(seen) {
-                                let applied =
-                                    pipeline::set_encoder_bitrate(&rate_pipeline, encoder, kbps);
-                                tracing::info!(
-                                    kbps,
-                                    ceiling_kbps,
-                                    applied,
-                                    resent = seen.packets_resent,
-                                    of = seen.packets_sent,
-                                    dropped = seen.frames_dropped,
-                                    "bitrate adjusted to what the link is carrying"
-                                );
-                            }
+                    if let Some(control) = rate.as_mut()
+                        && last_rate.elapsed() >= rate::UPDATE_INTERVAL
+                    {
+                        last_rate = std::time::Instant::now();
+                        let sent = u64::from(sender.stats.packets);
+                        let seen = rate::Window {
+                            packets_sent: sent.wrapping_sub(rate_baseline.0),
+                            packets_resent: packets_resent - rate_baseline.1,
+                            frames_dropped: sender.frames_dropped - rate_baseline.2,
+                        };
+                        rate_baseline = (sent, packets_resent, sender.frames_dropped);
+                        if let Some(kbps) = control.observe(seen) {
+                            let applied =
+                                pipeline::set_encoder_bitrate(&rate_pipeline, encoder, kbps);
+                            tracing::info!(
+                                kbps,
+                                ceiling_kbps,
+                                applied,
+                                resent = seen.packets_resent,
+                                of = seen.packets_sent,
+                                dropped = seen.frames_dropped,
+                                "bitrate adjusted to what the link is carrying"
+                            );
                         }
                     }
 
@@ -1491,12 +1485,11 @@ async fn stream(
                     }
                 }
 
-                if remaining.fetch_sub(1, std::sync::atomic::Ordering::AcqRel) == 1 {
-                    if let Ok(mut slot) = done_tx.lock() {
-                        if let Some(tx) = slot.take() {
-                            let _ = tx.send(Ok(()));
-                        }
-                    }
+                if remaining.fetch_sub(1, std::sync::atomic::Ordering::AcqRel) == 1
+                    && let Ok(mut slot) = done_tx.lock()
+                    && let Some(tx) = slot.take()
+                {
+                    let _ = tx.send(Ok(()));
                 }
             })
             .map_err(|e| NdError::Gst(e.to_string()))?;

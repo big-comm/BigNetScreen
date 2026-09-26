@@ -62,17 +62,16 @@ async fn grab(source_type: SourceType, cursor_mode: u32) -> nd_core::Result<(Vec
     let mut width = 0usize;
     for _ in 0..40 {
         if let Some(sample) = sink.try_pull_sample(gstreamer::ClockTime::from_mseconds(250)) {
-            if let Some(caps) = sample.caps() {
-                if let Some(structure) = caps.structure(0) {
-                    if let Ok(w) = structure.get::<i32>("width") {
-                        width = w as usize;
-                    }
-                }
+            if let Some(caps) = sample.caps()
+                && let Some(structure) = caps.structure(0)
+                && let Ok(w) = structure.get::<i32>("width")
+            {
+                width = w as usize;
             }
-            if let Some(buffer) = sample.buffer() {
-                if let Ok(map) = buffer.map_readable() {
-                    frame = map.to_vec();
-                }
+            if let Some(buffer) = sample.buffer()
+                && let Ok(map) = buffer.map_readable()
+            {
+                frame = map.to_vec();
             }
         }
     }

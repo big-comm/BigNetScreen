@@ -23,8 +23,8 @@
 
 use std::collections::HashMap;
 
-use zbus::zvariant::{OwnedValue, Value};
 use zbus::Connection;
+use zbus::zvariant::{OwnedValue, Value};
 
 use nd_core::{NdError, Result};
 
@@ -211,10 +211,10 @@ impl LayoutSnapshot {
             logical.5.retain(|(name, ..)| name != connector);
         }
         self.logical.retain(|logical| !logical.5.is_empty());
-        if !self.logical.iter().any(|logical| logical.4) {
-            if let Some(first) = self.logical.first_mut() {
-                first.4 = true;
-            }
+        if !self.logical.iter().any(|logical| logical.4)
+            && let Some(first) = self.logical.first_mut()
+        {
+            first.4 = true;
         }
         (!self.logical.is_empty()).then_some(self)
     }
@@ -420,10 +420,8 @@ pub async fn primary_connector(conn: &Connection) -> Option<String> {
     let (_serial, monitors, logical, _props) = proxy.get_current_state().await.ok()?;
 
     for (_x, _y, _scale, _transform, primary, assigned, _props) in &logical {
-        if *primary {
-            if let Some((connector, ..)) = assigned.first() {
-                return Some(connector.clone());
-            }
+        if *primary && let Some((connector, ..)) = assigned.first() {
+            return Some(connector.clone());
         }
     }
     // No monitor flagged primary (it happens on some setups): the first one is

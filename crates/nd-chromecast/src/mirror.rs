@@ -25,7 +25,7 @@ use std::io::Read;
 use std::net::IpAddr;
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use nd_core::{NdError, Result};
 
@@ -382,19 +382,17 @@ impl Answer {
             // Nothing to cap against, so the mode's own bitrate stands.
             cfg.bitrate_kbps = cast_bitrate_kbps(cfg);
         }
-        if with_audio {
-            if let Some(limits) = &self.audio_limits {
-                // The current Opus pipeline is fixed at 48 kHz / stereo / 128 kbit/s.
-                if limits.max_sample_rate < AUDIO_TIME_BASE
-                    || limits.max_channels < 2
-                    || limits.max_bitrate < 128_000
-                    || limits.min_bitrate > 128_000
-                    || limits.max_delay_ms.is_some_and(|limit| delay_ms > limit)
-                {
-                    return Err(NdError::Unsupported(
-                        "receiver cannot accept the offered Opus audio mode".into(),
-                    ));
-                }
+        if with_audio && let Some(limits) = &self.audio_limits {
+            // The current Opus pipeline is fixed at 48 kHz / stereo / 128 kbit/s.
+            if limits.max_sample_rate < AUDIO_TIME_BASE
+                || limits.max_channels < 2
+                || limits.max_bitrate < 128_000
+                || limits.min_bitrate > 128_000
+                || limits.max_delay_ms.is_some_and(|limit| delay_ms > limit)
+            {
+                return Err(NdError::Unsupported(
+                    "receiver cannot accept the offered Opus audio mode".into(),
+                ));
             }
         }
         Ok(())
