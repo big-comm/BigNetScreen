@@ -996,7 +996,13 @@ impl Engine {
         tracing::info!(name = %info.display_name, count = files.len(), "sending files");
         self.media_owner = None;
 
-        if info.kind == SinkKind::Chromecast {
+        // A Chromecast fetches its own formats directly; anything else is
+        // decoded here and streamed, the way DLNA always is.
+        let fetchable = files.iter().all(|item| match item {
+            MediaItem::File(file) => file.plays_natively(),
+            MediaItem::Url { .. } => true,
+        });
+        if info.kind == SinkKind::Chromecast && fetchable {
             let endpoint = sink.control_endpoint().ok_or("unknown-receiver")?;
             let session = MediaSession::start(
                 endpoint,
@@ -1015,8 +1021,14 @@ impl Engine {
         self.operation_generation += 1;
         self.probing = false;
         self.measured = None;
-        let session = MediaSession::start_mirroring(sink.clone(), files, start)
-            .map_err(|err| err.to_string())?;
+        // A DLNA television is asked first whether it plays the files itself.
+        let session = match sink.upnp_renderer() {
+            Some(renderer) => {
+                MediaSession::start_upnp(sink.clone(), renderer, files, self.settings.port, start)
+            }
+            None => MediaSession::start_mirroring(sink.clone(), files, start),
+        }
+        .map_err(|err| err.to_string())?;
         self.active_cast = Some(target);
         self.active_sink = Some(sink);
         self.media_session = Some(session);
@@ -1371,7 +1383,8 @@ mod tests {
                             seconds: 1.0,
                             paused: true,
                             volume: 0.25,
-                            muted: true
+                            muted: true,
+                            height: 720,
                         }
                     );
                     reply.send(Ok("session-a".into())).unwrap();
@@ -1420,13 +1433,13 @@ mod tests {
             }
         });
         tokio::time::timeout(Duration::from_secs(5), async {
-            assert_eq!(proxy.player_api().await.unwrap(), 1);
+            assert_eq!(proxy.player_api().await.unwrap(), 2);
             assert!(proxy.player_session().await.unwrap().id.is_empty());
             let id = proxy
                 .start_player(
                     "living-room",
                     &[path.display().to_string()],
-                    (1.0, true, 0.25, true),
+                    (1.0, true, 0.25, true, 720),
                 )
                 .await
                 .unwrap();
@@ -1443,7 +1456,7 @@ mod tests {
                     "audio/mpeg",
                     "Test radio",
                     true,
-                    (0.0, false, 1.0, false),
+                    (0.0, false, 1.0, false, 0),
                 )
                 .await
                 .unwrap();

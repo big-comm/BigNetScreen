@@ -1608,7 +1608,7 @@ impl VideoSource {
                     ),
                     crate::media::MediaKind::Video => format!(
                         "{decoder} \
-                         filedec. ! queue ! identity sync=true ! videoconvert"
+                         filedec. ! queue ! identity name=file-video-sync sync=true ! videoconvert"
                     ),
                     // A song has no picture. The decoder is still declared —
                     // the audio branch takes its sound from it — and the screen
@@ -1777,7 +1777,7 @@ impl AudioSource {
             AudioSource::MediaFile => "audiomixer name=filemix latency=20000000 ignore-inactive-pads=true \
                  audiotestsrc name=file-silence is-live=true wave=silence samplesperbuffer=480 \
                  ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! filemix. \
-                 filedec. ! queue name=file-audio-queue ! identity sync=true ! audioconvert ! audioresample \
+                 filedec. ! queue name=file-audio-queue ! identity name=file-audio-sync sync=true ! audioconvert ! audioresample \
                  ! audio/x-raw,rate=48000,channels=2 ! filemix. \
                  filemix. ! volume name=file-volume"
                 .to_string(),
@@ -2074,10 +2074,17 @@ impl StreamConfig {
         let scale = if self.encoder.is_va() {
             "vapostproc add-borders=true".to_string()
         } else {
-            "videoscale add-borders=true ! videoconvert n-threads=0".to_string()
+            // Converted first: `videoscale` fills its borders wrongly in the
+            // 10-bit formats a HEVC film decodes to, and a film's black bars
+            // reached the television pink.
+            "videoconvert n-threads=0 ! videoscale add-borders=true".to_string()
         };
+        // Square pixels, or the borders never appear: with the aspect ratio
+        // left open the scaler fills the frame and records the stretch as a
+        // pixel shape, which receivers ignore — a 2.39:1 film then fills a
+        // 16:9 television, stretched vertically.
         let caps = format!(
-            "video/x-raw,format={fmt},{dims},framerate={fps}/1",
+            "video/x-raw,format={fmt},{dims},pixel-aspect-ratio=1/1,framerate={fps}/1",
             dims = target.caps_dimensions()
         );
         format!("{rate} ! {scale} ! capsfilter name={SCALE_CAPS} caps=\"{caps}\"")
@@ -2439,6 +2446,9 @@ pub const TS_HTTP_SINK_NAME: &str = "cc-sink";
 /// This is not a capability negotiated with the receiver.
 pub const DLNA_MAX_RESOLUTION: (u32, u32) = (1920, 1080);
 
+/// How long the transport-stream multiplex waits for a file's first picture.
+const MEDIA_MUX_WAIT_NS: u64 = 1_000_000_000;
+
 /// Builds an H.264 + AAC transport stream for a receiver that fetches it over
 /// HTTP — the Cast fallback and every DLNA renderer.
 ///
@@ -2481,7 +2491,7 @@ pub fn ts_http_pipeline_description(
         "{src} ! {convert} ! {vqueue} ! \
          {enc} ! h264parse config-interval=-1 ! \
          video/x-h264,stream-format=byte-stream,alignment=au ! \
-         mpegtsmux name=mux alignment=7{padding} ! \
+         mpegtsmux name=mux alignment=7{padding}{wait_for_video} ! \
          queue max-size-buffers=0 max-size-bytes=0 max-size-time=50000000 silent=true ! \
          multisocketsink name={sink} sync=false async=false blocksize=8192 \
          burst-format=buffers {sink_policy} \
@@ -2489,6 +2499,17 @@ pub fn ts_http_pipeline_description(
         padding = match mux_bitrate_bps {
             Some(bps) => format!(" bitrate={bps}"),
             None => String::new(),
+        },
+        // A file's picture comes out of the decoder a few hundred milliseconds
+        // after the silence that backs its sound, and without a wait the
+        // multiplex starts with a program table that lists audio alone. A
+        // Panasonic VIErA takes that first table as the whole program, shows
+        // "waiting" and gives up; a session that happened to seek first won
+        // the race and played. The wait costs nothing once both are flowing.
+        wait_for_video = if source.is_media() {
+            format!(" latency={MEDIA_MUX_WAIT_NS}")
+        } else {
+            String::new()
         },
         src = source.description(),
         convert = cfg.convert_scale(target),
@@ -2562,6 +2583,39 @@ mod tests {
                 "source={source:?}, ceiling={ceiling:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_ten_bit_film_gets_black_bars() {
+        use gst::prelude::*;
+        init().unwrap();
+        let cfg = StreamConfig::default();
+        let description = format!(
+            "videotestsrc num-buffers=1 pattern=white \
+             ! video/x-raw,format=P010_10LE,width=320,height=134,pixel-aspect-ratio=1/1,framerate=30/1 \
+             ! {} ! videoconvert ! video/x-raw,format=RGB ! appsink name=out",
+            cfg.convert_scale(VideoTarget::Exact((320, 180)))
+        );
+        let pipeline = gst::parse::launch(&description)
+            .unwrap()
+            .downcast::<gst::Pipeline>()
+            .unwrap();
+        let guard = PipelineGuard::new(pipeline);
+        guard.pipeline().set_state(gst::State::Playing).unwrap();
+        let sample = guard
+            .pipeline()
+            .by_name("out")
+            .unwrap()
+            .emit_by_name::<Option<gst::Sample>>(
+                "try-pull-sample",
+                &[&gst::ClockTime::from_seconds(5)],
+            )
+            .expect("one frame");
+        let frame = sample.buffer().unwrap().map_readable().unwrap();
+        // Top-left: inside the upper bar. Centre: the white picture.
+        assert!(frame[..3].iter().all(|&c| c < 24), "bar {:?}", &frame[..3]);
+        let centre = (90 * 320 + 160) * 3;
+        assert!(frame[centre..centre + 3].iter().all(|&c| c > 200));
     }
 
     #[test]

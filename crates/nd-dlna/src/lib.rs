@@ -23,6 +23,7 @@
 //! `docs/dlna.md` for the transport choices and their validation limits.
 
 pub mod avtransport;
+pub mod renderer;
 pub mod session;
 pub mod ssdp;
 pub mod upnp;
@@ -49,10 +50,15 @@ pub struct DlnaSink {
     location: String,
     /// Where `AVTransport` is driven.
     control: Endpoint,
+    /// `RenderingControl` and `ConnectionManager`, when it announced them.
+    rendering_control: Option<Endpoint>,
+    connection_manager: Option<Endpoint>,
     address: IpAddr,
     status: SinkStatus,
-    /// Cancels the running session, when there is one.
-    session: Mutex<Option<tokio::sync::watch::Sender<bool>>>,
+    /// Cancels the running session, when there is one, with the number that
+    /// tells it apart from the next.
+    session: Mutex<Option<(u64, tokio::sync::watch::Sender<bool>)>>,
+    sessions: std::sync::atomic::AtomicU64,
 }
 
 impl DlnaSink {
@@ -76,6 +82,12 @@ impl DlnaSink {
             ))
         })?;
 
+        let service = |kind: &str| {
+            upnp::control_url(&description, kind).and_then(|path| location.resolve(&path))
+        };
+        let rendering_control = service("RenderingControl:1");
+        let connection_manager = service("ConnectionManager:1");
+
         // Off the network and straight into a label, so it is sanitised like
         // every other announced name.
         let display_name =
@@ -93,8 +105,11 @@ impl DlnaSink {
             location: announcement.location.clone(),
             address: location.addr.ip(),
             control,
+            rendering_control,
+            connection_manager,
             status: SinkStatus::new(),
             session: Mutex::new(None),
+            sessions: std::sync::atomic::AtomicU64::new(0),
         })
     }
 
@@ -114,6 +129,15 @@ impl Sink for DlnaSink {
         Some(self.control.addr)
     }
 
+    fn upnp_renderer(&self) -> Option<nd_core::sink::UpnpRenderer> {
+        Some(nd_core::sink::UpnpRenderer {
+            address: self.address,
+            av_transport: self.control.url(),
+            rendering_control: self.rendering_control.as_ref().map(Endpoint::url),
+            connection_manager: self.connection_manager.as_ref().map(Endpoint::url),
+        })
+    }
+
     fn state(&self) -> SinkState {
         self.status.state()
     }
@@ -128,20 +152,33 @@ impl Sink for DlnaSink {
 
     async fn start_stream(&self, source: CaptureSource) -> Result<()> {
         let (cancel_tx, cancel) = tokio::sync::watch::channel(false);
+        let number = self
+            .sessions
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         {
             let mut slot = self.session.lock().unwrap_or_else(PoisonError::into_inner);
             // A second session would take over the same television and leave
             // the first one serving a screen nobody is watching.
-            if slot.as_ref().is_some_and(|tx| !*tx.borrow()) {
+            if slot.as_ref().is_some_and(|(_, tx)| !*tx.borrow()) {
                 return Err(NdError::Protocol(
                     "this screen is already receiving a transmission".into(),
                 ));
             }
-            *slot = Some(cancel_tx);
+            *slot = Some((number, cancel_tx));
         }
         self.status.reset();
 
         let result = session::run(self.address, &self.control, source, &self.status, cancel).await;
+        // Over, however it ended. Left in place, a session that ended on its
+        // own — the file finished, the viewer stopped it on the remote — kept
+        // refusing every later one until the service restarted. Only ours:
+        // a stopped session may still be finishing when the next one starts.
+        {
+            let mut slot = self.session.lock().unwrap_or_else(PoisonError::into_inner);
+            if slot.as_ref().is_some_and(|(current, _)| *current == number) {
+                *slot = None;
+            }
+        }
 
         match result {
             Ok(()) => {
@@ -164,9 +201,66 @@ impl Sink for DlnaSink {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .as_ref()
+            .map(|(_, cancel)| cancel)
         {
             let _ = cancel.send(true);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_session_that_ended_on_its_own_lets_the_next_one_start() {
+        nd_core::pipeline::init().unwrap();
+        let previous = nd_core::settings::current();
+        nd_core::settings::set_in_memory(&nd_core::settings::Settings {
+            port: 0,
+            system_audio: false,
+            microphone: false,
+            hardware_encoding: false,
+            ..Default::default()
+        });
+        // Nobody answers there: each session ends by itself, with an error.
+        let control = Endpoint::parse("http://127.0.0.1:1/control").unwrap();
+        let sink = DlnaSink {
+            info: SinkInfo {
+                id: "test".into(),
+                display_name: "Test".into(),
+                kind: SinkKind::Dlna,
+                address: Some("127.0.0.1".into()),
+            },
+            location: String::new(),
+            address: control.addr.ip(),
+            control,
+            rendering_control: None,
+            connection_manager: None,
+            status: SinkStatus::new(),
+            session: Mutex::new(None),
+            sessions: std::sync::atomic::AtomicU64::new(0),
+        };
+        let source = || {
+            CaptureSource::media_file(
+                nd_core::capture::MediaPlayback {
+                    control: None,
+                    start: None,
+                    source: nd_core::media::MediaSource::File("/nonexistent.mkv".into()),
+                    kind: nd_core::media::MediaKind::Video,
+                    title: "gone".into(),
+                },
+                (320, 180),
+            )
+        };
+        for attempt in 0..2 {
+            let err = sink.start_stream(source()).await.unwrap_err().to_string();
+            assert!(
+                !err.contains("already receiving"),
+                "attempt {attempt}: {err}"
+            );
+        }
+        nd_core::settings::set_in_memory(&previous);
     }
 }

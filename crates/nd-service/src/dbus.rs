@@ -25,6 +25,18 @@ use crate::{BUS_NAME, OBJECT_PATH};
 pub const INTERFACE: &str = "br.com.biglinux.BigNetScreen1";
 
 async fn inspect_media(paths: Vec<String>) -> zbus::fdo::Result<Vec<MediaFile>> {
+    inspect_with(paths, MediaFile::inspect).await
+}
+
+/// A player session may also take files that only the decoding path plays.
+async fn inspect_media_for_player(paths: Vec<String>) -> zbus::fdo::Result<Vec<MediaFile>> {
+    inspect_with(paths, MediaFile::inspect_decodable).await
+}
+
+async fn inspect_with(
+    paths: Vec<String>,
+    inspect: fn(&std::path::Path) -> Result<MediaFile, String>,
+) -> zbus::fdo::Result<Vec<MediaFile>> {
     if paths.is_empty() || paths.len() > nd_core::media::MAX_FILES {
         return Err(zbus::fdo::Error::InvalidArgs(
             "select between 1 and 1000 files".into(),
@@ -33,7 +45,7 @@ async fn inspect_media(paths: Vec<String>) -> zbus::fdo::Result<Vec<MediaFile>> 
     let files = tokio::task::spawn_blocking(move || {
         let mut files = Vec::with_capacity(paths.len());
         for path in paths {
-            let file = MediaFile::inspect(std::path::Path::new(&path))
+            let file = inspect(std::path::Path::new(&path))
                 .map_err(|err| zbus::fdo::Error::InvalidArgs(format!("{path}: {err}")))?;
             files.push(file);
         }
@@ -75,7 +87,7 @@ impl Service {
         &self,
         target: &str,
         files: Vec<MediaItem>,
-        start: (f64, bool, f64, bool),
+        start: (f64, bool, f64, bool, u32),
         header: zbus::message::Header<'_>,
         connection: &zbus::Connection,
     ) -> zbus::fdo::Result<String> {
@@ -84,6 +96,7 @@ impl Service {
             paused: start.1,
             volume: start.2,
             muted: start.3,
+            height: start.4,
         }
         .validate()
         .map_err(|err| zbus::fdo::Error::InvalidArgs(err.to_string()))?;
@@ -227,11 +240,11 @@ impl Service {
         &self,
         target: &str,
         paths: Vec<String>,
-        start: (f64, bool, f64, bool),
+        start: (f64, bool, f64, bool, u32),
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> zbus::fdo::Result<String> {
-        let files = inspect_media(paths)
+        let files = inspect_media_for_player(paths)
             .await?
             .into_iter()
             .map(MediaItem::File)
@@ -249,7 +262,7 @@ impl Service {
         content_type: String,
         title: String,
         audio: bool,
-        start: (f64, bool, f64, bool),
+        start: (f64, bool, f64, bool, u32),
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> zbus::fdo::Result<String> {
@@ -295,8 +308,9 @@ impl Service {
     }
 
     #[zbus(property)]
+    /// 2: the start tuple carries the frame height as a fifth field.
     async fn player_api(&self) -> u32 {
-        1
+        2
     }
 
     #[zbus(property)]
@@ -371,7 +385,7 @@ pub trait Service {
         &self,
         target: &str,
         paths: &[String],
-        start: (f64, bool, f64, bool),
+        start: (f64, bool, f64, bool, u32),
     ) -> zbus::Result<String>;
     fn start_player_url(
         &self,
@@ -380,7 +394,7 @@ pub trait Service {
         content_type: &str,
         title: &str,
         audio: bool,
-        start: (f64, bool, f64, bool),
+        start: (f64, bool, f64, bool, u32),
     ) -> zbus::Result<String>;
     fn control_player(
         &self,

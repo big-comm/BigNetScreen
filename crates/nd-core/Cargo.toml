@@ -14,6 +14,8 @@ async-trait.workspace = true
 tracing.workspace = true
 futures.workspace = true
 gstreamer.workspace = true
+# `media::tv_frame`: a file's picture size, read from its headers.
+gstreamer-pbutils = "0.25"
 # `radio`: radio silence shared between discovery and streaming.
 tokio.workspace = true
 # `stream_server`: handing a live TCP socket to `multisocketsink`.

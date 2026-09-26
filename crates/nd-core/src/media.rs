@@ -56,6 +56,37 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_television_frame_is_16_by_9_and_holds_the_picture() {
+        let file = MediaSource::File("/nonexistent.mkv".into());
+        for (height, frame) in [
+            (720, (1280, 720)),
+            (1080, (1920, 1080)),
+            (1440, (2560, 1440)),
+            (2160, (3840, 2160)),
+            (480, (854, 480)),
+        ] {
+            assert_eq!(tv_frame(&file, height), Some(frame), "{height}");
+        }
+        // A 2.39:1 film keeps its width; a 4:3 one keeps its height; nothing
+        // grows past 4K.
+        let around = |(w, h): (u32, u32)| frame_of_height(h.max((w * 9).div_ceil(16)));
+        assert_eq!(around((1920, 802)), (1920, 1080));
+        assert_eq!(around((1440, 1080)), (1920, 1080));
+        assert_eq!(around((4096, 2160)), (3840, 2160));
+        let start = |height| PlaybackStart {
+            seconds: 0.0,
+            paused: false,
+            volume: 1.0,
+            muted: false,
+            height,
+        };
+        assert!(start(100).validate().is_err());
+        assert!(start(4320).validate().is_err());
+        assert!(start(1080).validate().is_ok());
+        assert!(start(0).validate().is_ok());
+    }
+
+    #[test]
     fn a_song_has_nothing_to_show() {
         assert!(!MediaKind::Music.has_picture());
         assert!(MediaKind::Video.has_picture());
@@ -101,6 +132,9 @@ pub struct PlaybackStart {
     pub paused: bool,
     pub volume: f64,
     pub muted: bool,
+    /// The height of the frame a decoded file is sent in, 0 for the file's
+    /// own size. See [`tv_frame`].
+    pub height: u32,
 }
 
 impl PlaybackStart {
@@ -108,13 +142,73 @@ impl PlaybackStart {
         if !self.volume.is_finite()
             || !(0.0..=1.0).contains(&self.volume)
             || gstreamer::ClockTime::try_from_seconds_f64(self.seconds).is_err()
+            || !(self.height == 0 || (240..=TV_FRAME_MAX.1).contains(&self.height))
         {
             return Err(crate::NdError::Unsupported(
-                "invalid initial playback position or volume".into(),
+                "invalid initial playback position, volume or resolution".into(),
             ));
         }
         Ok(self)
     }
+}
+
+/// The largest frame a television is sent: 4K UHD.
+const TV_FRAME_MAX: (u32, u32) = (3840, 2160);
+
+/// The frame a television is sent this file in.
+///
+/// Always 16:9, black bars included: a television stretches whatever frame it
+/// gets over its whole screen. `height` picks the frame; 0 asks for the file's
+/// own size, the smallest 16:9 frame that holds its picture, so nothing is
+/// scaled that did not need to be. `None` when the file has no picture or
+/// could not be read in time. Blocking: it reads the file's headers.
+pub fn tv_frame(source: &MediaSource, height: u32) -> Option<(u32, u32)> {
+    if height > 0 {
+        return Some(frame_of_height(height));
+    }
+    let (width, height) = picture_size(source)?;
+    Some(frame_of_height(height.max((width * 9).div_ceil(16))))
+}
+
+fn frame_of_height(height: u32) -> (u32, u32) {
+    let height = height.clamp(2, TV_FRAME_MAX.1) & !1;
+    ((height * 16 / 9 + 1) & !1, height)
+}
+
+/// The size the file's picture is shown at, pixel shape included.
+fn picture_size(source: &MediaSource) -> Option<(u32, u32)> {
+    let info = discover(source)?;
+    let video = info.video_streams().into_iter().next()?;
+    let par = video.par();
+    let (numer, denom) = (
+        u64::try_from(par.numer()).ok().filter(|n| *n > 0)?,
+        u64::try_from(par.denom()).ok().filter(|d| *d > 0)?,
+    );
+    let width = u32::try_from(u64::from(video.width()) * numer / denom).ok()?;
+    Some((width, video.height())).filter(|&(w, h)| w > 0 && h > 0)
+}
+
+/// How long the file plays, read from its headers. Blocking.
+pub fn duration(source: &MediaSource) -> Option<f64> {
+    discover(source)?
+        .duration()
+        .map(|duration| duration.seconds_f64())
+        .filter(|seconds| *seconds > 0.0)
+}
+
+/// What GStreamer can tell of a file without playing it; up to five seconds.
+fn discover(source: &MediaSource) -> Option<gstreamer_pbutils::DiscovererInfo> {
+    crate::pipeline::init().ok()?;
+    let uri = match source {
+        MediaSource::File(path) => gstreamer::glib::filename_to_uri(path, None)
+            .ok()?
+            .to_string(),
+        MediaSource::Url(uri) => uri.clone(),
+    };
+    gstreamer_pbutils::Discoverer::new(gstreamer::ClockTime::from_seconds(5))
+        .ok()?
+        .discover_uri(&uri)
+        .ok()
 }
 
 pub fn seek_target(seconds: f64, offset: f64, duration: Option<f64>) -> Option<f64> {
@@ -131,6 +225,33 @@ pub fn seek_target(seconds: f64, offset: f64, duration: Option<f64>) -> Option<f
             None => target,
         },
     )
+}
+
+/// Where playback is, from the clock that paces it.
+///
+/// The decoder answers a position query with how far it has *read*, and its
+/// queues read ahead: measured 14 s ahead of the picture being sent to a TV.
+/// The `identity sync=true` elements release each buffer at its running time,
+/// so the segment they carry and the pipeline's running time give the
+/// position actually leaving.
+fn played_position(pipeline: &gstreamer::Pipeline) -> Option<gstreamer::ClockTime> {
+    use gstreamer::{self as gst, prelude::*};
+    let running = if pipeline.current_state() == gst::State::Playing {
+        pipeline
+            .clock()?
+            .time()
+            .checked_sub(pipeline.base_time()?)?
+    } else {
+        pipeline.start_time()?
+    };
+    ["file-video-sync", "file-audio-sync"]
+        .iter()
+        .find_map(|name| {
+            let pad = pipeline.by_name(name)?.static_pad("sink")?;
+            let event = pad.sticky_event::<gst::event::Segment>(0)?;
+            let segment = event.segment().downcast_ref::<gst::ClockTime>()?;
+            segment.to_stream_time(segment.position_from_running_time(running)?)
+        })
 }
 
 /// Weak access to a file pipeline; never keeps a stopped session alive.
@@ -197,8 +318,8 @@ impl FilePlaybackControl {
         let can_seek = decoder.query(&mut seeking) && seeking.result().0;
         PlaybackState {
             paused: pipeline.current_state() == gst::State::Paused,
-            seconds: decoder
-                .query_position::<gst::ClockTime>()
+            seconds: played_position(&pipeline)
+                .or_else(|| decoder.query_position::<gst::ClockTime>())
                 .map(|v| v.seconds_f64())
                 .unwrap_or(0.0),
             duration: decoder

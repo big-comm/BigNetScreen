@@ -248,6 +248,7 @@ async fn media_load_applies_position_and_mute_before_play_and_refuses_unconfirme
                         paused,
                         volume: 0.25,
                         muted: true,
+                        height: 0,
                     }),
                 )
                 .await;

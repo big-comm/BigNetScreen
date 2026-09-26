@@ -110,6 +110,45 @@ impl MediaFile {
         })
     }
 
+    /// Describes a file that a receiver cannot fetch as it is but that the
+    /// decoding path (the one DLNA and screen mirroring use) can play: a
+    /// player hands over whatever it is showing, and `.mkv` or HEVC is common.
+    /// Formats the receiver plays natively are described as by [`Self::inspect`].
+    pub fn inspect_decodable(path: &Path) -> std::result::Result<Self, String> {
+        if let Ok(file) = Self::inspect(path) {
+            return Ok(file);
+        }
+        let extension = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        let (kind, content_type) = match extension.as_str() {
+            "mkv" | "avi" | "mov" | "ts" | "m2ts" | "mts" | "wmv" | "flv" | "mpg" | "mpeg"
+            | "3gp" | "ogv" | "vob" => (MediaKind::Video, "video/x-matroska"),
+            "mka" | "wma" | "ape" | "aiff" | "aif" | "wv" | "ac3" | "dts" | "mp2" | "m4b" => {
+                (MediaKind::Music, "audio/x-matroska")
+            }
+            "" => return Err("a file with no extension".to_string()),
+            other => return Err(format!(".{other} is not a format this receiver plays")),
+        };
+        let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
+        if !metadata.is_file() {
+            return Err("not a regular file".into());
+        }
+        Ok(Self {
+            path: path.to_path_buf(),
+            kind,
+            content_type,
+            size: metadata.len(),
+        })
+    }
+
+    /// Whether a Chromecast can fetch this file as it is.
+    pub fn plays_natively(&self) -> bool {
+        Self::inspect(&self.path).is_ok()
+    }
+
     /// The name to show on the receiver.
     pub fn title(&self) -> String {
         self.path
@@ -205,6 +244,12 @@ impl FileServer {
     }
 }
 
+/// What a DLNA renderer is told about a whole file: it may seek by byte
+/// range and stall the connection to pause. A Chromecast ignores them.
+const DLNA_HEADERS: &str = "transferMode.dlna.org: Streaming\r\n\
+     contentFeatures.dlna.org: DLNA.ORG_OP=01;DLNA.ORG_CI=0;\
+     DLNA.ORG_FLAGS=01700000000000000000000000000000\r\n";
+
 /// Reads one request and answers it.
 async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> Result<()> {
     let request = read_request(&mut stream).await?;
@@ -268,6 +313,7 @@ async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> R
              Content-Length: {length}\r\n\
              Content-Range: bytes {start}-{end}/{total}\r\n\
              Accept-Ranges: bytes\r\n\
+             {DLNA_HEADERS}\
              Connection: close\r\n\r\n",
             file.content_type
         )
@@ -277,6 +323,7 @@ async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> R
              Content-Type: {}\r\n\
              Content-Length: {length}\r\n\
              Accept-Ranges: bytes\r\n\
+             {DLNA_HEADERS}\
              Connection: close\r\n\r\n",
             file.content_type
         )
@@ -425,6 +472,28 @@ mod tests {
             .expect("connection closes");
         assert!(!response.contains("PRIVATE"));
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn a_player_can_hand_over_files_only_the_decoder_plays() {
+        let dir = std::env::temp_dir().join(format!("nd-decodable-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let film = dir.join("film.mkv");
+        let clip = dir.join("clip.mp4");
+        let notes = dir.join("notes.txt");
+        for path in [&film, &clip, &notes] {
+            std::fs::write(path, []).unwrap();
+        }
+        assert!(MediaFile::inspect(&film).is_err());
+        let decodable = MediaFile::inspect_decodable(&film).unwrap();
+        assert_eq!(decodable.kind, MediaKind::Video);
+        assert!(!decodable.plays_natively());
+        assert!(MediaFile::inspect_decodable(&clip)
+            .unwrap()
+            .plays_natively());
+        assert!(MediaFile::inspect_decodable(&notes).is_err());
+        assert!(MediaFile::inspect_decodable(&dir).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

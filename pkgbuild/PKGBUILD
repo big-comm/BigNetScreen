@@ -35,7 +35,7 @@ optdepends=(
 )
 # `gettext` is a build-time tool (msgfmt compiles the catalogues); at runtime
 # the gettext functions come from glibc.
-makedepends=('rust' 'cargo' 'git' 'gettext')
+makedepends=('rust' 'cargo' 'gettext')
 
 # `makepkg` enables link-time optimisation for C globally, which appends
 # `-flto=auto` to CFLAGS. That reaches the C and assembly that `ring` (the
@@ -48,8 +48,11 @@ makedepends=('rust' 'cargo' 'git' 'gettext')
 # which is all but a few hundred kilobytes of this package.
 options=(!lto)
 
-source=("$pkgname::git+$url.git")
-sha256sums=('SKIP')
+# Built in place from the checkout that holds this file, as it stands: no
+# clone, so what is packaged is what was just edited and tested.
+_root() {
+  cd "$startdir/.." && pwd -P
+}
 
 # Use an install script if the repository carries one.
 if [ -e "${pkgname}.install" ]; then
@@ -59,26 +62,26 @@ elif [ -e "pkgbuild.install" ]; then
 fi
 
 prepare() {
-  cd "$pkgname"
+  cd "$(_root)" || return 1
   export RUSTUP_TOOLCHAIN=stable
   cargo fetch --locked
 }
 
 build() {
-  cd "$pkgname"
+  cd "$(_root)" || return 1
   export RUSTUP_TOOLCHAIN=stable
   export CARGO_TARGET_DIR=target
   make PREFIX=/usr
 }
 
 check() {
-  cd "$pkgname"
+  cd "$(_root)" || return 1
   export RUSTUP_TOOLCHAIN=stable
   cargo test --workspace --locked
 }
 
 package() {
-  cd "$pkgname"
+  cd "$(_root)" || return 1
   make DESTDIR="$pkgdir" PREFIX=/usr install
   install -Dm644 COPYING "$pkgdir/usr/share/licenses/$pkgname/COPYING"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"

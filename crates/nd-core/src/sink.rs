@@ -293,6 +293,19 @@ pub struct SinkAccess {
     pub pin: String,
 }
 
+/// Where a UPnP renderer is driven: plain URLs, so that this crate knows
+/// nothing of the protocol that uses them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UpnpRenderer {
+    pub address: std::net::IpAddr,
+    /// `AVTransport`: load, play, pause, seek, position.
+    pub av_transport: String,
+    /// `RenderingControl`: volume and mute, when the renderer has it.
+    pub rendering_control: Option<String>,
+    /// `ConnectionManager`: which formats the renderer accepts.
+    pub connection_manager: Option<String>,
+}
+
 /// A connectable receiver. Implementations must be thread-safe.
 #[async_trait]
 pub trait Sink: Send + Sync {
@@ -301,6 +314,12 @@ pub trait Sink: Send + Sync {
 
     /// Discovered control endpoint, independent of an active stream.
     fn control_endpoint(&self) -> Option<SocketAddr> {
+        None
+    }
+
+    /// A renderer that can be handed a file's URL and driven over UPnP — a
+    /// DLNA television. `None` for every other kind of receiver.
+    fn upnp_renderer(&self) -> Option<UpnpRenderer> {
         None
     }
 

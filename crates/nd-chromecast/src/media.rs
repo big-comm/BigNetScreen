@@ -14,8 +14,10 @@ use nd_core::capture::{CaptureSource, MediaPlayback};
 use nd_core::media::{
     seek_target, FilePlaybackControl, MediaCommand, MediaSource, PlaybackStart, PlaybackState,
 };
-use nd_core::sink::Sink;
+use nd_core::sink::{Sink, UpnpRenderer};
 use nd_core::{NdError, Result};
+use nd_dlna::avtransport::{self, TransportState};
+use nd_dlna::renderer::{accepts, Renderer};
 
 use crate::cast::{CastChannel, LaunchedApp, DEFAULT_MEDIA_RECEIVER, NS_MEDIA};
 use crate::file_server::{FileServer, MediaFile, MediaKind};
@@ -297,7 +299,65 @@ impl MediaSession {
             files,
             move |files, shared, cancelled, commands| async move {
                 let outcome =
-                    play_mirrored_queue(sink, files, &shared, cancelled, commands, start).await;
+                    play_mirrored_queue(sink, None, files, &shared, cancelled, commands, start)
+                        .await;
+                shared.finish(outcome);
+            },
+        )
+    }
+
+    /// A DLNA television plays the files itself when it lists their format
+    /// — music goes as music, not as a black picture with sound — and gets
+    /// them decoded otherwise, as [`Self::start_mirroring`] does.
+    pub fn start_upnp(
+        sink: Arc<dyn Sink>,
+        renderer: UpnpRenderer,
+        files: Vec<MediaItem>,
+        port: u16,
+        start: Option<PlaybackStart>,
+    ) -> Result<Self> {
+        let start = start.map(PlaybackStart::validate).transpose()?;
+        Self::spawn(
+            files,
+            move |files, shared, mut cancelled, commands| async move {
+                let outcome = async {
+                    let tv = Renderer::new(&renderer)?;
+                    let accepted = tv.accepted_types().await.unwrap_or_default();
+                    let native: Option<Vec<MediaFile>> = files
+                        .iter()
+                        .map(|item| match item {
+                            MediaItem::File(file)
+                                if file.kind == MediaKind::Music
+                                    && file.plays_natively()
+                                    && accepts(&accepted, file.content_type) =>
+                            {
+                                Some(file.clone())
+                            }
+                            _ => None,
+                        })
+                        .collect();
+                    let Some(native) = native else {
+                        return play_mirrored_queue(
+                            sink,
+                            Some(&tv),
+                            files,
+                            &shared,
+                            cancelled,
+                            commands,
+                            start,
+                        )
+                        .await;
+                    };
+                    let server = FileServer::start(renderer.address, port, native).await?;
+                    let result = tokio::select! {
+                        result = play_upnp_queue(&tv, &server, &shared, files, commands, start) => result,
+                        _ = cancelled.changed() => Ok(()),
+                    };
+                    // Told even on the way out of an error, as the stream is.
+                    let _ = avtransport::stop(&tv.av_transport).await;
+                    result
+                }
+                .await;
                 shared.finish(outcome);
             },
         )
@@ -549,8 +609,11 @@ fn control_request(
     }
 }
 
+/// `tv`, for a DLNA television: its own volume is the one the player's
+/// volume control moves and shows, not the level of our stream.
 async fn play_mirrored_queue(
     sink: Arc<dyn Sink>,
+    tv: Option<&Renderer>,
     files: Vec<MediaItem>,
     shared: &Shared,
     mut cancelled: watch::Receiver<bool>,
@@ -619,6 +682,15 @@ async fn play_mirrored_queue(
         }
         let control = FilePlaybackControl::default();
         let photo = file.kind() == MediaKind::Photo;
+        let frame = {
+            let source = file.source();
+            let height = start.map_or(0, |start| start.height);
+            tokio::task::spawn_blocking(move || nd_core::media::tv_frame(&source, height))
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or((1920, 1080))
+        };
         let source = CaptureSource::media_file(
             MediaPlayback {
                 source: file.source(),
@@ -627,12 +699,17 @@ async fn play_mirrored_queue(
                 control: Some(control.clone()),
                 start,
             },
-            (1920, 1080),
+            frame,
         );
         let playing = sink.start_stream(source);
         tokio::pin!(playing);
         let mut poll = tokio::time::interval(Duration::from_millis(250));
         let mut photo_started = None;
+        let mut tv_volume = match tv {
+            Some(tv) => tv.volume().await,
+            None => None,
+        };
+        let mut polls = 0_u32;
         loop {
             tokio::select! {
                 biased;
@@ -654,6 +731,34 @@ async fn play_mirrored_queue(
                         break;
                     }
                     if matches!(command, MediaCommand::Remove(_)) { continue; }
+                    if let Some(tv) = tv {
+                        let changed = match command {
+                            MediaCommand::SetVolume(level) if level.is_finite() && (0.0..=1.0).contains(&level) => {
+                                Some(tv.set_volume(level).await.map(|()| (level, tv_volume.is_some_and(|(_, muted)| muted))))
+                            }
+                            MediaCommand::SetMute(muted) => Some(
+                                tv.set_mute(muted).await.map(|()| (tv_volume.map_or(1.0, |(level, _)| level), muted)),
+                            ),
+                            _ => None,
+                        };
+                        if let Some(changed) = changed {
+                            if let Ok(volume) = &changed {
+                                tv_volume = Some(*volume);
+                            }
+                            shared.update(|status| status.control_error = changed.err().map(|err| err.to_string()));
+                            continue;
+                        }
+                    }
+                    // A jump inside a stream that is already live sends the
+                    // receiver timestamps that run backwards or leap: a
+                    // Panasonic reconnects and then drops it. Start the item
+                    // again from there instead, as a start already works.
+                    if let Some(restart) = seek_restart(&command, &control.state(), start) {
+                        let _ = sink.stop_stream().await;
+                        playing.await?;
+                        start = Some(restart);
+                        continue 'items;
+                    }
                     let control = control.clone();
                     let outcome = tokio::task::spawn_blocking(move || control.command(&command)).await;
                     shared.update(|status| status.control_error = match outcome {
@@ -664,6 +769,15 @@ async fn play_mirrored_queue(
                 }
                 _ = poll.tick() => {
                     let mut playback = control.state();
+                    // Read back every few seconds: the remote moves it too.
+                    polls += 1;
+                    if let Some(tv) = tv.filter(|_| polls.is_multiple_of(12)) {
+                        tv_volume = tv.volume().await.or(tv_volume);
+                    }
+                    if let Some((volume, muted)) = tv_volume {
+                        playback.volume = Some(volume);
+                        playback.muted = Some(muted);
+                    }
                     if photo {
                         if playback.can_pause { photo_started.get_or_insert_with(tokio::time::Instant::now); }
                         playback.can_pause = false;
@@ -683,6 +797,252 @@ async fn play_mirrored_queue(
     }
     Ok(())
 }
+/// How long a television gets to start playing an item it was handed.
+const UPNP_START_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// A queue the renderer plays itself: each file is handed over as it is, and
+/// pause, seek, volume and the position belong to the renderer.
+async fn play_upnp_queue(
+    tv: &Renderer,
+    server: &FileServer,
+    shared: &Shared,
+    files: Vec<MediaItem>,
+    mut commands: mpsc::Receiver<MediaCommand>,
+    mut start: Option<PlaybackStart>,
+) -> Result<()> {
+    let control = &tv.av_transport;
+    let mut queue = Queue::new(files);
+    while let Some((index, item)) = queue.pending.front().cloned() {
+        if shared.stopping.load(Ordering::SeqCst) {
+            break;
+        }
+        queue.publish(shared, true);
+        let MediaItem::File(file) = &item else {
+            queue.advance();
+            continue;
+        };
+        let duration = {
+            let source = MediaSource::File(file.path.clone());
+            tokio::task::spawn_blocking(move || nd_core::media::duration(&source))
+                .await
+                .ok()
+                .flatten()
+        };
+        // A renderer holding something else may refuse a new URI.
+        let _ = avtransport::stop(control).await;
+        avtransport::set_file(
+            control,
+            &server.url(index),
+            &file.title(),
+            "object.item.audioItem.musicTrack",
+            file.content_type,
+            file.size,
+            duration,
+        )
+        .await
+        .map_err(|e| NdError::Protocol(format!("the TV refused {}: {e}", file.title())))?;
+        avtransport::play(control).await?;
+
+        let mut playback = PlaybackState {
+            can_pause: true,
+            can_seek: true,
+            duration,
+            ..Default::default()
+        };
+        // Since when, and from where, playback has been running unreported.
+        let mut clock: Option<(tokio::time::Instant, f64)> = None;
+        let mut polls = 0_u32;
+        // The TV's own volume, reported and left as it is. The player's level
+        // is the level of its own sound, not of the television: applied here
+        // as the set's master volume it sent a Panasonic to full volume.
+        if let Some((volume, muted)) = tv.volume().await {
+            playback.volume = Some(volume);
+            playback.muted = Some(muted);
+        }
+        // Where to start and whether to hold, once the renderer is playing:
+        // before that it has nothing to seek in.
+        let mut pending_seek = start.map(|s| s.seconds).filter(|s| *s > 0.0);
+        let mut pending_pause = start.is_some_and(|s| s.paused);
+        let handed_over = tokio::time::Instant::now();
+        let mut ever_played = false;
+        let mut idle_polls = 0;
+        let mut poll = tokio::time::interval(Duration::from_secs(1));
+        poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            tokio::select! {
+                command = commands.recv() => {
+                    let Some(command) = command else { return Ok(()); };
+                    if queue.edit(&command, shared) { break; }
+                    if matches!(command, MediaCommand::Remove(_)) { continue; }
+                    let result = upnp_command(tv, &command, &mut playback).await;
+                    // A pause or a seek moves the point the clock counts from.
+                    if !matches!(command, MediaCommand::SetVolume(_) | MediaCommand::SetMute(_)) {
+                        clock = None;
+                    }
+                    shared.update(|status| {
+                        status.control_error = result.err().map(|err| err.to_string());
+                        status.playback = playback.clone();
+                    });
+                }
+                _ = poll.tick() => {
+                    polls += 1;
+                    if polls.is_multiple_of(3) {
+                        if let Some((volume, muted)) = tv.volume().await {
+                            playback.volume = Some(volume);
+                            playback.muted = Some(muted);
+                        }
+                    }
+                    let state = avtransport::transport_state(control).await;
+                    match state {
+                        Ok(TransportState::Playing | TransportState::Paused) => {
+                            ever_played = true;
+                            idle_polls = 0;
+                            playback.paused = matches!(state, Ok(TransportState::Paused));
+                            if let Some(seconds) = pending_seek.take() {
+                                if avtransport::seek(control, seconds).await.is_ok() {
+                                    playback.seconds = seconds;
+                                    clock = None;
+                                }
+                            }
+                            if std::mem::take(&mut pending_pause)
+                                && avtransport::pause(control).await.is_ok()
+                            {
+                                playback.paused = true;
+                            }
+                            let reported = avtransport::position(control).await.ok();
+                            if let Some((_, Some(duration))) = reported {
+                                playback.duration = Some(duration);
+                            }
+                            match reported.map(|(seconds, _)| seconds).filter(|s| *s > 0.0) {
+                                Some(seconds) => {
+                                    playback.seconds = seconds;
+                                    clock = None;
+                                }
+                                None if playback.paused => clock = None,
+                                // Some renderers play without ever saying where
+                                // (a Panasonic answers 0:00:00 throughout): count.
+                                None => {
+                                    let (since, from) = *clock
+                                        .get_or_insert((tokio::time::Instant::now(), playback.seconds));
+                                    let seconds = from + since.elapsed().as_secs_f64();
+                                    playback.seconds = playback
+                                        .duration
+                                        .map_or(seconds, |duration| seconds.min(duration));
+                                }
+                            }
+                        }
+                        Ok(TransportState::Transitioning) => idle_polls = 0,
+                        Ok(TransportState::Idle) | Err(_) if ever_played => {
+                            idle_polls += 1;
+                            if idle_polls >= 2 {
+                                // At the end it moves on; before it, the viewer
+                                // stopped it on the TV and the session is over.
+                                let at_end = playback
+                                    .duration
+                                    .is_some_and(|duration| playback.seconds >= duration - 5.0);
+                                if !at_end {
+                                    return Ok(());
+                                }
+                                queue.advance();
+                                break;
+                            }
+                        }
+                        _ if handed_over.elapsed() > UPNP_START_TIMEOUT => {
+                            return Err(NdError::Protocol(format!(
+                                "the TV did not start playing {}",
+                                file.title()
+                            )));
+                        }
+                        _ => {}
+                    }
+                    shared.update(|status| status.playback = playback.clone());
+                }
+            }
+        }
+        shared.next_start(&mut start);
+    }
+    Ok(())
+}
+
+/// One player command, carried out by the renderer.
+async fn upnp_command(
+    tv: &Renderer,
+    command: &MediaCommand,
+    playback: &mut PlaybackState,
+) -> Result<()> {
+    let control = &tv.av_transport;
+    match *command {
+        MediaCommand::TogglePause | MediaCommand::SetPaused(_) => {
+            let pause = match *command {
+                MediaCommand::SetPaused(pause) => pause,
+                _ => !playback.paused,
+            };
+            if pause {
+                avtransport::pause(control).await?;
+            } else {
+                avtransport::play(control).await?;
+            }
+            playback.paused = pause;
+        }
+        MediaCommand::SeekTo(_) | MediaCommand::SeekRelative(_) => {
+            let target = match *command {
+                MediaCommand::SeekTo(seconds) => seek_target(0.0, seconds, playback.duration),
+                MediaCommand::SeekRelative(offset) => {
+                    seek_target(playback.seconds, offset, playback.duration)
+                }
+                _ => None,
+            }
+            .ok_or_else(|| NdError::Unsupported("invalid seek position".into()))?;
+            avtransport::seek(control, target).await?;
+            playback.seconds = target;
+        }
+        MediaCommand::SetVolume(level) if level.is_finite() && (0.0..=1.0).contains(&level) => {
+            tv.set_volume(level).await?;
+            playback.volume = Some(level);
+        }
+        MediaCommand::SetMute(muted) => {
+            tv.set_mute(muted).await?;
+            playback.muted = Some(muted);
+        }
+        _ => {
+            return Err(NdError::Unsupported(
+                "playback control is not available for this item".into(),
+            ))
+        }
+    }
+    Ok(())
+}
+
+/// Where a seek on a decoded item restarts it, keeping its pause, volume and
+/// frame. None for any other command, or a seek the item cannot take.
+fn seek_restart(
+    command: &MediaCommand,
+    state: &PlaybackState,
+    start: Option<PlaybackStart>,
+) -> Option<PlaybackStart> {
+    if !state.can_seek {
+        return None;
+    }
+    let seconds = match command {
+        MediaCommand::SeekTo(seconds) => seek_target(0.0, *seconds, state.duration),
+        MediaCommand::SeekRelative(offset) => seek_target(state.seconds, *offset, state.duration),
+        _ => return None,
+    }?;
+    Some(PlaybackStart {
+        seconds,
+        paused: state.paused,
+        volume: state
+            .volume
+            .or(start.map(|start| start.volume))
+            .unwrap_or(1.0),
+        muted: state
+            .muted
+            .or(start.map(|start| start.muted))
+            .unwrap_or(false),
+        height: start.map_or(0, |start| start.height),
+    })
+}
+
 pub(crate) fn active_status<'a>(
     payload: &'a Value,
     session_id: i64,
@@ -725,6 +1085,46 @@ fn item_has_ended(payload: &Value) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_seek_restarts_the_item_where_it_was_asked() {
+        let state = PlaybackState {
+            paused: true,
+            seconds: 40.0,
+            duration: Some(100.0),
+            can_pause: true,
+            can_seek: true,
+            volume: Some(0.3),
+            muted: Some(true),
+        };
+        let start = Some(PlaybackStart {
+            seconds: 0.0,
+            paused: false,
+            volume: 1.0,
+            muted: false,
+            height: 720,
+        });
+        let to = seek_restart(&MediaCommand::SeekTo(90.0), &state, start).unwrap();
+        assert_eq!(
+            (to.seconds, to.paused, to.volume, to.muted, to.height),
+            (90.0, true, 0.3, true, 720)
+        );
+        let back = seek_restart(&MediaCommand::SeekRelative(-50.0), &state, start).unwrap();
+        assert_eq!(back.seconds, 0.0);
+        // Past the end is the end; not a seek, or not seekable, is no restart.
+        assert_eq!(
+            seek_restart(&MediaCommand::SeekTo(500.0), &state, start)
+                .unwrap()
+                .seconds,
+            100.0
+        );
+        assert!(seek_restart(&MediaCommand::SetPaused(true), &state, start).is_none());
+        let fixed = PlaybackState {
+            can_seek: false,
+            ..state
+        };
+        assert!(seek_restart(&MediaCommand::SeekTo(10.0), &fixed, start).is_none());
+    }
     use serde_json::json;
 
     fn fixture(name: &str) -> MediaItem {
@@ -818,7 +1218,7 @@ mod tests {
             let control = FilePlaybackControl::default();
             control.attach(&pipeline);
             control.prepare(nd_core::media::PlaybackStart {
-                seconds: 1.0, paused: false, volume: 0.25, muted: true,
+                seconds: 1.0, paused: false, volume: 0.25, muted: true, height: 0,
             }).unwrap();
             pipeline.set_state(gst::State::Playing).unwrap();
             let sink = pipeline.by_name("samples").unwrap();
@@ -997,6 +1397,228 @@ mod tests {
         }
     }
 
+    /// Reads one HTTP request: its head and its body.
+    async fn read_request(socket: &mut tokio::net::TcpStream) -> (String, String) {
+        use tokio::io::AsyncReadExt;
+        let mut data = Vec::new();
+        let mut chunk = [0; 4096];
+        let head_end = loop {
+            let read = socket.read(&mut chunk).await.unwrap();
+            assert!(read > 0, "request ended early");
+            data.extend_from_slice(&chunk[..read]);
+            if let Some(end) = data.windows(4).position(|w| w == b"\r\n\r\n") {
+                break end + 4;
+            }
+        };
+        let head = String::from_utf8_lossy(&data[..head_end]).to_string();
+        let length = head
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse::<usize>().unwrap())
+            })
+            .unwrap_or(0);
+        while data.len() < head_end + length {
+            let read = socket.read(&mut chunk).await.unwrap();
+            data.extend_from_slice(&chunk[..read]);
+        }
+        let body = String::from_utf8_lossy(&data[head_end..head_end + length]).to_string();
+        (head, body)
+    }
+
+    #[tokio::test]
+    async fn a_dlna_tv_is_handed_music_as_music() {
+        use tokio::io::AsyncWriteExt;
+        let dir = std::env::temp_dir().join(format!("nd-upnp-music-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let song = dir.join("song.wav");
+        std::fs::write(&song, vec![0u8; 4096]).unwrap();
+        let file = MediaFile::inspect(&song).unwrap();
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let renderer = UpnpRenderer {
+            address: "127.0.0.1".parse().unwrap(),
+            av_transport: format!("{base}/avt"),
+            rendering_control: Some(format!("{base}/rc")),
+            connection_manager: Some(format!("{base}/cm")),
+        };
+        // Would be used by the decoding fallback, which must not happen here.
+        let sink = Arc::new(QueueSink {
+            started: Mutex::new(Vec::new()),
+            initial: Mutex::new(Vec::new()),
+            cancel: watch::channel(false).0,
+            ready: tokio::sync::Notify::new(),
+        });
+        // What a player sends: its own level, full. The TV must not follow it.
+        let start = PlaybackStart {
+            seconds: 0.0,
+            paused: false,
+            volume: 1.0,
+            muted: false,
+            height: 0,
+        };
+        let session = MediaSession::start_upnp(
+            sink.clone(),
+            renderer,
+            vec![MediaItem::File(file)],
+            0,
+            Some(start),
+        )
+        .unwrap();
+
+        let tv = async {
+            let mut state = "NO_MEDIA_PRESENT";
+            let mut metadata = String::new();
+            let mut served = String::new();
+            let mut polls = 0;
+            let mut actions = Vec::new();
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let (head, body) = read_request(&mut socket).await;
+                let action = head
+                    .lines()
+                    .find_map(|line| {
+                        line.split_once('#')
+                            .map(|(_, action)| action.trim_end_matches('"').to_string())
+                    })
+                    .unwrap_or_default();
+                actions.push(action.clone());
+                let reply = match action.as_str() {
+                    "GetProtocolInfo" => {
+                        "<Sink>http-get:*:audio/wav:*,http-get:*:video/mpeg:*</Sink>".to_string()
+                    }
+                    "SetAVTransportURI" => {
+                        metadata = nd_dlna::upnp::tag_text(&body, "CurrentURIMetaData")
+                            .unwrap()
+                            .replace("&lt;", "<")
+                            .replace("&gt;", ">")
+                            .replace("&quot;", "\"")
+                            .replace("&amp;", "&");
+                        // Fetch the item as a television would.
+                        let url = nd_dlna::upnp::tag_text(&body, "CurrentURI")
+                            .unwrap()
+                            .to_string();
+                        let endpoint = nd_dlna::upnp::Endpoint::parse(&url).unwrap();
+                        let mut client =
+                            tokio::net::TcpStream::connect(endpoint.addr).await.unwrap();
+                        client
+                            .write_all(format!("GET {} HTTP/1.1\r\nHost: {}\r\ngetcontentFeatures.dlna.org: 1\r\n\r\n", endpoint.path, endpoint.authority).as_bytes())
+                            .await
+                            .unwrap();
+                        served = read_request(&mut client).await.0;
+                        String::new()
+                    }
+                    "Play" => {
+                        state = "PLAYING";
+                        String::new()
+                    }
+                    "GetTransportInfo" => {
+                        polls += 1;
+                        format!("<CurrentTransportState>{state}</CurrentTransportState>")
+                    }
+                    "GetPositionInfo" => {
+                        "<RelTime>0:00:01</RelTime><TrackDuration>0:03:00</TrackDuration>"
+                            .to_string()
+                    }
+                    "GetVolume" => "<CurrentVolume>40</CurrentVolume>".to_string(),
+                    "GetMute" => "<CurrentMute>0</CurrentMute>".to_string(),
+                    "Stop" if !metadata.is_empty() => break,
+                    _ => String::new(),
+                };
+                let body = format!("<s:Envelope><s:Body>{reply}</s:Body></s:Envelope>");
+                socket
+                    .write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/xml\r\nContent-Length: {}\r\n\r\n{body}", body.len()).as_bytes())
+                    .await
+                    .unwrap();
+                if polls == 2 {
+                    let status = session.status();
+                    assert_eq!(status.playback.seconds, 1.0);
+                    assert_eq!(status.playback.duration, Some(180.0));
+                    assert_eq!(status.playback.volume, Some(0.4));
+                    session.stop();
+                }
+            }
+            (metadata, served, actions)
+        };
+        let (metadata, served, actions) = tokio::time::timeout(Duration::from_secs(15), tv)
+            .await
+            .expect("the session must drive the TV and stop it");
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(
+            metadata.contains("object.item.audioItem.musicTrack"),
+            "{metadata}"
+        );
+        assert!(
+            metadata.contains("http-get:*:audio/wav:DLNA.ORG_OP=01"),
+            "{metadata}"
+        );
+        assert!(served.starts_with("HTTP/1.1 200"), "{served}");
+        assert!(served.contains("Content-Type: audio/wav"), "{served}");
+        assert!(
+            served.contains("contentFeatures.dlna.org: DLNA.ORG_OP=01"),
+            "{served}"
+        );
+        assert!(
+            sink.started.lock().unwrap().is_empty(),
+            "no decoding for a format the TV plays"
+        );
+        // The TV's volume is its own: starting never sets it.
+        assert!(
+            !actions.iter().any(|a| a == "SetVolume" || a == "SetMute"),
+            "{actions:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn music_a_tv_does_not_list_is_decoded_for_it() {
+        use tokio::io::AsyncWriteExt;
+        let dir = std::env::temp_dir().join(format!("nd-upnp-ogg-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let song = dir.join("song.ogg");
+        std::fs::write(&song, vec![0u8; 16]).unwrap();
+        let file = MediaFile::inspect(&song).unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let renderer = UpnpRenderer {
+            address: "127.0.0.1".parse().unwrap(),
+            av_transport: format!("{base}/avt"),
+            rendering_control: None,
+            connection_manager: Some(format!("{base}/cm")),
+        };
+        let sink = Arc::new(QueueSink {
+            started: Mutex::new(Vec::new()),
+            initial: Mutex::new(Vec::new()),
+            cancel: watch::channel(false).0,
+            ready: tokio::sync::Notify::new(),
+        });
+        let session =
+            MediaSession::start_upnp(sink.clone(), renderer, vec![MediaItem::File(file)], 0, None)
+                .unwrap();
+        // It asks what the TV plays, and the answer has no Ogg in it.
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let (head, _) = read_request(&mut socket).await;
+        assert!(head.contains("#GetProtocolInfo"), "{head}");
+        let body = "<s:Envelope><s:Body><Sink>http-get:*:audio/mpeg:*</Sink></s:Body></s:Envelope>";
+        socket
+            .write_all(
+                format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(5), sink.ready.notified())
+            .await
+            .expect("decoded instead");
+        assert_eq!(*sink.started.lock().unwrap(), [song]);
+        session.stop();
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[tokio::test]
     async fn removing_and_skipping_files_updates_the_running_mirrored_queue() {
         let sink = Arc::new(QueueSink {
@@ -1055,6 +1677,7 @@ mod tests {
                 paused: true,
                 volume: 0.25,
                 muted: true,
+                height: 0,
             }),
         )
         .unwrap();
@@ -1080,6 +1703,7 @@ mod tests {
                 paused: false,
                 volume: 0.37,
                 muted: false,
+                height: 0,
             })]
         );
         session.stop();

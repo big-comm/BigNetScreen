@@ -26,7 +26,7 @@ use gstreamer as gst;
 use nd_core::capture::CaptureSource;
 use nd_core::pipeline::{self, PipelineGuard, StreamConfig, TS_HTTP_SINK_NAME};
 use nd_core::sink::{SinkState, SinkStatus, StreamLink};
-use nd_core::stream_server::{StreamServer, DLNA_MEDIA};
+use nd_core::stream_server::{MediaType, StreamServer, DLNA_FILE_MEDIA, DLNA_MEDIA};
 use nd_core::{NdError, Result};
 
 use crate::avtransport::{self, TransportState};
@@ -46,6 +46,8 @@ const STATE_POLL_INTERVAL: Duration = Duration::from_secs(3);
 /// impossible to ever start one.
 const IDLE_POLLS_BEFORE_ENDING: u32 = 2;
 const SIZE_POLL_INTERVAL: Duration = Duration::from_millis(100);
+/// How often a file transmission's pause is checked to pass it on.
+const PAUSE_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 /// What the renderer shows as the item's title.
 ///
@@ -76,12 +78,24 @@ async fn stream(
     status.set(SinkState::Connecting);
     let _radio = nd_core::radio::quiet();
 
-    let server = StreamServer::bind(receiver, DLNA_MEDIA).await?;
+    // A file may be paused by the renderer; a screen may not (see
+    // `DLNA_FILE_MEDIA`).
+    let media = if source.media.is_some() {
+        DLNA_FILE_MEDIA
+    } else {
+        DLNA_MEDIA
+    };
+    let server = StreamServer::bind(receiver, media).await?;
     let url = server.url();
 
     // Portal dimensions use compositor coordinates, not necessarily pixels.
     // Let the scaler negotiate from the actual capture up to the preference.
-    let (width, height) = StreamConfig::preferred_or(pipeline::DLNA_MAX_RESOLUTION);
+    // A file comes with the frame it is to be sent in (see
+    // `nd_core::media::tv_frame`); a screen takes the person's preference.
+    let (width, height) = match (&source.media, source.size) {
+        (Some(_), Some(frame)) => frame,
+        _ => StreamConfig::preferred_or(pipeline::DLNA_MAX_RESOLUTION),
+    };
     let mut cfg = StreamConfig {
         width,
         height,
@@ -100,7 +114,14 @@ async fn stream(
     let desc = pipeline::ts_http_pipeline_description(
         &cfg,
         &source.video_source(),
-        pipeline::VideoTarget::UpTo((cfg.width, cfg.height)),
+        // A television stretches whatever frame it gets over its whole
+        // screen, so a film wider than 16:9 goes inside a 16:9 frame, black
+        // bars included.
+        if source.media.is_some() {
+            pipeline::VideoTarget::Exact((cfg.width, cfg.height))
+        } else {
+            pipeline::VideoTarget::UpTo((cfg.width, cfg.height))
+        },
         Some(mux_bitrate),
     );
     let (built, mut events) = pipeline::build_pipeline(&desc, cfg.latency_ms())?;
@@ -217,7 +238,18 @@ async fn serve_until_over(
     measure.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut measured = false;
 
-    let renderer_done = until_renderer_stops(control);
+    // A player pauses the file pipeline, which then sends nothing; the
+    // renderer has to be told as well, or it gives up on the silent stream.
+    let paused_here = std::sync::atomic::AtomicBool::new(false);
+    let mut pause_watch = tokio::time::interval(PAUSE_POLL_INTERVAL);
+    pause_watch.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    // Run beside the server, like the handshake: a resume may hand the URL
+    // over again, and some renderers fetch it from inside that request.
+    let telling = futures::FutureExt::fuse(follow_pause(control, url, false, server.media()));
+    tokio::pin!(telling);
+    telling.set(futures::future::Fuse::terminated());
+
+    let renderer_done = until_renderer_stops(control, &paused_here);
     tokio::pin!(renderer_done);
 
     let handshake = async {
@@ -227,7 +259,7 @@ async fn serve_until_over(
         if let Err(err) = avtransport::stop(control).await {
             tracing::debug!(%err, "the renderer had nothing to stop, or would not");
         }
-        avtransport::set_uri(control, url, ITEM_TITLE, None).await?;
+        avtransport::set_uri(control, url, ITEM_TITLE, None, server.media()).await?;
         avtransport::play(control).await
     };
     tokio::pin!(handshake);
@@ -268,6 +300,30 @@ async fn serve_until_over(
                 deadline
                     .as_mut()
                     .reset(tokio::time::Instant::now() + Duration::from_secs(86_400));
+            }
+
+            result = &mut telling => {
+                if let Err(err) = result {
+                    tracing::warn!(%err, "the renderer did not follow the pause");
+                }
+            }
+
+            _ = pause_watch.tick(), if handed_over => {
+                if !started.load(std::sync::atomic::Ordering::SeqCst)
+                    || !futures::future::FusedFuture::is_terminated(&*telling)
+                {
+                    continue;
+                }
+                // The state being moved to, not the one reached: the renderer
+                // should hear about a pause as soon as it is asked for.
+                let (_, current, pending) = gst_pipeline.state(gst::ClockTime::ZERO);
+                let paused = if pending == gst::State::VoidPending { current } else { pending }
+                    == gst::State::Paused;
+                if paused == paused_here.load(std::sync::atomic::Ordering::SeqCst) {
+                    continue;
+                }
+                paused_here.store(paused, std::sync::atomic::Ordering::SeqCst);
+                telling.set(futures::FutureExt::fuse(follow_pause(control, url, paused, server.media())));
             }
 
             _ = measure.tick(), if !measured => {
@@ -313,12 +369,31 @@ async fn serve_until_over(
     }
 }
 
+/// Passes the file pipeline's pause or resume on to the renderer.
+async fn follow_pause(control: &Endpoint, url: &str, paused: bool, media: MediaType) -> Result<()> {
+    if paused {
+        return avtransport::pause(control).await;
+    }
+    if avtransport::play(control).await.is_ok() {
+        return Ok(());
+    }
+    // A renderer can give up on a stream that stayed silent through a long
+    // pause: gmediarender's HTTP source times out after 15 s, retries with a
+    // Range this live stream cannot honour, then refuses Play. Handed the URL
+    // again, it fetches afresh from where the file is now.
+    avtransport::set_uri(control, url, ITEM_TITLE, None, media).await?;
+    avtransport::play(control).await
+}
+
 /// Resolves when the renderer's own view of the session says it is over.
 ///
 /// Without this, pressing stop on the television's remote leaves us capturing,
 /// encoding and sending to nobody: the TCP connection can stay open long after
 /// the renderer stopped reading it, so silence on the socket proves nothing.
-async fn until_renderer_stops(control: &Endpoint) {
+///
+/// A pause counts as over only when it was not ours: `paused_here` says the
+/// renderer was told to pause because the file pipeline did.
+async fn until_renderer_stops(control: &Endpoint, paused_here: &std::sync::atomic::AtomicBool) {
     let mut ticker = tokio::time::interval(STATE_POLL_INTERVAL);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     ticker.tick().await;
@@ -337,11 +412,15 @@ async fn until_renderer_stops(control: &Endpoint) {
                 idle_polls = 0;
                 continue;
             }
+            Ok(TransportState::Paused) if paused_here.load(std::sync::atomic::Ordering::SeqCst) => {
+                idle_polls = 0;
+                continue;
+            }
             // Idle before it ever played just means the television has not
             // caught up yet; only a renderer that started and then stopped is
             // a renderer that finished.
-            Ok(TransportState::Idle) if !ever_played => continue,
-            Ok(TransportState::Idle) => {
+            Ok(TransportState::Idle | TransportState::Paused) if !ever_played => continue,
+            Ok(TransportState::Idle | TransportState::Paused) => {
                 idle_polls += 1;
                 if idle_polls >= IDLE_POLLS_BEFORE_ENDING {
                     tracing::info!("the renderer stopped playing; ending the transmission");
@@ -395,12 +474,14 @@ mod tests {
                     paused: false,
                     volume: 0.25,
                     muted: true,
+                    height: 0,
                 }),
                 source: nd_core::media::MediaSource::File(path.clone()),
                 kind: nd_core::media::MediaKind::Video,
                 title: "DLNA test".into(),
             },
-            (320, 240),
+            // The 16:9 frame `tv_frame` gives this 4:3 film at its own size.
+            (426, 240),
         );
         let previous = nd_core::settings::current();
         nd_core::settings::set_in_memory(&nd_core::settings::Settings {
@@ -421,6 +502,9 @@ mod tests {
         let renderer = async {
             let mut media = None;
             let mut stops = 0;
+            let mut plays = 0;
+            let mut uris = 0;
+            let mut paused = false;
             loop {
                 let (socket, _) = listener.accept().await.unwrap();
                 let mut socket = BufReader::new(socket);
@@ -441,6 +525,7 @@ mod tests {
                 socket.read_exact(&mut body).await.unwrap();
                 let body = String::from_utf8(body).unwrap();
                 if headers.contains("#SetAVTransportURI") {
+                    uris += 1;
                     assert!(!body.contains("resolution="));
                     // Fetch inside SetAVTransportURI, after the old two-second
                     // one-shot caps measurement would already have fired.
@@ -471,11 +556,33 @@ mod tests {
                     assert_eq!(packet[0], 0x47, "receiver must get MPEG-TS");
                     media = Some(client);
                 }
+                if headers.contains("#Play") {
+                    plays += 1;
+                }
+                // The resume is refused once, as by a renderer that gave up
+                // on the silent stream during the pause.
+                let refused = plays == 2;
                 socket
-                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+                    .write_all(if refused {
+                        b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n"
+                    } else {
+                        b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+                    })
                     .await
                     .unwrap();
-                if headers.contains("#Play") {
+                if headers.contains("#Pause") {
+                    paused = true;
+                    playback
+                        .command(&nd_core::media::MediaCommand::SetPaused(false))
+                        .unwrap();
+                }
+                if plays == 3 && headers.contains("#Play") {
+                    // The refused resume handed the stream over again.
+                    assert!(paused, "Play again only after a Pause");
+                    assert_eq!(uris, 2);
+                    cancel.send_replace(true);
+                }
+                if headers.contains("#Play") && plays == 1 {
                     let link = tokio::time::timeout(Duration::from_secs(3), async {
                         loop {
                             if let Some(link) = status.link() {
@@ -488,8 +595,8 @@ mod tests {
                     .expect("caps must be reported after the late GET");
                     assert_eq!(
                         (link.width, link.height),
-                        (320, 240),
-                        "test source must not be enlarged to the preference ceiling"
+                        (426, 240),
+                        "a file must reach the television in the frame it was given"
                     );
                     assert_eq!(status.state(), SinkState::Streaming);
                     use nd_core::media::MediaCommand;
@@ -501,7 +608,8 @@ mod tests {
                     playback.command(&MediaCommand::SetMute(false)).unwrap();
                     assert!((playback.state().volume.unwrap() - 0.37).abs() < 0.000_001);
                     assert_eq!(playback.state().muted, Some(false));
-                    cancel.send_replace(true);
+                    // A paused file pipeline must reach the renderer as Pause.
+                    playback.command(&MediaCommand::SetPaused(true)).unwrap();
                 }
                 if headers.contains("#Stop") {
                     stops += 1;
@@ -512,7 +620,7 @@ mod tests {
             }
             drop(media);
         };
-        let result = tokio::time::timeout(Duration::from_secs(15), async {
+        let result = tokio::time::timeout(Duration::from_secs(20), async {
             tokio::join!(
                 stream(control.addr.ip(), &control, &source, &status, cancelled),
                 renderer

@@ -57,6 +57,17 @@ pub struct MediaType {
     pub extra_headers: &'static str,
 }
 
+impl MediaType {
+    /// The `DLNA.ORG_OP=…;DLNA.ORG_FLAGS=…` this response declares, for the
+    /// item metadata to say the same: a renderer that sees the two disagree
+    /// believes the metadata.
+    pub fn dlna_features(&self) -> Option<&'static str> {
+        let start = self.extra_headers.find("DLNA.ORG_OP=")?;
+        let rest = &self.extra_headers[start..];
+        Some(rest.split("\r\n").next().unwrap_or(rest))
+    }
+}
+
 /// The Cast HTTP fallback: H.264 + AAC in MPEG-TS, nothing else to declare.
 pub const CAST_MEDIA: MediaType = MediaType {
     content_type: "video/mp2t",
@@ -85,6 +96,20 @@ pub const DLNA_MEDIA: MediaType = MediaType {
     extra_headers: "transferMode.dlna.org: Streaming\r\n\
                     contentFeatures.dlna.org: DLNA.ORG_OP=00;\
                     DLNA.ORG_FLAGS=8d100000000000000000000000000000\r\n",
+};
+
+/// The same stream when it carries a file: [`DLNA_MEDIA`] plus the
+/// connection-stalling flag (bit 21), which lets the renderer pause by no
+/// longer reading. Measured on a Panasonic TX-75GX880: without it the set
+/// lists only `Stop,Play` and answers `Pause` with 500; with it, it lists and
+/// accepts `Pause` and keeps the connection through it. A screen keeps the
+/// plain flags: paused from the remote, it would go on producing into a
+/// connection nobody reads until the queue limit ended the session.
+pub const DLNA_FILE_MEDIA: MediaType = MediaType {
+    content_type: "video/mpeg",
+    extra_headers: "transferMode.dlna.org: Streaming\r\n\
+                    contentFeatures.dlna.org: DLNA.ORG_OP=00;\
+                    DLNA.ORG_FLAGS=8d300000000000000000000000000000\r\n",
 };
 
 /// Cap on a request's header size.
@@ -350,6 +375,11 @@ impl StreamServer {
     }
 
     /// The URL to hand the receiver.
+    /// How the responses describe the stream.
+    pub fn media(&self) -> MediaType {
+        self.media
+    }
+
     pub fn url(&self) -> String {
         let host = match self.local_addr.ip() {
             IpAddr::V4(ip) => ip.to_string(),

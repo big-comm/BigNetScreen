@@ -49,7 +49,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("Stop", avtransport::stop(&control).await),
         (
             "SetAVTransportURI",
-            avtransport::set_uri(&control, url, "BigNetScreen", None).await,
+            avtransport::set_uri(
+                &control,
+                url,
+                "BigNetScreen",
+                None,
+                nd_core::stream_server::DLNA_MEDIA,
+            )
+            .await,
         ),
     ] {
         let at = std::time::Instant::now();

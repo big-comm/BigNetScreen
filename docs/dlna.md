@@ -52,7 +52,7 @@ Expect the television to open and close a few connections before it settles: it 
 
 Ask for `Connection: close` and a Panasonic will answer with a `Content-Length` and hold the socket open anyway. A client that reads to EOF hangs for its whole timeout on every call. Frame by `Content-Length`, with EOF only as the fallback.
 
-The same asymmetry runs the other way: our *response* carries no length, because the stream has no end. `transferMode.dlna.org: Streaming` and `DLNA.ORG_FLAGS=8d100000…` (sender-paced, s0- and sn-increasing, streaming transfer mode, DLNA 1.5) are what tell the renderer this is live content rather than a file to download. The same flags go in the DIDL-Lite `res` element, because a renderer that sees the two disagree believes the metadata.
+The same asymmetry runs the other way: our *response* carries no length, because the stream has no end. `transferMode.dlna.org: Streaming` and `DLNA.ORG_FLAGS=8d100000…` (sender-paced, s0- and sn-increasing, streaming transfer mode, DLNA 1.5) are what tell the renderer this is live content rather than a file to download. The same flags go in the DIDL-Lite `res` element, because a renderer that sees the two disagree believes the metadata. A file sent this way adds connection stalling (bit 21, `8d300000…`): with it a Panasonic TX-75GX880 lists and accepts `Pause` and keeps the connection through it, where without it it lists only `Stop,Play` and answers `Pause` with 500. A shared screen keeps the plain flags, since a pause from the remote would stall a stream that is still being produced. Music the renderer can play itself is not streamed at all: it is served as the file, byte-seekable (`DLNA.ORG_OP=01`, flags `01700000…`), and driven with `Seek` and `RenderingControl`.
 
 ## Evidence and limits
 

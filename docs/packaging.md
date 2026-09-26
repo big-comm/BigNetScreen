@@ -14,7 +14,8 @@ A package build performed against isolated review libraries is not a verified Ar
 
 ## Archive the revision a release was built from
 
-`makepkg` clones the branch, so the package itself needs nothing generated. What
+`makepkg` builds the checkout that holds `pkgbuild/PKGBUILD` in place, so the
+package itself needs nothing generated. What
 a published release does need is a record of *which* commit it came from:
 
 ```sh
