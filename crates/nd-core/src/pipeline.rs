@@ -238,6 +238,25 @@ fn audio_buffer_property() -> String {
 /// The capture element's name, so its negotiated caps can be read back.
 pub const CAPTURE_SOURCE_NAME: &str = "capture";
 
+/// Pins the captured frames to square pixels.
+///
+/// The compositor does not say what shape its pixels are, so `pipewiresrc`
+/// offers the whole range, `[1/2147483647, 2147483647/1]`. An exact target
+/// never noticed: its caps carry `pixel-aspect-ratio=1/1` and the scaler
+/// works from the dimensions. A *range* of sizes ([`VideoTarget::UpTo`]) is
+/// different — the scaler derives the output from the input aspect, and
+/// fixation had picked the range's minimum: `vapostproc` overflowed ("Error
+/// calculating the output scaled size") and `videoscale` settled on 2x2, so
+/// the DLNA and Cast mirroring sessions ended in "negotiation problem" three
+/// seconds after they started (measured on GNOME 49, through the portal and
+/// the direct Mutter backend alike).
+///
+/// A plain `video/x-raw` filter would not do: caps without features mean
+/// system memory, and the frames arrive as DMA-BUFs. `(ANY)` keeps whatever
+/// memory the compositor offers and only settles the ratio. Not applied to
+/// files: a film's pixel shape is real and [`VideoTarget::Exact`] handles it.
+pub const SQUARE_PIXELS: &str = "capsfilter caps=\"video/x-raw(ANY),pixel-aspect-ratio=1/1\"";
+
 /// How long `pipewiresrc` waits before resending the last frame, in ms.
 ///
 /// One frame at 30 Hz, two at 60. It is the frame rate a still screen gets,
@@ -1568,7 +1587,8 @@ impl VideoSource {
                 // only their timing is, and regular beats bursty.
                 format!(
                     "pipewiresrc name={CAPTURE_SOURCE_NAME} {fd_prop}{target} \
-                     do-timestamp=true keepalive-time={keepalive} resend-last=true{pool}",
+                     do-timestamp=true keepalive-time={keepalive} resend-last=true{pool} ! \
+                     {SQUARE_PIXELS}",
                     keepalive = capture_keepalive_ms()
                 )
             }
@@ -2581,6 +2601,60 @@ mod tests {
                 "source={source:?}, ceiling={ceiling:?}"
             );
         }
+    }
+
+    /// `pipewiresrc` offers every pixel aspect ratio and fixation took the
+    /// minimum, which drove the ranged scaler to 2x2 (`videoscale`) or an
+    /// overflow (`vapostproc`). With the ratio pinned the picture keeps its
+    /// size. `videotestsrc` fixates a range to 1/1 by itself, so the second
+    /// run feeds the minimum as a fixed value — what the capture measured as
+    /// negotiated before the pin — to show the scaler still misbehaves on it.
+    #[test]
+    fn a_capture_offering_any_pixel_aspect_keeps_its_size() {
+        use gst::prelude::*;
+        init().unwrap();
+        let cfg = StreamConfig {
+            width: 1920,
+            height: 1080,
+            ..Default::default()
+        };
+        let negotiated = |aspect: &str, pin: &str| -> Option<(i32, i32)> {
+            let description = format!(
+                "videotestsrc num-buffers=3 \
+                 ! video/x-raw,width=640,height=360,framerate=30/1,\
+                 pixel-aspect-ratio={aspect} {pin} ! {} ! fakesink sync=false",
+                cfg.convert_scale(VideoTarget::UpTo((1920, 1080)))
+            );
+            let pipeline = gst::parse::launch(&description)
+                .unwrap()
+                .downcast::<gst::Pipeline>()
+                .unwrap();
+            let guard = PipelineGuard::new(pipeline);
+            guard.pipeline().set_state(gst::State::Playing).ok()?;
+            let message = guard.pipeline().bus().unwrap().timed_pop_filtered(
+                gst::ClockTime::from_seconds(5),
+                &[gst::MessageType::Error, gst::MessageType::Eos],
+            )?;
+            if message.type_() != gst::MessageType::Eos {
+                return None;
+            }
+            let caps = guard
+                .pipeline()
+                .by_name(SCALE_CAPS)?
+                .static_pad("src")?
+                .current_caps()?;
+            let s = caps.structure(0)?;
+            Some((s.get::<i32>("width").ok()?, s.get::<i32>("height").ok()?))
+        };
+        assert_eq!(
+            negotiated("[1/2147483647,2147483647/1]", &format!("! {SQUARE_PIXELS}")),
+            Some((640, 360))
+        );
+        assert_ne!(
+            negotiated("1/2147483647", ""),
+            Some((640, 360)),
+            "the minimum ratio no longer breaks the ranged scaler; the pin may be redundant"
+        );
     }
 
     #[test]
