@@ -3651,12 +3651,20 @@ mod tests {
             let desc = mirror_pipeline_description(&cfg, &VideoSource::Test, (2560, 1440), false);
             assert!(!desc.contains("cudaupload"), "{desc}");
         }
-        // The real string, built and linked: the one check that catches a
-        // misspelled element or a caps field the encoder will not take.
-        if init().is_ok() {
-            let built = mirror_pipeline_description(&nv, &VideoSource::Test, (2560, 1440), false);
-            gst::parse::launch(&built).expect("the CUDA description builds");
-        }
+    }
+
+    /// The real string, built and linked: the one check that catches a
+    /// misspelled element or a caps field the encoder will not take.
+    #[test]
+    #[ignore = "needs GStreamer's NVIDIA plugins (cudaupload, nvh264enc)"]
+    fn the_cuda_description_builds() {
+        init().unwrap();
+        let nv = StreamConfig {
+            encoder: H264Encoder::NvH264,
+            ..Default::default()
+        };
+        let built = mirror_pipeline_description(&nv, &VideoSource::Test, (2560, 1440), false);
+        gst::parse::launch(&built).expect("the CUDA description builds");
     }
 
     #[test]
@@ -3677,19 +3685,30 @@ mod tests {
         // reason the caller only picks this path for a screen that fits.
         assert!(!desc.contains("glcolorscale"), "{desc}");
         assert!(!desc.contains("videoconvert"), "{desc}");
+    }
 
-        // The requirement is enforced when the pipeline is built, not silently
-        // dropped later: a source that cannot produce a DMA-BUF fails to link.
-        // That is what makes this path safe to gate behind a switch — it either
-        // runs on the graphics card or it refuses to start, and never quietly
-        // becomes the copy it was meant to remove.
-        if init().is_ok() {
-            let error = gst::parse::launch(&desc).expect_err("a test source has no DMA-BUF");
-            assert!(
-                error.to_string().contains("memory:DMABuf"),
-                "the refusal must name what was missing: {error}"
-            );
-        }
+    /// The requirement is enforced when the pipeline is built, not silently
+    /// dropped later: a source that cannot produce a DMA-BUF fails to link.
+    /// That is what makes this path safe to gate behind a switch — it either
+    /// runs on the graphics card or it refuses to start, and never quietly
+    /// becomes the copy it was meant to remove.
+    #[test]
+    #[ignore = "needs GStreamer's NVIDIA plugins (nvh264enc)"]
+    fn the_gpu_path_refuses_a_source_without_a_dmabuf() {
+        init().unwrap();
+        let cfg = StreamConfig {
+            width: 2560,
+            height: 1440,
+            fps: 60,
+            encoder: H264Encoder::NvH264,
+            ..Default::default()
+        };
+        let desc = mirror_pipeline_description(&cfg, &VideoSource::Test, (2560, 1440), true);
+        let error = gst::parse::launch(&desc).expect_err("a test source has no DMA-BUF");
+        assert!(
+            error.to_string().contains("memory:DMABuf"),
+            "the refusal must name what was missing: {error}"
+        );
     }
 
     #[test]
