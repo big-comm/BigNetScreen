@@ -249,7 +249,13 @@ async fn serve_until_over(
     tokio::pin!(telling);
     telling.set(futures::future::Fuse::terminated());
 
-    let renderer_done = until_renderer_stops(control, &paused_here);
+    let renderer_done = until_renderer_stops(
+        control,
+        &paused_here,
+        gst_pipeline,
+        server.media() == DLNA_FILE_MEDIA,
+        STATE_POLL_INTERVAL,
+    );
     tokio::pin!(renderer_done);
 
     let handshake = async {
@@ -390,20 +396,48 @@ async fn follow_pause(control: &Endpoint, url: &str, paused: bool, media: MediaT
 /// encoding and sending to nobody: the TCP connection can stay open long after
 /// the renderer stopped reading it, so silence on the socket proves nothing.
 ///
-/// A pause counts as over only when it was not ours: `paused_here` says the
-/// renderer was told to pause because the file pipeline did.
-async fn until_renderer_stops(control: &Endpoint, paused_here: &std::sync::atomic::AtomicBool) {
-    let mut ticker = tokio::time::interval(STATE_POLL_INTERVAL);
+/// A pause is not an end when `paused_here` says the renderer was told to
+/// pause because the file pipeline did. A file the renderer can pause
+/// (`follows_pause`) also follows a pause from the remote: the pipeline holds
+/// until the renderer plays again. Left producing, it would fill a connection
+/// the renderer stopped reading until the queue limit ended the session.
+async fn until_renderer_stops(
+    control: &Endpoint,
+    paused_here: &std::sync::atomic::AtomicBool,
+    file_pipeline: &gst::Pipeline,
+    follows_pause: bool,
+    every: Duration,
+) {
+    use std::sync::atomic::Ordering;
+    let mut ticker = tokio::time::interval(every);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     ticker.tick().await;
 
     let mut ever_played = false;
     let mut idle_polls = 0;
+    let mut paused_by_renderer = false;
     loop {
         ticker.tick().await;
         match avtransport::transport_state(control).await {
             Ok(TransportState::Playing) => {
                 ever_played = true;
+                idle_polls = 0;
+                // Flag first, with no await between: the pause watcher must
+                // not read the resumed pipeline as a pause to pass back.
+                if std::mem::take(&mut paused_by_renderer) {
+                    paused_here.store(false, Ordering::SeqCst);
+                    tracing::info!("the renderer resumed; resuming the file");
+                    let _ = file_pipeline.set_state(gst::State::Playing);
+                }
+                continue;
+            }
+            Ok(TransportState::Paused)
+                if follows_pause && ever_played && !paused_here.load(Ordering::SeqCst) =>
+            {
+                paused_by_renderer = true;
+                paused_here.store(true, Ordering::SeqCst);
+                tracing::info!("the renderer paused; holding the file");
+                let _ = file_pipeline.set_state(gst::State::Paused);
                 idle_polls = 0;
                 continue;
             }
@@ -411,7 +445,7 @@ async fn until_renderer_stops(control: &Endpoint, paused_here: &std::sync::atomi
                 idle_polls = 0;
                 continue;
             }
-            Ok(TransportState::Paused) if paused_here.load(std::sync::atomic::Ordering::SeqCst) => {
+            Ok(TransportState::Paused) if paused_here.load(Ordering::SeqCst) => {
                 idle_polls = 0;
                 continue;
             }
@@ -444,6 +478,91 @@ mod tests {
     use super::*;
     use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
     use tokio::net::{TcpListener, TcpStream};
+
+    #[tokio::test]
+    async fn a_pause_from_the_remote_holds_the_file_until_the_renderer_plays() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        pipeline::init().unwrap();
+        let file = gst::parse::launch("videotestsrc is-live=true ! fakesink")
+            .unwrap()
+            .downcast::<gst::Pipeline>()
+            .unwrap();
+        let _guard = PipelineGuard::new(file.clone());
+        file.set_state(gst::State::Playing).unwrap();
+        let target = |pipeline: &gst::Pipeline| match pipeline.state(gst::ClockTime::ZERO) {
+            (_, current, gst::State::VoidPending) => current,
+            (_, _, pending) => pending,
+        };
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let control = Endpoint::parse(&format!(
+            "http://{}/control",
+            listener.local_addr().unwrap()
+        ))
+        .unwrap();
+        let paused_here = AtomicBool::new(false);
+        let renderer = async {
+            // What the renderer answers each poll, and the file's state the
+            // previous answer must have left.
+            for (answer, expected) in [
+                ("PLAYING", gst::State::Playing),
+                ("PAUSED_PLAYBACK", gst::State::Playing),
+                ("PAUSED_PLAYBACK", gst::State::Paused),
+                ("PLAYING", gst::State::Paused),
+                ("STOPPED", gst::State::Playing),
+                ("STOPPED", gst::State::Playing),
+            ] {
+                let (socket, _) = listener.accept().await.unwrap();
+                let mut socket = BufReader::new(socket);
+                let mut length = 0;
+                loop {
+                    let mut line = String::new();
+                    assert!(socket.read_line(&mut line).await.unwrap() > 0);
+                    if line == "\r\n" {
+                        break;
+                    }
+                    if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                        length = value.trim().parse::<usize>().unwrap();
+                    }
+                }
+                let mut body = vec![0; length];
+                socket.read_exact(&mut body).await.unwrap();
+                assert_eq!(target(&file), expected, "before answering {answer}");
+                assert_eq!(
+                    paused_here.load(Ordering::SeqCst),
+                    expected == gst::State::Paused
+                );
+                let reply = format!(
+                    "<s:Envelope><s:Body><u:GetTransportInfoResponse>\
+                     <CurrentTransportState>{answer}</CurrentTransportState>\
+                     </u:GetTransportInfoResponse></s:Body></s:Envelope>"
+                );
+                socket
+                    .write_all(
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{reply}",
+                            reply.len()
+                        )
+                        .as_bytes(),
+                    )
+                    .await
+                    .unwrap();
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(10), async {
+            tokio::join!(
+                until_renderer_stops(
+                    &control,
+                    &paused_here,
+                    &file,
+                    true,
+                    Duration::from_millis(50)
+                ),
+                renderer
+            )
+        })
+        .await
+        .expect("two idle answers after playing must end the session");
+    }
 
     #[tokio::test]
     async fn delayed_renderer_get_reports_actual_pixels_and_stays_streaming() {

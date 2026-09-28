@@ -530,6 +530,17 @@ impl StreamServer {
     }
 }
 
+/// The kernel's share of a slow reader's backlog.
+///
+/// Left to autotuning, a stream socket's send buffer grows toward
+/// `net.ipv4.tcp_wmem`'s maximum, which BigLinux raises to 32 MiB: against a
+/// reader that stopped, 18.5 MB piled up there, out of `multisocketsink`'s
+/// sight. Its queue limit then fired tens of seconds late, and each of those
+/// seconds reached the television as delay once it read again. Fixed, the
+/// sink's own limit is the bound on every kernel. 256 KiB, which the kernel
+/// doubles, still covers a 21 Mbit/s stream over a 150 ms round trip.
+const SEND_BUFFER_BYTES: i32 = 256 * 1024;
+
 /// Transfers ownership of the TCP socket to `multisocketsink`.
 ///
 /// A detail that only shows up in practice: the descriptor coming from tokio
@@ -546,6 +557,10 @@ fn hand_socket_to_sink(stream: TcpStream, sink: &gst::Element) -> Result<()> {
 
     let socket = gio::Socket::from_fd(std::os::fd::OwnedFd::from(std_stream))
         .map_err(|e| NdError::Network(format!("gio::Socket: {e}")))?;
+    // SOL_SOCKET/SO_SNDBUF on Linux. Without it the queue limit is not ours.
+    if let Err(err) = socket.set_option(1, 7, SEND_BUFFER_BYTES) {
+        tracing::warn!(%err, "the stream socket keeps the kernel's send buffer");
+    }
 
     sink.emit_by_name::<()>("add", &[&socket]);
     Ok(())
@@ -836,8 +851,9 @@ mod tests {
             )
             .unwrap();
         let (_cancel, cancelled) = tokio::sync::watch::channel(false);
+        // Eight seconds of the 8 Mbit/s multiplex fill the limit.
         let result = tokio::time::timeout(
-            Duration::from_secs(10),
+            Duration::from_secs(20),
             server.serve(
                 sink.clone(),
                 || {
@@ -853,7 +869,7 @@ mod tests {
         .await
         .expect("a stalled receiver must be disconnected");
         assert!(result.unwrap_err().to_string().contains("queue limit"));
-        assert!(u64::from(sink.property::<u32>("buffers-queued")) * 1316 < 2_100_000);
+        assert!(u64::from(sink.property::<u32>("buffers-queued")) * 1316 < 8_100_000);
         client.close().unwrap();
     }
 }

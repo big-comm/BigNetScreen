@@ -34,7 +34,11 @@ Earlier field notes reported roughly 6 seconds with a 0.32 Mbit/s unpadded strea
 
 ## Sender queue limits
 
-The DLNA socket queue has a byte limit calculated from two seconds at the initial target multiplex rate, clamped to 1–8 MiB. This limits retained media; it is neither reserved memory nor extra playback delay. The small mux output queue remains non-leaky.
+The DLNA socket queue has a byte limit calculated from eight seconds at the initial target multiplex rate, clamped to 1–32 MiB. A reader that stalls for more than two seconds must survive: after a `Pause`, a Panasonic TX-75GX880 went on reading for about 3 s before it stopped. This limits retained media; it is neither reserved memory nor extra playback delay, since a healthy reader queues nothing. The small mux output queue remains non-leaky.
+
+Each stream socket's kernel send buffer is fixed at 256 KiB (doubled by the kernel) rather than autotuned. Autotuning grows it toward `net.ipv4.tcp_wmem`'s maximum, which BigLinux sets to 32 MiB; 18.5 MB of a stopped reader's backlog accumulated there, invisible to the sink, so the limit above fired tens of seconds late and that backlog became delay on the television.
+
+A file the renderer pauses from its remote is held, not ended: the session sees `PAUSED_PLAYBACK` on its next poll (every 3 s), pauses the file pipeline, and resumes it when the renderer reports `PLAYING`. Measured on the same Panasonic, a 15 s pause held and resumed with the kernel backlog drained within 3 s. A shared screen cannot be paused by the renderer (see the flags below).
 
 `mpegtsmux` output does not preserve the H.264 `DELTA_UNIT` markings expected by `multisocketsink` keyframe recovery. A soft-limit jump could therefore cut into a transport/PES packet sequence rather than resume at a complete decodable keyframe. DLNA uses no such recovery: a reader exceeding the hard limit is disconnected, the server returns a queue-limit error, and the session tears down normally. Restarting the transmission starts a fresh stream. Healthy readers keep the same continuous stream and incur no intentional waiting for this limit. See [GStreamer's socket queue semantics](https://gstreamer.freedesktop.org/documentation/tcp/multisocketsink.html).
 

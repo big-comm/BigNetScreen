@@ -2469,12 +2469,16 @@ pub fn ts_http_pipeline_description(
 ) -> String {
     // MPEG-TS buffers do not preserve H.264 DELTA_UNIT flags. A soft-limit
     // "keyframe" resync would cut arbitrary TS/PES packets, corrupting decode.
-    // Bound DLNA backlog by bytes instead: about two seconds at the target
-    // rate, at most 8 MiB. Disconnect a stalled reader rather than grow forever.
+    // Bound DLNA backlog by bytes instead: eight seconds at the target rate,
+    // within 1-32 MiB. A reader that pauses longer than two seconds must
+    // survive: a Panasonic TX-75GX880 read about 3 s more after a Pause before
+    // it stopped, and the session takes up to one renderer poll (3 s) to
+    // notice and hold the file. A healthy reader queues nothing, so the limit
+    // costs it no delay. Disconnect a stalled reader rather than grow forever.
     let sink_policy = match mux_bitrate_bps {
         Some(bps) => format!(
             "sync-method=latest recover-policy=none unit-format=bytes units-max={}",
-            (u64::from(bps) / 4).clamp(1_048_576, 8_388_608)
+            u64::from(bps).clamp(1_048_576, 33_554_432)
         ),
         None => format!(
             "sync-method={} recover-policy=keyframe",
