@@ -51,6 +51,24 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.1.4" date="2026-09-28">
+      <description>
+        <p>Release candidate for the first stable version.</p>
+        <p xml:lang="pt_BR">Versão candidata à primeira versão estável.</p>
+        <ul>
+          <li>Share the screen with DLNA televisions, and send them files and music; files and music also go to Chromecast</li>
+          <li xml:lang="pt_BR">Compartilhe a tela com televisões DLNA e envie arquivos e músicas a elas; arquivos e músicas também vão para o Chromecast</li>
+          <li>Sharing runs in a background service that keeps going when the window closes</li>
+          <li xml:lang="pt_BR">O compartilhamento roda em um serviço em segundo plano, que continua quando a janela é fechada</li>
+          <li>Each Chromecast is remembered the first time it is used; a device that then proves a different identity is refused, and can be trusted again from Devices</li>
+          <li xml:lang="pt_BR">Cada Chromecast é lembrado na primeira vez em que é usado; um aparelho que depois prove outra identidade é recusado e pode receber confiança de novo em Dispositivos</li>
+          <li>A file paused from the television's remote stays paused instead of ending the transmission</li>
+          <li xml:lang="pt_BR">Um arquivo pausado pelo controle remoto da televisão continua pausado em vez de encerrar a transmissão</li>
+          <li>Chromecast mirroring encodes the size the capture really delivers and follows what the link can carry</li>
+          <li xml:lang="pt_BR">O espelhamento no Chromecast codifica no tamanho que a captura realmente entrega e acompanha o que a conexão consegue transportar</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-08-07">
       <description>
         <p>First development release: receiver discovery (Chromecast, AirPlay,
