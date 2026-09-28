@@ -11,9 +11,20 @@
 
 fn main() {
     println!("cargo::rerun-if-env-changed=SOURCE_DATE_EPOCH");
-    // Without this the stamp would survive in the build cache and a binary
-    // built tomorrow would still claim today's date.
-    println!("cargo::rerun-if-changed=build.rs");
+    // Rerun whenever anything this binary is built from changes, which is
+    // when it is rebuilt: the stamp is then its real build date. Listing only
+    // `build.rs` kept the date of whenever the script last changed on every
+    // binary rebuilt since. Rerunning on every build would recompile the GUI
+    // each time for nothing; Cargo has no way to expire a script by the clock.
+    for input in [
+        "build.rs",
+        "../../crates",
+        "../../vendor",
+        "../../Cargo.lock",
+        "../../Cargo.toml",
+    ] {
+        println!("cargo::rerun-if-changed={input}");
+    }
 
     let mut date = std::process::Command::new("date");
     date.arg("+%y.%m.%d");
