@@ -27,10 +27,10 @@ jobs:
             gst-plugins-ugly gst-libav gst-plugin-pipewire \
             pipewire libnice networkmanager gettext
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Cache do Cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -58,7 +58,7 @@ jobs:
     steps:
       - name: System dependencies
         run: pacman -Syu --noconfirm --needed base-devel git gtk4 libadwaita gstreamer gst-plugins-base pipewire gettext
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.98.1
       - run: cargo check --workspace --all-targets --locked
 
@@ -66,7 +66,7 @@ jobs:
     name: Data files and translations
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Instalar validadores
         run: |
@@ -98,7 +98,11 @@ jobs:
     name: Dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2
+      - uses: actions/checkout@v7
+      # rustsec/audit-check@v2 still runs on the deprecated Node.js 20; the
+      # same RustSec check, run directly, needs no Node at all.
+      - uses: taiki-e/install-action@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          tool: cargo-audit
+      - name: RustSec advisories
+        run: cargo audit
