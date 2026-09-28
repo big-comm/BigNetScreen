@@ -18,7 +18,7 @@ use nd_core::settings;
 use nd_core::sink::SinkState;
 
 use super::home::{DeviceRow, DeviceRowOutput};
-use super::{DeviceEntry, latency_hint, state_label};
+use super::{DeviceEntry, latency_hint, set_switch_active, state_label};
 use crate::tr;
 
 /// Which protocols the list shows.
@@ -344,7 +344,7 @@ impl Component for DevicesPage {
         widgets
             .auto_switch
             .block_signal(&widgets.auto_discovery_handler);
-        widgets.auto_switch.set_active(model.auto_discovery);
+        set_switch_active(&widgets.auto_switch, model.auto_discovery);
         widgets
             .auto_switch
             .unblock_signal(&widgets.auto_discovery_handler);
@@ -389,7 +389,7 @@ impl Component for DevicesPage {
                 widgets
                     .auto_switch
                     .block_signal(&widgets.auto_discovery_handler);
-                widgets.auto_switch.set_active(on);
+                set_switch_active(&widgets.auto_switch, on);
                 widgets
                     .auto_switch
                     .unblock_signal(&widgets.auto_discovery_handler);
@@ -514,12 +514,34 @@ mod tests {
                 "settings synchronization echoed"
             );
         }
-        page.widgets().auto_switch.set_active(false);
+        set_switch_active(&page.widgets().auto_switch, false);
         flush();
         assert_eq!(
             *outputs.borrow(),
             [false],
             "user change must be emitted once"
+        );
+        // A click is a 100 ms slide; a settings sync with the shown value
+        // inside it must not cancel the slide. The slide runs on the frame
+        // clock, so the switch has to be on screen.
+        let window = gtk::Window::builder().child(page.widget()).build();
+        window.present();
+        flush();
+        page.widgets().auto_switch.emit_activate();
+        page.emit(DevicesMsg::SyncAutoDiscovery(false));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while !page.widgets().auto_switch.is_active() && std::time::Instant::now() < deadline {
+            gtk::glib::MainContext::default().iteration(false);
+        }
+        flush();
+        assert!(
+            page.widgets().auto_switch.is_active(),
+            "a sync with the shown value swallowed the click"
+        );
+        assert_eq!(
+            *outputs.borrow(),
+            [false, true],
+            "the click must be emitted"
         );
         let mut cast = entry(nd_core::sink::SinkKind::Chromecast);
         cast.id = "cast".into();

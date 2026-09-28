@@ -137,6 +137,54 @@ pub struct MediaStatus {
 struct Shared {
     status: Mutex<MediaStatus>,
     stopping: AtomicBool,
+    latest: Mutex<Latest>,
+}
+
+/// The seek and the volume waiting for the session. A slider sends them far
+/// faster than a TV follows (a seek restarts the item there), so the last
+/// one asked waits here and the queue holds one place for it, not hundreds.
+#[derive(Default)]
+struct Latest {
+    seek: Option<MediaCommand>,
+    volume: Option<MediaCommand>,
+}
+
+impl Latest {
+    fn slot(&mut self, command: &MediaCommand) -> Option<&mut Option<MediaCommand>> {
+        match command {
+            MediaCommand::SeekTo(_) | MediaCommand::SeekRelative(_) => Some(&mut self.seek),
+            MediaCommand::SetVolume(_) => Some(&mut self.volume),
+            _ => None,
+        }
+    }
+}
+
+/// `later` asked while `earlier` still waited: relative steps add up.
+fn merge(earlier: Option<MediaCommand>, later: MediaCommand) -> MediaCommand {
+    match (earlier, later) {
+        (Some(MediaCommand::SeekTo(at)), MediaCommand::SeekRelative(by)) => {
+            MediaCommand::SeekTo(at + by)
+        }
+        (Some(MediaCommand::SeekRelative(a)), MediaCommand::SeekRelative(b)) => {
+            MediaCommand::SeekRelative(a + b)
+        }
+        (_, later) => later,
+    }
+}
+
+/// The next command, a seek or a volume standing for the latest one asked.
+async fn next_command(
+    commands: &mut mpsc::Receiver<MediaCommand>,
+    shared: &Shared,
+) -> Option<MediaCommand> {
+    let command = commands.recv().await?;
+    let mut latest = shared.latest.lock().unwrap_or_else(|e| e.into_inner());
+    Some(
+        latest
+            .slot(&command)
+            .and_then(Option::take)
+            .unwrap_or(command),
+    )
 }
 
 impl Shared {
@@ -389,6 +437,7 @@ impl MediaSession {
                 ..Default::default()
             }),
             stopping: AtomicBool::new(false),
+            latest: Mutex::default(),
         });
         let (cancel, cancelled) = watch::channel(false);
         let (commands, incoming) = mpsc::channel(32);
@@ -407,9 +456,21 @@ impl MediaSession {
     }
 
     pub fn command(&self, command: MediaCommand) -> Result<()> {
-        self.commands
-            .try_send(command)
-            .map_err(|_| NdError::Protocol("media control is busy or playback has ended".into()))
+        let busy = || NdError::Protocol("media control is busy or playback has ended".into());
+        let mut latest = self.shared.latest.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(slot) = latest.slot(&command) else {
+            drop(latest);
+            return self.commands.try_send(command).map_err(|_| busy());
+        };
+        let waiting = slot.is_some();
+        *slot = Some(merge(slot.take(), command.clone()));
+        if waiting {
+            return Ok(());
+        }
+        self.commands.try_send(command).map_err(|_| {
+            *slot = None;
+            busy()
+        })
     }
 
     pub fn status(&self) -> MediaStatus {
@@ -467,7 +528,7 @@ async fn play_queue(
         let photo_end = last_status + Duration::from_secs(PHOTO_SECONDS);
         loop {
             let payload = tokio::select! {
-                command = commands.recv() => {
+                command = next_command(&mut commands, shared) => {
                     let Some(command) = command else { return Ok(()); };
                     if queue.edit(&command, shared) { break; }
                     if matches!(command, MediaCommand::Remove(_)) { continue; }
@@ -642,7 +703,7 @@ async fn play_mirrored_queue(
             });
             let command = tokio::select! {
                 _ = cancelled.changed() => return Ok(()),
-                command = commands.recv() => command,
+                command = next_command(&mut commands, shared) => command,
             };
             let Some(command) = command else {
                 return Ok(());
@@ -719,7 +780,7 @@ async fn play_mirrored_queue(
                     playing.await?;
                     return Ok(());
                 }
-                command = commands.recv() => {
+                command = next_command(&mut commands, shared) => {
                     let Some(command) = command else {
                         let _ = sink.stop_stream().await;
                         playing.await?;
@@ -870,7 +931,7 @@ async fn play_upnp_queue(
         poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tokio::select! {
-                command = commands.recv() => {
+                command = next_command(&mut commands, shared) => {
                     let Some(command) = command else { return Ok(()); };
                     if queue.edit(&command, shared) { break; }
                     if matches!(command, MediaCommand::Remove(_)) { continue; }
@@ -1084,6 +1145,53 @@ fn item_has_ended(payload: &Value) -> bool {
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn a_dragged_slider_is_one_seek_not_a_full_queue() {
+        let (release, released) = tokio::sync::oneshot::channel::<()>();
+        let (seen_tx, seen) = tokio::sync::oneshot::channel();
+        let file = MediaItem::Url {
+            uri: "http://example.invalid/a.mp4".into(),
+            content_type: "video/mp4".into(),
+            title: "a".into(),
+            kind: MediaKind::Video,
+        };
+        let session =
+            MediaSession::spawn(vec![file], move |_, shared, _, mut commands| async move {
+                // Busy restarting the item while the slider moves.
+                let _ = released.await;
+                let mut seen = Vec::new();
+                while let Ok(Some(command)) = tokio::time::timeout(
+                    Duration::from_millis(50),
+                    next_command(&mut commands, &shared),
+                )
+                .await
+                {
+                    seen.push(command);
+                }
+                let _ = seen_tx.send(seen);
+            })
+            .unwrap();
+        for step in 0..200 {
+            session
+                .command(MediaCommand::SeekTo(f64::from(step)))
+                .unwrap();
+            session
+                .command(MediaCommand::SetVolume(f64::from(step) / 200.0))
+                .unwrap();
+        }
+        session.command(MediaCommand::SeekRelative(-9.0)).unwrap();
+        session.command(MediaCommand::TogglePause).unwrap();
+        release.send(()).unwrap();
+        assert_eq!(
+            seen.await.unwrap(),
+            [
+                MediaCommand::SeekTo(190.0),
+                MediaCommand::SetVolume(199.0 / 200.0),
+                MediaCommand::TogglePause,
+            ]
+        );
+    }
+
     #[test]
     fn a_seek_restarts_the_item_where_it_was_asked() {
         let state = PlaybackState {
@@ -1139,6 +1247,7 @@ mod tests {
         let shared = Shared {
             status: Mutex::new(MediaStatus::default()),
             stopping: AtomicBool::new(true),
+            latest: Mutex::default(),
         };
         shared.finish(Err(NdError::Protocol("STOP unconfirmed".into())));
         let status = shared.status.lock().unwrap();
@@ -1161,6 +1270,7 @@ mod tests {
         let shared = Shared {
             status: Mutex::new(MediaStatus::default()),
             stopping: AtomicBool::new(false),
+            latest: Mutex::default(),
         };
         assert_eq!(queue.pending.back().unwrap().0, 1);
         queue.advance();
@@ -1262,6 +1372,7 @@ mod tests {
         let shared = Shared {
             status: Mutex::new(MediaStatus::default()),
             stopping: AtomicBool::new(false),
+            latest: Mutex::default(),
         };
         let mut queue = Queue::new(vec![fixture("a.mp4"), fixture("b.mp4"), fixture("c.mp4")]);
         assert!(!queue.edit(&MediaCommand::Remove("b.mp4".into()), &shared));

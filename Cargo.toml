@@ -14,9 +14,12 @@ members = [
     "crates/nd-ndi",
     "crates/nd-webrtc",
 ]
-# A dependency, not a member: it keeps upstream's own lint and format
+# Dependencies, not members: they keep upstream's own lint and format
 # settings, and `--workspace` commands must not touch it.
-exclude = ["vendor/gst-plugin-ndi"]
+exclude = ["vendor/gst-plugin-ndi", "vendor/relm4"]
+
+[patch.crates-io]
+relm4 = { path = "vendor/relm4" }
 
 [workspace.package]
 version = "0.1.4"

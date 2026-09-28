@@ -21,25 +21,29 @@ fn arch_based(os_release: &str) -> bool {
     })
 }
 
-pub fn can_install() -> bool {
-    // The current AUR ndi-sdk recipe supports x86_64 only.
-    cfg!(target_arch = "x86_64")
-        && !nd_capture::is_sandboxed()
-        && std::fs::read_to_string("/etc/os-release")
-            .or_else(|_| std::fs::read_to_string("/usr/lib/os-release"))
-            .is_ok_and(|release| arch_based(&release))
-        && [
-            "/usr/bin/bash",
-            "/usr/bin/pkexec",
-            "/usr/bin/pacman",
-            "/usr/bin/timeout",
-        ]
-        .iter()
-        .all(|path| Path::new(path).is_file())
+pub async fn can_install() -> bool {
+    tokio::task::spawn_blocking(|| {
+        // The current AUR ndi-sdk recipe supports x86_64 only.
+        cfg!(target_arch = "x86_64")
+            && !nd_capture::is_sandboxed()
+            && std::fs::read_to_string("/etc/os-release")
+                .or_else(|_| std::fs::read_to_string("/usr/lib/os-release"))
+                .is_ok_and(|release| arch_based(&release))
+            && [
+                "/usr/bin/bash",
+                "/usr/bin/pkexec",
+                "/usr/bin/pacman",
+                "/usr/bin/timeout",
+            ]
+            .iter()
+            .all(|path| Path::new(path).is_file())
+    })
+    .await
+    .unwrap_or(false)
 }
 
 pub async fn install() -> Result<(), String> {
-    if !can_install() {
+    if !can_install().await {
         return Err("Automatic NDI installation is unavailable on this system".into());
     }
     // GNU timeout bounds the entire subprocess group, not just our wait.

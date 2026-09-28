@@ -1,0 +1,16 @@
+# Known retention bugs in the locked GTK/libadwaita bindings and libadwaita 1.9.
+# Keep these guards until the affected dependency is fixed and remeasured.
+disallowed-methods = [
+    { path = "libadwaita::prelude::AlertDialogExtManual::choose", reason = "Retains the dialog: connect response and call present instead." },
+    { path = "libadwaita::prelude::AlertDialogExtManual::choose_future", reason = "Retains the dialog: connect response and call present instead." },
+    { path = "libadwaita::prelude::MessageDialogExtManual::choose", reason = "Retains the dialog: use AlertDialog with response/present." },
+    { path = "gtk4::prelude::AccessibleExtManual::update_relation", reason = "Leaks target GList nodes in gtk-rs 0.11; use an ownership-correct FFI wrapper if relations are needed." },
+    { path = "libadwaita::PasswordEntryRow::new", reason = "Retains its password buffer in libadwaita 1.9; use GtkPasswordEntry." },
+    { path = "libadwaita::builders::PasswordEntryRowBuilder::build", reason = "Retains its password buffer in libadwaita 1.9; use GtkPasswordEntry." },
+    { path = "gtk4::Switch::set_active", reason = "Cancels a click's slide even when the value is unchanged (GTK 4.22), so a sync swallows the click; use pages::set_switch_active." },
+]
+disallowed-types = [
+    { path = "libadwaita::InlineViewSwitcher", reason = "Retains toggle children in libadwaita 1.9; use ToggleGroup with GtkStack." },
+    { path = "libadwaita::ViewStack", reason = "Retains its transition animation in libadwaita 1.9; use GtkStack." },
+    { path = "libadwaita::ViewSwitcher", reason = "Requires the leaking AdwViewStack; use ToggleGroup with GtkStack." },
+]

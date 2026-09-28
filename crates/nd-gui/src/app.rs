@@ -140,6 +140,7 @@ impl std::fmt::Debug for Connection {
 #[derive(Debug)]
 pub enum AppCmd {
     NdiInstalled(std::result::Result<(), String>),
+    NdiInstallOffer(bool),
     /// The service answered and is ours to talk to.
     Connected(Box<Connection>),
     /// The service could not be reached, with the reason to show.
@@ -424,10 +425,12 @@ impl Component for AppModel {
             Some(&true.to_value()),
         );
         root.add_breakpoint(compact);
-        let split = widgets.split.clone();
-        widgets
-            .navigation_button
-            .connect_clicked(move |_| split.set_show_sidebar(true));
+        let split = widgets.split.downgrade();
+        widgets.navigation_button.connect_clicked(move |_| {
+            if let Some(split) = split.upgrade() {
+                split.set_show_sidebar(true);
+            }
+        });
 
         let ndi_installing = model.ndi_installing.clone();
         let allow_close = model.allow_close.clone();
@@ -566,7 +569,7 @@ impl Component for AppModel {
                 }
             }
             AppMsg::InstallNdi => {
-                if self.ndi_installing.get() || !crate::ndi_setup::can_install() {
+                if self.ndi_installing.get() {
                     return;
                 }
                 self.ndi_installing.set(true);
@@ -733,6 +736,7 @@ impl Component for AppModel {
         tracing::debug!(
             kind = match &message {
                 AppCmd::NdiInstalled(_) => "ndi-installed",
+                AppCmd::NdiInstallOffer(_) => "ndi-install-offer",
                 AppCmd::Connected(_) => "connected",
                 AppCmd::Unreachable(_) => "unreachable",
                 AppCmd::State(_) => "state",
@@ -757,15 +761,22 @@ impl Component for AppModel {
                     dialog.set_default_response(Some("back"));
                     dialog.set_close_response("back");
                     let allow_close = self.allow_close.clone();
-                    let window = root.clone();
+                    let window = root.downgrade();
                     dialog.connect_response(Some("close"), move |_, _| {
                         allow_close.set(true);
-                        window.close();
+                        if let Some(window) = window.upgrade() {
+                            window.close();
+                        }
                     });
                     dialog.present(Some(root));
                 }
             },
             AppCmd::NdiInstalled(result) => self.ndi_installed(result, &sender, root),
+            AppCmd::NdiInstallOffer(can_install) => {
+                if self.state.status.kind == "ndi-runtime-missing" {
+                    self.offer_ndi_install(can_install, &sender, root);
+                }
+            }
             AppCmd::Connected(connection) => {
                 self.failure = None;
                 tracing::info!("connected to the session service");
@@ -812,7 +823,9 @@ impl Component for AppModel {
                     self.push_media_status();
                 }
                 if ndi_missing {
-                    self.offer_ndi_install(&sender, root);
+                    sender.oneshot_command(async {
+                        AppCmd::NdiInstallOffer(crate::ndi_setup::can_install().await)
+                    });
                 }
                 if was_streaming && self.state.session.is_idle() {
                     tracing::info!("the session ended");
@@ -1024,8 +1037,12 @@ impl AppModel {
         dialog.present(Some(root));
     }
 
-    fn offer_ndi_install(&self, sender: &ComponentSender<Self>, root: &adw::ApplicationWindow) {
-        let can_install = crate::ndi_setup::can_install();
+    fn offer_ndi_install(
+        &self,
+        can_install: bool,
+        sender: &ComponentSender<Self>,
+        root: &adw::ApplicationWindow,
+    ) {
         let body = if can_install {
             tr!(
                 "NDI needs a proprietary library that is not included with BigNetScreen. Install ndi-sdk from the AUR and the required build tools? Your system will ask for administrator authentication. Other sharing methods work without it."
@@ -1364,6 +1381,100 @@ fn show_about(root: &adw::ApplicationWindow) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "requires isolated GTK and XDG_CONFIG_HOME=/proc/bns-leak-test"]
+    fn save_error_dialog_releases_its_window() {
+        assert_eq!(
+            std::env::var("XDG_CONFIG_HOME").unwrap(),
+            "/proc/bns-leak-test"
+        );
+        adw::init().unwrap();
+        struct Finalized(std::rc::Rc<std::cell::Cell<bool>>);
+        impl Drop for Finalized {
+            fn drop(&mut self) {
+                self.0.set(true);
+            }
+        }
+        let context = gtk::glib::MainContext::default();
+        for force in [false, true].into_iter().cycle().take(10) {
+            let finalized = std::rc::Rc::new(std::cell::Cell::new(false));
+            let controller = AppModel::builder().launch(());
+            // SAFETY: this test exclusively owns the key and observes its destructor.
+            unsafe {
+                controller
+                    .widget()
+                    .set_data("bns-save-finalization", Finalized(finalized.clone()));
+            }
+            controller.widget().present();
+            controller.state().get_mut().model.settings_changed = true;
+            controller.emit(AppMsg::CloseRequested);
+            for _ in 0..20 {
+                context.block_on(gtk::glib::timeout_future(Duration::from_millis(50)));
+                if controller.widget().visible_dialog().is_some() {
+                    break;
+                }
+            }
+            let dialog = controller
+                .widget()
+                .visible_dialog()
+                .unwrap()
+                .downcast::<adw::AlertDialog>()
+                .unwrap();
+            if force {
+                controller.widget().destroy();
+            } else {
+                dialog.set_close_response("close");
+                dialog.close();
+            }
+            drop(dialog);
+            drop(controller);
+            context.block_on(gtk::glib::timeout_future(Duration::from_millis(500)));
+            assert!(
+                finalized.get(),
+                "save-error window did not finalize (force={force})"
+            );
+        }
+        println!("save-error window census: new=10, fin=10");
+    }
+
+    #[test]
+    #[ignore = "requires an isolated GTK session"]
+    fn navigation_tree_finalizes_after_window_close() {
+        adw::init().unwrap();
+        let finalized = std::rc::Rc::new(std::cell::Cell::new(0));
+        struct Finalized(std::rc::Rc<std::cell::Cell<usize>>);
+        impl Drop for Finalized {
+            fn drop(&mut self) {
+                self.0.set(self.0.get() + 1);
+            }
+        }
+        let context = gtk::glib::MainContext::default();
+        let cycles = std::env::var("BIGNETSCREEN_LEAK_CYCLES")
+            .map(|value| value.parse::<usize>().unwrap())
+            .unwrap_or(5);
+        for cycle in 1..=cycles {
+            let controller = AppModel::builder().launch(());
+            // SAFETY: this test owns this qdata key and never reads its value.
+            // Its destructor observes finalization, rather than disposal.
+            unsafe {
+                controller
+                    .widgets()
+                    .split
+                    .set_data("bns-test-finalization", Finalized(finalized.clone()));
+            }
+            controller.widget().present();
+            context.block_on(gtk::glib::timeout_future(Duration::from_millis(100)));
+            controller.widgets().split.set_show_sidebar(false);
+            controller.widgets().navigation_button.emit_clicked();
+            assert!(controller.widgets().split.shows_sidebar());
+            controller.widget().destroy();
+            drop(controller);
+            context.block_on(gtk::glib::timeout_future(Duration::from_millis(100)));
+            assert_eq!(finalized.get(), cycle, "navigation panel did not finalize");
+        }
+        println!("navigation census: new={cycles}, fin={}", finalized.get());
+    }
 
     fn status(kind: &str) -> wire::Status {
         wire::Status::of(kind)

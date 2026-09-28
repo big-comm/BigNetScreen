@@ -28,6 +28,11 @@ portal or Mutter ── CaptureSource ── GStreamer ──┤
 
 The local `vendor/gst-plugin-ndi` is tracked, licensed source with local changes. The external Cargo offline vendor used by a review environment is a **different directory** and is not part of a source release.
 
+`vendor/relm4` is also tracked source. Its local patch prunes closed component
+shutdown channels before registering another component, so window recreation
+does not retain a channel for every component ever created. Keep this override
+until the locked upstream version fixes that ownership; see its `PATCHES.md`.
+
 ## Capture identity
 
 The portal's restricted PipeWire FD and stream identity must survive until the encoding pipeline stops. Portal v6 supplies a u64 serial; the source targets that serial with `target-object`. Older portals and the Mutter backend currently use node IDs. A serial does not authorize access by itself: the portal FD still matters. The small `portal_start` adapter parses the raw Start response because the locked ashpd version does not expose the new property; remove that adapter only when the replacement API preserves it and the compatibility tests pass.

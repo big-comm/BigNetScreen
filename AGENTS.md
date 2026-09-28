@@ -17,6 +17,7 @@ BigNetScreen is a Rust workspace with a native GTK4/libadwaita/Relm4 UI, not a P
 | `crates/nd-webrtc` | Browser publisher, WHEP front door and PIN |
 | `crates/nd-gui` | Presentation, user actions and application lifetime |
 | `vendor/gst-plugin-ndi` | **Tracked source**, not a disposable dependency cache |
+| `vendor/relm4` | **Tracked source**; bounds shutdown-channel retention (see `PATCHES.md`) |
 
 ## Work and evidence
 

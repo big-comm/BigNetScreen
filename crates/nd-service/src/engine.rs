@@ -304,7 +304,7 @@ impl Engine {
                     Some(command) => self.command(command).await,
                 },
                 Some(event) = event_rx.recv() => self.event(event),
-                _ = poll.tick() => {
+                _ = poll.tick(), if self.active_cast.is_some() || self.media_session.is_some() || self.audio_pending => {
                     self.reap_finished_media();
                     self.measure_link();
                     // The session's own progress moves no event of its own, so
