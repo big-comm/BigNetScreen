@@ -1730,6 +1730,8 @@ mod tests {
 
     #[tokio::test]
     async fn removing_and_skipping_files_updates_the_running_mirrored_queue() {
+        // A cold plugin registry is scanned here, outside the deadlines below.
+        nd_core::pipeline::init().unwrap();
         let sink = Arc::new(QueueSink {
             started: Mutex::new(Vec::new()),
             initial: Mutex::new(Vec::new()),
@@ -1772,6 +1774,8 @@ mod tests {
 
     #[tokio::test]
     async fn an_initially_paused_renderer_waits_for_play_and_keeps_pending_settings() {
+        // A cold plugin registry is scanned here, outside the deadlines below.
+        nd_core::pipeline::init().unwrap();
         let sink = Arc::new(QueueSink {
             started: Mutex::new(Vec::new()),
             initial: Mutex::new(Vec::new()),

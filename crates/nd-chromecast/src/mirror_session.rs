@@ -1892,11 +1892,6 @@ mod lifecycle_tests {
             offer,
         };
         let before = rx_threads();
-        let (tx, mut rx) = tokio::sync::watch::channel(false);
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(300)).await;
-            tx.send(true).unwrap();
-        });
         // The session builds and starts the pipeline before negotiating now,
         // so the test does the same rather than handing `stream` a source.
         let desc = pipeline::mirror_pipeline_description(
@@ -1906,7 +1901,17 @@ mod lifecycle_tests {
             false,
         );
         let (gst_pipeline, events) = pipeline::build_pipeline(&desc, cfg.latency_ms()).unwrap();
+        // The session's own guard: a panic or early return must not dispose a
+        // running pipeline, whose streaming threads would then use freed state.
+        let _guard = pipeline::PipelineGuard::new(gst_pipeline.clone());
         gst_pipeline.set_state(gst::State::Playing).unwrap();
+        // Armed only now: a cold plugin registry can make the build above slower
+        // than the deadline, and `stream` would then return before starting.
+        let (tx, mut rx) = tokio::sync::watch::channel(false);
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            tx.send(true).unwrap();
+        });
         stream(
             &cfg,
             gst_pipeline,
