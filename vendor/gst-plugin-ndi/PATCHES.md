@@ -28,8 +28,17 @@ crates.io and delete this directory.
 
 ## Changed files
 
-- `Cargo.toml` (description/readme only)
+- `Cargo.toml` (description/readme; `quick-xml` 0.41, see below)
 - `src/lib.rs`
 - `src/ndi.rs`
 - `src/ndisys.rs`
 - `src/ndisink/imp.rs`
+
+## `quick-xml` 0.41
+
+The released 0.15.3 asks for `quick-xml` 0.40, which is affected by
+RUSTSEC-2026-0194 and RUSTSEC-2026-0195 (quadratic duplicate-attribute check,
+unbounded namespace allocation). The receiving side (`ndisrcdemux`) parses
+closed-caption XML from the network, so the requirement is raised to the fixed
+0.41 even though BigNetScreen only publishes. Drop this
+change once an upstream release requires 0.41 or later.

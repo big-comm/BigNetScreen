@@ -27,7 +27,7 @@ Classify failures as CODE, TEST, ENV, DEPENDENCY or UNKNOWN from the actual log.
 
 ## Build and test
 
-This review environment uses Rust **1.98.1**, isolated and verified with rustc/cargo/clippy/rustfmt version output. Reuse supplied offline tools; never install rustup or change system libraries merely to satisfy a sandbox. The manifest's MSRV is a separate CI gate, not implied by testing 1.98.1.
+This review environment uses Rust **1.98.1**, isolated and verified with rustc/cargo/clippy/rustfmt version output. Reuse supplied offline tools; never install rustup or change system libraries merely to satisfy a sandbox. The manifest's MSRV is also 1.98.1 and keeps its own CI gate, so a newer local toolchain does not hide a regression.
 
 ```sh
 cargo fmt --all -- --check

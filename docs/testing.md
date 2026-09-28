@@ -16,7 +16,7 @@ python3 scripts/test-project-tools.py
 make locale
 ```
 
-Use `--offline` with a supplied vendor. Test the MSRV separately; success on Rust 1.98.1 does not prove it. CI should also validate Desktop/AppStream metadata, PO catalogues, deterministic POT extraction, shell scripts, manifests and source archive contents. Dependency advisory checks require a current advisory database; unavailable data means not run, not clean.
+Use `--offline` with a supplied vendor. The declared MSRV is Rust 1.98.1; keep testing it in its own CI job, since success on a newer toolchain does not prove it. CI should also validate Desktop/AppStream metadata, PO catalogues, deterministic POT extraction, shell scripts, manifests and source archive contents. Dependency advisory checks require a current advisory database; unavailable data means not run, not clean.
 
 The Cast HTTP integration test runs a real GStreamer encoder/muxer and downloads from the real server. Transport sync bytes are useful, but a release should also decode a capture independently (for example FFmpeg). A protocol writer test that exercises 20 cycles is not a TLS receiver test or 20 physical reconnections. Describe each accurately.
 

@@ -97,7 +97,7 @@ package = "gstreamer-video"
 version = "0.9"
 
 [dependencies.quick-xml]
-version = "0.40"
+version = "0.41"
 
 [dependencies.smallvec]
 version = "1.11"
