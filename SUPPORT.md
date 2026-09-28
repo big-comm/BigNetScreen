@@ -10,6 +10,10 @@ Record which path is active: Cast mirroring, Cast HTTP, WFD, browser or NDI. For
 
 A missing GStreamer factory is a dependency problem. WebRTC needs `nicesink` and `nicesrc` from the GStreamer libnice plugin, not just the shared libnice library. NDI needs its separate runtime; [NDI setup](docs/ndi.md) describes that optional path. Portal/virtual-screen failures need the desktop, compositor and portal backend versions.
 
+## A Cast receiver "did not prove it is the same device"
+
+BigNetScreen remembers the device key each Cast receiver proves the first time it is used, and refuses to send the screen when a later connection proves another key or none. Treat it first as someone on the network impersonating the receiver. If the receiver was really replaced and nobody else is on the network, delete `~/.local/share/bignetscreen/cast-receivers` (or under `$XDG_DATA_HOME`); every receiver is then remembered again on its next use.
+
 ## Safe diagnostic commands
 
 ```sh

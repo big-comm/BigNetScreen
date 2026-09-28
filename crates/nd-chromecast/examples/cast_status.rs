@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     println!("connecting to {ip}:8009…");
-    let channel = CastChannel::connect(ip).await?;
+    let channel = CastChannel::connect(ip, &ip.to_string()).await?;
     println!("TLS + CONNECT ok (certificate validated: chain and validity period)");
 
     // The reply is now correlated by requestId: this genuinely waits.

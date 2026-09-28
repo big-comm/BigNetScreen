@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let with_audio = std::env::args().nth(2).as_deref() != Some("video-only");
 
     println!("connecting to {ip}…");
-    let channel = CastChannel::connect(ip).await?;
+    let channel = CastChannel::connect(ip, &ip.to_string()).await?;
 
     println!("starting the mirroring app {MIRRORING_APP_ID}…");
     let app = channel.launch(MIRRORING_APP_ID).await?;

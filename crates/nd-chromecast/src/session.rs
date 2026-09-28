@@ -302,13 +302,24 @@ pub async fn run(
     receiver_ip: IpAddr,
     // The control port the receiver announced over mDNS.
     receiver_port: u16,
+    // The discovery identity its device key is remembered under.
+    receiver: &str,
     source: CaptureSource,
     status: &SinkStatus,
     cancel: tokio::sync::watch::Receiver<bool>,
 ) -> Result<()> {
     let video = source.video_source();
     let size = source.size_or((1920, 1080));
-    let result = run_with_video(receiver_ip, receiver_port, video, size, status, cancel).await;
+    let result = run_with_video(
+        receiver_ip,
+        receiver_port,
+        receiver,
+        video,
+        size,
+        status,
+        cancel,
+    )
+    .await;
     drop(source);
     result
 }
@@ -320,6 +331,7 @@ pub async fn run(
 pub async fn run_with_video(
     receiver_ip: IpAddr,
     receiver_port: u16,
+    receiver: &str,
     video: pipeline::VideoSource,
     size: (u32, u32),
     status: &SinkStatus,
@@ -398,7 +410,7 @@ pub async fn run_with_video(
     if *cancel.borrow() {
         return Ok(());
     }
-    let channel = CastChannel::connect_to(receiver_ip, receiver_port).await?;
+    let channel = CastChannel::connect_to(receiver_ip, receiver_port, receiver).await?;
     if *cancel.borrow() {
         channel.close().await;
         return Ok(());

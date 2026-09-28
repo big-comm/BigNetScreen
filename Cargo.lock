@@ -2100,6 +2100,7 @@ dependencies = [
  "nd-core",
  "nd-dlna",
  "prost",
+ "ring",
  "rustls",
  "rustls-webpki",
  "serde_json",

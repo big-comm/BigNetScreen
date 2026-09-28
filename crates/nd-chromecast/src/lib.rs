@@ -9,6 +9,7 @@
 pub mod cast;
 pub mod file_server;
 mod flow;
+pub mod identity;
 pub mod media;
 pub mod mirror;
 pub mod mirror_session;
@@ -336,24 +337,31 @@ impl Sink for MdnsSink {
         let video = source.video_source();
         let size = source.size_or((1920, 1080));
 
-        let result =
-            match mirror_session::run(ip, self.port, video, size, &self.status, cancel.clone())
-                .await
-            {
-                Err(err) if mirror_session::is_unsupported(&err) && *cancel.borrow() => Ok(()),
-                Err(err) if mirror_session::is_unsupported(&err) => {
-                    tracing::info!(
-                        %err,
-                        "this receiver does not accept mirroring; using the HTTP path"
-                    );
-                    self.status.reset();
-                    session::run(ip, self.port, source, &self.status, cancel).await
-                }
-                other => {
-                    drop(source);
-                    other
-                }
-            };
+        let result = match mirror_session::run(
+            ip,
+            self.port,
+            &self.info.id,
+            video,
+            size,
+            &self.status,
+            cancel.clone(),
+        )
+        .await
+        {
+            Err(err) if mirror_session::is_unsupported(&err) && *cancel.borrow() => Ok(()),
+            Err(err) if mirror_session::is_unsupported(&err) => {
+                tracing::info!(
+                    %err,
+                    "this receiver does not accept mirroring; using the HTTP path"
+                );
+                self.status.reset();
+                session::run(ip, self.port, &self.info.id, source, &self.status, cancel).await
+            }
+            other => {
+                drop(source);
+                other
+            }
+        };
 
         match result {
             Ok(()) => {

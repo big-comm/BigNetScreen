@@ -300,6 +300,8 @@ impl Drop for MediaSession {
 impl MediaSession {
     pub fn start(
         receiver: SocketAddr,
+        // The discovery identity its device key is remembered under.
+        identity: String,
         files: Vec<MediaItem>,
         port: u16,
         sender_name: String,
@@ -315,7 +317,7 @@ impl MediaSession {
                     Some(FileServer::start(receiver.ip(), port, local_files).await?)
                 };
                 let channel = tokio::select! {
-                    result = CastChannel::connect_to(receiver.ip(), receiver.port()) => result?,
+                    result = CastChannel::connect_to(receiver.ip(), receiver.port(), &identity) => result?,
                     _ = cancelled.changed() => return Ok(()),
                 };
                 // Finish LAUNCH so cancellation can explicitly STOP its result.

@@ -85,6 +85,7 @@ const CLOSE_PAYLOAD: &str = r#"{"type":"CLOSE","reasonCode":5}"#;
 const NS_CONNECTION: &str = "urn:x-cast:com.google.cast.tp.connection";
 const NS_HEARTBEAT: &str = "urn:x-cast:com.google.cast.tp.heartbeat";
 const NS_RECEIVER: &str = "urn:x-cast:com.google.cast.receiver";
+const NS_DEVICE_AUTH: &str = "urn:x-cast:com.google.cast.tp.deviceauth";
 /// The media namespace (LOAD/PLAY/STOP on the receiver app).
 pub const NS_MEDIA: &str = "urn:x-cast:com.google.cast.media";
 
@@ -101,6 +102,10 @@ const MAX_MESSAGE_BYTES: usize = 64 * 1024;
 
 /// How long to allow for establishing TCP+TLS.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(8);
+/// How long a receiver gets to answer the identity challenge. A Google
+/// receiver answers within milliseconds; one that never does is treated as
+/// unauthenticated rather than waited on.
+const AUTH_TIMEOUT: Duration = Duration::from_secs(3);
 /// How long to wait for an ordinary request's reply.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -154,6 +159,58 @@ enum ProtocolVersion {
 enum PayloadType {
     Str = 0,
     Bin = 1,
+}
+
+// DeviceAuth, from the same `cast_channel.proto`. The enums stay plain
+// integers: only two of their values are ever sent or accepted.
+
+/// `SignatureAlgorithm.RSASSA_PKCS1v15`, the protocol's default.
+const RSASSA_PKCS1V15: i32 = 1;
+/// `HashAlgorithm.SHA256`; the default, SHA-1, is not accepted.
+const SHA256: i32 = 1;
+
+#[derive(Clone, PartialEq, ::prost::Message)]
+struct AuthChallenge {
+    #[prost(int32, optional, tag = "1")]
+    signature_algorithm: Option<i32>,
+    #[prost(bytes = "vec", optional, tag = "2")]
+    sender_nonce: Option<Vec<u8>>,
+    #[prost(int32, optional, tag = "3")]
+    hash_algorithm: Option<i32>,
+}
+
+#[derive(Clone, PartialEq, ::prost::Message)]
+struct AuthResponse {
+    #[prost(bytes = "vec", required, tag = "1")]
+    signature: Vec<u8>,
+    #[prost(bytes = "vec", required, tag = "2")]
+    client_auth_certificate: Vec<u8>,
+    #[prost(bytes = "vec", repeated, tag = "3")]
+    intermediate_certificate: Vec<Vec<u8>>,
+    #[prost(int32, optional, tag = "4")]
+    signature_algorithm: Option<i32>,
+    #[prost(bytes = "vec", optional, tag = "5")]
+    sender_nonce: Option<Vec<u8>>,
+    #[prost(int32, optional, tag = "6")]
+    hash_algorithm: Option<i32>,
+    #[prost(bytes = "vec", optional, tag = "7")]
+    crl: Option<Vec<u8>>,
+}
+
+#[derive(Clone, PartialEq, ::prost::Message)]
+struct AuthError {
+    #[prost(int32, required, tag = "1")]
+    error_type: i32,
+}
+
+#[derive(Clone, PartialEq, ::prost::Message)]
+struct DeviceAuthMessage {
+    #[prost(message, optional, tag = "1")]
+    challenge: Option<AuthChallenge>,
+    #[prost(message, optional, tag = "2")]
+    response: Option<AuthResponse>,
+    #[prost(message, optional, tag = "3")]
+    error: Option<AuthError>,
 }
 
 // ---------------------------------------------------------------------------
@@ -275,8 +332,8 @@ impl Drop for PendingRequest {
 
 impl CastChannel {
     /// Connects (TCP+TLS) to the receiver and sends the initial platform CONNECT.
-    pub async fn connect(ip: IpAddr) -> Result<Self> {
-        Self::connect_to(ip, PORT).await
+    pub async fn connect(ip: IpAddr, receiver: &str) -> Result<Self> {
+        Self::connect_to(ip, PORT, receiver).await
     }
 
     /// Connects on the port the receiver **announced**.
@@ -285,7 +342,10 @@ impl CastChannel {
     /// until it did not: the port is part of the mDNS record precisely because
     /// a receiver may choose another one, and such a device would be listed by
     /// discovery and then be unreachable, with no clue as to why.
-    pub async fn connect_to(ip: IpAddr, port: u16) -> Result<Self> {
+    ///
+    /// `receiver` is the identity the person chose (the mDNS instance), under
+    /// which the device's key is remembered; see [`crate::identity`].
+    pub async fn connect_to(ip: IpAddr, port: u16, receiver: &str) -> Result<Self> {
         let tcp = tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect((ip, port)))
             .await
             // The two failures below are different situations and the wording
@@ -313,10 +373,12 @@ impl CastChannel {
 
         let connector = TlsConnector::from(Arc::new(config));
         let server_name = ServerName::IpAddress(ip.into());
-        let stream = tokio::time::timeout(CONNECT_TIMEOUT, connector.connect(server_name, tcp))
+        let mut stream = tokio::time::timeout(CONNECT_TIMEOUT, connector.connect(server_name, tcp))
             .await
             .map_err(|_| NdError::Network("the TLS handshake timed out".into()))?
             .map_err(net_err)?;
+        let device_key = authenticate_device(&mut stream).await?;
+        crate::identity::check_and_remember(receiver, device_key.as_deref())?;
 
         let (read_half, write_half) = tokio::io::split(stream);
         let writer: Writer = Arc::new(ControlWriter {
@@ -842,6 +904,28 @@ fn session_absent(response: &Value, session_id: &str) -> bool {
 }
 
 async fn read_message<R: AsyncRead + Unpin>(reader: &mut R) -> Result<CastEvent> {
+    let msg = read_raw_message(reader).await?;
+    let payload = if msg.payload_type == PayloadType::Str as i32 {
+        let text = msg
+            .payload_utf8
+            .as_deref()
+            .ok_or_else(|| NdError::Protocol("Cast UTF-8 payload missing".into()))?;
+        serde_json::from_str(text).map_err(proto_err)?
+    } else if msg.payload_type == PayloadType::Bin as i32 {
+        // DeviceAuth is a separate binary protocol, not a JSON reply.
+        Value::Null
+    } else {
+        return Err(NdError::Protocol("unknown Cast payload type".into()));
+    };
+    Ok(CastEvent {
+        source_id: msg.source_id,
+        namespace: msg.namespace,
+        payload,
+    })
+}
+
+/// One framed, envelope-checked message, payload untouched.
+async fn read_raw_message<R: AsyncRead + Unpin>(reader: &mut R) -> Result<CastMessage> {
     let mut len_buf = [0u8; 4];
     reader.read_exact(&mut len_buf).await.map_err(net_err)?;
     let len = u32::from_be_bytes(len_buf) as usize;
@@ -870,23 +954,119 @@ async fn read_message<R: AsyncRead + Unpin>(reader: &mut R) -> Result<CastEvent>
     {
         return Err(NdError::Protocol("invalid Cast message envelope".into()));
     }
-    let payload = if msg.payload_type == PayloadType::Str as i32 {
-        let text = msg
-            .payload_utf8
-            .as_deref()
-            .ok_or_else(|| NdError::Protocol("Cast UTF-8 payload missing".into()))?;
-        serde_json::from_str(text).map_err(proto_err)?
-    } else if msg.payload_type == PayloadType::Bin as i32 {
-        // DeviceAuth is a separate binary protocol, not a JSON reply.
-        Value::Null
-    } else {
-        return Err(NdError::Protocol("unknown Cast payload type".into()));
+    Ok(msg)
+}
+
+/// Asks the receiver to prove which device it is, before anything else is
+/// said on the channel.
+///
+/// The TLS certificate cannot identify a receiver: it is self-signed and a
+/// Chromecast replaces it every two days. What stays is the device
+/// certificate it answers the challenge with, whose key signs our fresh nonce
+/// followed by this session's TLS certificate. Returns that key (the
+/// certificate's SPKI) once the signature verifies, binding the device to the
+/// connection just made.
+///
+/// Whether the key belongs to a device Google issued is not checked: that
+/// takes Cast's own root CA and revocation list (see [`CastCertVerifier`]).
+/// Remembering the key on first use, as VLC remembers a receiver's TLS key,
+/// is what [`crate::identity`] does with it.
+///
+/// `None` when the receiver declines or does not answer within
+/// [`AUTH_TIMEOUT`]; an answer that fails verification is an error.
+async fn authenticate_device(stream: &mut TlsStream<TcpStream>) -> Result<Option<Vec<u8>>> {
+    let peer = stream
+        .get_ref()
+        .1
+        .peer_certificates()
+        .and_then(|chain| chain.first())
+        .ok_or_else(|| NdError::Protocol("the receiver presented no TLS certificate".into()))?
+        .to_vec();
+    let nonce = crate::mirror::random_bytes()?;
+    let challenge = DeviceAuthMessage {
+        challenge: Some(AuthChallenge {
+            signature_algorithm: Some(RSASSA_PKCS1V15),
+            sender_nonce: Some(nonce.to_vec()),
+            hash_algorithm: Some(SHA256),
+        }),
+        response: None,
+        error: None,
     };
-    Ok(CastEvent {
-        source_id: msg.source_id,
-        namespace: msg.namespace,
-        payload,
+    let msg = CastMessage {
+        protocol_version: ProtocolVersion::Castv210 as i32,
+        source_id: SOURCE_ID.to_string(),
+        destination_id: PLATFORM_DEST.to_string(),
+        namespace: NS_DEVICE_AUTH.to_string(),
+        payload_type: PayloadType::Bin as i32,
+        payload_utf8: None,
+        payload_binary: Some(challenge.encode_to_vec()),
+    };
+    let buf = msg.encode_to_vec();
+    let mut frame = Vec::with_capacity(4 + buf.len());
+    frame.extend_from_slice(&(buf.len() as u32).to_be_bytes());
+    frame.extend_from_slice(&buf);
+    tokio::time::timeout(WRITE_TIMEOUT, async {
+        stream.write_all(&frame).await?;
+        stream.flush().await
     })
+    .await
+    .map_err(|_| NdError::Network("the identity challenge could not be sent".into()))?
+    .map_err(net_err)?;
+
+    let answer = tokio::time::timeout(AUTH_TIMEOUT, async {
+        // Nothing else is expected before CONNECT; a few strays are skipped.
+        for _ in 0..8 {
+            let msg = read_raw_message(stream).await?;
+            if msg.namespace == NS_DEVICE_AUTH {
+                return Ok(Some(msg));
+            }
+        }
+        Ok::<_, NdError>(None)
+    })
+    .await;
+    let binary = match answer {
+        Ok(Ok(Some(msg))) => msg.payload_binary.unwrap_or_default(),
+        Ok(Ok(None)) | Err(_) => {
+            tracing::info!("the receiver did not answer the identity challenge");
+            return Ok(None);
+        }
+        Ok(Err(err)) => return Err(err),
+    };
+    let reply = DeviceAuthMessage::decode(&binary[..]).map_err(proto_err)?;
+    let Some(response) = reply.response else {
+        tracing::info!(
+            error = ?reply.error.map(|e| e.error_type),
+            "the receiver declined the identity challenge"
+        );
+        return Ok(None);
+    };
+    verify_auth_response(&nonce, &peer, &response).map(Some)
+}
+
+/// Checks a DeviceAuth answer against our nonce and the session's TLS
+/// certificate, returning the device key that signed it.
+fn verify_auth_response(nonce: &[u8], peer_der: &[u8], response: &AuthResponse) -> Result<Vec<u8>> {
+    let refuse = |why: &str| NdError::Protocol(format!("the receiver's identity proof {why}"));
+    if response.sender_nonce.as_deref() != Some(nonce) {
+        return Err(refuse("does not answer this connection's challenge"));
+    }
+    if response.hash_algorithm != Some(SHA256)
+        || response.signature_algorithm.unwrap_or(RSASSA_PKCS1V15) != RSASSA_PKCS1V15
+    {
+        return Err(refuse("uses a signature this sender does not accept"));
+    }
+    let certificate = CertificateDer::from(response.client_auth_certificate.as_slice());
+    let device = webpki::EndEntityCert::try_from(&certificate)
+        .map_err(|_| refuse("carries an unreadable device certificate"))?;
+    let signed = [nonce, peer_der].concat();
+    device
+        .verify_signature(
+            webpki::ring::RSA_PKCS1_2048_8192_SHA256,
+            &signed,
+            &response.signature,
+        )
+        .map_err(|_| refuse("has a signature that does not verify"))?;
+    Ok(device.subject_public_key_info().as_ref().to_vec())
 }
 
 /// The read task: answers PINGs, resolves pending requests and forwards the
@@ -989,8 +1169,10 @@ async fn reader_loop(
 /// checked; only the anchor's provenance and the host name are waived.
 ///
 /// SECURITY LIMIT: this validates syntax/signatures but does not authenticate
-/// the device's identity. A LAN attacker can present their own chain and
-/// receive the screen. Certificate validity is not receiver identity.
+/// the device's identity; certificate validity is not receiver identity.
+/// [`authenticate_device`] and [`crate::identity`] then hold a receiver to
+/// the device key it proved on first use (steps 1 to 3 below, remembered).
+/// Proving that the first device was genuine is what remains.
 ///
 /// What closing it takes, from Chromium's own sender
 /// (`cast/channel/cast_auth_util.cc`, `cast/certificate/`):

@@ -32,6 +32,30 @@ async fn reply<W: AsyncWrite + Unpin>(writer: &mut W, source: &str, namespace: &
     writer.flush().await.unwrap();
 }
 
+/// Answers the identity challenge the way a receiver without DeviceAuth does.
+async fn decline_identity<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) {
+    let challenge = receive(stream).await;
+    assert_eq!(challenge.namespace, NS_DEVICE_AUTH);
+    let error = DeviceAuthMessage {
+        challenge: None,
+        response: None,
+        error: Some(AuthError { error_type: 0 }),
+    };
+    let message = CastMessage {
+        protocol_version: ProtocolVersion::Castv210 as i32,
+        source_id: PLATFORM_DEST.into(),
+        destination_id: SOURCE_ID.into(),
+        namespace: NS_DEVICE_AUTH.into(),
+        payload_type: PayloadType::Bin as i32,
+        payload_utf8: None,
+        payload_binary: Some(error.encode_to_vec()),
+    };
+    let bytes = message.encode_to_vec();
+    stream.write_u32(bytes.len() as u32).await.unwrap();
+    stream.write_all(&bytes).await.unwrap();
+    stream.flush().await.unwrap();
+}
+
 fn tls_acceptor() -> TlsAcceptor {
     let certificate =
         CertificateDer::from(include_bytes!("../tests/fixtures/test-receiver.der").to_vec());
@@ -60,6 +84,7 @@ async fn twenty_tls_sessions_keep_heartbeat_until_scoped_stop_then_close() {
             for cycle in 0..20 {
                 let (socket, _) = listener.accept().await.unwrap();
                 let mut stream = acceptor.accept(socket).await.unwrap();
+                decline_identity(&mut stream).await;
                 let session_id = format!("our-session-{cycle}");
                 let transport_id = format!("our-transport-{cycle}");
                 let mut stop_request = None;
@@ -137,9 +162,10 @@ async fn twenty_tls_sessions_keep_heartbeat_until_scoped_stop_then_close() {
         });
     let client = async {
         for _ in 0..20 {
-            let channel = CastChannel::connect_to(address.ip(), address.port())
-                .await
-                .unwrap();
+            let channel =
+                CastChannel::connect_to(address.ip(), address.port(), "local-test-receiver")
+                    .await
+                    .unwrap();
             let application = channel.launch(DEFAULT_MEDIA_RECEIVER).await.unwrap();
             channel.finish_app(&application, Ok(())).await.unwrap();
         }
@@ -160,6 +186,7 @@ async fn media_load_applies_position_and_mute_before_play_and_refuses_unconfirme
         for (paused, confirmed_volume) in cases {
             let (socket, _) = listener.accept().await.unwrap();
             let mut stream = acceptor.accept(socket).await.unwrap();
+            decline_identity(&mut stream).await;
             let mut commands = Vec::new();
             let mut stopped = false;
             loop {
@@ -226,9 +253,10 @@ async fn media_load_applies_position_and_mute_before_play_and_refuses_unconfirme
     });
     tokio::time::timeout(Duration::from_secs(15), async {
         for (paused, confirmed_volume) in cases {
-            let channel = CastChannel::connect_to(address.ip(), address.port())
-                .await
-                .unwrap();
+            let channel =
+                CastChannel::connect_to(address.ip(), address.port(), "local-test-receiver")
+                    .await
+                    .unwrap();
             let app = channel.launch(DEFAULT_MEDIA_RECEIVER).await.unwrap();
             let item = crate::media::MediaItem::url(
                 "https://example.invalid/movie".into(),
@@ -259,4 +287,120 @@ async fn media_load_applies_position_and_mute_before_play_and_refuses_unconfirme
     })
     .await
     .unwrap();
+}
+
+/// Answers the identity challenge as a Cast device holding `key` does: its
+/// certificate, and a signature over the nonce and this TLS certificate.
+async fn prove_identity<S: AsyncRead + AsyncWrite + Unpin>(
+    stream: &mut S,
+    key: &[u8],
+    device: &[u8],
+) {
+    let challenge = receive(stream).await;
+    assert_eq!(challenge.namespace, NS_DEVICE_AUTH);
+    let asked = DeviceAuthMessage::decode(&challenge.payload_binary.unwrap()[..])
+        .unwrap()
+        .challenge
+        .unwrap();
+    assert_eq!(asked.hash_algorithm, Some(SHA256));
+    let nonce = asked.sender_nonce.unwrap();
+    let key = ring::signature::RsaKeyPair::from_der(key).unwrap();
+    let mut signature = vec![0; key.public().modulus_len()];
+    let signed = [
+        &nonce[..],
+        include_bytes!("../tests/fixtures/test-receiver.der"),
+    ]
+    .concat();
+    key.sign(
+        &ring::signature::RSA_PKCS1_SHA256,
+        &ring::rand::SystemRandom::new(),
+        &signed,
+        &mut signature,
+    )
+    .unwrap();
+    let answer = DeviceAuthMessage {
+        challenge: None,
+        response: Some(AuthResponse {
+            signature,
+            client_auth_certificate: device.to_vec(),
+            intermediate_certificate: Vec::new(),
+            signature_algorithm: Some(RSASSA_PKCS1V15),
+            sender_nonce: Some(nonce),
+            hash_algorithm: Some(SHA256),
+            crl: None,
+        }),
+        error: None,
+    };
+    let message = CastMessage {
+        protocol_version: ProtocolVersion::Castv210 as i32,
+        source_id: PLATFORM_DEST.into(),
+        destination_id: SOURCE_ID.into(),
+        namespace: NS_DEVICE_AUTH.into(),
+        payload_type: PayloadType::Bin as i32,
+        payload_utf8: None,
+        payload_binary: Some(answer.encode_to_vec()),
+    };
+    let bytes = message.encode_to_vec();
+    stream.write_u32(bytes.len() as u32).await.unwrap();
+    stream.write_all(&bytes).await.unwrap();
+    stream.flush().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_receiver_keeps_the_device_key_it_first_proved() {
+    const A_KEY: &[u8] = include_bytes!("../tests/fixtures/test-device-a-key.der");
+    const A: &[u8] = include_bytes!("../tests/fixtures/test-device-a.der");
+    const B_KEY: &[u8] = include_bytes!("../tests/fixtures/test-device-b-key.der");
+    const B: &[u8] = include_bytes!("../tests/fixtures/test-device-b.der");
+    let acceptor = tls_acceptor();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    // First use, the same device again, A's certificate signed by another
+    // key, another device, then no proof at all.
+    let server = tokio::spawn(async move {
+        for answer in [
+            Some((A_KEY, A)),
+            Some((A_KEY, A)),
+            Some((B_KEY, A)),
+            Some((B_KEY, B)),
+            None,
+        ] {
+            let (socket, _) = listener.accept().await.unwrap();
+            let mut stream = acceptor.accept(socket).await.unwrap();
+            match answer {
+                Some((key, device)) => prove_identity(&mut stream, key, device).await,
+                None => decline_identity(&mut stream).await,
+            }
+            // Drain until the sender hangs up.
+            let mut rest = Vec::new();
+            let _ = stream.read_to_end(&mut rest).await;
+        }
+    });
+    let receiver = "identity-test._googlecast._tcp.local.";
+    let connect = || CastChannel::connect_to(address.ip(), address.port(), receiver);
+    drop(connect().await.expect("a first device is remembered"));
+    drop(connect().await.expect("the same device is accepted"));
+    let forged = connect()
+        .await
+        .err()
+        .expect("a borrowed certificate must be refused");
+    assert!(forged.to_string().contains("does not verify"), "{forged}");
+    for refusal in ["another device", "a device that stopped proving"] {
+        let err = connect()
+            .await
+            .err()
+            .unwrap_or_else(|| panic!("{refusal} must be refused"));
+        assert!(
+            err.to_string().ends_with(crate::identity::IDENTITY_CHANGED),
+            "{refusal}: {err}"
+        );
+    }
+    tokio::time::timeout(Duration::from_secs(10), server)
+        .await
+        .unwrap()
+        .unwrap();
+    // The test build's store (see `identity::store_path`).
+    let _ = std::fs::remove_dir_all(
+        std::env::temp_dir().join(format!("nd-cast-identity-{}", std::process::id())),
+    );
 }

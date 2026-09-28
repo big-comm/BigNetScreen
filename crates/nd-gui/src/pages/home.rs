@@ -109,6 +109,14 @@ impl DeviceRow {
         if self.entry.kind == nd_core::sink::SinkKind::AirPlay {
             return tr!("This device is visible, but AirPlay sharing is not supported.");
         }
+        if self.entry.state == SinkState::Error
+            && self
+                .entry
+                .detail
+                .ends_with(nd_chromecast::identity::IDENTITY_CHANGED)
+        {
+            return tr!("Did not prove it is the same device used before");
+        }
         if self.entry.state == SinkState::Error && !self.entry.detail.is_empty() {
             return self.entry.detail.clone();
         }

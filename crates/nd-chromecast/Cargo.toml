@@ -28,6 +28,8 @@ aes = "0.8"
 ctr = "0.9"
 
 [dev-dependencies]
+# Signs the local test receiver's identity answers; already in the tree via rustls.
+ring = "0.17"
 nd-capture.workspace = true
 nd-core.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

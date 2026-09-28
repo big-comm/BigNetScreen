@@ -786,6 +786,8 @@ pub async fn run(
     receiver_ip: IpAddr,
     // The control port the receiver announced over mDNS.
     receiver_port: u16,
+    // The discovery identity its device key is remembered under.
+    receiver: &str,
     video: pipeline::VideoSource,
     size: (u32, u32),
     status: &SinkStatus,
@@ -802,7 +804,7 @@ pub async fn run(
     if *cancel.borrow() {
         return Ok(());
     }
-    let channel = CastChannel::connect_to(receiver_ip, receiver_port).await?;
+    let channel = CastChannel::connect_to(receiver_ip, receiver_port, receiver).await?;
     if *cancel.borrow() {
         channel.close().await;
         return Ok(());

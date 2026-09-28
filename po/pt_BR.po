@@ -178,6 +178,9 @@ msgstr ""
 "No Miracast ele é aplicado aqui; no Chromecast é um pedido que o receptor "
 "pode ignorar."
 
+msgid "Cancel"
+msgstr "Cancelar"
+
 #: crates/nd-gui/src/pages/settings.rs:394
 msgid "Changes are saved automatically"
 msgstr "As alterações são salvas automaticamente"
@@ -272,6 +275,9 @@ msgstr ""
 "Não foi possível conectar. Verifique se os dois aparelhos estão na mesma "
 "rede."
 
+msgid "Could not forget this receiver's identity: {}"
+msgstr "Não foi possível esquecer a identidade deste receptor: {}"
+
 #: crates/nd-gui/src/app.rs:1211
 msgid ""
 "Could not prepare the BigNetScreen sound output. Check the audio options in "
@@ -305,6 +311,9 @@ msgstr ""
 #: crates/nd-gui/src/pages/mod.rs:49 crates/nd-gui/src/pages/devices.rs:108
 msgid "Devices"
 msgstr "Dispositivos"
+
+msgid "Did not prove it is the same device used before"
+msgstr "Não provou ser o mesmo aparelho usado antes"
 
 #: crates/nd-gui/src/pages/home.rs:454 crates/nd-gui/src/pages/devices.rs:239
 msgid "Disconnect"
@@ -374,6 +383,13 @@ msgid ""
 msgstr ""
 "Para Miracast, abra o espelhamento de tela na TV ou no projetor e atualize a "
 "lista de aparelhos."
+
+msgid ""
+"Forget the device remembered for this receiver and trust the one that "
+"answers next"
+msgstr ""
+"Esquecer o aparelho lembrado para este receptor e confiar no que "
+"responder a seguir"
 
 #: crates/nd-gui/src/pages/media.rs:481 crates/nd-gui/src/pages/media.rs:1237
 msgid "Forward 10 seconds"
@@ -875,6 +891,18 @@ msgstr "Esse PIN não está certo. Confira a tela do computador."
 msgid "That device is no longer available"
 msgstr "Esse dispositivo não está mais disponível"
 
+msgid "The device that answers on the next connection will be trusted"
+msgstr "O aparelho que responder na próxima conexão será considerado confiável"
+
+msgid ""
+"The next device that answers for this receiver will be trusted and "
+"remembered. Do this only if you replaced or reset it and nobody else "
+"can reach this network."
+msgstr ""
+"O próximo aparelho que responder por este receptor será considerado "
+"confiável e lembrado. Faça isso somente se você trocou ou restaurou o "
+"aparelho e ninguém mais tem acesso a esta rede."
+
 #: crates/nd-gui/src/pages/mod.rs:255
 msgid "The receiver did not answer the connection check"
 msgstr "O aparelho não respondeu à verificação de conexão"
@@ -908,9 +936,23 @@ msgstr ""
 "Este aparelho está visível, mas o compartilhamento por AirPlay não é "
 "compatível."
 
+#: crates/nd-gui/src/app.rs:1261
+msgid ""
+"This receiver did not prove it is the same device used before, so the screen "
+"was not sent. Someone on the network may be impersonating it."
+msgstr ""
+"Este receptor não provou ser o mesmo aparelho usado antes, por isso a tela "
+"não foi enviada. Alguém na rede pode estar se passando por ele."
+
 #: crates/nd-gui/src/app.rs:1294
 msgid "Too many attempts. Wait half a minute and try again."
 msgstr "Muitas tentativas. Espere meio minuto e tente de novo."
+
+msgid "Trust again"
+msgstr "Confiar de novo"
+
+msgid "Trust this receiver again?"
+msgstr "Confiar de novo neste receptor?"
 
 #: crates/nd-gui/src/pages/home.rs:1029
 msgid ""

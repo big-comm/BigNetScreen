@@ -92,6 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let result = mirror_session::run(
         ip,
         nd_chromecast::cast::PORT,
+        &ip.to_string(),
         video,
         size,
         &status,

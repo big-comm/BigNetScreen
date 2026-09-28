@@ -1258,6 +1258,10 @@ fn describe_refusal(reason: &str) -> String {
              does not have."
         ),
         "a stream is already running" => tr!("A stream is already running"),
+        nd_chromecast::identity::IDENTITY_CHANGED => tr!(
+            "This receiver did not prove it is the same device used before, so the screen was \
+             not sent. Someone on the network may be impersonating it."
+        ),
         _ => tr!("Sharing could not be completed. Open Details to see the reason."),
     }
 }

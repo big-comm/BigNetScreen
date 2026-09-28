@@ -53,6 +53,9 @@ pub struct DevicesPage {
     auto_discovery: bool,
     /// The id of the receiver being streamed to.
     active: Option<String>,
+    /// A receiver whose remembered identity the person just forgot, and how
+    /// forgetting it went.
+    trusted_again: Option<(String, Result<(), String>)>,
 }
 
 #[derive(Debug)]
@@ -67,6 +70,9 @@ pub enum DevicesMsg {
     Cast,
     Stop,
     SendMedia,
+    /// Asks before forgetting the refused receiver's identity.
+    TrustAgain,
+    TrustConfirmed(String),
 }
 
 #[derive(Debug)]
@@ -84,7 +90,8 @@ impl Component for DevicesPage {
     type Init = ();
     type Input = DevicesMsg;
     type Output = DevicesOutput;
-    type CommandOutput = ();
+    /// The receiver whose identity was forgotten, and the outcome.
+    type CommandOutput = (String, Result<(), String>);
 
     view! {
         adw::BreakpointBin {
@@ -215,6 +222,7 @@ impl Component for DevicesPage {
                             set_margin_top: 6,
                             set_homogeneous: true,
 
+                            #[name = "mirror"]
                             gtk::Button {
                                 #[watch]
                                 set_visible: !model.is_selected_active(),
@@ -237,6 +245,20 @@ impl Component for DevicesPage {
                                 adw::ButtonContent {
                                     set_icon_name: "media-playback-stop-symbolic",
                                     set_label: &tr!("Disconnect"),
+                                },
+                            },
+                            #[name = "trust_again"]
+                            gtk::Button {
+                                #[watch]
+                                set_visible: model.identity_refused(),
+                                set_tooltip_text: Some(&tr!(
+                                    "Forget the device remembered for this receiver and trust the one that answers next"
+                                )),
+                                connect_clicked => DevicesMsg::TrustAgain,
+
+                                adw::ButtonContent {
+                                    set_icon_name: "security-medium-symbolic",
+                                    set_label: &tr!("Trust again"),
                                 },
                             },
                             gtk::Button {
@@ -316,6 +338,7 @@ impl Component for DevicesPage {
             selected: None,
             auto_discovery: settings::current().auto_discovery,
             active: None,
+            trusted_again: None,
         };
 
         let device_list = model.devices.widget();
@@ -357,7 +380,7 @@ impl Component for DevicesPage {
         widgets: &mut Self::Widgets,
         message: Self::Input,
         sender: ComponentSender<Self>,
-        _root: &Self::Root,
+        root: &Self::Root,
     ) {
         match message {
             DevicesMsg::Devices(entries) => {
@@ -366,6 +389,14 @@ impl Component for DevicesPage {
                 // description of itself on screen.
                 if let Some(selected) = &self.selected {
                     self.selected = entries.iter().find(|e| e.id == selected.id).cloned();
+                }
+                // A new attempt replaces the refusal the note was about.
+                if let Some((id, _)) = &self.trusted_again
+                    && !entries
+                        .iter()
+                        .any(|e| &e.id == id && e.state == SinkState::Error)
+                {
+                    self.trusted_again = None;
                 }
                 self.all = entries;
                 self.apply_filter();
@@ -412,8 +443,62 @@ impl Component for DevicesPage {
                         .ok();
                 }
             }
+            DevicesMsg::TrustAgain => {
+                let Some(selected) = &self.selected else {
+                    return;
+                };
+                let dialog = adw::AlertDialog::new(
+                    Some(&tr!("Trust this receiver again?")),
+                    Some(&tr!(
+                        "The next device that answers for this receiver will be trusted and \
+                         remembered. Do this only if you replaced or reset it and nobody else \
+                         can reach this network."
+                    )),
+                );
+                dialog.add_response("cancel", &tr!("Cancel"));
+                dialog.add_response("trust", &tr!("Trust again"));
+                dialog.set_response_appearance("trust", adw::ResponseAppearance::Destructive);
+                dialog.set_default_response(Some("cancel"));
+                dialog.set_close_response("cancel");
+                let input = sender.input_sender().clone();
+                let id = selected.id.clone();
+                dialog.connect_response(Some("trust"), move |_, _| {
+                    input.emit(DevicesMsg::TrustConfirmed(id.clone()))
+                });
+                dialog.present(Some(root));
+            }
+            DevicesMsg::TrustConfirmed(id) => {
+                sender.oneshot_command(async move {
+                    let forget = id.clone();
+                    let result =
+                        relm4::spawn_blocking(move || nd_chromecast::identity::forget(&forget))
+                            .await
+                            .map_err(|err| err.to_string())
+                            .and_then(|result| result.map_err(|err| err.to_string()));
+                    (id, result)
+                });
+            }
         }
         self.update_view(widgets, sender);
+    }
+
+    fn update_cmd_with_view(
+        &mut self,
+        widgets: &mut Self::Widgets,
+        outcome: Self::CommandOutput,
+        sender: ComponentSender<Self>,
+        _root: &Self::Root,
+    ) {
+        if let Err(err) = &outcome.1 {
+            tracing::warn!(%err, "could not forget the receiver's identity");
+        }
+        let forgotten = outcome.1.is_ok();
+        self.trusted_again = Some(outcome);
+        self.update_view(widgets, sender);
+        // The button that had focus is gone; the next step is to connect.
+        if forgotten {
+            widgets.mirror.grab_focus();
+        }
     }
 }
 
@@ -443,6 +528,17 @@ impl DevicesPage {
         self.selected.as_ref().map(f).unwrap_or(false)
     }
 
+    /// The selected receiver was refused for proving another identity, and
+    /// the person has not yet forgotten the old one.
+    fn identity_refused(&self) -> bool {
+        self.selected.as_ref().is_some_and(|d| {
+            d.state == SinkState::Error
+                && d.detail
+                    .ends_with(nd_chromecast::identity::IDENTITY_CHANGED)
+                && !matches!(&self.trusted_again, Some((id, Ok(()))) if id == &d.id)
+        })
+    }
+
     fn is_selected_active(&self) -> bool {
         match (&self.selected, &self.active) {
             (Some(selected), Some(active)) => &selected.id == active,
@@ -455,6 +551,17 @@ impl DevicesPage {
         let Some(selected) = &self.selected else {
             return String::new();
         };
+        if let Some((id, outcome)) = &self.trusted_again
+            && id == &selected.id
+        {
+            return match outcome {
+                Ok(()) => tr!("The device that answers on the next connection will be trusted"),
+                Err(err) => tr!("Could not forget this receiver's identity: {}").replace("{}", err),
+            };
+        }
+        if self.identity_refused() {
+            return tr!("Did not prove it is the same device used before");
+        }
         if selected.state == SinkState::Error && !selected.detail.is_empty() {
             return selected.detail.clone();
         }
@@ -555,6 +662,64 @@ mod tests {
         flush();
         assert!(page.model().selected.is_none());
         assert_eq!(page.model().devices.len(), 1);
+    }
+
+    #[test]
+    #[ignore = "requires a graphical GTK session and a temporary XDG_DATA_HOME"]
+    fn trusting_a_refused_receiver_again_forgets_only_its_identity() {
+        let data = std::env::var_os("XDG_DATA_HOME").expect("XDG_DATA_HOME");
+        assert!(
+            std::path::Path::new(&data).starts_with(std::env::temp_dir()),
+            "run with a temporary XDG_DATA_HOME; this test forgets identities"
+        );
+        adw::init().expect("GTK session");
+        let flush = || {
+            gtk::glib::MainContext::default().block_on(gtk::glib::timeout_future(
+                std::time::Duration::from_millis(50),
+            ));
+        };
+        let receiver = "Test-TV._googlecast._tcp.local.";
+        nd_chromecast::identity::check_and_remember(receiver, Some(b"old-device")).unwrap();
+        let page = DevicesPage::builder().launch(()).detach();
+        let mut refused = entry(SinkKind::Chromecast);
+        refused.id = receiver.into();
+        refused.state = SinkState::Error;
+        refused.detail = format!(
+            "protocol: changed: {}",
+            nd_chromecast::identity::IDENTITY_CHANGED
+        );
+        page.emit(DevicesMsg::Devices(vec![refused.clone()]));
+        page.emit(DevicesMsg::Selected(receiver.into()));
+        flush();
+        assert!(page.widgets().trust_again.is_visible());
+        assert_eq!(
+            page.model().status_line(),
+            tr!("Did not prove it is the same device used before")
+        );
+
+        page.emit(DevicesMsg::TrustConfirmed(receiver.into()));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while page.model().trusted_again.is_none() && std::time::Instant::now() < deadline {
+            gtk::glib::MainContext::default().iteration(false);
+        }
+        flush();
+        assert!(
+            !page.widgets().trust_again.is_visible(),
+            "the button stays after forgetting"
+        );
+        assert_eq!(
+            page.model().status_line(),
+            tr!("The device that answers on the next connection will be trusted")
+        );
+        // Forgotten: a different device is now a first use, and remembered.
+        nd_chromecast::identity::check_and_remember(receiver, Some(b"new-device")).unwrap();
+        nd_chromecast::identity::check_and_remember(receiver, Some(b"old-device")).unwrap_err();
+
+        // The next attempt replaces the note.
+        refused.state = SinkState::Connecting;
+        page.emit(DevicesMsg::Devices(vec![refused]));
+        flush();
+        assert!(page.model().trusted_again.is_none());
     }
 
     fn entry(kind: SinkKind) -> DeviceEntry {

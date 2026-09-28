@@ -232,6 +232,12 @@ struct Engine {
     last_client_activity: Option<tokio::time::Instant>,
     media_session: Option<MediaSession>,
     media_owner: Option<MediaOwner>,
+    /// The receiver files are being sent to.
+    media_target: Option<String>,
+    /// A receiver refused for proving another identity while files were sent
+    /// to it, and why. Its row says so, like a refused screen does, until the
+    /// next attempt to it: that is where the person can trust it again.
+    refused: Option<(String, String)>,
     /// The last link measurement. The outer `None` means *not measured yet*,
     /// the inner one means *the receiver did not answer* — one `Option` would
     /// have to call one of those the other.
@@ -263,6 +269,8 @@ impl Engine {
             virtual_available: false,
             generation: 0,
             media_session: None,
+            media_target: None,
+            refused: None,
             media_owner: None,
             measured: None,
             probing: false,
@@ -643,7 +651,14 @@ impl Engine {
                 } else {
                     self.registry.get(id)
                 }?;
-                Some(Receiver::of(sink.as_ref()))
+                let mut receiver = Receiver::of(sink.as_ref());
+                if let Some((refused, why)) = &self.refused
+                    && refused == id
+                {
+                    receiver.state = wire::state_name(SinkState::Error).to_string();
+                    receiver.detail = why.clone();
+                }
+                Some(receiver)
             })
             .collect();
         let session = match &self.active_sink {
@@ -733,13 +748,21 @@ impl Engine {
         }
         self.media_session = None;
         self.media_owner = None;
+        let target = self.media_target.take();
         self.active_cast = None;
         self.active_sink = None;
         self.cast_cancel = None;
         self.measured = None;
         self.probing = false;
         match status.error {
-            Some(error) => self.status = Status::error(error),
+            Some(error) => {
+                if error.ends_with(nd_chromecast::identity::IDENTITY_CHANGED)
+                    && let Some(target) = target
+                {
+                    self.refused = Some((target, error.clone()));
+                }
+                self.status = Status::error(error);
+            }
             None => {
                 self.status = Status::of("idle");
                 self.refresh_status();
@@ -908,6 +931,7 @@ impl Engine {
         if self.active_cast.is_some() || self.media_session.is_some() {
             return Err("a stream is already running".into());
         }
+        self.refused.take_if(|(refused, _)| *refused == id);
 
         self.media_owner = None;
         // From the file, every time. The window writes it and this process
@@ -988,6 +1012,7 @@ impl Engine {
         if self.active_cast.is_some() || self.media_session.is_some() {
             return Err("a stream is already running".into());
         }
+        self.refused.take_if(|(refused, _)| *refused == target);
 
         let info = sink.info();
         if start.is_some() && !matches!(info.kind, SinkKind::Chromecast | SinkKind::Dlna) {
@@ -1006,6 +1031,7 @@ impl Engine {
             let endpoint = sink.control_endpoint().ok_or("unknown-receiver")?;
             let session = MediaSession::start(
                 endpoint,
+                info.id.clone(),
                 files,
                 self.settings.port,
                 self.settings.display_name(),
@@ -1013,6 +1039,7 @@ impl Engine {
             )
             .map_err(|err| err.to_string())?;
             self.media_session = Some(session);
+            self.media_target = Some(target);
             self.status = Status::of("sending");
             self.refresh_status();
             return Ok(());
@@ -1029,6 +1056,7 @@ impl Engine {
             None => MediaSession::start_mirroring(sink.clone(), files, start),
         }
         .map_err(|err| err.to_string())?;
+        self.media_target = Some(target.clone());
         self.active_cast = Some(target);
         self.active_sink = Some(sink);
         self.media_session = Some(session);
@@ -1160,6 +1188,30 @@ mod tests {
     }
 
     #[test]
+    fn a_receiver_refused_while_sending_files_says_so_on_its_row() {
+        let (tx, snapshots) = watch::channel(Snapshot::initial(Settings::default()));
+        let mut engine = Engine::new(tx);
+        engine.registry.insert("a".into(), sink("a"));
+        engine.registry.insert("b".into(), sink("b"));
+        engine.order = vec!["a".into(), "b".into()];
+        let why = format!(
+            "protocol: changed: {}",
+            nd_chromecast::identity::IDENTITY_CHANGED
+        );
+        engine.refused = Some(("a".into(), why.clone()));
+        engine.publish();
+        let receivers = snapshots.borrow().receivers.clone();
+        assert_eq!(
+            (receivers[0].state.as_str(), receivers[0].detail.as_str()),
+            ("error", why.as_str())
+        );
+        assert_eq!(
+            receivers[1].state, "disconnected",
+            "only the refused receiver"
+        );
+    }
+
+    #[test]
     fn a_running_session_outranks_the_receiver_count_in_the_status() {
         let mut engine = engine();
         engine.settings.auto_discovery = true;
@@ -1276,6 +1328,7 @@ mod tests {
         engine.media_session = Some(
             MediaSession::start(
                 "127.0.0.1:9".parse().unwrap(),
+                "test".into(),
                 vec![MediaItem::File(file)],
                 0,
                 "test".into(),
