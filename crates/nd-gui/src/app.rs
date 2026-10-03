@@ -424,7 +424,7 @@ impl Component for AppModel {
             "visible",
             Some(&true.to_value()),
         );
-        root.add_breakpoint(compact);
+        big_gtk_kit::breakpoint::add(&root, compact);
         let split = widgets.split.downgrade();
         widgets.navigation_button.connect_clicked(move |_| {
             if let Some(split) = split.upgrade() {

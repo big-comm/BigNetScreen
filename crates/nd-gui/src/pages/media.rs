@@ -547,7 +547,7 @@ impl Component for MediaPage {
             "orientation",
             Some(&gtk::Orientation::Vertical.to_value()),
         );
-        root.add_breakpoint(compact);
+        big_gtk_kit::breakpoint::add(&root, compact);
 
         for label in [tr!("Photos"), tr!("Videos"), tr!("Music")] {
             widgets

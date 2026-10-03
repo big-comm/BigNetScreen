@@ -20,7 +20,7 @@ fn layout_pages_and_breakpoints() {
     let observed = errors.clone();
     let css = gtk::CssProvider::new();
     css.connect_parsing_error(move |_, _, error| observed.borrow_mut().push(error.to_string()));
-    css.load_from_data(include_str!("../style.css"));
+    css.load_from_string(include_str!("../style.css"));
     assert!(errors.borrow().is_empty(), "CSS: {:?}", errors.borrow());
     gtk::style_context_add_provider_for_display(
         &gtk::gdk::Display::default().unwrap(),

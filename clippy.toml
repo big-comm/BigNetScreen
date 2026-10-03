@@ -1,16 +1,21 @@
-# Known retention bugs in the locked GTK/libadwaita bindings and libadwaita 1.9.
-# Keep these guards until the affected dependency is fixed and remeasured.
+# GTK and libadwaita APIs that leak, from big-gtk-kit/clippy.toml: use the kit
+# function each reason names.
 disallowed-methods = [
-    { path = "libadwaita::prelude::AlertDialogExtManual::choose", reason = "Retains the dialog: connect response and call present instead." },
-    { path = "libadwaita::prelude::AlertDialogExtManual::choose_future", reason = "Retains the dialog: connect response and call present instead." },
-    { path = "libadwaita::prelude::MessageDialogExtManual::choose", reason = "Retains the dialog: use AlertDialog with response/present." },
-    { path = "gtk4::prelude::AccessibleExtManual::update_relation", reason = "Leaks target GList nodes in gtk-rs 0.11; use an ownership-correct FFI wrapper if relations are needed." },
-    { path = "libadwaita::PasswordEntryRow::new", reason = "Retains its password buffer in libadwaita 1.9; use GtkPasswordEntry." },
-    { path = "libadwaita::builders::PasswordEntryRowBuilder::build", reason = "Retains its password buffer in libadwaita 1.9; use GtkPasswordEntry." },
-    { path = "gtk4::Switch::set_active", reason = "Cancels a click's slide even when the value is unchanged (GTK 4.22), so a sync swallows the click; use pages::set_switch_active." },
+    { path = "gtk4::prelude::AccessibleExtManual::update_relation", reason = "leaks the list of targets on every call (gtk-rs 0.11); use `big_gtk_kit::accessible::relate`" },
+    { path = "libadwaita::PasswordEntryRow::new", reason = "leaks its buffer and the password in it (libadwaita 1.9); use `big_gtk_kit::password::password_row(adw::PasswordEntryRow::builder())`" },
+    { path = "libadwaita::builders::PasswordEntryRowBuilder::build", reason = "leaks its buffer and the password in it (libadwaita 1.9); pass the builder to `big_gtk_kit::password::password_row`" },
+    { path = "libadwaita::prelude::AlertDialogExtManual::choose", reason = "leaks the dialog (libadwaita-rs 0.9); use `big_gtk_kit::alert::choose`" },
+    { path = "libadwaita::prelude::AlertDialogExtManual::choose_future", reason = "leaks the dialog (libadwaita-rs 0.9); use `big_gtk_kit::alert::choose_future`" },
+    { path = "libadwaita::prelude::MessageDialogExtManual::choose", reason = "leaks the dialog (libadwaita-rs 0.9); use `adw::AlertDialog` with `big_gtk_kit::alert::choose`" },
+    { path = "libadwaita::prelude::AdwWindowExt::add_breakpoint", reason = "the breakpoint outlives the window (libadwaita 1.9); use `big_gtk_kit::breakpoint::add`" },
+    { path = "libadwaita::prelude::AdwApplicationWindowExt::add_breakpoint", reason = "the breakpoint outlives the window (libadwaita 1.9); use `big_gtk_kit::breakpoint::add`" },
+    { path = "libadwaita::prelude::AdwDialogExt::add_breakpoint", reason = "the breakpoint outlives the dialog (libadwaita 1.9); use `big_gtk_kit::breakpoint::add`" },
+    { path = "libadwaita::prelude::BreakpointBinExt::add_breakpoint", reason = "the breakpoint outlives the bin (libadwaita 1.9); use `big_gtk_kit::breakpoint::add`" },
+    { path = "gtk4::Switch::set_active", reason = "cancels a click's slide even when the value is unchanged (GTK 4.22), so a refresh swallows the click; use `big_gtk_kit::switch::set_active`" },
+    { path = "gio::Menu::append_section", reason = "GTK 4.22's menu tracker leaks unmerged section links; keep menus flat" },
 ]
 disallowed-types = [
-    { path = "libadwaita::InlineViewSwitcher", reason = "Retains toggle children in libadwaita 1.9; use ToggleGroup with GtkStack." },
-    { path = "libadwaita::ViewStack", reason = "Retains its transition animation in libadwaita 1.9; use GtkStack." },
-    { path = "libadwaita::ViewSwitcher", reason = "Requires the leaking AdwViewStack; use ToggleGroup with GtkStack." },
+    { path = "libadwaita::InlineViewSwitcher", reason = "leaks a widget tree per page (libadwaita 1.9); use `big_gtk_kit::view_switcher::toggles_for` over a `gtk::Stack`" },
+    { path = "libadwaita::ViewStack", reason = "leaks its transition animation (libadwaita 1.9); use `gtk::Stack` with `big_gtk_kit::view_switcher::toggles_for`" },
+    { path = "libadwaita::ViewSwitcher", reason = "needs an `AdwViewStack`, which leaks (libadwaita 1.9); use `big_gtk_kit::view_switcher::toggles_for` over a `gtk::Stack`" },
 ]

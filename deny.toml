@@ -27,3 +27,8 @@ wildcards = "deny"
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
+
+# Shared BigLinux crates (big-gtk-kit) come from the project's own GitHub
+# organisation; every other git source stays refused.
+[sources.allow-org]
+github = ["biglinux"]

@@ -34,6 +34,7 @@ futures.workspace = true
 tokio.workspace = true
 gettext-rs = { version = "0.8", features = ["gettext-system"] }
 relm4 = { version = "0.11", features = ["libadwaita"] }
+big-gtk-kit.workspace = true
 # The application uses libadwaita 1.7 APIs.
 adw = { package = "libadwaita", version = "0.9", features = ["v1_7"] }
 # GtkFileDialog and content-fit require GTK 4.10 or later.

@@ -261,22 +261,6 @@ pub fn quality_line(info: &SessionInfo) -> String {
     }
 }
 
-/// Show `active` on `switch`, leaving it alone when it already shows it.
-///
-/// A click starts a 100 ms slide and flips the switch when it ends, and
-/// `gtk_switch_set_active` stops that slide even when given the value already
-/// shown (GTK 4.22): a settings sync arriving in those 100 ms swallowed the
-/// click, and the person had to click again.
-pub fn set_switch_active(switch: &relm4::gtk::Switch, active: bool) {
-    if switch.is_active() != active {
-        #[allow(
-            clippy::disallowed_methods,
-            reason = "the one caller that checks first"
-        )]
-        switch.set_active(active);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

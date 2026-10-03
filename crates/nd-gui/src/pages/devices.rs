@@ -18,7 +18,7 @@ use nd_core::settings;
 use nd_core::sink::SinkState;
 
 use super::home::{DeviceRow, DeviceRowOutput};
-use super::{DeviceEntry, latency_hint, set_switch_active, state_label};
+use super::{DeviceEntry, latency_hint, state_label};
 use crate::tr;
 
 /// Which protocols the list shows.
@@ -356,7 +356,7 @@ impl Component for DevicesPage {
             "orientation",
             Some(&gtk::Orientation::Vertical.to_value()),
         );
-        root.add_breakpoint(compact);
+        big_gtk_kit::breakpoint::add(&root, compact);
 
         for label in [tr!("All protocols"), tr!("Local network"), tr!("Miracast")] {
             widgets
@@ -367,7 +367,7 @@ impl Component for DevicesPage {
         widgets
             .auto_switch
             .block_signal(&widgets.auto_discovery_handler);
-        set_switch_active(&widgets.auto_switch, model.auto_discovery);
+        big_gtk_kit::switch::set_active(&widgets.auto_switch, model.auto_discovery);
         widgets
             .auto_switch
             .unblock_signal(&widgets.auto_discovery_handler);
@@ -420,7 +420,7 @@ impl Component for DevicesPage {
                 widgets
                     .auto_switch
                     .block_signal(&widgets.auto_discovery_handler);
-                set_switch_active(&widgets.auto_switch, on);
+                big_gtk_kit::switch::set_active(&widgets.auto_switch, on);
                 widgets
                     .auto_switch
                     .unblock_signal(&widgets.auto_discovery_handler);
@@ -621,7 +621,7 @@ mod tests {
                 "settings synchronization echoed"
             );
         }
-        set_switch_active(&page.widgets().auto_switch, false);
+        big_gtk_kit::switch::set_active(&page.widgets().auto_switch, false);
         flush();
         assert_eq!(
             *outputs.borrow(),
