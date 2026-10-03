@@ -9,8 +9,8 @@ url="https://github.com/big-comm/BigNetScreen"
 license=('GPL-3.0-or-later')
 
 depends=(
-  'gtk4'
-  'libadwaita'
+  'gtk4>=4.22'
+  'libadwaita>=1.9'
   'gstreamer'
   'gst-plugins-base'
   'gst-plugins-good'
