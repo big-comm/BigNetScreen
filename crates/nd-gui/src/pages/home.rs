@@ -718,7 +718,7 @@ impl Component for HomePage {
             "orientation",
             Some(&gtk::Orientation::Vertical.to_value()),
         );
-        root.add_breakpoint(compact);
+        big_gtk_kit::breakpoint::add(&root, compact);
 
         ComponentParts { model, widgets }
     }

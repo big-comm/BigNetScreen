@@ -42,6 +42,9 @@ nd-dlna = { path = "crates/nd-dlna" }
 nd-service = { path = "crates/nd-service" }
 
 # Shared dependencies
+# The shared BigLinux GTK kit. A path until the kit's first push; then
+# git = "https://github.com/biglinux/big-gtk-kit".
+big-gtk-kit = { path = "../../code/big-gtk-kit" }
 thiserror = "2"
 async-trait = "0.1"
 tracing = "0.1"

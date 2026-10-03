@@ -71,5 +71,6 @@ fn main() {
 
     let app = RelmApp::new(APP_ID);
     relm4::set_global_css(include_str!("style.css"));
+    big_gtk_kit::install();
     app.run::<AppModel>(());
 }
