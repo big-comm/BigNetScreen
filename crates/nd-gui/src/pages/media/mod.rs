@@ -1,168 +1,26 @@
 //! Sending photos, films and music to a receiver.
-use super::preview::{self, Preview};
+//!
+//! The page shows the newest files of one kind from the standard folder
+//! ([`library`]) as a grid of [`tile`]s, keeps the files chosen as a queue, and
+//! hands the queue to the root component to send.
+
+mod library;
+mod queue;
+mod tile;
+
+use super::preview::Preview;
 use crate::{tr, tr_n};
+use library::{GRID_LIMIT, inspect_paths, open_file_dialog, scan_library};
 use nd_chromecast::file_server::{MediaFile, MediaKind};
 use nd_chromecast::media::MediaStatus;
 use nd_core::media::MediaCommand;
+use queue::QueueList;
 use relm4::adw::{self, prelude::*};
-use relm4::factory::{DynamicIndex, FactoryComponent, FactorySender, FactoryVecDeque};
+use relm4::factory::FactoryVecDeque;
 use relm4::gtk;
-use relm4::gtk::glib;
 use relm4::prelude::*;
 use std::path::PathBuf;
-
-const GRID_LIMIT: usize = 60;
-
-#[derive(Debug)]
-pub struct MediaTile {
-    file: MediaFile,
-    selected: bool,
-    preview: Preview,
-}
-#[derive(Debug)]
-pub enum TileMsg {
-    Toggled(bool),
-    SetSelected(bool),
-}
-#[derive(Debug)]
-pub enum TileOutput {
-    Selected(PathBuf, bool),
-}
-
-#[relm4::factory(pub)]
-impl FactoryComponent for MediaTile {
-    type Init = MediaFile;
-    type Input = TileMsg;
-    type Output = TileOutput;
-    type CommandOutput = Result<Preview, String>;
-    type ParentWidget = gtk::FlowBox;
-
-    view! {
-        gtk::ToggleButton {
-            set_css_classes: &["media-tile", "flat"],
-            #[watch]
-            #[block_signal(toggle_handler)]
-            set_active: self.selected,
-            set_tooltip_text: Some(&self.file.path.to_string_lossy()),
-            connect_toggled[sender] => move |button| {
-                sender.input(TileMsg::Toggled(button.is_active()));
-            } @toggle_handler,
-            gtk::Box {
-                set_orientation: gtk::Orientation::Vertical,
-                set_spacing: 2,
-                gtk::Overlay {
-                    add_css_class: "thumb-frame",
-                    set_overflow: gtk::Overflow::Hidden,
-                    gtk::Box {
-                        set_width_request: 170,
-                        set_height_request: if self.file.kind == MediaKind::Video { 110 } else { 170 },
-                    },
-                    #[name = "thumb"]
-                    add_overlay = &gtk::Picture {
-                        set_content_fit: gtk::ContentFit::Cover,
-                        set_can_shrink: true,
-                        set_halign: gtk::Align::Fill,
-                        set_valign: gtk::Align::Fill,
-                        add_css_class: "thumb",
-                        set_can_target: false,
-                    },
-                    add_overlay = &gtk::Image {
-                        set_icon_name: Some(match self.file.kind { MediaKind::Photo => "image-x-generic-symbolic", MediaKind::Video => "video-x-generic-symbolic", MediaKind::Music => "audio-x-generic-symbolic" }),
-                        set_pixel_size: 48,
-                        set_halign: gtk::Align::Center,
-                        set_valign: gtk::Align::Center,
-                        add_css_class: "thumb-fallback",
-                        #[watch]
-                        set_visible: self.preview.image.is_none(),
-                        set_can_target: false,
-                    },
-                    add_overlay = &gtk::Image {
-                        #[watch]
-                        set_icon_name: if self.selected { Some("object-select-symbolic") } else { None },
-                        set_halign: gtk::Align::Start,
-                        set_valign: gtk::Align::Start,
-                        add_css_class: "selection-mark",
-                        set_can_target: false,
-                    },
-                    add_overlay = &gtk::Label {
-                        #[watch]
-                        set_label: &self.preview.duration.map(format_time).unwrap_or_default(),
-                        #[watch]
-                        set_visible: self.preview.duration.is_some(),
-                        set_halign: gtk::Align::End,
-                        set_valign: gtk::Align::End,
-                        add_css_class: "duration-badge",
-                        set_can_target: false,
-                    },
-                },
-                gtk::Label {
-                    set_label: &self.file.title(),
-                    set_xalign: 0.0,
-                    set_ellipsize: gtk::pango::EllipsizeMode::Middle,
-                    set_max_width_chars: 20,
-                    add_css_class: "media-name",
-                },
-                gtk::Label {
-                    #[watch]
-                    set_label: &self.preview.artist.clone().unwrap_or_else(|| format!("{} · {}", glib::format_size(self.file.size), self.file.path.extension().unwrap_or_default().to_string_lossy().to_uppercase())),
-                    set_xalign: 0.0,
-                    set_ellipsize: gtk::pango::EllipsizeMode::End,
-                    set_max_width_chars: 20,
-                    add_css_class: "media-detail",
-                },
-            },
-        }
-    }
-    fn init_model(file: Self::Init, _index: &DynamicIndex, _sender: FactorySender<Self>) -> Self {
-        Self {
-            file,
-            selected: false,
-            preview: Preview::default(),
-        }
-    }
-    fn init_widgets(
-        &mut self,
-        _index: &DynamicIndex,
-        root: Self::Root,
-        _returned: &<Self::ParentWidget as relm4::factory::FactoryView>::ReturnedWidget,
-        sender: FactorySender<Self>,
-    ) -> Self::Widgets {
-        let widgets = view_output!();
-        if self.file.kind == MediaKind::Music {
-            root.add_css_class("music");
-        }
-        sender.oneshot_command(preview::load(self.file.path.clone(), self.file.kind));
-        widgets
-    }
-    fn update_cmd_with_view(
-        &mut self,
-        widgets: &mut Self::Widgets,
-        message: Self::CommandOutput,
-        sender: FactorySender<Self>,
-    ) {
-        match message {
-            Ok(preview) => {
-                if let Some(image) = &preview.image {
-                    widgets.thumb.set_paintable(Some(&image.texture(360)));
-                }
-                self.preview = preview;
-                self.update_view(widgets, sender);
-            }
-            Err(err) => tracing::debug!(%err, "no preview"),
-        }
-    }
-    fn update(&mut self, message: Self::Input, sender: FactorySender<Self>) {
-        match message {
-            TileMsg::SetSelected(selected) => self.selected = selected,
-            TileMsg::Toggled(selected) => {
-                self.selected = selected;
-                sender
-                    .output(TileOutput::Selected(self.file.path.clone(), selected))
-                    .ok();
-            }
-        }
-    }
-}
+use tile::{MediaTile, TileMsg, TileOutput, format_time};
 
 pub struct MediaPage {
     tiles: FactoryVecDeque<MediaTile>,
@@ -182,9 +40,7 @@ pub struct MediaPage {
     status: Option<MediaStatus>,
     scan_generation: u64,
     inspection_generation: u64,
-    rendered_queue: Vec<PathBuf>,
-    queue_thumbnails: std::collections::HashMap<PathBuf, gtk::Image>,
-    queue_preview_cancel: tokio::sync::watch::Sender<()>,
+    queue: QueueList,
     scan_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -329,8 +185,6 @@ impl Component for MediaPage {
                     add_css_class: "media-grid",
                 },
             },
-
-
 
             gtk::Box {
                 set_spacing: 8,
@@ -522,9 +376,7 @@ impl Component for MediaPage {
             status: None,
             scan_generation: 0,
             inspection_generation: 0,
-            rendered_queue: Vec::new(),
-            queue_thumbnails: Default::default(),
-            queue_preview_cancel: tokio::sync::watch::channel(()).0,
+            queue: QueueList::new(),
             scan_cancel: Default::default(),
         };
 
@@ -563,11 +415,7 @@ impl Component for MediaPage {
         _sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
-        if let (Some(picture), Ok(preview)) = (self.queue_thumbnails.get(&path), preview)
-            && let Some(image) = preview.image
-        {
-            picture.set_paintable(Some(&image.texture(48)));
-        }
+        self.queue.show_preview(&path, preview);
     }
 
     fn update_with_view(
@@ -741,56 +589,7 @@ impl MediaPage {
                 self.tiles.send(index, TileMsg::SetSelected(selected));
             }
         }
-        let paths: Vec<_> = self.chosen.iter().map(|file| file.path.clone()).collect();
-        if paths == self.rendered_queue {
-            return;
-        }
-        self.queue_preview_cancel.send_replace(());
-        while let Some(row) = widgets.queue_list.first_child() {
-            widgets.queue_list.remove(&row);
-        }
-        self.queue_thumbnails.clear();
-        for file in &self.chosen {
-            let row = adw::ActionRow::builder()
-                .title(file.title())
-                .use_markup(false)
-                .subtitle(file.path.to_string_lossy())
-                .build();
-            let picture = gtk::Image::builder()
-                .icon_name(match file.kind {
-                    MediaKind::Photo => "image-x-generic-symbolic",
-                    MediaKind::Video => "video-x-generic-symbolic",
-                    MediaKind::Music => "audio-x-generic-symbolic",
-                })
-                .pixel_size(48)
-                .valign(gtk::Align::Center)
-                .css_classes(["queue-thumb"])
-                .build();
-            row.add_prefix(&picture);
-            self.queue_thumbnails.insert(file.path.clone(), picture);
-            let path = file.path.clone();
-            let kind = file.kind;
-            let mut cancel = self.queue_preview_cancel.subscribe();
-            sender.command(move |out, shutdown| {
-                shutdown.register(async move {
-                    tokio::select! {
-                        preview = preview::load(path.clone(), kind) => { let _ = out.send((path, preview)); },
-                        _ = cancel.changed() => {},
-                    }
-                }).drop_on_shutdown()
-            });
-            let remove = gtk::Button::from_icon_name("list-remove-symbolic");
-            remove.set_valign(gtk::Align::Center);
-            remove.set_tooltip_text(Some(&tr!("Remove from queue")));
-            let path = file.path.clone();
-            let input = sender.input_sender().clone();
-            remove.connect_clicked(move |_| {
-                let _ = input.send(MediaMsg::Remove(path.clone()));
-            });
-            row.add_suffix(&remove);
-            widgets.queue_list.append(&row);
-        }
-        self.rendered_queue = paths;
+        self.queue.render(&widgets.queue_list, &self.chosen, sender);
     }
 
     /// Rebuilds the list of destinations, keeping what was chosen selected.
@@ -913,151 +712,10 @@ fn target_at(targets: &[(String, String)], index: usize) -> Option<String> {
         .map(|(id, _)| id.clone())
 }
 
-fn format_time(seconds: f64) -> String {
-    let seconds = if seconds.is_finite() {
-        seconds.max(0.0) as u64
-    } else {
-        0
-    };
-    if seconds >= 3600 {
-        format!(
-            "{}:{:02}:{:02}",
-            seconds / 3600,
-            seconds / 60 % 60,
-            seconds % 60
-        )
-    } else {
-        format!("{}:{:02}", seconds / 60, seconds % 60)
-    }
-}
-
 impl Drop for MediaPage {
     fn drop(&mut self) {
         self.scan_cancel
             .store(true, std::sync::atomic::Ordering::Relaxed);
-    }
-}
-
-fn inspect_paths(paths: Vec<PathBuf>) -> (Vec<MediaFile>, Vec<String>) {
-    let mut files = Vec::new();
-    let mut refused = Vec::new();
-    for path in paths {
-        let candidates = if path.is_dir() {
-            let mut paths: Vec<_> = std::fs::read_dir(&path)
-                .into_iter()
-                .flatten()
-                .flatten()
-                .map(|entry| entry.path())
-                .filter(|path| path.is_file())
-                .take(nd_core::media::MAX_FILES + 1)
-                .collect();
-            paths.sort();
-            paths
-        } else {
-            vec![path]
-        };
-        for candidate in candidates {
-            if files.len() + refused.len() >= nd_core::media::MAX_FILES {
-                refused.push(tr!("Select up to 1000 files at a time."));
-                return (files, refused);
-            }
-            match MediaFile::inspect(&candidate) {
-                Ok(file) => files.push(file),
-                Err(reason) => refused.push(format!("{}: {reason}", candidate.display())),
-            }
-        }
-    }
-    (files, refused)
-}
-
-/// Lists the standard folder for this kind of file.
-fn scan_library(kind: MediaKind, cancel: &std::sync::atomic::AtomicBool) -> Vec<MediaFile> {
-    let Some(directory) = user_directory(kind) else {
-        return Vec::new();
-    };
-    let files: Vec<(std::time::SystemTime, MediaFile)> = std::fs::read_dir(&directory)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .take_while(|_| !cancel.load(std::sync::atomic::Ordering::Relaxed))
-        .filter_map(|entry| {
-            let path = entry.path();
-            if !path.is_file() {
-                return None;
-            }
-            let file = MediaFile::inspect(&path).ok()?;
-            if file.kind != kind {
-                return None;
-            }
-            let modified = entry
-                .metadata()
-                .and_then(|m| m.modified())
-                .unwrap_or(std::time::UNIX_EPOCH);
-            Some((modified, file))
-        })
-        // Newest first, keeping only what the grid shows: the photo taken
-        // this afternoon is the one being shown to the room.
-        .fold(Vec::with_capacity(GRID_LIMIT + 1), |mut newest, entry| {
-            newest.push(entry);
-            newest.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
-            newest.truncate(GRID_LIMIT);
-            newest
-        });
-    files.into_iter().map(|(_, file)| file).collect()
-}
-
-/// The XDG folder for this kind of file, falling back to the home directory.
-fn user_directory(kind: MediaKind) -> Option<PathBuf> {
-    let directory = match kind {
-        MediaKind::Photo => glib::user_special_dir(glib::UserDirectory::Pictures),
-        MediaKind::Video => glib::user_special_dir(glib::UserDirectory::Videos),
-        MediaKind::Music => glib::user_special_dir(glib::UserDirectory::Music),
-    };
-    directory.or_else(|| glib::home_dir().into())
-}
-
-/// Opens the desktop's file chooser.
-fn open_file_dialog(root: &impl IsA<gtk::Widget>, sender: relm4::Sender<MediaMsg>, folder: bool) {
-    let window = root.root().and_downcast::<gtk::Window>();
-    let dialog = gtk::FileDialog::builder()
-        .title(if folder {
-            tr!("Choose a folder")
-        } else {
-            tr!("Choose files")
-        })
-        .modal(true)
-        .build();
-
-    if folder {
-        dialog.select_folder(
-            window.as_ref(),
-            gtk::gio::Cancellable::NONE,
-            move |result| {
-                if let Ok(file) = result
-                    && let Some(path) = file.path()
-                {
-                    sender.emit(MediaMsg::Picked(vec![path]));
-                }
-            },
-        );
-    } else {
-        dialog.open_multiple(
-            window.as_ref(),
-            gtk::gio::Cancellable::NONE,
-            move |result| {
-                if let Ok(files) = result {
-                    let paths: Vec<PathBuf> = files
-                        .into_iter()
-                        .flatten()
-                        .filter_map(|object| object.downcast::<gtk::gio::File>().ok())
-                        .filter_map(|file| file.path())
-                        .collect();
-                    if !paths.is_empty() {
-                        sender.emit(MediaMsg::Picked(paths));
-                    }
-                }
-            },
-        );
     }
 }
 
@@ -1080,13 +738,14 @@ fn human_size(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gtk::{gdk, gdk_pixbuf::Pixbuf};
+    use crate::pages::preview;
+    use gtk::{gdk, gdk_pixbuf::Pixbuf, glib};
 
     #[test]
     #[ignore = "requires a graphical GTK session and image loader"]
     fn media_library_is_lazy_and_background_thumbnails_preserve_pixels() {
         adw::init().expect("GTK session");
-        relm4::set_global_css(include_str!("../style.css"));
+        relm4::set_global_css(include_str!("../../style.css"));
         let context = glib::MainContext::default();
         let page = MediaPage::builder().launch(()).detach();
         context.block_on(glib::timeout_future(std::time::Duration::from_millis(50)));
@@ -1152,7 +811,7 @@ mod tests {
     #[ignore = "requires a graphical GTK session"]
     fn media_queue_edits_sync_tiles_and_discard_stale_picker_results() {
         adw::init().expect("GTK session");
-        relm4::set_global_css(include_str!("../style.css"));
+        relm4::set_global_css(include_str!("../../style.css"));
         let context = glib::MainContext::default();
         let page = MediaPage::builder().launch(()).detach();
         let flush = || context.block_on(glib::timeout_future(std::time::Duration::from_millis(60)));
