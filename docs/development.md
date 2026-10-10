@@ -30,7 +30,7 @@ cargo run --locked -p nd-service --bin bignetscreend -- --foreground
 make run
 ```
 
-On a machine with the `bignetscreen` package installed, start yours before opening the window: otherwise D-Bus activates the installed service. A service started later takes the bus name over from a running one, but the old process keeps any session it was running.
+On a machine with the `bignetscreen` package installed, start yours before opening the window: otherwise D-Bus activates the installed service. A service started later takes the bus name over from a running one, which stops its sessions and exits.
 
 `make` builds the release binaries and translations; `make install` takes `PREFIX` and `DESTDIR` (see [packaging](packaging.md)). A sandbox-built binary linked to isolated native libraries is a test artifact, not a portable distribution package.
 

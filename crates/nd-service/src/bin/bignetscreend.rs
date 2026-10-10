@@ -37,6 +37,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(name = nd_service::BUS_NAME, "session service ready");
 
     let mut messages = zbus::MessageStream::from(&connection);
+    // A service started later takes the name over; this one would otherwise
+    // keep its sessions and devices with no client able to reach it.
+    let mut name_lost = zbus::fdo::DBusProxy::new(&connection)
+        .await?
+        .receive_name_lost()
+        .await?;
     // Being asked to stop (the session ending, the service manager, Ctrl+C) goes
     // through the same shutdown as going idle; SIGTERM's default action would
     // skip it, and with it the removal of the virtual sound card.
@@ -44,6 +50,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::select! {
         _ = async { while let Some(Ok(_)) = messages.next().await {} } => {
             tracing::info!("session bus disconnected; stopping the service");
+        }
+        _ = async {
+            while let Some(lost) = name_lost.next().await {
+                if lost.args().is_ok_and(|args| args.name() == nd_service::BUS_NAME) {
+                    break;
+                }
+            }
+        } => {
+            tracing::info!("another service took the bus name over; stopping this one");
         }
         _ = terminate.recv() => {
             tracing::info!("asked to stop; stopping the service");
