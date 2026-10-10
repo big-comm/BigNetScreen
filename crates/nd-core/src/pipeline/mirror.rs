@@ -12,47 +12,31 @@ pub const MIRROR_VIDEO_SINK: &str = "mirror-video";
 /// The same, for the audio track.
 pub const MIRROR_AUDIO_SINK: &str = "mirror-audio";
 
-/// The rate-control budget the Cast **mirroring** encoder is held to, in
-/// frames. See [`StreamConfig::vbv_frames`] for the table behind the number.
+/// The rate-control budget the Cast mirroring encoder is held to, in frames
+/// (see [`StreamConfig::vbv_frames`]).
 ///
-/// Every other path hands its frames to a muxer or to a stack that paces on
-/// its behalf. Mirroring puts each frame on the wire as its own burst of UDP
-/// datagrams, so the size of one frame is something the network sees directly,
-/// and an encoder given no budget will spend it: switching a browser tab
-/// changes the whole screen and produces one enormous frame, several hundred
-/// datagrams the pacer then releases a burst at a time. The receiver cannot
-/// show any of that change until the last packet of it arrives.
-///
-/// This was removed once, on the reasoning that an encoder knows its own job.
-/// It does — about pictures. It cannot know that here a frame is a burst on a
-/// paced link, which is a property of this transport and not of H.264. That is
-/// the line: configure what the component has no way to know, and nothing else.
+/// Mirroring puts each frame on the wire as its own burst of UDP datagrams,
+/// so the size of one frame is something the network sees directly. Without a
+/// budget, switching a browser tab makes one enormous frame, and the receiver
+/// shows none of the change until its last packet arrives. The encoder cannot
+/// know that a frame is a burst on a paced link, so this transport tells it.
 pub const CAST_VBV_FRAMES: u32 = 3;
 
-/// The Cast **mirroring** pipeline: it delivers encoded frames, no container.
+/// The Cast mirroring pipeline, ending in one `appsink` per track.
 ///
-/// Cast Streaming receives *access units* and handles transport itself, so
-/// there is no muxer, no HTTP server and no media player on the other end —
-/// which is precisely what removes the Default Media Receiver path's seconds
-/// of pre-buffering.
+/// No muxer and no receiver-side player, which is what spares this path the
+/// Default Media Receiver's seconds of prebuffering:
+/// - H.264 byte-stream access units with SPS and PPS at every IDR, so the
+///   receiver can join;
+/// - Opus audio, which the mirroring receiver expects;
+/// - a video `appsink` holding one frame, so it goes straight to the network;
+/// - an audio `appsink` holding eight 10 ms frames, enough to absorb thread
+///   scheduling without audible delay.
 ///
-/// - video as H.264 byte-stream with SPS/PPS at every IDR
-///   (`config-interval=-1`), so the receiver can join the stream;
-/// - audio in Opus, which is what the mirroring app expects;
-/// - the video `appsink` with `max-buffers=1`: the frame goes straight out to
-///   the network, with no queue;
-/// - the audio `appsink` with a little more slack: Opus frames go out every
-///   10 ms and a minimal amount of slack absorbs thread scheduling without
-///   becoming perceptible delay (8 frames = 80 ms in the worst case).
-///
-/// `ceiling` is the largest picture the person is willing to send. The scaler
-/// stays out of the way below it, so the capture reaches the encoder at the
-/// size it was captured in rather than at the portal's guess about it.
-///
-/// `gpu` keeps the frame on the graphics card from capture to encoder. It is
-/// off unless [`gpu_path_requested`] says otherwise, because it demands a
-/// DMA-BUF the compositor may not offer and cannot scale — a screen larger than
-/// the ceiling has no path through it.
+/// `ceiling` is the largest picture the person is willing to send; below it
+/// the capture reaches the encoder at its own size. `gpu` keeps the frame on
+/// the graphics card (see [`super::gpu_path_requested`]); it cannot scale, so
+/// the caller sets it only for a screen inside the ceiling.
 pub fn mirror_pipeline_description(
     cfg: &StreamConfig,
     source: &VideoSource,
@@ -71,10 +55,8 @@ pub fn mirror_pipeline_description(
     );
 
     format!(
-        // The profile comes from the configuration here, unlike the WFD path
-        // where the specification pins it: a Cast receiver decodes H.264 High
-        // (it is what every streaming service sends it), and constrained
-        // baseline was inherited from Miracast rather than required.
+        // The profile comes from the configuration, unlike WFD where the
+        // specification pins it: every Cast receiver decodes H.264 High.
         "{src} ! {convert} ! {vqueue} ! \
          {enc} ! video/x-h264,profile={profile},stream-format=byte-stream,\
 alignment=au ! \
@@ -151,8 +133,7 @@ mod tests {
             desc.contains("leaky=downstream"),
             "the video queue must leak: {desc}"
         );
-        // Audio, no: dropping a sample opens a hole in the sound — which is
-        // what made the mirroring audio stutter.
+        // Audio may not: dropping a sample opens a hole in the sound.
         let audio = desc
             .split("audioconvert")
             .nth(1)
@@ -201,8 +182,7 @@ mod tests {
 
     #[test]
     fn nvenc_gets_its_input_uploaded_by_the_element_that_is_best_at_it() {
-        // Measured, 300 frames at 2560x1440: 1.15s through cudaupload against
-        // 1.30s letting the encoder upload its own input, repeatably.
+        // `cudaupload` uploads faster than NVENC does for itself.
         let nv = StreamConfig {
             encoder: H264Encoder::NvH264,
             ..Default::default()

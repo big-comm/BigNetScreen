@@ -133,9 +133,8 @@ mod tests {
 
     #[test]
     fn pipewire_source_carries_fd_and_node() {
-        // A regression: without `fd=`/`path=` pipewiresrc does not capture the
-        // stream the portal opened — it captured an arbitrary node from the
-        // daemon.
+        // Without `fd=` and `path=`, pipewiresrc captures an arbitrary node
+        // from the daemon instead of the stream the portal opened.
         let desc = wfd_desc(&StreamConfig::default());
         assert!(
             desc.contains("pipewiresrc name=capture fd=7 path=42"),
@@ -165,8 +164,7 @@ mod tests {
     #[test]
     fn wfd_pipeline_pins_the_spec_pids() {
         // Without fixed PIDs mpegtsmux chooses on its own and the sink cannot
-        // find the video: it receives data and shows a black screen. Verified
-        // in the field.
+        // find the video: it receives data and shows a black screen.
         let desc = wfd_desc(&StreamConfig::default());
         assert!(desc.contains("mux.sink_4113"), "video on 0x1011: {desc}");
         assert!(desc.contains("mux.sink_4352"), "audio on 0x1100: {desc}");

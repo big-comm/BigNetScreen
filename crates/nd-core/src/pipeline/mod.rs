@@ -290,10 +290,10 @@ fn forward_bus_message(
     }
 }
 
-/// Takes the pipeline to NULL when it goes out of scope.
+/// Takes the pipeline to `Null` when it goes out of scope.
 ///
-/// A pipeline dropped while PLAYING logs a GStreamer `CRITICAL` and leaves its
-/// elements running. Tied to a scope, the teardown also runs on an early `?`
+/// A pipeline dropped while `Playing` logs a GStreamer critical warning and
+/// leaves its elements running. Tied to a scope, the teardown also runs on an early `?`
 /// return and when a cancelled future is dropped mid-await.
 #[derive(Debug)]
 pub struct PipelineGuard {
@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn a_pipeline_guard_leaves_the_pipeline_in_null() {
-        // Dropping a pipeline in PLAYING used to crash the app when pressing Stop.
+        // A pipeline dropped while playing leaves its elements running.
         init().expect("gstreamer");
         let pipeline = gst::parse::launch("fakesrc num-buffers=1 ! fakesink")
             .expect("test pipeline")
@@ -547,12 +547,9 @@ mod tests {
 
     #[test]
     fn every_h264_path_gets_the_same_capture_and_encode_stage() {
-        // The three paths that encode H.264 differ in what they do with the
-        // result — Cast mirroring sends access units, Cast HTTP and Miracast
-        // mux — and not in how the picture reaches the encoder. Keeping that
-        // stage in one place is what stops a measured gain from landing on one
-        // path and leaving the other two on the old code, which is exactly what
-        // happened while this was two functions.
+        // The three H.264 paths differ in what they do with the result (Cast
+        // mirroring sends access units, Cast HTTP and Miracast mux) and not in
+        // how the picture reaches the encoder, so they share that stage.
         let cfg = StreamConfig {
             width: 1920,
             height: 1080,
@@ -579,9 +576,9 @@ mod tests {
             assert!(desc.contains("cudaupload ! nvh264enc"), "{desc}");
             assert!(desc.contains("capsfilter name=scale-caps"), "{desc}");
         }
-        // What genuinely differs: Wi-Fi Display agreed one mode with the sink
-        // in M3/M4 and may not be sent another. Nothing was promised on either
-        // Cast path, so there the capture's own size stands.
+        // What differs: Wi-Fi Display agreed one mode with the sink in M3/M4.
+        // Nothing was promised on either Cast path, so the capture's own size
+        // stands there.
         assert!(wfd.contains("width=1920,height=1080"), "{wfd}");
         for desc in [&mirror, &http] {
             assert!(

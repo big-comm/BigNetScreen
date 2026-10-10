@@ -7,33 +7,28 @@ use super::{StreamConfig, VideoSource, VideoTarget};
 
 /// How `multisocketsink` positions a client that has just connected.
 ///
-/// `latest-keyframe` (the historical default) places it at the **last keyframe
-/// already gone by** — that is, it hands over up to a whole GOP of stale data
-/// straight away, which becomes permanent delay because the receiver keeps
-/// whatever it buffered. `next-keyframe` makes the client wait for the next
-/// keyframe and start clean: it costs a few extra frames before the first
-/// picture, and saves that time forever afterwards.
-///
-/// `BIGNETSCREEN_CC_SYNC_METHOD` allows comparing in the field.
+/// `latest-keyframe` would hand over up to a whole GOP of data already sent,
+/// which becomes permanent delay because the receiver keeps what it buffered.
+/// `next-keyframe` costs a few frames before the first picture and nothing
+/// after. `BIGNETSCREEN_CC_SYNC_METHOD` overrides it, for comparison.
 fn chromecast_sync_method() -> String {
     std::env::var("BIGNETSCREEN_CC_SYNC_METHOD").unwrap_or_else(|_| "next-keyframe".to_string())
 }
 
 /// The maximum resolution sent to a Chromecast.
 ///
-/// The Default Media Receiver decodes H.264 up to 1080p; anything above would
-/// need VP9/HEVC, which this pipeline does not produce. Sending the raw screen
-/// (a 16:10 1920x1200 one, say) makes the device rescale — or refuse.
+/// The Default Media Receiver decodes H.264 up to 1080p; above that it would
+/// need VP9 or HEVC, which this pipeline does not produce.
 pub const CHROMECAST_MAX_RESOLUTION: (u32, u32) = (1920, 1080);
 
 /// The `multisocketsink`'s name in the transport-stream pipeline description.
 ///
-/// The HTTP server looks the element up by this name in order to hand it the
-/// receiver's socket with the headers already written.
+/// The HTTP server looks it up by this name to hand it the receiver's socket
+/// once the headers are written.
 pub const TS_HTTP_SINK_NAME: &str = "cc-sink";
 
-/// Conservative DLNA default when the user has not selected a higher ceiling.
-/// This is not a capability negotiated with the receiver.
+/// The DLNA ceiling while the quality preference is untouched; a safe guess,
+/// not a capability the renderer declared.
 pub const DLNA_MAX_RESOLUTION: (u32, u32) = (1920, 1080);
 
 /// How long the transport-stream multiplex waits for a file's first picture.
@@ -42,35 +37,27 @@ const MEDIA_MUX_WAIT_NS: u64 = 1_000_000_000;
 /// Builds an H.264 + AAC transport stream for a receiver that fetches it over
 /// HTTP — the Cast fallback and every DLNA renderer.
 ///
-/// MP2T is an officially supported Cast container and the one DLNA profile
-/// family a television is certain to have. Explicit byte-stream access units
-/// and short mux/queue batches bound sender buffering; the receiver may still
-/// prebuffer seconds. This is not the raw-RTP mirroring path.
-/// `multisocketsink` takes the receiver socket after HTTP headers are written.
+/// MPEG-TS is a supported Cast container and the one DLNA profile family a
+/// television is certain to have. Short mux and queue batches bound what the
+/// sender holds; the receiver may still prebuffer seconds.
 ///
-/// `mux_bitrate_bps` pads the multiplex with null packets to a constant rate.
-/// `None` sends only real data, which is what Cast gets. **A DLNA renderer
-/// needs the padding**, and the reason is measured rather than assumed: a
-/// Panasonic VIErA prebuffers a fixed number of *bytes*, so the delay it adds
-/// is that buffer divided by the bitrate. Streaming content that happened to
-/// compress to 320 kbit/s put the picture **6 seconds** behind; padding the
-/// same stream to 8 Mbit/s brought it to 2 s, and 20 Mbit/s to 1.5 s. Padding
-/// to what the encoder already targets captures nearly all of that without
-/// spending the network on null packets.
+/// `mux_bitrate_bps` pads the multiplex with null packets to a constant rate;
+/// `None`, for Cast, sends only real data. A DLNA renderer needs the padding:
+/// some prebuffer a fixed number of bytes, so a stream that compresses well
+/// arrives seconds late. Padding to the encoder's target removes most of that
+/// delay without spending the network on more null packets.
 pub fn ts_http_pipeline_description(
     cfg: &StreamConfig,
     source: &VideoSource,
     target: VideoTarget,
     mux_bitrate_bps: Option<u32>,
 ) -> String {
-    // MPEG-TS buffers do not preserve H.264 DELTA_UNIT flags. A soft-limit
-    // "keyframe" resync would cut arbitrary TS/PES packets, corrupting decode.
-    // Bound DLNA backlog by bytes instead: eight seconds at the target rate,
-    // within 1-32 MiB. A reader that pauses longer than two seconds must
-    // survive: a Panasonic TX-75GX880 read about 3 s more after a Pause before
-    // it stopped, and the session takes up to one renderer poll (3 s) to
-    // notice and hold the file. A healthy reader queues nothing, so the limit
-    // costs it no delay. Disconnect a stalled reader rather than grow forever.
+    // MPEG-TS buffers carry no H.264 DELTA_UNIT flags, so a keyframe resync
+    // would cut TS packets mid-stream. The DLNA backlog is bounded in bytes
+    // instead: eight seconds at the target rate, within 1-32 MiB, enough for a
+    // renderer that keeps reading for seconds after Pause until the session's
+    // next poll notices. A stalled reader is disconnected (`recover-policy=none`
+    // ends it with status "slow") rather than queued for without bound.
     let sink_policy = match mux_bitrate_bps {
         Some(bps) => format!(
             "sync-method=latest recover-policy=none unit-format=bytes units-max={}",
@@ -94,12 +81,10 @@ pub fn ts_http_pipeline_description(
             Some(bps) => format!(" bitrate={bps}"),
             None => String::new(),
         },
-        // A file's picture comes out of the decoder a few hundred milliseconds
-        // after the silence that backs its sound, and without a wait the
-        // multiplex starts with a program table that lists audio alone. A
-        // Panasonic VIErA takes that first table as the whole program, shows
-        // "waiting" and gives up; a session that happened to seek first won
-        // the race and played. The wait costs nothing once both are flowing.
+        // A file's picture leaves the decoder after the silence that backs its
+        // sound, and without a wait the first program table lists audio alone;
+        // some renderers take that table as the whole program and give up.
+        // The wait costs nothing once both tracks flow.
         wait_for_video = if source.is_media() {
             format!(" latency={MEDIA_MUX_WAIT_NS}")
         } else {
