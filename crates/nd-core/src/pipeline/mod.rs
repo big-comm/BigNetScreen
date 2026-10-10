@@ -330,6 +330,28 @@ impl Drop for PipelineGuard {
     }
 }
 
+/// Runs a description that writes a test file, until it ends.
+#[cfg(test)]
+pub(crate) fn write_test_media(description: &str) {
+    init().unwrap();
+    let pipeline = gst::parse::launch(description)
+        .unwrap()
+        .downcast::<gst::Pipeline>()
+        .unwrap();
+    let guard = PipelineGuard::new(pipeline);
+    guard.pipeline().set_state(gst::State::Playing).unwrap();
+    let message = guard
+        .pipeline()
+        .bus()
+        .unwrap()
+        .timed_pop_filtered(
+            gst::ClockTime::from_seconds(20),
+            &[gst::MessageType::Eos, gst::MessageType::Error],
+        )
+        .expect("the fixture pipeline must finish");
+    assert_eq!(message.type_(), gst::MessageType::Eos, "{message:?}");
+}
+
 #[cfg(test)]
 mod tests {
     use super::source::quoted;
@@ -341,25 +363,10 @@ mod tests {
         use futures::StreamExt;
         init().unwrap();
         let path = std::env::temp_dir().join(format!("nd-eos-{}.wav", std::process::id()));
-        let make = gst::parse::launch(&format!(
+        crate::pipeline::write_test_media(&format!(
             "audiotestsrc num-buffers=10 ! wavenc ! filesink location={}",
             quoted(&path.to_string_lossy())
-        ))
-        .unwrap()
-        .downcast::<gst::Pipeline>()
-        .unwrap();
-        let fixture_guard = PipelineGuard::new(make.clone());
-        make.set_state(gst::State::Playing).unwrap();
-        let msg = make
-            .bus()
-            .unwrap()
-            .timed_pop_filtered(
-                gst::ClockTime::from_seconds(3),
-                &[gst::MessageType::Eos, gst::MessageType::Error],
-            )
-            .unwrap();
-        assert_eq!(msg.type_(), gst::MessageType::Eos, "{msg:?}");
-        drop(fixture_guard);
+        ));
         let source = VideoSource::Media {
             source: crate::media::MediaSource::File(path.clone()),
             kind: crate::media::MediaKind::Music,
@@ -401,22 +408,7 @@ mod tests {
                 "videotestsrc num-buffers=15 ! video/x-raw,width=320,height=240,framerate=30/1 ! vp8enc deadline=1 ! matroskamux name=mux ! filesink location={} {audio}",
                 quoted(&path.to_string_lossy())
             );
-            let make = gst::parse::launch(&description)
-                .unwrap()
-                .downcast::<gst::Pipeline>()
-                .unwrap();
-            let fixture = PipelineGuard::new(make.clone());
-            make.set_state(gst::State::Playing).unwrap();
-            let msg = make
-                .bus()
-                .unwrap()
-                .timed_pop_filtered(
-                    gst::ClockTime::from_seconds(5),
-                    &[gst::MessageType::Eos, gst::MessageType::Error],
-                )
-                .unwrap();
-            assert_eq!(msg.type_(), gst::MessageType::Eos, "{msg:?}");
-            drop(fixture);
+            crate::pipeline::write_test_media(&description);
             let video = VideoSource::Media {
                 source: crate::media::MediaSource::File(path.clone()),
                 kind: crate::media::MediaKind::Video,

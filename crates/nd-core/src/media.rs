@@ -1,10 +1,15 @@
-//! What kind of thing a media file is.
+//! Files and URLs played to a receiver: what they contain, the frame a
+//! television is sent them in, and control of a file pipeline once it plays.
 //!
-//! Lives here, not in the Cast crate, because the answer decides how a file is
-//! **played** on either protocol: a Chromecast is handed the file and decodes
-//! it, a Miracast receiver is a screen and has to be shown a picture. A photo
-//! has no sound, a song has no picture, and a film may have either missing —
+//! Shared by every protocol because the kind of file decides how it is
+//! played: a Chromecast is handed the file and decodes it, a Miracast receiver
+//! is a screen and is sent a picture (`crate::pipeline::VideoSource::Media`).
+//! A photo has no sound, a song has no picture, and a film may lack either,
 //! each of which stalls a pipeline built for the other.
+
+use std::sync::{Arc, Mutex, PoisonError};
+
+use gstreamer::{self as gst, prelude::*};
 
 /// Maximum files in one playback queue, including additions to a selection.
 pub const MAX_FILES: usize = 1000;
@@ -33,44 +38,7 @@ pub enum MediaKind {
     Music,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_television_frame_is_16_by_9_and_holds_the_picture() {
-        let file = MediaSource::File("/nonexistent.mkv".into());
-        for (height, frame) in [
-            (720, (1280, 720)),
-            (1080, (1920, 1080)),
-            (1440, (2560, 1440)),
-            (2160, (3840, 2160)),
-            (480, (854, 480)),
-        ] {
-            assert_eq!(tv_frame(&file, height), Some(frame), "{height}");
-        }
-        // A 2.39:1 film keeps its width; a 4:3 one keeps its height; nothing
-        // grows past 4K.
-        assert_eq!(frame_holding((1920, 802)), (1920, 1080));
-        assert_eq!(frame_holding((1440, 1080)), (1920, 1080));
-        assert_eq!(frame_holding((4096, 2160)), (3840, 2160));
-        // A width read from a hostile header must not overflow the arithmetic.
-        assert_eq!(frame_holding((u32::MAX, 1)), (3840, 2160));
-        let start = |height| PlaybackStart {
-            seconds: 0.0,
-            paused: false,
-            volume: 1.0,
-            muted: false,
-            height,
-        };
-        assert!(start(100).validate().is_err());
-        assert!(start(4320).validate().is_err());
-        assert!(start(1080).validate().is_ok());
-        assert!(start(0).validate().is_ok());
-    }
-}
-
-/// Transport-independent controls exposed by the media page.
+/// Playback controls, independent of the protocol carrying the file.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MediaCommand {
     TogglePause,
@@ -110,7 +78,7 @@ impl PlaybackStart {
     pub fn validate(self) -> crate::Result<Self> {
         if !self.volume.is_finite()
             || !(0.0..=1.0).contains(&self.volume)
-            || gstreamer::ClockTime::try_from_seconds_f64(self.seconds).is_err()
+            || gst::ClockTime::try_from_seconds_f64(self.seconds).is_err()
             || !(self.height == 0 || (240..=TV_FRAME_MAX.1).contains(&self.height))
         {
             return Err(crate::NdError::Unsupported(
@@ -151,8 +119,8 @@ fn frame_of_height(height: u32) -> (u32, u32) {
 
 /// The size the file's picture is shown at, pixel shape included.
 fn picture_size(source: &MediaSource) -> Option<(u32, u32)> {
-    let info = discover(source)?;
-    let video = info.video_streams().into_iter().next()?;
+    let discovered = discover(source)?;
+    let video = discovered.video_streams().into_iter().next()?;
     let par = video.par();
     let (numer, denom) = (
         u64::try_from(par.numer()).ok().filter(|n| *n > 0)?,
@@ -174,17 +142,17 @@ pub fn duration(source: &MediaSource) -> Option<f64> {
 fn discover(source: &MediaSource) -> Option<gstreamer_pbutils::DiscovererInfo> {
     crate::pipeline::init().ok()?;
     let uri = match source {
-        MediaSource::File(path) => gstreamer::glib::filename_to_uri(path, None)
-            .ok()?
-            .to_string(),
+        MediaSource::File(path) => gst::glib::filename_to_uri(path, None).ok()?.to_string(),
         MediaSource::Url(uri) => uri.clone(),
     };
-    gstreamer_pbutils::Discoverer::new(gstreamer::ClockTime::from_seconds(5))
+    gstreamer_pbutils::Discoverer::new(gst::ClockTime::from_seconds(5))
         .ok()?
         .discover_uri(&uri)
         .ok()
 }
 
+/// `seconds + offset`, clamped to `0..=duration`; `None` for a non-finite
+/// position or offset.
 pub fn seek_target(seconds: f64, offset: f64, duration: Option<f64>) -> Option<f64> {
     if !seconds.is_finite() || !offset.is_finite() {
         return None;
@@ -203,13 +171,12 @@ pub fn seek_target(seconds: f64, offset: f64, duration: Option<f64>) -> Option<f
 
 /// Where playback is, from the clock that paces it.
 ///
-/// The decoder answers a position query with how far it has *read*, and its
-/// queues read ahead: measured 14 s ahead of the picture being sent to a TV.
-/// The `identity sync=true` elements release each buffer at its running time,
-/// so the segment they carry and the pipeline's running time give the
-/// position actually leaving.
-fn played_position(pipeline: &gstreamer::Pipeline) -> Option<gstreamer::ClockTime> {
-    use gstreamer::{self as gst, prelude::*};
+/// The decoder answers a position query with how far it has read, and its
+/// queues read seconds ahead of the picture being sent. The `identity
+/// sync=true` elements release each buffer at its running time, so the
+/// segment they carry and the pipeline's running time give the position
+/// actually leaving.
+fn played_position(pipeline: &gst::Pipeline) -> Option<gst::ClockTime> {
     let running = if pipeline.current_state() == gst::State::Playing {
         pipeline
             .clock()?
@@ -231,20 +198,19 @@ fn played_position(pipeline: &gstreamer::Pipeline) -> Option<gstreamer::ClockTim
 /// Weak access to a file pipeline; never keeps a stopped session alive.
 #[derive(Clone, Debug, Default)]
 pub struct FilePlaybackControl {
-    pipeline: std::sync::Arc<std::sync::Mutex<gstreamer::glib::WeakRef<gstreamer::Pipeline>>>,
+    pipeline: Arc<Mutex<gst::glib::WeakRef<gst::Pipeline>>>,
 }
 
 impl FilePlaybackControl {
-    pub fn attach(&self, pipeline: &gstreamer::Pipeline) {
+    pub fn attach(&self, pipeline: &gst::Pipeline) {
         self.pipeline
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(PoisonError::into_inner)
             .set(Some(pipeline));
     }
 
     /// Prepare on a worker before a receiver can consume any buffers.
     pub fn prepare(&self, start: PlaybackStart) -> crate::Result<()> {
-        use gstreamer::{self as gst, prelude::*};
         let start = start.validate()?;
         self.command(&MediaCommand::SetVolume(start.volume))?;
         self.command(&MediaCommand::SetMute(start.muted))?;
@@ -270,15 +236,14 @@ impl FilePlaybackControl {
         Ok(())
     }
 
-    fn pipeline(&self) -> Option<gstreamer::Pipeline> {
+    fn pipeline(&self) -> Option<gst::Pipeline> {
         self.pipeline
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(PoisonError::into_inner)
             .upgrade()
     }
 
     pub fn state(&self) -> PlaybackState {
-        use gstreamer::{self as gst, prelude::*};
         let Some(pipeline) = self.pipeline() else {
             return PlaybackState::default();
         };
@@ -308,78 +273,111 @@ impl FilePlaybackControl {
         }
     }
 
-    /// Call from the session worker, never the GTK main thread.
+    /// Applies one control to the playing file. Blocking: call from the
+    /// session worker, never the GTK main thread.
     pub fn command(&self, command: &MediaCommand) -> crate::Result<()> {
-        use gstreamer::{self as gst, prelude::*};
         let pipeline = self
             .pipeline()
             .ok_or_else(|| crate::NdError::Gst("media pipeline is not ready".into()))?;
         let state = self.state();
         match command {
-            MediaCommand::TogglePause | MediaCommand::SetPaused(_) if state.can_pause => {
-                let paused = match command {
-                    MediaCommand::SetPaused(paused) => *paused,
-                    _ => !state.paused,
-                };
-                pipeline
-                    .set_state(if paused {
-                        gst::State::Paused
-                    } else {
-                        gst::State::Playing
-                    })
-                    .map_err(|err| crate::NdError::Gst(err.to_string()))?;
-            }
-            MediaCommand::SeekRelative(_) | MediaCommand::SeekTo(_) if state.can_seek => {
-                let target = match command {
-                    MediaCommand::SeekRelative(offset) => {
-                        seek_target(state.seconds, *offset, state.duration)
-                    }
-                    MediaCommand::SeekTo(seconds) => seek_target(0.0, *seconds, state.duration),
-                    _ => unreachable!(),
-                }
-                .ok_or_else(|| crate::NdError::Gst("invalid seek position".into()))?;
-                let decoder = pipeline
-                    .by_name("filedec")
-                    .ok_or_else(|| crate::NdError::Gst("media decoder is missing".into()))?;
-                let precision = if matches!(command, MediaCommand::SeekTo(_)) {
-                    gst::SeekFlags::ACCURATE
-                } else {
-                    gst::SeekFlags::KEY_UNIT
-                };
-                decoder
-                    .seek_simple(
-                        gst::SeekFlags::FLUSH | precision,
-                        gst::ClockTime::try_from_seconds_f64(target)
-                            .map_err(|err| crate::NdError::Gst(err.to_string()))?,
-                    )
-                    .map_err(|err| crate::NdError::Gst(err.to_string()))?;
-            }
+            MediaCommand::TogglePause if state.can_pause => set_paused(&pipeline, !state.paused),
+            MediaCommand::SetPaused(paused) if state.can_pause => set_paused(&pipeline, *paused),
+            MediaCommand::SeekRelative(offset) if state.can_seek => seek(
+                &pipeline,
+                seek_target(state.seconds, *offset, state.duration),
+                gst::SeekFlags::KEY_UNIT,
+            ),
+            MediaCommand::SeekTo(seconds) if state.can_seek => seek(
+                &pipeline,
+                seek_target(0.0, *seconds, state.duration),
+                gst::SeekFlags::ACCURATE,
+            ),
             MediaCommand::SetVolume(level) if level.is_finite() && (0.0..=1.0).contains(level) => {
                 let volume = pipeline.by_name("file-volume").ok_or_else(|| {
                     crate::NdError::Unsupported("media volume is unavailable".into())
                 })?;
                 volume.set_property("volume", *level);
+                Ok(())
             }
             MediaCommand::SetMute(muted) => {
                 let volume = pipeline.by_name("file-volume").ok_or_else(|| {
                     crate::NdError::Unsupported("media mute is unavailable".into())
                 })?;
                 volume.set_property("mute", *muted);
+                Ok(())
             }
-            _ => {
-                return Err(crate::NdError::Unsupported(
-                    "playback control is not available for this item".into(),
-                ));
-            }
+            _ => Err(crate::NdError::Unsupported(
+                "playback control is not available for this item".into(),
+            )),
         }
-        Ok(())
     }
 }
 
+fn set_paused(pipeline: &gst::Pipeline, paused: bool) -> crate::Result<()> {
+    let state = if paused {
+        gst::State::Paused
+    } else {
+        gst::State::Playing
+    };
+    pipeline
+        .set_state(state)
+        .map(|_| ())
+        .map_err(|err| crate::NdError::Gst(err.to_string()))
+}
+
+/// Flushing seek on the decoder, which keeps a paused pipeline paused.
+fn seek(
+    pipeline: &gst::Pipeline,
+    target: Option<f64>,
+    precision: gst::SeekFlags,
+) -> crate::Result<()> {
+    let target = target.ok_or_else(|| crate::NdError::Gst("invalid seek position".into()))?;
+    let decoder = pipeline
+        .by_name("filedec")
+        .ok_or_else(|| crate::NdError::Gst("media decoder is missing".into()))?;
+    let position = gst::ClockTime::try_from_seconds_f64(target)
+        .map_err(|err| crate::NdError::Gst(err.to_string()))?;
+    decoder
+        .seek_simple(gst::SeekFlags::FLUSH | precision, position)
+        .map_err(|err| crate::NdError::Gst(err.to_string()))
+}
+
 #[cfg(test)]
-mod playback_tests {
+mod tests {
     use super::*;
-    use gstreamer::{self as gst, prelude::*};
+
+    #[test]
+    fn a_television_frame_is_16_by_9_and_holds_the_picture() {
+        let file = MediaSource::File("/nonexistent.mkv".into());
+        for (height, frame) in [
+            (720, (1280, 720)),
+            (1080, (1920, 1080)),
+            (1440, (2560, 1440)),
+            (2160, (3840, 2160)),
+            (480, (854, 480)),
+        ] {
+            assert_eq!(tv_frame(&file, height), Some(frame), "{height}");
+        }
+        // A 2.39:1 film keeps its width; a 4:3 one keeps its height; nothing
+        // grows past 4K.
+        assert_eq!(frame_holding((1920, 802)), (1920, 1080));
+        assert_eq!(frame_holding((1440, 1080)), (1920, 1080));
+        assert_eq!(frame_holding((4096, 2160)), (3840, 2160));
+        // A width read from a hostile header must not overflow the arithmetic.
+        assert_eq!(frame_holding((u32::MAX, 1)), (3840, 2160));
+        let start = |height| PlaybackStart {
+            seconds: 0.0,
+            paused: false,
+            volume: 1.0,
+            muted: false,
+            height,
+        };
+        assert!(start(100).validate().is_err());
+        assert!(start(4320).validate().is_err());
+        assert!(start(1080).validate().is_ok());
+        assert!(start(0).validate().is_ok());
+    }
 
     #[test]
     fn media_volume_and_mute_change_encoded_input_samples() {
@@ -456,21 +454,10 @@ mod playback_tests {
         pipeline::init().unwrap();
         let path =
             std::env::temp_dir().join(format!("bns-transport-playback-{}.mkv", std::process::id()));
-        let make = gst::parse::launch(&format!(
-            "matroskamux name=mux ! filesink location=\"{}\" videotestsrc num-buffers=600 ! video/x-raw,width=160,height=90,framerate=30/1 ! vp8enc deadline=1 keyframe-max-dist=30 ! mux. audiotestsrc num-buffers=938 ! audio/x-raw,rate=48000 ! vorbisenc ! mux.", path.display()
-        )).unwrap().downcast::<gst::Pipeline>().unwrap();
-        let fixture = PipelineGuard::new(make.clone());
-        make.set_state(gst::State::Playing).unwrap();
-        let message = make
-            .bus()
-            .unwrap()
-            .timed_pop_filtered(
-                gst::ClockTime::from_seconds(10),
-                &[gst::MessageType::Eos, gst::MessageType::Error],
-            )
-            .unwrap();
-        assert_eq!(message.type_(), gst::MessageType::Eos, "{message:?}");
-        drop(fixture);
+        crate::pipeline::write_test_media(&format!(
+            "matroskamux name=mux ! filesink location=\"{}\" videotestsrc num-buffers=600 ! video/x-raw,width=160,height=90,framerate=30/1 ! vp8enc deadline=1 keyframe-max-dist=30 ! mux. audiotestsrc num-buffers=938 ! audio/x-raw,rate=48000 ! vorbisenc ! mux.",
+            path.display()
+        ));
         let receiver = gst::parse::launch(
             "appsrc name=wire is-live=true do-timestamp=true format=time caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=MP2T,payload=33\" ! rtpjitterbuffer latency=30 ! rtpmp2tdepay ! tsdemux name=demux queue name=video-input ! h264parse ! avdec_h264 max-threads=2 ! fakesink name=video sync=false signal-handoffs=true queue name=audio-input ! aacparse ! avdec_aac ! fakesink name=audio sync=false signal-handoffs=true"
         ).unwrap().downcast::<gst::Pipeline>().unwrap();
@@ -632,21 +619,10 @@ mod playback_tests {
         use std::time::Duration;
         pipeline::init().unwrap();
         let path = std::env::temp_dir().join(format!("bns-playback-{}.mkv", std::process::id()));
-        let fixture = gst::parse::launch(&format!(
-            "matroskamux name=mux ! filesink location=\"{}\" videotestsrc num-buffers=360 ! video/x-raw,width=160,height=90,framerate=30/1 ! vp8enc deadline=1 ! mux. audiotestsrc num-buffers=563 ! audio/x-raw,rate=48000 ! vorbisenc ! mux.", path.display()
-        )).unwrap().downcast::<gst::Pipeline>().unwrap();
-        let guard = PipelineGuard::new(fixture.clone());
-        fixture.set_state(gst::State::Playing).unwrap();
-        let message = fixture
-            .bus()
-            .unwrap()
-            .timed_pop_filtered(
-                gst::ClockTime::from_seconds(10),
-                &[gst::MessageType::Eos, gst::MessageType::Error],
-            )
-            .unwrap();
-        assert_eq!(message.type_(), gst::MessageType::Eos, "{message:?}");
-        drop(guard);
+        crate::pipeline::write_test_media(&format!(
+            "matroskamux name=mux ! filesink location=\"{}\" videotestsrc num-buffers=360 ! video/x-raw,width=160,height=90,framerate=30/1 ! vp8enc deadline=1 ! mux. audiotestsrc num-buffers=563 ! audio/x-raw,rate=48000 ! vorbisenc ! mux.",
+            path.display()
+        ));
         let video = VideoSource::Media {
             source: crate::media::MediaSource::File(path.clone()),
             kind: MediaKind::Video,
