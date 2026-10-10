@@ -1,33 +1,19 @@
 //! Serves files from disk to a receiver over HTTP.
 //!
-//! A Chromecast never receives media over the control channel: it is given a
-//! **URL** and fetches it itself. For mirroring that URL is a live stream
-//! ([`crate::http`]); for a photo or a film it is a file on this computer, and
-//! the difference is not cosmetic:
+//! A Cast receiver or DLNA renderer is given a URL and fetches the file
+//! itself ([`crate::media`] hands it over). Unlike the live stream of
+//! `nd_core::stream_server`, a file:
 //!
-//! - **it must support `Range`.** The receiver asks for byte ranges to seek,
-//!   and — with some firmware — opens the file with a range request before
-//!   playing at all. A server that ignores `Range` and always sends from zero
-//!   makes seeking silently do nothing;
-//! - **it is finite.** The response carries a `Content-Length` and ends, rather
-//!   than being terminated by EOF the way the live stream is;
-//! - **it is served more than once.** The receiver reconnects when it seeks, so
-//!   the server stays up for the whole session instead of handing its socket to
-//!   GStreamer and stepping aside.
+//! - must support `Range`: receivers seek by byte range, and some firmware
+//!   opens the file with a range request before playing at all;
+//! - is finite: the response carries a `Content-Length` and ends;
+//! - is served more than once: the receiver reconnects when it seeks, so the
+//!   server stays up for the whole session.
 //!
-//! ## Protections
-//!
-//! The same two as the live stream, for the same reason — anything reachable
-//! here is the person's own files:
-//!
-//! 1. a random token in the path, so a portscan finds nothing;
-//! 2. an allowlist for the receiver's IP.
-//!
-//! On top of those, this server can only ever serve **the exact paths it was
-//! given**: the URL carries an *index into that list*, never a path. There is
-//! no filename in the request to normalise, so `../../.ssh/id_rsa` is not a
-//! request this server can express, and directory traversal is impossible by
-//! construction rather than by filtering.
+//! Anything reachable here is the person's own files. The path carries a
+//! random token, only the receiver's IP is answered, and the URL names an
+//! index into the list the session was started with, never a path: there is
+//! no filename to normalise, so directory traversal cannot be expressed.
 
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -47,9 +33,6 @@ use nd_core::stream_server::{
 /// enough not to hold a megabyte per connection.
 const CHUNK: usize = 64 * 1024;
 
-// The kind lives in `nd-core`: it decides how a file is played on **either**
-// protocol, and a second definition here would be the same idea maintained in
-// two places.
 pub use nd_core::media::MediaKind;
 
 /// A file that can be sent, with everything the receiver needs to know.
@@ -65,49 +48,15 @@ pub struct MediaFile {
 impl MediaFile {
     /// Describes a file, or explains why this receiver cannot play it.
     ///
-    /// The check is by extension, and that is the honest limit: identifying a
-    /// container tells us nothing about the codecs inside it, and a Chromecast
-    /// rejects `.mp4` carrying HEVC just as it rejects `.mkv`. What this does
-    /// catch is the common case — a file type the Default Media Receiver has
-    /// never supported — and catching it here means saying so in the interface
-    /// instead of the receiver going black with no explanation.
+    /// The check is by extension, and that is the honest limit: the container
+    /// says nothing about the codecs inside, and a Chromecast rejects `.mp4`
+    /// carrying HEVC as it rejects `.mkv`. It catches a file type the Default
+    /// Media Receiver never plays, so the interface can say so instead of the
+    /// receiver going black.
     pub fn inspect(path: &Path) -> std::result::Result<Self, String> {
-        let extension = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or_default()
-            .to_ascii_lowercase();
-
-        // The Default Media Receiver's supported list. Anything outside it
-        // fails on the device, so it is refused here where it can be explained.
-        let (kind, content_type) = match extension.as_str() {
-            "jpg" | "jpeg" => (MediaKind::Photo, "image/jpeg"),
-            "png" => (MediaKind::Photo, "image/png"),
-            "gif" => (MediaKind::Photo, "image/gif"),
-            "webp" => (MediaKind::Photo, "image/webp"),
-            "bmp" => (MediaKind::Photo, "image/bmp"),
-            "mp4" | "m4v" => (MediaKind::Video, "video/mp4"),
-            "webm" => (MediaKind::Video, "video/webm"),
-            "mp3" => (MediaKind::Music, "audio/mpeg"),
-            "m4a" | "aac" => (MediaKind::Music, "audio/mp4"),
-            "wav" => (MediaKind::Music, "audio/wav"),
-            "ogg" | "opus" => (MediaKind::Music, "audio/ogg"),
-            "flac" => (MediaKind::Music, "audio/flac"),
-            "" => return Err("a file with no extension".to_string()),
-            other => return Err(format!(".{other} is not a format this receiver plays")),
-        };
-
-        let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
-        if !metadata.is_file() {
-            return Err("not a regular file".into());
-        }
-        let size = metadata.len();
-        Ok(Self {
-            path: path.to_path_buf(),
-            kind,
-            content_type,
-            size,
-        })
+        let extension = extension(path);
+        let format = native_format(&extension).ok_or_else(|| unplayable(&extension))?;
+        Self::describe(path, format)
     }
 
     /// Describes a file that a receiver cannot fetch as it is but that the
@@ -115,23 +64,17 @@ impl MediaFile {
     /// player hands over whatever it is showing, and `.mkv` or HEVC is common.
     /// Formats the receiver plays natively are described as by [`Self::inspect`].
     pub fn inspect_decodable(path: &Path) -> std::result::Result<Self, String> {
-        if let Ok(file) = Self::inspect(path) {
-            return Ok(file);
-        }
-        let extension = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or_default()
-            .to_ascii_lowercase();
-        let (kind, content_type) = match extension.as_str() {
-            "mkv" | "avi" | "mov" | "ts" | "m2ts" | "mts" | "wmv" | "flv" | "mpg" | "mpeg"
-            | "3gp" | "ogv" | "vob" => (MediaKind::Video, "video/x-matroska"),
-            "mka" | "wma" | "ape" | "aiff" | "aif" | "wv" | "ac3" | "dts" | "mp2" | "m4b" => {
-                (MediaKind::Music, "audio/x-matroska")
-            }
-            "" => return Err("a file with no extension".to_string()),
-            other => return Err(format!(".{other} is not a format this receiver plays")),
-        };
+        let extension = extension(path);
+        let format = native_format(&extension)
+            .or_else(|| decodable_format(&extension))
+            .ok_or_else(|| unplayable(&extension))?;
+        Self::describe(path, format)
+    }
+
+    fn describe(
+        path: &Path,
+        (kind, content_type): (MediaKind, &'static str),
+    ) -> std::result::Result<Self, String> {
         let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
         if !metadata.is_file() {
             return Err("not a regular file".into());
@@ -146,7 +89,7 @@ impl MediaFile {
 
     /// Whether a Chromecast can fetch this file as it is.
     pub fn plays_natively(&self) -> bool {
-        Self::inspect(&self.path).is_ok()
+        native_format(&extension(&self.path)).is_some()
     }
 
     /// The name to show on the receiver.
@@ -159,9 +102,55 @@ impl MediaFile {
     }
 }
 
+fn extension(path: &Path) -> String {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+}
+
+/// The Default Media Receiver's supported formats. Anything outside them
+/// fails on the device, so it is refused where it can be explained.
+fn native_format(extension: &str) -> Option<(MediaKind, &'static str)> {
+    Some(match extension {
+        "jpg" | "jpeg" => (MediaKind::Photo, "image/jpeg"),
+        "png" => (MediaKind::Photo, "image/png"),
+        "gif" => (MediaKind::Photo, "image/gif"),
+        "webp" => (MediaKind::Photo, "image/webp"),
+        "bmp" => (MediaKind::Photo, "image/bmp"),
+        "mp4" | "m4v" => (MediaKind::Video, "video/mp4"),
+        "webm" => (MediaKind::Video, "video/webm"),
+        "mp3" => (MediaKind::Music, "audio/mpeg"),
+        "m4a" | "aac" => (MediaKind::Music, "audio/mp4"),
+        "wav" => (MediaKind::Music, "audio/wav"),
+        "ogg" | "opus" => (MediaKind::Music, "audio/ogg"),
+        "flac" => (MediaKind::Music, "audio/flac"),
+        _ => return None,
+    })
+}
+
+/// Containers only the decoding path plays.
+fn decodable_format(extension: &str) -> Option<(MediaKind, &'static str)> {
+    Some(match extension {
+        "mkv" | "avi" | "mov" | "ts" | "m2ts" | "mts" | "wmv" | "flv" | "mpg" | "mpeg" | "3gp"
+        | "ogv" | "vob" => (MediaKind::Video, "video/x-matroska"),
+        "mka" | "wma" | "ape" | "aiff" | "aif" | "wv" | "ac3" | "dts" | "mp2" | "m4b" => {
+            (MediaKind::Music, "audio/x-matroska")
+        }
+        _ => return None,
+    })
+}
+
+fn unplayable(extension: &str) -> String {
+    if extension.is_empty() {
+        "a file with no extension".to_string()
+    } else {
+        format!(".{extension} is not a format this receiver plays")
+    }
+}
+
 /// An HTTP server for a fixed list of files, running until it is dropped.
 pub struct FileServer {
-    files: Arc<Vec<MediaFile>>,
     token: String,
     address: SocketAddr,
     task: tokio::task::JoinHandle<()>,
@@ -189,10 +178,10 @@ impl FileServer {
             .local_addr()
             .map_err(|e| NdError::Network(e.to_string()))?;
         let token = random_token()?;
+        tracing::info!(%address, count = files.len(), "serving media files");
         let files = Arc::new(files);
 
         let task = tokio::spawn({
-            let files = files.clone();
             let token = token.clone();
             async move {
                 let mut clients = tokio::task::JoinSet::new();
@@ -204,7 +193,7 @@ impl FileServer {
                     let Ok((stream, peer)) = accepted else {
                         break;
                     };
-                    // Refuse anyone but the receiver this session opened.
+                    // Only the receiver this session serves.
                     if peer.ip() != receiver {
                         tracing::warn!(%peer, "a request from outside the session was refused");
                         continue;
@@ -225,9 +214,7 @@ impl FileServer {
             }
         });
 
-        tracing::info!(%address, count = files.len(), "serving media files");
         Ok(Self {
-            files,
             token,
             address,
             task,
@@ -238,10 +225,6 @@ impl FileServer {
     pub fn url(&self, index: usize) -> String {
         format!("http://{}/{}/{index}", self.address, self.token,)
     }
-
-    pub fn files(&self) -> &[MediaFile] {
-        &self.files
-    }
 }
 
 /// What a DLNA renderer is told about a whole file: it may seek by byte
@@ -250,32 +233,21 @@ const DLNA_HEADERS: &str = "transferMode.dlna.org: Streaming\r\n\
      contentFeatures.dlna.org: DLNA.ORG_OP=01;DLNA.ORG_CI=0;\
      DLNA.ORG_FLAGS=01700000000000000000000000000000\r\n";
 
+const NOT_FOUND: &[u8] =
+    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+
 /// Reads one request and answers it.
 async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> Result<()> {
     let request = read_request(&mut stream).await?;
     let (method, target) =
         request_line(&request).ok_or_else(|| NdError::Protocol("malformed HTTP request".into()))?;
-    let mut lines = request.lines().skip(1);
 
-    // A wrong token gets 404, without distinguishing a protected file from
-    // an unknown resource. A response does not conceal the listening server.
-    let Some(index) = parse_target(target, token) else {
-        let _ = write_bounded(
-            &mut stream,
-            b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-        )
-        .await;
+    // A wrong token and an unknown index both get 404, so a protected file
+    // cannot be told from a missing one.
+    let Some(file) = parse_target(target, token).and_then(|index| files.get(index)) else {
+        let _ = write_bounded(&mut stream, NOT_FOUND).await;
         return Ok(());
     };
-    let Some(file) = files.get(index) else {
-        let _ = write_bounded(
-            &mut stream,
-            b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-        )
-        .await;
-        return Ok(());
-    };
-
     if method != "GET" && method != "HEAD" {
         write_bounded(&mut stream, b"HTTP/1.1 405 Method Not Allowed\r\nAllow: GET, HEAD\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await?;
         return Ok(());
@@ -291,7 +263,9 @@ async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> R
         return Err(NdError::Network("not a regular file".into()));
     }
     let total = metadata.len();
-    let requested = lines
+    let requested = request
+        .lines()
+        .skip(1)
         .find_map(|line| {
             let (name, value) = line.split_once(':')?;
             name.eq_ignore_ascii_case("range").then_some(value.trim())
@@ -305,44 +279,51 @@ async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> R
         write_bounded(&mut stream, header.as_bytes()).await?;
         return Ok(());
     }
-    let (start, end) = range.unwrap_or((0, total.saturating_sub(1)));
-    let length = range.map_or(total, |(start, end)| end - start + 1);
-
-    let header = if range.is_some() {
-        format!(
-            "HTTP/1.1 206 Partial Content\r\n\
-             Content-Type: {}\r\n\
-             Content-Length: {length}\r\n\
-             Content-Range: bytes {start}-{end}/{total}\r\n\
-             Accept-Ranges: bytes\r\n\
-             {DLNA_HEADERS}\
-             Connection: close\r\n\r\n",
-            file.content_type
-        )
-    } else {
-        format!(
-            "HTTP/1.1 200 OK\r\n\
-             Content-Type: {}\r\n\
-             Content-Length: {length}\r\n\
-             Accept-Ranges: bytes\r\n\
-             {DLNA_HEADERS}\
-             Connection: close\r\n\r\n",
-            file.content_type
-        )
-    };
-    write_bounded(&mut stream, header.as_bytes()).await?;
-
+    write_bounded(&mut stream, response_head(file, range, total).as_bytes()).await?;
     // A HEAD asks what the file is, not for the file. Some firmware sends one
     // before deciding whether it can play the item.
-    if method.eq_ignore_ascii_case("HEAD") {
+    if method == "HEAD" {
         return Ok(());
     }
+    let start = range.map_or(0, |(start, _)| start);
+    let length = range.map_or(total, |(start, end)| end - start + 1);
+    send_bytes(&mut handle, &mut stream, start, length).await
+}
 
+/// The status line and headers for the whole file or one range of it.
+fn response_head(file: &MediaFile, range: Option<(u64, u64)>, total: u64) -> String {
+    let (status, length, content_range) = match range {
+        Some((start, end)) => (
+            "206 Partial Content",
+            end - start + 1,
+            format!("Content-Range: bytes {start}-{end}/{total}\r\n"),
+        ),
+        None => ("200 OK", total, String::new()),
+    };
+    format!(
+        "HTTP/1.1 {status}\r\n\
+         Content-Type: {}\r\n\
+         Content-Length: {length}\r\n\
+         {content_range}\
+         Accept-Ranges: bytes\r\n\
+         {DLNA_HEADERS}\
+         Connection: close\r\n\r\n",
+        file.content_type
+    )
+}
+
+/// Copies `length` bytes from `start`. A receiver that stops watching closes
+/// the socket; that ends the transfer and is not a fault.
+async fn send_bytes(
+    handle: &mut tokio::fs::File,
+    stream: &mut TcpStream,
+    start: u64,
+    length: u64,
+) -> Result<()> {
     handle
         .seek(std::io::SeekFrom::Start(start))
         .await
         .map_err(|e| NdError::Network(e.to_string()))?;
-
     let mut remaining = length;
     let mut buffer = vec![0u8; CHUNK];
     while remaining > 0 {
@@ -356,9 +337,7 @@ async fn serve_one(mut stream: TcpStream, files: &[MediaFile], token: &str) -> R
                 "file truncated during HTTP transfer".into(),
             ));
         }
-        // A receiver that stops watching closes the socket; that is an ordinary
-        // end of transfer, not a fault to report.
-        if write_bounded(&mut stream, &buffer[..read]).await.is_err() {
+        if write_bounded(stream, &buffer[..read]).await.is_err() {
             break;
         }
         remaining -= read as u64;
@@ -455,6 +434,52 @@ mod tests {
             .unwrap();
         assert!(response.contains("Content-Length: 0\r\n"), "{response}");
         assert!(response.ends_with("\r\n\r\n"));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    async fn fetch(authority: &str, request: &str) -> String {
+        let mut client = TcpStream::connect(authority).await.unwrap();
+        client.write_all(request.as_bytes()).await.unwrap();
+        let mut response = String::new();
+        tokio::time::timeout(Duration::from_secs(2), client.read_to_string(&mut response))
+            .await
+            .unwrap()
+            .unwrap();
+        response
+    }
+
+    #[tokio::test]
+    async fn ranges_heads_and_bad_ranges_get_their_own_answers() {
+        let (_server, authority, target, path) = fixture(b"0123456789", "range").await;
+        let range = fetch(
+            &authority,
+            &format!("GET /{target} HTTP/1.1\r\nHost: localhost\r\nRange: bytes=2-5\r\n\r\n"),
+        )
+        .await;
+        assert!(
+            range.starts_with("HTTP/1.1 206 Partial Content\r\n"),
+            "{range}"
+        );
+        assert!(range.contains("Content-Length: 4\r\n"), "{range}");
+        assert!(range.contains("Content-Range: bytes 2-5/10\r\n"), "{range}");
+        assert!(range.ends_with("\r\n\r\n2345"), "{range}");
+
+        let head = fetch(
+            &authority,
+            &format!("HEAD /{target} HTTP/1.1\r\nHost: localhost\r\n\r\n"),
+        )
+        .await;
+        assert!(head.starts_with("HTTP/1.1 200 OK\r\n"), "{head}");
+        assert!(head.contains("Content-Length: 10\r\n"), "{head}");
+        assert!(head.ends_with("\r\n\r\n"), "{head}");
+
+        let beyond = fetch(
+            &authority,
+            &format!("GET /{target} HTTP/1.1\r\nHost: localhost\r\nRange: bytes=20-\r\n\r\n"),
+        )
+        .await;
+        assert!(beyond.starts_with("HTTP/1.1 416 "), "{beyond}");
+        assert!(beyond.contains("Content-Range: bytes */10\r\n"), "{beyond}");
         std::fs::remove_file(path).unwrap();
     }
 
