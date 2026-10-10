@@ -47,77 +47,74 @@ impl Provider for WfdP2pProvider {
 
     async fn discover(&self) -> Result<BoxStream<'static, DiscoveryEvent>> {
         let (tx, mut rx) = tokio::sync::mpsc::channel::<DiscoveryEvent>(32);
-
-        tokio::spawn(async move {
-            static DISCOVERY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-            let _serial = tokio::select! {
-                guard = DISCOVERY_LOCK.lock() => guard,
-                _ = tx.closed() => return,
-            };
-            let mut backoff = RETRY_BASE;
-            let mut known: HashSet<String> = HashSet::new();
-
-            loop {
-                let opened = tokio::select! {
-                    result = tokio::time::timeout(Duration::from_secs(15), P2pDevice::open()) =>
-                        result.unwrap_or_else(|_| Err(NdError::Network("NetworkManager did not answer".into()))),
-                    _ = tx.closed() => return,
-                };
-                let outcome = match opened {
-                    Ok(device) => {
-                        let result = tokio::select! {
-                            result = async {
-                                device.start_find().await?;
-                                backoff = RETRY_BASE;
-                                let _ = tx.send(DiscoveryEvent::ProviderReady { provider: "wfd-p2p" }).await;
-                                run_discovery(&device, &tx, &mut known).await
-                            } => result,
-                            _ = tx.closed() => Ok(()),
-                        };
-                        let _ =
-                            tokio::time::timeout(Duration::from_secs(5), device.stop_find()).await;
-                        result
-                    }
-                    Err(err) => Err(err),
-                };
-                match outcome {
-                    // The consumer went away: shut down for good.
-                    Ok(()) => return,
-                    Err(err) => {
-                        // Retried rather than ended: a single D-Bus failure
-                        // would otherwise leave the list on "Searching…".
-                        tracing::warn!(%err, "P2P discovery failed; retrying");
-                        if tx
-                            .send(DiscoveryEvent::ProviderUnavailable {
-                                provider: "wfd-p2p",
-                                reason: format!("{err} — reconnecting"),
-                            })
-                            .await
-                            .is_err()
-                        {
-                            return;
-                        }
-
-                        // Known sinks may no longer exist after reconnecting:
-                        // clear the UI list.
-                        for id in known.drain() {
-                            if tx.send(DiscoveryEvent::Removed(id)).await.is_err() {
-                                return;
-                            }
-                        }
-
-                        tokio::select! {
-                            _ = tokio::time::sleep(backoff) => {},
-                            _ = tx.closed() => return,
-                        }
-                        backoff = (backoff * 2).min(RETRY_MAX);
-                    }
-                }
-            }
-        });
-
+        tokio::spawn(keep_discovering(tx));
         Ok(futures::stream::poll_fn(move |cx| rx.poll_recv(cx)).boxed())
     }
+}
+
+/// Runs discovery until the consumer goes away, reopening the device with
+/// backoff after each failure: a single D-Bus failure would otherwise leave
+/// the list on "Searching…".
+async fn keep_discovering(tx: tokio::sync::mpsc::Sender<DiscoveryEvent>) {
+    static DISCOVERY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _serial = tokio::select! {
+        guard = DISCOVERY_LOCK.lock() => guard,
+        _ = tx.closed() => return,
+    };
+    let mut backoff = RETRY_BASE;
+    let mut known: HashSet<String> = HashSet::new();
+
+    // `Ok` means the consumer went away: shut down for good.
+    while let Err(err) = discover_once(&tx, &mut known, &mut backoff).await {
+        tracing::warn!(%err, "P2P discovery failed; retrying");
+        let unavailable = DiscoveryEvent::ProviderUnavailable {
+            provider: "wfd-p2p",
+            reason: format!("{err} — reconnecting"),
+        };
+        if tx.send(unavailable).await.is_err() {
+            return;
+        }
+        // Known sinks may have gone while NetworkManager was unreachable.
+        for id in known.drain() {
+            if tx.send(DiscoveryEvent::Removed(id)).await.is_err() {
+                return;
+            }
+        }
+        tokio::select! {
+            _ = tokio::time::sleep(backoff) => {},
+            _ = tx.closed() => return,
+        }
+        backoff = (backoff * 2).min(RETRY_MAX);
+    }
+}
+
+/// Opens the device and follows its peers. `Ok` once the consumer went
+/// away, `Err` when NetworkManager failed.
+async fn discover_once(
+    tx: &tokio::sync::mpsc::Sender<DiscoveryEvent>,
+    known: &mut HashSet<String>,
+    backoff: &mut Duration,
+) -> Result<()> {
+    let opened = tokio::select! {
+        result = tokio::time::timeout(Duration::from_secs(15), P2pDevice::open()) => result,
+        _ = tx.closed() => return Ok(()),
+    };
+    let device = opened.map_err(|_| NdError::Network("NetworkManager did not answer".into()))??;
+    let result = tokio::select! {
+        result = async {
+            device.start_find().await?;
+            *backoff = RETRY_BASE;
+            let _ = tx.send(DiscoveryEvent::ProviderReady { provider: "wfd-p2p" }).await;
+            run_discovery(&device, tx, known).await
+        } => result,
+        _ = tx.closed() => Ok(()),
+    };
+    match tokio::time::timeout(Duration::from_secs(5), device.stop_find()).await {
+        Ok(Ok(())) => {}
+        Ok(Err(err)) => tracing::warn!(%err, "the Wi-Fi Direct scan did not stop"),
+        Err(_) => tracing::warn!("the Wi-Fi Direct scan did not stop in time"),
+    }
+    result
 }
 
 /// The discovery loop: NM signals plus scan renewal.
