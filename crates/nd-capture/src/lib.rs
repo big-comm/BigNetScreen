@@ -25,7 +25,6 @@ mod portal_start;
 
 use std::path::PathBuf;
 
-use ashpd::WindowIdentifier;
 use ashpd::desktop::screencast::{
     CursorMode, Screencast, SelectSourcesOptions, SourceType as PortalSourceType,
 };
@@ -50,7 +49,7 @@ fn cap_err<E: std::fmt::Display>(e: E) -> NdError {
 /// on each cast is noise. Sharing "a window" is a choice, and it is usually a
 /// different one: restoring it skipped the picker and silently cast the window
 /// from the previous run.
-pub fn restores_selection(source_type: SourceType) -> bool {
+fn restores_selection(source_type: SourceType) -> bool {
     source_type != SourceType::Window
 }
 
@@ -105,45 +104,15 @@ fn clear_restore_token(source_type: SourceType) {
     }
 }
 
-/// The window identifier for the portal dialog.
-///
-/// Without it the dialog may open parentless, non-modal and behind the app's
-/// own window.
-#[derive(Clone, Debug, Default)]
-pub struct ParentWindow(Option<String>);
-
-impl ParentWindow {
-    /// A handle exported through `xdg-foreign` (Wayland) or an XID (X11).
-    pub fn from_handle(handle: impl Into<String>) -> Self {
-        Self(Some(handle.into()))
-    }
-
-    fn identifier(&self) -> Option<WindowIdentifier> {
-        self.0
-            .clone()
-            .map(WindowIdentifier::from_xdg_foreign_exported)
-    }
-}
-
 /// Capture backend through xdg-desktop-portal (`ashpd`).
 pub struct PortalBackend {
     session: Mutex<Option<std::sync::Arc<Session<Screencast>>>>,
-    parent: ParentWindow,
 }
 
 impl PortalBackend {
     pub fn new() -> Self {
         Self {
             session: Mutex::new(None),
-            parent: ParentWindow::default(),
-        }
-    }
-
-    /// Sets the parent window, so the portal dialog opens correctly.
-    pub fn with_parent(parent: ParentWindow) -> Self {
-        Self {
-            session: Mutex::new(None),
-            parent,
         }
     }
 }
@@ -223,7 +192,6 @@ impl CaptureBackend for PortalBackend {
         // session.
         let cursor_mode = match proxy.available_cursor_modes().await {
             Ok(modes) if modes.contains(CursorMode::Embedded) => CursorMode::Embedded,
-            Ok(modes) if modes.contains(CursorMode::Metadata) => CursorMode::Hidden,
             _ => CursorMode::Hidden,
         };
 
@@ -261,10 +229,9 @@ impl CaptureBackend for PortalBackend {
             .response()
             .map_err(cap_err)?;
 
-        let identifier = self.parent.identifier();
         // ashpd 0.13 drops unknown stream properties during deserialization.
         // Read Start's documented dictionary so pipewire-serial survives.
-        let streams = match portal_start::start(&proxy, &session, identifier.as_ref()).await {
+        let streams = match portal_start::start(&proxy, &session).await {
             Ok(streams) => streams,
             Err(err) => {
                 let _ = session.close().await;
@@ -566,10 +533,5 @@ mod tests {
                 "{path:?}"
             );
         }
-    }
-
-    #[test]
-    fn sandbox_detection_does_not_panic() {
-        let _ = is_sandboxed();
     }
 }

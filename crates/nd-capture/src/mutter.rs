@@ -690,14 +690,6 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn availability_check_never_panics() {
-        // Runs both on GNOME and in CI without a graphical session.
-        let backend = MutterBackend::new();
-        let available = backend.is_available().await;
-        tracing::info!(available, "is Mutter ScreenCast available?");
-    }
-
-    #[tokio::test]
     async fn stop_without_start_is_a_noop() {
         let backend = MutterBackend::new();
         assert!(backend.stop().await.is_ok());

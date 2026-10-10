@@ -7,7 +7,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use ashpd::WindowIdentifier;
 use ashpd::desktop::{Session, screencast::Screencast};
 use futures::StreamExt;
 use nd_core::{NdError, Result};
@@ -31,10 +30,11 @@ fn error(reason: impl std::fmt::Display) -> NdError {
 
 /// Subscribe before Start: a fast portal may emit Response before returning
 /// the method reply. Use the same connection and session created by ashpd.
+///
+/// The dialog has no parent window: the service that calls this has none.
 pub(crate) async fn start(
     proxy: &Screencast,
     session: &Session<Screencast>,
-    parent: Option<&WindowIdentifier>,
 ) -> Result<StartedStream> {
     let connection = proxy.connection();
     let sender = connection
@@ -60,9 +60,8 @@ pub(crate) async fn start(
     .map_err(error)?;
     let mut responses = request.receive_signal("Response").await.map_err(error)?;
     let options = HashMap::from([("handle_token", Value::from(token.as_str()))]);
-    let parent = parent.map(ToString::to_string).unwrap_or_default();
     let returned: OwnedObjectPath = proxy
-        .call("Start", &(session, parent, options))
+        .call("Start", &(session, "", options))
         .await
         .map_err(error)?;
     if returned.as_str() != path {
