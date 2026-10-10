@@ -47,14 +47,6 @@ pub fn init() -> Result<()> {
         .map_err(NdError::Gst)
 }
 
-/// Creates a `gst::Bin` from a `gst-launch`-style description.
-pub fn build_bin(description: &str) -> Result<gst::Element> {
-    init()?;
-    gst::parse::bin_from_description(description, true)
-        .map(|bin| bin.upcast())
-        .map_err(|e| NdError::Gst(e.to_string()))
-}
-
 /// An event coming off a running pipeline's bus.
 #[derive(Clone, Debug)]
 pub enum PipelineEvent {
@@ -743,8 +735,6 @@ pub fn build_configured_pipeline(
 /// this module once forced sat *below* that minimum — and the effect was not
 /// "faster", it was the sink receiving data and displaying nothing.
 pub const PIPELINE_LATENCY_AUTO: u64 = 0;
-/// For compatibility: "low" latency now means automatic.
-pub const PIPELINE_LATENCY_MS: u64 = PIPELINE_LATENCY_AUTO;
 /// `openh264enc` with `usage-type=screen` has latency spikes after scene
 /// changes; it alone justifies fixed headroom (the reference C project's
 /// value).
@@ -790,15 +780,6 @@ pub const MIRROR_AUDIO_QUEUE_BUFFERS: u32 = 64;
 pub const MIRROR_AUDIO_QUEUE_MS: u64 = 200;
 /// Local RTP port used as the source of the WFD stream.
 pub const LOCAL_RTP_PORT: u16 = 16384;
-
-/// The WFD path's pipeline latency: automatic.
-///
-/// The C project pinned 500 ms for every encoder because of openh264's spikes.
-/// Measured in the field, the real minimum with x264/VA is **41 ms** — pinning
-/// 500 ms adds nearly half a second of lag, visible when moving the mouse. The
-/// fixed headroom now lives only where it is needed
-/// ([`OPENH264_PIPELINE_LATENCY_MS`]).
-pub const WFD_PIPELINE_LATENCY_MS: u64 = PIPELINE_LATENCY_AUTO;
 
 /// The video PES PID the Wi-Fi Display specification requires (0x1011).
 ///
@@ -968,7 +949,7 @@ impl H264Encoder {
     pub fn pipeline_latency_ms(self) -> u64 {
         match self {
             H264Encoder::OpenH264 => OPENH264_PIPELINE_LATENCY_MS,
-            _ => PIPELINE_LATENCY_MS,
+            _ => PIPELINE_LATENCY_AUTO,
         }
     }
 
@@ -2177,11 +2158,6 @@ impl StreamConfig {
         )
     }
 
-    /// Is an audio track configured?
-    pub fn audio_enabled(&self) -> bool {
-        true
-    }
-
     /// The AAC audio branch attached to the given pad of the muxer named
     /// `mux`.
     ///
@@ -2370,20 +2346,16 @@ pub fn mirror_pipeline_description(
     ceiling: (u32, u32),
     gpu: bool,
 ) -> String {
-    let audio = if cfg.audio_enabled() {
-        format!(
-            " {src} ! audioconvert ! audioresample ! \
-             audio/x-raw,rate=48000,channels=2 ! {queue} ! \
-             opusenc bitrate=128000 frame-size=10 ! \
-             appsink name={audio_sink} emit-signals=false sync=false \
-             max-buffers=8 drop=false",
-            src = cfg.audio.description(),
-            queue = cfg.mirror_audio_queue(),
-            audio_sink = MIRROR_AUDIO_SINK,
-        )
-    } else {
-        String::new()
-    };
+    let audio = format!(
+        " {src} ! audioconvert ! audioresample ! \
+         audio/x-raw,rate=48000,channels=2 ! {queue} ! \
+         opusenc bitrate=128000 frame-size=10 ! \
+         appsink name={audio_sink} emit-signals=false sync=false \
+         max-buffers=8 drop=false",
+        src = cfg.audio.description(),
+        queue = cfg.mirror_audio_queue(),
+        audio_sink = MIRROR_AUDIO_SINK,
+    );
 
     format!(
         // The profile comes from the configuration here, unlike the WFD path
@@ -2420,24 +2392,6 @@ alignment=au ! \
 /// need VP9/HEVC, which this pipeline does not produce. Sending the raw screen
 /// (a 16:10 1920x1200 one, say) makes the device rescale — or refuse.
 pub const CHROMECAST_MAX_RESOLUTION: (u32, u32) = (1920, 1080);
-
-/// The Cast bitrate at the mode Open Screen calibrates against, in kbit/s.
-///
-/// Open Screen describes 1080p30 as "playable at good quality around 10mbps",
-/// and [`StreamConfig::scaled_bitrate_kbps`] returns exactly this at that mode.
-/// It is the anchor the rest of the table is read against, not a ceiling: a
-/// receiver that declares `maxBitRate` caps the stream, and a receiver that
-/// declares nothing gets what the mode needs.
-///
-/// A flat 10 Mbit ceiling used to sit here for every Cast mode. It could not
-/// protect anybody: at 1080p30 and below the table already returns this number
-/// or less, so the ceiling only ever fired against a bigger picture, handing a
-/// 1440p60 screen the bitrate of a 1080p30 one. The field report behind it — a
-/// Google TV Stick losing frames from the first second, with a backlog that
-/// grew until it ended the session — was measured before the sender bounded
-/// its own backlog at all (see `flow.rs`). Re-measure before restoring any
-/// fixed ceiling, and if one is needed, pin it to a number that was observed.
-pub const CAST_REFERENCE_BITRATE_KBPS: u32 = 10_000;
 
 /// The rate-control budget the Cast **mirroring** encoder is held to, in
 /// frames. See [`StreamConfig::vbv_frames`] for the table behind the number.
@@ -3089,7 +3043,7 @@ mod tests {
         // wrong shows up only as a picture that takes too long to change.
         let cfg = StreamConfig {
             fps: 30,
-            bitrate_kbps: CAST_REFERENCE_BITRATE_KBPS,
+            bitrate_kbps: 10_000,
             encoder: H264Encoder::NvH264,
             vbv_frames: CAST_VBV_FRAMES,
             ..Default::default()
@@ -4084,11 +4038,6 @@ mod tests {
             OPENH264_PIPELINE_LATENCY_MS
         );
         const { assert!(OPENH264_PIPELINE_LATENCY_MS > 0) };
-    }
-
-    #[test]
-    fn wfd_uses_automatic_latency() {
-        assert_eq!(WFD_PIPELINE_LATENCY_MS, PIPELINE_LATENCY_AUTO);
     }
 
     #[test]

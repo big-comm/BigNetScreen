@@ -13,7 +13,6 @@
 //!
 //! Nothing here depends on GTK: everything is testable in isolation.
 
-pub mod audio_state;
 pub mod capture;
 pub mod dummy;
 pub mod error;
