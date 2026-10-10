@@ -235,9 +235,9 @@ fn video_frame(pipeline: &gst::Pipeline, duration: Option<f64>) -> Option<Thumbn
         let _ = pipeline.state(gst::ClockTime::from_seconds(2));
     }
     let sample = pipeline.property::<Option<gst::Sample>>("sample")?;
-    let info = gstreamer_video::VideoInfo::from_caps(sample.caps()?).ok()?;
-    let ratio = f64::from(info.width()) * f64::from(info.par().numer())
-        / (f64::from(info.height()) * f64::from(info.par().denom()));
+    let decoded = gstreamer_video::VideoInfo::from_caps(sample.caps()?).ok()?;
+    let ratio = f64::from(decoded.width()) * f64::from(decoded.par().numer())
+        / (f64::from(decoded.height()) * f64::from(decoded.par().denom()));
     let (width, height) = if ratio >= 1.0 {
         (SIZE, (f64::from(SIZE) / ratio).round().max(1.0) as i32)
     } else {
@@ -250,13 +250,13 @@ fn video_frame(pipeline: &gst::Pipeline, duration: Option<f64>) -> Option<Thumbn
         .field("pixel-aspect-ratio", gst::Fraction::new(1, 1))
         .build();
     let sample = pipeline.emit_by_name::<Option<gst::Sample>>("convert-sample", &[&caps])?;
-    let info = gstreamer_video::VideoInfo::from_caps(sample.caps()?).ok()?;
+    let scaled = gstreamer_video::VideoInfo::from_caps(sample.caps()?).ok()?;
     let map = sample.buffer()?.map_readable().ok()?;
     Some(Thumbnail {
         pixels: glib::Bytes::from_owned(map.as_slice().to_vec()),
-        width: info.width() as i32,
-        height: info.height() as i32,
-        stride: info.stride()[0],
+        width: scaled.width() as i32,
+        height: scaled.height() as i32,
+        stride: scaled.stride()[0],
         alpha: false,
     })
 }

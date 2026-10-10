@@ -1,15 +1,12 @@
 //! The preferences, and only the ones that change something.
 //!
 //! Every control here is wired to [`nd_core::settings`], and every field of
-//! that struct is read by the code that builds a session. Some rows from the
-//! original design are deliberately absent — end-to-end encryption cannot be
-//! chosen (Cast mirroring fixes its own cipher and Miracast offers none), and
-//! subtitle handling belongs to a media player this application does not have.
-//! A switch that does nothing is a lie told in a nice font.
+//! that struct is read by the code that builds a session. Encryption is not a
+//! choice: Cast mirroring fixes its own cipher and Miracast offers none.
 //!
-//! Changes take effect on the **next** session, not the running one. The
-//! resolution and the audio branch are fixed when the pipeline is built, and
-//! rebuilding it under a live cast would drop the picture on the wall.
+//! Changes take effect on the next session. The resolution and the audio
+//! branch are fixed when the pipeline is built, and rebuilding it under a live
+//! cast would drop the picture on the wall.
 
 use relm4::adw::{self, prelude::*};
 use relm4::gtk;

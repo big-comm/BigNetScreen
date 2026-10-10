@@ -1,13 +1,10 @@
 //! Every receiver found, with what is known about the one selected.
 //!
 //! The home page lists receivers so that one can be picked; this page is for
-//! looking at them — filtering by protocol, rescanning, and reading what the
-//! discovery actually told us about a device before sending a screen to it.
-//!
-//! What it does **not** show is as deliberate as what it does. There is no
-//! firmware version, no MAC address for a Chromecast and no "last seen": mDNS
-//! and Wi-Fi Direct do not report those, and a panel of plausible-looking
-//! fields invented to fill space is worse than a short one that is true.
+//! looking at them — filtering by protocol, rescanning, and reading what
+//! discovery reported about a device before sending a screen to it. The detail
+//! panel shows only fields discovery reports: mDNS and Wi-Fi Direct carry no
+//! firmware version, Chromecast MAC address or "last seen".
 
 use relm4::adw::{self, prelude::*};
 use relm4::factory::FactoryVecDeque;

@@ -68,11 +68,8 @@ impl Page {
     }
 }
 
-/// One receiver, as the pages need to show it.
-///
-/// A plain snapshot rather than the `Arc<dyn Sink>` itself: a page that held
-/// the sink could start or stop a stream behind the root component's back, and
-/// then two parts of the window would disagree about what is running.
+/// One receiver, as the pages show it: a snapshot of what the service
+/// publishes, so pages can only ask the root component to act on it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeviceEntry {
     pub id: String,
@@ -155,13 +152,11 @@ impl DeviceEntry {
     }
 }
 
-/// "1920 × 1080 · 60 Hz", plus how many receivers are watching when the
-/// protocol can tell (NDI publishes to whoever asks, so that number is the
-/// difference between sharing and sharing with nobody).
-/// "1280 × 720 · 60 Hz", with NDI's audience when it has one.
+/// "1280 × 720 · 60 Hz", with the audience when the protocol can count it.
 ///
 /// `receivers` is negative for the protocols that cannot tell, which is every
-/// one but NDI: on a point-to-point link "streaming" already means one.
+/// one but NDI: on a point-to-point link "streaming" already means one, while
+/// NDI publishes to whoever asks, so zero means sharing with nobody.
 pub fn describe_mode(width: u32, height: u32, fps: u32, receivers: i32) -> String {
     if width == 0 {
         return String::new();
@@ -218,9 +213,8 @@ pub fn state_label(state: SinkState) -> String {
 /// Warns about receiver-controlled buffering without promising unmeasured latency.
 pub fn latency_hint(kind: SinkKind) -> Option<String> {
     match kind {
-        // Measured, not guessed, and the one number that decides whether
-        // somebody picks this: a renderer sets its own prebuffer and DLNA
-        // gives the sender no way to ask for a smaller one.
+        // A renderer sets its own prebuffer, and DLNA gives the sender no way
+        // to ask for a smaller one.
         SinkKind::Dlna => Some(tr!("delayed a few seconds")),
         _ => None,
     }
@@ -241,7 +235,7 @@ pub struct SessionInfo {
     /// Can this protocol's link be measured at all?
     ///
     /// Cast receivers hold a control connection open on a known port; a
-    /// Miracast receiver connects **to us** and listens on nothing we may
+    /// Miracast receiver connects to this computer and listens on nothing we may
     /// count on. Rather than show a measurement that cannot be taken, the
     /// quality is left out entirely for the protocols where it cannot.
     pub measurable: bool,
