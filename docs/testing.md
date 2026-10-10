@@ -16,11 +16,21 @@ python3 scripts/test-project-tools.py
 make locale
 ```
 
-Use `--offline` with a supplied vendor. The declared MSRV is Rust 1.98.1; keep testing it in its own CI job, since success on a newer toolchain does not prove it. CI should also validate Desktop/AppStream metadata, PO catalogues, deterministic POT extraction, shell scripts, manifests and source archive contents. Dependency advisory checks require a current advisory database; unavailable data means not run, not clean.
+Use `--offline` with a supplied vendor. The declared MSRV is Rust 1.98.1; keep testing it in its own CI job, since success on a newer toolchain does not prove it. CI (`.github/workflows/ci.yml`) runs the Rust gates, the MSRV check, the desktop entry and AppStream validators, `msgfmt --check` on every catalogue, a POT freshness check, both project scripts and `cargo audit`. `cargo deny check` applies the license, source and advisory policy in `deny.toml`. Advisory checks require a current advisory database; unavailable data means not run, not clean.
 
 The Cast HTTP integration test runs a real GStreamer encoder/muxer and downloads from the real server. Transport sync bytes are useful, but a release should also decode a capture independently (for example FFmpeg). A protocol writer test that exercises 20 cycles is not a TLS receiver test or 20 physical reconnections. Describe each accurately.
 
-GUI layout tests marked ignored need a display. Run only the relevant display tests under a bounded Xvfb/D-Bus session; do not execute all ignored tests, because some use the host firewall, P2P or NDI hardware. Inspect representative wide/compact states and closure while cleanup is pending.
+Graphical tests are ignored by default because they need a display. Run only the relevant ones, with a timeout, in a private graphical session with its own D-Bus; do not execute all ignored tests, because some use the host firewall, P2P or NDI hardware. Inspect representative wide/compact states and closure while cleanup is pending.
+
+The layout harness renders every page and breakpoint through GTK's Broadway backend and captures each state from a headless browser. Use one new, empty directory for both halves; the script needs the Python Playwright package and stops after the last state, `settings-compact`:
+
+```sh
+gtk4-broadwayd -a 127.0.0.1 -p 19091 :91 &
+scripts/layout-screenshots.py "$dir" --browser /path/to/chromium &
+GDK_BACKEND=broadway BROADWAY_DISPLAY=:91 GSK_RENDERER=broadway GTK_A11Y=none \
+BIGNETSCREEN_LAYOUT_DIR="$dir" \
+cargo test -p nd-gui --locked layout_pages_and_breakpoints -- --ignored --nocapture
+```
 
 For window teardown, run `navigation_tree_finalizes_after_window_close` with
 `--ignored --nocapture` in a private graphical session. The test opens the real

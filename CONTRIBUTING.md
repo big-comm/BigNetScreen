@@ -1,6 +1,6 @@
 # Contributing
 
-Start with the [architecture](ARCHITECTURE.md) and [development setup](docs/development.md). AGENTS.md applies to maintainers and automated contributors alike; the README remains the entry point for users.
+Start with the [architecture](ARCHITECTURE.md) and [development setup](docs/development.md). [AGENTS.md](AGENTS.md) applies to maintainers and automated contributors alike.
 
 ## Propose a focused change
 
@@ -12,9 +12,9 @@ Run targeted tests first, then the [required gates](docs/testing.md). Include th
 
 ## Translations and documentation
 
-UI text uses English message IDs. Run `python3 po/extract.py`, update the appropriate PO catalogue and validate it with msgfmt. Explain new concepts in simple language and preserve placeholders and plurals. Review PT-BR as Brazilian Portuguese, not a copy of European Portuguese; do not equate simplified and traditional Chinese. Only claim review of the languages actually reviewed.
+UI text uses English message IDs. A new source file that calls `tr!` must be listed in `po/POTFILES.in`. Run `./po/update-pot.sh` to refresh the template and merge it into the catalogues, then validate each changed catalogue with `msgfmt --check`. See [po/README.md](po/README.md). Explain new concepts in simple language and preserve placeholders and plurals. Review PT-BR as Brazilian Portuguese, not a copy of European Portuguese; do not equate simplified and traditional Chinese. Only claim review of the languages actually reviewed.
 
-Update the closest maintained guide when behavior changes. Keep the root small: README, AGENTS, architecture, contribution/security/support policy and build manifests. Put reproducible tools under scripts and historical reports under docs/history or audit. Never check in personal paths, tokens, screenshots of private content, caches or built binaries.
+Update the closest maintained guide when behavior changes. Keep the root small: README, AGENTS, architecture, contribution/security/support policy and build manifests. Put reproducible tools under `scripts/` and historical reports under `docs/history/` or `audit/`. Never check in personal paths, tokens, screenshots of private content, caches or built binaries.
 
 ## Pull request evidence
 
