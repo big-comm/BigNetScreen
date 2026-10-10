@@ -1311,13 +1311,13 @@ mod tests {
         assert_eq!(close["reasonCode"], 5, "closed by peer, on purpose");
     }
 
-    #[test]
-    fn oversized_length_prefix_is_rejected_before_allocating() {
-        // A security regression: `vec![0u8; len]` with `len` coming off the
-        // network allowed allocating up to 4 GiB from a 4-byte header.
-        const { assert!(MAX_MESSAGE_BYTES < 1024 * 1024) };
-        let claimed = u32::MAX as usize;
-        assert!(claimed > MAX_MESSAGE_BYTES);
+    #[tokio::test]
+    async fn oversized_length_prefix_is_rejected_before_allocating() {
+        // Only the prefix arrives: the claim alone has to be refused, before
+        // a buffer of that size exists.
+        let prefix = u32::MAX.to_be_bytes();
+        let err = read_message(&mut prefix.as_slice()).await.unwrap_err();
+        assert!(err.to_string().contains("exceeds"), "{err}");
     }
 
     #[test]
@@ -1338,13 +1338,6 @@ mod tests {
         assert!(result.is_err(), "a malformed certificate was accepted");
     }
 
-    #[test]
-    fn request_ids_are_unique_and_increasing() {
-        let counter = AtomicI32::new(1);
-        let a = counter.fetch_add(1, Ordering::Relaxed);
-        let b = counter.fetch_add(1, Ordering::Relaxed);
-        assert!(b > a);
-    }
     #[test]
     fn stop_confirmation_is_scoped_and_structurally_valid() {
         let stopped = json!({"type":"RECEIVER_STATUS", "status":{"applications":[]}});
