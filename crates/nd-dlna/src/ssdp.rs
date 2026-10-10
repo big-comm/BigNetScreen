@@ -86,6 +86,18 @@ pub fn parse_reply(reply: &str) -> Option<Announcement> {
     })
 }
 
+/// Whether the reply's `LOCATION` is on the host that sent it.
+///
+/// Discovery fetches every description it hears of, unprompted. A reply
+/// naming another address would make any host on the network, or anything
+/// able to spoof a datagram, aim that fetch at a third machine or at a
+/// loopback service here. A renderer describes itself from the address it
+/// answers from.
+fn describes_itself(announcement: &Announcement, sender: SocketAddr) -> bool {
+    Endpoint::parse(&announcement.location)
+        .is_some_and(|location| location.addr.ip() == sender.ip())
+}
+
 /// Sends one `M-SEARCH` and collects the replies.
 ///
 /// The search names `MediaRenderer` rather than `ssdp:all`. Both were measured
@@ -165,11 +177,12 @@ async fn search_on(
         let receives = sockets.iter().map(|socket| {
             Box::pin(async move {
                 let mut buffer = [0u8; MAX_REPLY_BYTES];
-                let (read, _) = socket.recv_from(&mut buffer).await?;
+                let (read, sender) = socket.recv_from(&mut buffer).await?;
                 Ok::<_, std::io::Error>(
                     std::str::from_utf8(&buffer[..read])
                         .ok()
-                        .and_then(parse_reply),
+                        .and_then(parse_reply)
+                        .filter(|announcement| describes_itself(announcement, sender)),
                 )
             })
         });
@@ -338,6 +351,11 @@ mod tests {
         USN: uuid:4D454930-0100-1000-8001-80C755DF58D9::\
         urn:schemas-upnp-org:device:MediaRenderer:1\r\n\r\n";
 
+    /// [`REPLY`] as the device answers from loopback, its own address.
+    fn loopback_reply() -> String {
+        REPLY.replace("192.168.1.59", "127.0.0.1")
+    }
+
     #[tokio::test]
     async fn searches_each_source_and_delivers_before_the_sweep_ends() {
         let receiver = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
@@ -352,7 +370,10 @@ mod tests {
                         .unwrap()
                         .unwrap();
                 sources.insert(source.ip());
-                receiver.send_to(REPLY.as_bytes(), source).await.unwrap();
+                receiver
+                    .send_to(loopback_reply().as_bytes(), source)
+                    .await
+                    .unwrap();
             }
             sources
         });
@@ -369,7 +390,7 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(first, parse_reply(REPLY).unwrap());
+        assert_eq!(first, parse_reply(&loopback_reply()).unwrap());
         assert!(
             !search.is_finished(),
             "receivers must appear before the reply window ends"
@@ -380,6 +401,25 @@ mod tests {
             events.recv().await.is_none(),
             "one receiver on two networks is still one receiver"
         );
+    }
+
+    #[tokio::test]
+    async fn a_reply_pointing_at_another_host_is_not_followed() {
+        let device = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let target = device.local_addr().unwrap();
+        let replies = tokio::spawn(async move {
+            let mut buffer = [0; 2048];
+            for _ in 0..2 {
+                let (_, source) = device.recv_from(&mut buffer).await.unwrap();
+                // From 127.0.0.1, naming 192.168.1.59.
+                device.send_to(REPLY.as_bytes(), source).await.unwrap();
+            }
+        });
+        let found = search_on(&[Ipv4Addr::new(127, 0, 0, 1)], target, None)
+            .await
+            .unwrap();
+        replies.await.unwrap();
+        assert!(found.is_empty(), "{found:?}");
     }
 
     #[test]

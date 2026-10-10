@@ -53,6 +53,9 @@ impl Endpoint {
             Some(at) => (&rest[..at], &rest[at..]),
             None => (rest, "/"),
         };
+        if !is_request_target(path) {
+            return None;
+        }
         // An SSDP `LOCATION` always carries a literal address, never a name to
         // resolve, so this parses rather than does DNS.
         let addr: SocketAddr = if authority.contains(':') {
@@ -70,10 +73,16 @@ impl Endpoint {
     /// Resolves a `controlURL` from a description against this endpoint.
     ///
     /// The value may be absolute, root-relative, or relative — all three occur
-    /// in the wild, and a Panasonic uses the root-relative form.
+    /// in the wild, and a Panasonic uses the root-relative form. An absolute
+    /// one must stay on this device: the description is the device's own
+    /// word, and following it to another address would let any host on the
+    /// network aim our requests at a third machine or a loopback service.
     pub fn resolve(&self, target: &str) -> Option<Self> {
         if target.starts_with("http://") {
-            return Self::parse(target);
+            return Self::parse(target).filter(|other| other.addr.ip() == self.addr.ip());
+        }
+        if !is_request_target(target) {
+            return None;
         }
         let path = if let Some(absolute) = target.strip_prefix('/') {
             format!("/{absolute}")
@@ -91,6 +100,14 @@ impl Endpoint {
     pub fn url(&self) -> String {
         format!("http://{}{}", self.authority, self.path)
     }
+}
+
+/// Whether `path` can go into a request line as it is.
+///
+/// It comes from a device: a space, CR or LF in it would end the request line
+/// early and let the device write the rest of our request.
+fn is_request_target(path: &str) -> bool {
+    path.bytes().all(|byte| byte.is_ascii_graphic())
 }
 
 /// Performs one request and returns the body.
@@ -455,9 +472,22 @@ mod tests {
             "/dmr/control_2"
         );
         assert_eq!(base.resolve("control_2").unwrap().path, "/dmr/control_2");
-        let absolute = base.resolve("http://10.0.0.9:80/ctl").unwrap();
-        assert_eq!(absolute.authority, "10.0.0.9:80");
+        let absolute = base.resolve("http://192.168.1.59:80/ctl").unwrap();
+        assert_eq!(absolute.authority, "192.168.1.59:80");
         assert_eq!(absolute.path, "/ctl");
+    }
+
+    #[test]
+    fn a_description_cannot_aim_requests_elsewhere() {
+        let base = Endpoint::parse("http://192.168.1.59:55000/dmr/ddd.xml").unwrap();
+        // Another host, loopback included, is not this device's service.
+        assert!(base.resolve("http://127.0.0.1:631/admin").is_none());
+        assert!(base.resolve("http://192.168.1.1/ctl").is_none());
+        // Whitespace would let the device finish our request line for us.
+        for target in ["ctl HTTP/1.1\r\nX: y", "/ctl\nX: y", "/a b"] {
+            assert!(base.resolve(target).is_none(), "{target:?}");
+        }
+        assert!(Endpoint::parse("http://10.0.0.1/a\nX: y").is_none());
     }
 
     #[test]
