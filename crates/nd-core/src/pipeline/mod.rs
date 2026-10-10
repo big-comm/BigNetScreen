@@ -333,7 +333,7 @@ impl Drop for PipelineGuard {
 
 #[cfg(test)]
 mod tests {
-    use super::source::escape_location;
+    use super::source::quoted;
     use super::*;
     use std::net::{IpAddr, Ipv4Addr};
 
@@ -344,7 +344,7 @@ mod tests {
         let path = std::env::temp_dir().join(format!("nd-eos-{}.wav", std::process::id()));
         let make = gst::parse::launch(&format!(
             "audiotestsrc num-buffers=10 ! wavenc ! filesink location={}",
-            escape_location(&path)
+            quoted(&path.to_string_lossy())
         ))
         .unwrap()
         .downcast::<gst::Pipeline>()
@@ -400,7 +400,7 @@ mod tests {
             };
             let description = format!(
                 "videotestsrc num-buffers=15 ! video/x-raw,width=320,height=240,framerate=30/1 ! vp8enc deadline=1 ! matroskamux name=mux ! filesink location={} {audio}",
-                escape_location(&path)
+                quoted(&path.to_string_lossy())
             );
             let make = gst::parse::launch(&description)
                 .unwrap()

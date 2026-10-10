@@ -11,37 +11,23 @@ use gstreamer as gst;
 
 use super::init;
 
-/// The device buffer asked of `pulsesrc`, in microseconds.
+/// The device buffer asked of `pulsesrc`, in milliseconds.
 ///
-/// The element's own default is 200 ms, documented as "the maximum latency
-/// that the source reports". A pipeline adopts the largest latency any of its
-/// sources reports and the screen capture reports almost none, so that default
-/// made the audio branch decide how late the picture was — reported from use
-/// as the screen arriving noticeably sooner with audio switched off, and
-/// confirmed by asking for less and watching the delay go.
-///
-/// Forty milliseconds, not the ten that was measured working. Ten is one read
-/// period — `latency-time` asks for ten and gets one buffer's worth of room,
-/// which is no headroom at all, and this already logs an overrun at startup
-/// with two hundred. It held on one fast machine; this ships to slow ones,
-/// where the cost is not latency but audio breaking up. Four periods is the
-/// usual floor for low-latency capture and still cuts the old default by five.
-///
-/// `BIGNETSCREEN_AUDIO_BUFFER_MS` overrides it either way.
+/// A pipeline adopts the largest latency any source reports, and `pulsesrc`
+/// reports its buffer: its 200 ms default made the sound decide how late the
+/// picture arrived. Ten milliseconds is a single read period and breaks up on
+/// slow machines; four periods is the usual floor for low-latency capture.
+/// `BIGNETSCREEN_AUDIO_BUFFER_MS` overrides it within 5..=500.
 const CAPTURE_AUDIO_BUFFER_MS: u32 = 40;
 
-fn capture_audio_buffer_us() -> u32 {
-    std::env::var("BIGNETSCREEN_AUDIO_BUFFER_MS")
+/// The ` buffer-time=` property, in the microseconds `pulsesrc` expects.
+fn audio_buffer_property() -> String {
+    let ms = std::env::var("BIGNETSCREEN_AUDIO_BUFFER_MS")
         .ok()
         .and_then(|value| value.parse::<u32>().ok())
         .unwrap_or(CAPTURE_AUDIO_BUFFER_MS)
-        .clamp(5, 500)
-        * 1_000
-}
-
-/// The `buffer-time=` property as `pulsesrc` spells it.
-fn audio_buffer_property() -> String {
-    format!(" buffer-time={}", capture_audio_buffer_us())
+        .clamp(5, 500);
+    format!(" buffer-time={}", ms * 1_000)
 }
 
 /// The capture element's name, so its negotiated caps can be read back.
@@ -50,38 +36,29 @@ pub const CAPTURE_SOURCE_NAME: &str = "capture";
 /// Pins the captured frames to square pixels.
 ///
 /// The compositor does not say what shape its pixels are, so `pipewiresrc`
-/// offers the whole range, `[1/2147483647, 2147483647/1]`. An exact target
-/// never noticed: its caps carry `pixel-aspect-ratio=1/1` and the scaler
-/// works from the dimensions. A *range* of sizes ([`VideoTarget::UpTo`]) is
-/// different — the scaler derives the output from the input aspect, and
-/// fixation had picked the range's minimum: `vapostproc` overflowed ("Error
-/// calculating the output scaled size") and `videoscale` settled on 2x2, so
-/// the DLNA and Cast mirroring sessions ended in "negotiation problem" three
-/// seconds after they started (measured on GNOME 49, through the portal and
-/// the direct Mutter backend alike).
+/// offers the whole range `[1/2147483647, 2147483647/1]`. Against a ranged
+/// size (`VideoTarget::UpTo`) the scaler derives the output from the input
+/// aspect, and fixation picks the range's minimum: `vapostproc` overflows and
+/// `videoscale` settles on 2x2, ending the session in a negotiation error.
 ///
-/// A plain `video/x-raw` filter would not do: caps without features mean
-/// system memory, and the frames arrive as DMA-BUFs. `(ANY)` keeps whatever
-/// memory the compositor offers and only settles the ratio. Not applied to
-/// files: a film's pixel shape is real and [`VideoTarget::Exact`] handles it.
+/// `(ANY)` keeps whatever memory the compositor offers: caps without features
+/// mean system memory, and the frames arrive as DMA-BUFs. Files do not get
+/// this filter, because a film's pixel shape is real.
 pub const SQUARE_PIXELS: &str = "capsfilter caps=\"video/x-raw(ANY),pixel-aspect-ratio=1/1\"";
 
 /// How long `pipewiresrc` waits before resending the last frame, in ms.
 ///
-/// One frame at 30 Hz, two at 60. It is the frame rate a still screen gets,
-/// because nothing else produces buffers when the compositor has nothing to
-/// repaint — at the 1000 ms it used to be, typing in a terminal updated the
-/// picture about once a second.
+/// A compositor repaints only what changed, so on a still screen this is the
+/// frame rate: one frame at 30 Hz keeps the encoder fed and a typed character
+/// on the receiver within a frame, at the price of duplicates a P-frame codes
+/// in a few bytes.
 ///
-/// `BIGNETSCREEN_CAPTURE_KEEPALIVE_MS` overrides it, and exists for an open
-/// question rather than for tuning. A resent frame is not a copy of the real
-/// one: `gstpipewiresrc` rewrites its timestamp to the clock, while a real
-/// frame keeps the one the compositor gave it. If those two disagree, a real
-/// frame arriving between resends can look older than what already went out —
-/// which would show up as exactly the reported symptom, a keystroke taking far
-/// too long to appear while a moving pointer stays fluid. Comparing 33 against
-/// a much larger value while typing is what tells that apart from the
-/// compositor simply not sending the damage.
+/// `BIGNETSCREEN_CAPTURE_KEEPALIVE_MS` overrides it within 1..=5000. A resent
+/// frame carries the clock's timestamp where a real one keeps the
+/// compositor's, so comparing values while typing tells a timestamp problem
+/// from a compositor that sends no damage.
+const CAPTURE_KEEPALIVE_MS: u32 = 33;
+
 fn capture_keepalive_ms() -> u32 {
     std::env::var("BIGNETSCREEN_CAPTURE_KEEPALIVE_MS")
         .ok()
@@ -90,161 +67,80 @@ fn capture_keepalive_ms() -> u32 {
         .unwrap_or(CAPTURE_KEEPALIVE_MS)
 }
 
-const CAPTURE_KEEPALIVE_MS: u32 = 33;
-
 /// Where the video frames come from.
-// Not `Copy`: a media file carries its path. Cloning a source is rare (once
-// per session) and cheap next to what the session then does.
 #[derive(Clone, Debug)]
 pub enum VideoSource {
-    /// The PipeWire stream handed over by the portal/Mutter.
+    /// The PipeWire stream handed over by the portal or Mutter.
     ///
-    /// `node_id` may **never** be missing: a `pipewiresrc` without `path`
-    /// picks an arbitrary node from the daemon instead of the one the capture
-    /// session authorised. `fd` is the portal's remote descriptor (mandatory
-    /// under Flatpak); with Mutter directly the node lives in the session's own
-    /// daemon and `fd` is `None`.
+    /// `fd` is the portal's PipeWire remote, which holds only the authorised
+    /// node (required under Flatpak); Mutter's node lives in the session's own
+    /// daemon and has no `fd`. See [`Self::description`] for how the node is
+    /// targeted.
     PipeWire {
         fd: Option<RawFd>,
+        /// The node ID, targeted only when the portal gave no serial.
         node_id: u32,
-        /// Prefer the non-reusable portal serial over the legacy node ID.
+        /// The portal's `pipewire-serial`, which unlike a node ID is never
+        /// reused for another object.
         serial: Option<u64>,
         /// The smallest buffer pool to accept from the producer.
         ///
-        /// `None` leaves `pipewiresrc`'s own default of one, which lets the
-        /// producer settle anywhere in the range it offers. KWin offers two to
-        /// four and prefers three (`screencaststream.cpp`), and where it lands
-        /// is decided once per stream and kept — which is why a new virtual
-        /// screen came out fluid or stuttering at random and stayed that way,
-        /// with no load to blame: measured at 9 frames a second on a bad one
-        /// and 36 on a good one, with the compositor at 7% of a core both
-        /// times.
-        ///
-        /// A small pool starves the compositor: it can only paint into a
-        /// buffer we have given back, and this pipeline holds one in
-        /// `videorate` by design. With two, that is half the pool.
-        ///
-        /// Only set where the producer's range is known from its source.
-        /// Asking for more than it offers is not clamped — it fails the
-        /// allocation outright, and a capture that will not start is worse
-        /// than one that sometimes stutters.
+        /// `None` leaves `pipewiresrc`'s default of one, and the producer
+        /// settles anywhere in the range it offers (KWin: two to four, decided
+        /// once per stream). A small pool starves the compositor, which can only
+        /// paint into a buffer given back while `videorate` holds one. Set it
+        /// only where the producer's range is known: asking for more than it
+        /// offers fails the allocation instead of being clamped.
         min_buffers: Option<u32>,
-        /// The size to demand from the producer, when it must not be left open.
+        /// The size a virtual monitor was announced at.
         ///
-        /// A **virtual monitor** has no panel to take a resolution from, so
-        /// Mutter leaves it to PipeWire to negotiate one — and creates the
-        /// screen at whatever comes out of that negotiation. With the size only
-        /// fixed downstream of the scaler, `pipewiresrc` accepted anything and
-        /// the monitor was created at **16x16**, then stretched to fill the
-        /// receiver. That is what a blurry picture looks like from here.
-        ///
-        /// `None` for a real monitor: its resolution is its own.
+        /// Not applied: forcing caps on `pipewiresrc` makes the authorised node
+        /// fail negotiation (see [`Self::description`]), so a virtual monitor
+        /// still takes whatever size PipeWire negotiates.
         size: Option<(u32, u32)>,
     },
-    /// A media file played **to** the receiver.
+    /// A media file or URL played to the receiver in place of the screen.
     ///
-    /// Miracast has no notion of "play this file": the receiver is a screen and
-    /// nothing else. So the file is decoded here and takes the place of the
-    /// screen capture — full screen on the receiver, without the desktop
-    /// showing. It costs a re-encode, which is the price of a protocol that
-    /// only knows how to be a display.
-    ///
-    /// The element is named `filedec` because [`AudioSource::MediaFile`] takes
-    /// the sound from the **same** decoder: decoding a film twice to split its
-    /// two tracks would double the cost of the thing that is already the most
-    /// expensive part.
+    /// A Miracast receiver is only a display, so the file is decoded and
+    /// re-encoded here. The decoder is named `filedec` because
+    /// [`AudioSource::MediaFile`] takes the sound from the same one rather than
+    /// decoding the file twice.
     Media {
         source: crate::media::MediaSource,
         kind: crate::media::MediaKind,
         /// What to write across a file that has no picture of its own.
         title: String,
     },
-    /// A test pattern (diagnostic, needing no capture session).
+    /// A still test pattern that needs no capture session.
     Test,
-    /// An **animated** pattern with a clock overlaid.
-    ///
-    /// Colour bars are static: on a remote screen there is no way to tell "live
-    /// picture" from "frozen picture". A moving ball plus a running clock
-    /// settle that at a glance — and the clock also allows measuring the delay
-    /// by comparing against the local screen.
+    /// A moving ball under a running clock: a frozen picture is told from a
+    /// live one at a glance, and the clock against the local screen gives
+    /// the delay.
     Diagnostic,
 }
 
 impl VideoSource {
     /// Is this local or online media, rather than a captured desktop?
     ///
-    /// The distinction decides pacing: a capture arrives at the pace of the
-    /// thing it captures, and a file arrives as fast as it can be read.
+    /// A capture arrives at the pace of what it captures; a file arrives as
+    /// fast as it can be read, so it is paced and its queues never drop data.
     pub fn is_media(&self) -> bool {
         matches!(self, VideoSource::Media { .. })
     }
 
-    /// The GStreamer fragment that produces this source's frames.
+    /// The description fragment that produces this source's raw frames.
     ///
-    /// Public so diagnostics can build a pipeline of their own — the
-    /// `cursor_probe` example needs raw video, where the production pipelines
-    /// all end in an encoder.
+    /// Public so a diagnostic (`nd-capture`'s `cursor_probe` example) can build
+    /// a pipeline of its own around the capture.
     pub fn description(&self) -> String {
         match self {
-            // `keepalive-time`/`resend-last` make the source re-emit the last
-            // frame when the screen is still. Without them the encoder starves
-            // and the receiver drops the session for lack of data.
             VideoSource::PipeWire {
                 fd,
                 node_id,
                 serial,
-                size,
                 min_buffers,
-            } => {
-                let pool = match min_buffers {
-                    Some(n) => format!(" min-buffers={n}"),
-                    None => String::new(),
-                };
-                let fd_prop = match fd {
-                    Some(fd) => format!("fd={fd} "),
-                    None => String::new(),
-                };
-                // No caps are forced on the producer, and that is deliberate.
-                //
-                // Demanding a size here looked like the way to stop Mutter
-                // creating a 16x16 virtual monitor. What it actually did was
-                // make the authorised node unable to satisfy the negotiation —
-                // and `pipewiresrc`, whose `autoconnect` defaults to true,
-                // then went looking for another video peer and found the
-                // laptop's **webcam**, which went out to the projector.
-                //
-                // Turning `autoconnect` off is not the fix either: with it off
-                // the element never connects at all (measured: zero frames,
-                // the monitor is never created). So the size stays negotiated,
-                // and sizing the virtual monitor properly is still open.
-                let _ = size;
-                // Do not fall back to a node ID when a serial was supplied:
-                // a recycled ID could point at a different producer. A plugin
-                // without target-object must fail, not capture another node.
-                let target = match serial {
-                    Some(serial) => format!("target-object={serial}"),
-                    None => format!("path={node_id}"),
-                };
-                // `keepalive-time` is the floor on the capture's frame rate: a
-                // compositor only repaints what changed, so when the screen is
-                // still this is the only thing producing buffers at all.
-                //
-                // It used to be 1000 ms, which is a floor of one frame per
-                // second — measured, and visible as exactly that: typing in a
-                // terminal changes a character cell, the compositor sends
-                // almost nothing, and the picture updated about once a second.
-                // One frame interval keeps the encoder fed and the receiver's
-                // clock moving, at the price of duplicate frames that a P-frame
-                // codes in a handful of bytes. The encoder was already emitting
-                // 60 fps against 13 arriving, so the duplicates are not new —
-                // only their timing is, and regular beats bursty.
-                format!(
-                    "pipewiresrc name={CAPTURE_SOURCE_NAME} {fd_prop}{target} \
-                     do-timestamp=true keepalive-time={keepalive} resend-last=true{pool} ! \
-                     {SQUARE_PIXELS}",
-                    keepalive = capture_keepalive_ms()
-                )
-            }
+                size: _,
+            } => pipewire_description(*fd, *node_id, *serial, *min_buffers),
             VideoSource::Test => "videotestsrc is-live=true".to_string(),
             VideoSource::Diagnostic => "videotestsrc is-live=true pattern=ball ! \
                  timeoverlay halignment=center valignment=center font-desc=\"Sans 48\" \
@@ -254,42 +150,77 @@ impl VideoSource {
                 source,
                 kind,
                 title,
-            } => {
-                let decoder = match source {
-                    crate::media::MediaSource::File(path) => format!(
-                        "filesrc location={} ! decodebin name=filedec",
-                        escape_location(path)
-                    ),
-                    crate::media::MediaSource::Url(uri) => format!(
-                        "uridecodebin uri={} name=filedec",
-                        escape_location(std::path::Path::new(uri))
-                    ),
-                };
-                match kind {
-                    // A photo is one frame. Sent once, a receiver expecting a
-                    // video stream shows nothing at all, so `imagefreeze`
-                    // repeats it for as long as the session lasts.
-                    crate::media::MediaKind::Photo => format!(
-                        "{decoder} \
-                         filedec. ! queue ! imagefreeze name=file-photo ! videoconvert"
-                    ),
-                    crate::media::MediaKind::Video => format!(
-                        "{decoder} \
-                         filedec. ! queue ! identity name=file-video-sync sync=true ! videoconvert"
-                    ),
-                    // A song has no picture. The decoder is still declared —
-                    // the audio branch takes its sound from it — and the screen
-                    // gets the one thing worth showing: what is playing.
-                    crate::media::MediaKind::Music => format!(
-                        "{decoder} \
-                         videotestsrc name=file-picture is-live=true pattern=black \
-                         ! textoverlay text={title} halignment=center valignment=center \
-                           font-desc=\"Sans 32\" ! videoconvert",
-                        title = escape_location(std::path::Path::new(title)),
-                    ),
-                }
-            }
+            } => media_description(source, *kind, title),
         }
+    }
+}
+
+/// `pipewiresrc` on exactly the node the capture session authorised.
+///
+/// No caps are forced on the producer. `pipewiresrc` defaults `autoconnect` to
+/// true, and when the authorised node could not satisfy forced caps it went
+/// looking for another video peer and streamed the laptop's webcam. Turning
+/// `autoconnect` off is not the fix either: the element then never connects.
+fn pipewire_description(
+    fd: Option<RawFd>,
+    node_id: u32,
+    serial: Option<u64>,
+    min_buffers: Option<u32>,
+) -> String {
+    let fd = fd.map(|fd| format!("fd={fd} ")).unwrap_or_default();
+    let pool = min_buffers
+        .map(|n| format!(" min-buffers={n}"))
+        .unwrap_or_default();
+    // With a serial there is no fallback to the node ID, which may have been
+    // recycled for another producer: a plugin without `target-object` fails.
+    let target = match serial {
+        Some(serial) => format!("target-object={serial}"),
+        None => format!("path={node_id}"),
+    };
+    // `resend-last` repeats the last frame after `keepalive-time` of a still
+    // screen, so the encoder and the receiver's clock keep moving.
+    format!(
+        "pipewiresrc name={CAPTURE_SOURCE_NAME} {fd}{target} \
+         do-timestamp=true keepalive-time={keepalive} resend-last=true{pool} ! \
+         {SQUARE_PIXELS}",
+        keepalive = capture_keepalive_ms()
+    )
+}
+
+/// A file's decoder and the picture branch that fits its kind.
+fn media_description(
+    source: &crate::media::MediaSource,
+    kind: crate::media::MediaKind,
+    title: &str,
+) -> String {
+    let decoder = match source {
+        crate::media::MediaSource::File(path) => format!(
+            "filesrc location={} ! decodebin name=filedec",
+            quoted(&path.to_string_lossy())
+        ),
+        crate::media::MediaSource::Url(uri) => {
+            format!("uridecodebin uri={} name=filedec", quoted(uri))
+        }
+    };
+    match kind {
+        // Sent once, a single frame shows nothing on a receiver expecting a
+        // stream, so `imagefreeze` repeats it for the whole session.
+        crate::media::MediaKind::Photo => {
+            format!("{decoder} filedec. ! queue ! imagefreeze name=file-photo ! videoconvert")
+        }
+        crate::media::MediaKind::Video => format!(
+            "{decoder} \
+             filedec. ! queue ! identity name=file-video-sync sync=true ! videoconvert"
+        ),
+        // A song has no picture; the decoder is still declared for the audio
+        // branch, and the screen shows what is playing.
+        crate::media::MediaKind::Music => format!(
+            "{decoder} \
+             videotestsrc name=file-picture is-live=true pattern=black \
+             ! textoverlay text={title} halignment=center valignment=center \
+               font-desc=\"Sans 32\" ! videoconvert",
+            title = quoted(title),
+        ),
     }
 }
 
@@ -298,8 +229,8 @@ impl VideoSource {
 pub enum AudioSource {
     /// Synthesised silence.
     ///
-    /// **Not optional on WFD:** the sink declares an A/V session and discards
-    /// the programme if it arrives with video alone.
+    /// Required on WFD: the sink declares an audio and video session and
+    /// discards a programme that arrives with video alone.
     Silence,
     /// System audio: an output's *monitor*, that is, what is playing through
     /// it. Which output is [`Monitor`].
@@ -319,9 +250,8 @@ pub enum AudioSource {
 /// Which output's monitor "the computer's sound" means.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Monitor {
-    /// The default output. Resolved by the server, so it follows the person
-    /// when they switch device mid-session, and it carries **everything** the
-    /// computer is playing.
+    /// The default output, resolved by the sound server so it follows a device
+    /// switch mid-session. Carries everything the computer plays.
     Default,
     /// The virtual card's monitor: only what an application was routed to it.
     Virtual,
@@ -330,8 +260,7 @@ pub enum Monitor {
 impl Monitor {
     fn device(self) -> &'static str {
         match self {
-            // Resolved by the server (PulseAudio, or PipeWire's compatibility
-            // mode) — there is nothing for us to query.
+            // Resolved by PulseAudio or PipeWire's Pulse server.
             Monitor::Default => "@DEFAULT_MONITOR@",
             Monitor::Virtual => crate::virtual_sink::MONITOR,
         }
@@ -347,11 +276,7 @@ impl Monitor {
 }
 
 impl AudioSource {
-    /// Picks the best source available on this machine.
-    ///
-    /// Falls back to silence if there is no way to capture system audio — the
-    /// audio branch is **not optional** on WFD (the sink discards a video-only
-    /// programme), so sending silence beats sending nothing.
+    /// [`Self::for_settings`] with the preferences in force.
     pub fn detect() -> Self {
         Self::for_settings(&crate::settings::current())
     }
@@ -359,19 +284,16 @@ impl AudioSource {
     /// The source the person asked for, or the closest thing this machine can
     /// actually produce.
     ///
-    /// Turning both off is a legitimate choice — sharing a screen in a meeting
-    /// where the sound would echo — and it still yields silence rather than no
-    /// audio branch at all.
+    /// Silence when `pulsesrc` is missing or both switches are off: the audio
+    /// branch always exists, because WFD discards a video-only programme.
     pub fn for_settings(settings: &crate::settings::Settings) -> Self {
         if init().is_err() || gst::ElementFactory::find("pulsesrc").is_none() {
             tracing::info!("no `pulsesrc`; the cast will go without audio");
             return AudioSource::Silence;
         }
         let volume = settings.mic_volume as f64 / 100.0;
-        // Mixing needs an element that may not be installed (`audiomixer` is in
-        // gst-plugins-base, but a minimal image can still lack it). Without it
-        // the honest answer is the system audio, not a pipeline that fails to
-        // build at the moment the person hits cast.
+        // A minimal image can lack `audiomixer`; sending the system audio
+        // alone beats a pipeline that fails to build.
         let can_mix = gst::ElementFactory::find("audiomixer").is_some();
         let monitor = Monitor::from_settings(settings);
         match (settings.system_audio, settings.microphone) {
@@ -385,46 +307,34 @@ impl AudioSource {
             (false, false) => AudioSource::Silence,
         }
     }
-}
 
-impl AudioSource {
+    /// The description fragment that produces this source's raw audio.
     pub fn description(&self) -> String {
         match self {
-            // `samplesperbuffer=480` = 10 ms at 48 kHz (the default, 1024, is
-            // 21 ms). The audio branch is what sets the pipeline's latency
-            // floor: measured in the field, 41 ms with the default.
+            // 480 samples is 10 ms at 48 kHz, against 21 ms for the default
+            // 1024; the audio branch sets the pipeline's latency floor.
             AudioSource::Silence => {
                 "audiotestsrc is-live=true wave=silence samplesperbuffer=480".to_string()
             }
-            // `provide-clock=false`: the screen capture sets the pace; a second
-            // clock in the pipeline fights with it.
-            //
-            // `buffer-time`: see `CAPTURE_AUDIO_BUFFER_MS`. This branch reports
-            // the pipeline's largest latency, so it decides when the picture
-            // arrives.
+            // `provide-clock=false`: the capture sets the pace, and a second
+            // clock would fight it. `buffer-time`: see `CAPTURE_AUDIO_BUFFER_MS`.
             AudioSource::System(monitor) => format!(
                 "pulsesrc device={device} provide-clock=false do-timestamp=true{buffer}",
                 device = monitor.device(),
                 buffer = audio_buffer_property()
             ),
-            // `@DEFAULT_SOURCE@`, the counterpart of `@DEFAULT_MONITOR@`: the
-            // input the person selected in their sound settings, following
-            // them when they plug a headset in mid-session.
+            // `@DEFAULT_SOURCE@` follows the input selected in the sound
+            // settings, including a headset plugged in mid-session.
             AudioSource::Mic { volume } => format!(
                 "pulsesrc device=@DEFAULT_SOURCE@ provide-clock=false do-timestamp=true{buffer} \
                  ! audioconvert ! audioresample ! volume volume={volume:.2}",
                 buffer = audio_buffer_property()
             ),
-            // Two live sources into one branch. What matters here:
-            //
-            // - `audiomixer` (not the deprecated `audiomixer`-less `adder`)
-            //   resamples and aligns by timestamp, so the two sources need not
-            //   agree on format or arrive in step;
-            // - both are converted to a common rate **before** the mixer, or it
-            //   refuses to link;
-            // - `latency=20000000` (20 ms) is how long the mixer waits for a
-            //   late source before outputting without it. The default, 0, makes
-            //   a microphone that hiccups drop the system audio with it.
+            // `audiomixer` aligns the two live sources by timestamp, but they
+            // must reach it at a common rate or it refuses to link.
+            // `latency=20000000` (20 ms) is how long it waits for a late
+            // source; with the default of 0 a microphone hiccup drops the
+            // system audio with it.
             AudioSource::SystemAndMic { monitor, volume } => format!(
                 "audiomixer name=micmix latency=20000000 \
                  pulsesrc device={device} provide-clock=false do-timestamp=true{buffer} \
@@ -436,11 +346,9 @@ impl AudioSource {
                 device = monitor.device(),
                 buffer = audio_buffer_property()
             ),
-            // Mixed with silence, and that is not belt and braces: a film with
-            // no audio track, and every photo, leaves this branch with nothing
-            // linked to it. The muxer would then wait for a track that never
-            // comes and the picture would never leave the machine. The mixer
-            // always has the silence to fall back on.
+            // A film without sound and every photo leave the decoder's audio
+            // unlinked, and a muxer would wait forever for that track; the
+            // mixed-in silence keeps the branch producing.
             AudioSource::MediaFile => "audiomixer name=filemix latency=20000000 ignore-inactive-pads=true \
                  audiotestsrc name=file-silence is-live=true wave=silence samplesperbuffer=480 \
                  ! audioconvert ! audioresample ! audio/x-raw,rate=48000,channels=2 ! filemix. \
@@ -452,30 +360,26 @@ impl AudioSource {
     }
 }
 
-/// Quotes a path for `gst_parse_launch`.
+/// Quotes a property value for `gst_parse_launch`.
 ///
-/// A file called `My Holiday - Côte d'Azur.mp4` would otherwise end the
-/// property at the first space and take the rest as elements. Backslashes and
-/// quotes are escaped first, so a name containing one cannot close the string
-/// and start writing pipeline of its own.
-pub(super) fn escape_location(path: &std::path::Path) -> String {
-    let text = path
-        .to_string_lossy()
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"");
+/// Unquoted, a file called `My Holiday.mp4` ends the property at the space
+/// and the rest is parsed as elements. Backslashes and quotes are escaped
+/// first, so a file name, URL or title cannot close the string and write
+/// pipeline of its own.
+pub(super) fn quoted(text: &str) -> String {
+    let text = text.replace('\\', "\\\\").replace('"', "\\\"");
     format!("\"{text}\"")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gst::prelude::*;
 
     #[test]
     fn a_still_screen_is_not_left_at_one_frame_per_second() {
         // A compositor repaints what changed, so on a still screen the only
-        // thing producing buffers is this timeout — it *is* the frame rate.
-        // At the 1000 ms it used to be, typing in a terminal changed one
-        // character cell and the picture updated about once a second.
+        // thing producing buffers is this timeout: it is the frame rate.
         const _: () = assert!(CAPTURE_KEEPALIVE_MS <= 1000 / 30);
         let description = VideoSource::PipeWire {
             fd: Some(7),
@@ -580,19 +484,11 @@ mod tests {
 
     #[test]
     fn the_capture_source_never_has_caps_forced_on_it() {
-        // A privacy regression seen in the field, and the reason this is a
-        // test rather than a comment.
-        //
-        // `pipewiresrc` documents `autoconnect` as "Attempt to find a peer to
-        // connect to" and defaults it to true. Forcing a size on the producer
-        // made the authorised node unable to negotiate, the element went
-        // looking for another video peer, and the laptop's **webcam** was
-        // streamed to the projector.
-        //
-        // The portal path is protected by its `fd`: that PipeWire remote holds
-        // only the node the user authorised, cameras included in nothing. The
-        // Mutter path has no `fd` and lives in the session's own daemon, where
-        // the camera does exist — so nothing may narrow the negotiation there.
+        // A privacy contract. `pipewiresrc` defaults `autoconnect` to true:
+        // when forced caps left the authorised node unable to negotiate, it
+        // found another video peer and streamed the webcam. The portal's `fd`
+        // holds only the authorised node, but the Mutter path has no `fd` and
+        // shares the session daemon with the camera.
         for size in [None, Some((1920, 1080))] {
             let desc = VideoSource::PipeWire {
                 fd: None,
@@ -610,6 +506,30 @@ mod tests {
                 desc.contains("path=42"),
                 "and the node must be named: {desc}"
             );
+        }
+    }
+
+    #[test]
+    fn a_hostile_file_name_stays_one_property_value() {
+        // GStreamer's own parser is the oracle: the value must come back whole,
+        // and no element named in it may be created.
+        init().unwrap();
+        for name in [
+            "My Holiday - Côte d'Azur.mp4",
+            r#"a" ! fakesink name=injected b="c.mp4"#,
+            r"back\slash\.mp4",
+        ] {
+            let description = format!("filesrc name=src location={} ! fakesink", quoted(name));
+            let pipeline = gst::parse::launch(&description)
+                .unwrap()
+                .downcast::<gst::Pipeline>()
+                .unwrap();
+            let location = pipeline
+                .by_name("src")
+                .unwrap()
+                .property::<Option<String>>("location");
+            assert_eq!(location.as_deref(), Some(name), "{description}");
+            assert!(pipeline.by_name("injected").is_none(), "{description}");
         }
     }
 }
