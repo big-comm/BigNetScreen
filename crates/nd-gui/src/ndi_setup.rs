@@ -47,7 +47,6 @@ pub async fn install() -> Result<(), String> {
         return Err("Automatic NDI installation is unavailable on this system".into());
     }
     // GNU timeout bounds the entire subprocess group, not just our wait.
-    // The installer is opt-in; no package-manager command is run by tests.
     let mut child = tokio::process::Command::new("/usr/bin/timeout")
         .args([
             "--signal=TERM",
@@ -107,16 +106,17 @@ async fn read_log_tail<R: tokio::io::AsyncRead + Unpin>(mut reader: R) -> std::i
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[tokio::test]
     async fn installer_output_is_drained_but_retained_memory_is_bounded() {
         let mut data = vec![b'a'; 1024 * 1024];
         data.extend_from_slice(b"END");
-        let tail = super::read_log_tail(data.as_slice()).await.unwrap();
+        let tail = read_log_tail(data.as_slice()).await.unwrap();
         assert_eq!(tail.len(), 4096);
         assert!(tail.ends_with(b"END"));
-        assert!(super::read_log_tail(&b""[..]).await.unwrap().is_empty());
+        assert!(read_log_tail(&b""[..]).await.unwrap().is_empty());
     }
-    use super::*;
 
     #[test]
     fn installer_targets_arch_family_only() {

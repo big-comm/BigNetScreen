@@ -975,7 +975,7 @@ fn scan_library(kind: MediaKind, cancel: &std::sync::atomic::AtomicBool) -> Vec<
     let Some(directory) = user_directory(kind) else {
         return Vec::new();
     };
-    let mut files: Vec<(std::time::SystemTime, MediaFile)> = std::fs::read_dir(&directory)
+    let files: Vec<(std::time::SystemTime, MediaFile)> = std::fs::read_dir(&directory)
         .into_iter()
         .flatten()
         .flatten()
@@ -995,17 +995,15 @@ fn scan_library(kind: MediaKind, cancel: &std::sync::atomic::AtomicBool) -> Vec<
                 .unwrap_or(std::time::UNIX_EPOCH);
             Some((modified, file))
         })
+        // Newest first, keeping only what the grid shows: the photo taken
+        // this afternoon is the one being shown to the room.
         .fold(Vec::with_capacity(GRID_LIMIT + 1), |mut newest, entry| {
             newest.push(entry);
             newest.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
             newest.truncate(GRID_LIMIT);
             newest
         });
-
-    // Newest first: the photo taken this afternoon is the one being shown to
-    // the room, not the oldest file in the folder.
-    files.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
-    files.into_iter().take(GRID_LIMIT).map(|(_, f)| f).collect()
+    files.into_iter().map(|(_, file)| file).collect()
 }
 
 /// The XDG folder for this kind of file, falling back to the home directory.

@@ -40,10 +40,6 @@ macro_rules! tr {
     ($msg:expr) => {
         gettextrs::gettext($msg)
     };
-    ($msg:expr, $($arg:tt)*) => {
-        format!("{}", gettextrs::gettext($msg))
-            .replacen("{}", &format!($($arg)*), 1)
-    };
 }
 
 /// Translates honouring plural forms.

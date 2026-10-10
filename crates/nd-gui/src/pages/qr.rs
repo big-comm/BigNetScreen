@@ -13,6 +13,20 @@ const QUIET_ZONE: usize = 2;
 
 /// The code for `text`, or `None` when the text does not fit a QR code.
 pub fn texture(text: &str) -> Option<gdk::Texture> {
+    let (side, rgba) = rgba(text)?;
+    let texture = gdk::MemoryTexture::new(
+        side as i32,
+        side as i32,
+        gdk::MemoryFormat::R8g8b8a8,
+        &glib::Bytes::from_owned(rgba),
+        side * 4,
+    );
+    Some(texture.into())
+}
+
+/// The code as RGBA rows `side` pixels wide, or `None` when `text` does not
+/// fit. Kept apart from [`texture`] because a texture needs a display.
+fn rgba(text: &str) -> Option<(usize, Vec<u8>)> {
     let code = qrcode::QrCode::new(text.as_bytes()).ok()?;
     let modules = code.width();
     let colors = code.to_colors();
@@ -30,22 +44,26 @@ pub fn texture(text: &str) -> Option<gdk::Texture> {
             }
         }
     }
-    let texture = gdk::MemoryTexture::new(
-        side as i32,
-        side as i32,
-        gdk::MemoryFormat::R8g8b8a8,
-        &glib::Bytes::from_owned(rgba),
-        side * 4,
-    );
-    Some(texture.into())
+    Some((side, rgba))
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn a_short_address_fits_and_a_novel_does_not() {
-        // Textures need a display; only the matrix logic is exercised here.
-        assert!(qrcode::QrCode::new(b"http://192.168.1.20:8080").is_ok());
-        assert!(qrcode::QrCode::new(vec![b'a'; 5000]).is_err());
+    fn modules_are_drawn_inside_a_white_quiet_zone() {
+        let (side, pixels) = rgba("http://192.168.1.20:8080").expect("short address fits");
+        let pixel = |x: usize, y: usize| &pixels[(y * side + x) * 4..(y * side + x) * 4 + 4];
+        let margin = QUIET_ZONE * SCALE;
+        assert_eq!(pixels.len(), side * side * 4);
+        assert_eq!(pixel(margin - 1, margin - 1), [0xff; 4], "quiet zone");
+        // Every code starts with a dark finder pattern in its top-left corner.
+        assert_eq!(pixel(margin, margin), [0, 0, 0, 0xff]);
+        assert_eq!(
+            pixel(margin + SCALE - 1, margin + SCALE - 1),
+            [0, 0, 0, 0xff]
+        );
+        assert!(rgba("a".repeat(5000).as_str()).is_none());
     }
 }
