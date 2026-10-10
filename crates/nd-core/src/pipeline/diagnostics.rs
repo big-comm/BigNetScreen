@@ -2,23 +2,21 @@
 //! frame is at each stage, and what the capture negotiated.
 //!
 //! Nothing here changes what is sent. The session crates install
-//! [`count_buffers`] on every run; the rest is behind environment switches
-//! because it costs a probe per buffer.
+//! [`count_buffers`] on every run; the per-buffer logging is behind
+//! environment switches.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use gst::prelude::*;
 use gstreamer as gst;
 
 use super::{CAPTURE_SOURCE_NAME, ENCODER_NAME};
 
-/// Asks the pipeline for the **minimum** latency it can sustain.
+/// Asks a playing pipeline for the minimum latency it can sustain, and logs it.
 ///
-/// Only meaningful once `Playing`. This is the number that separates
-/// "aggressive tuning" from "the sink goes black": setting anything below this
-/// minimum makes sinks drop late buffers. Querying it and logging the value is
-/// what keeps latency from being picked by guesswork again.
+/// A pipeline latency set below this makes sinks drop every buffer as late.
 pub fn query_min_latency_ms(pipeline: &gst::Pipeline) -> Option<u64> {
     let mut query = gst::query::Latency::new();
     if !pipeline.query(&mut query) {
@@ -35,57 +33,43 @@ pub fn query_min_latency_ms(pipeline: &gst::Pipeline) -> Option<u64> {
     Some(min_ms)
 }
 
-/// Counts the frames the encoder actually produces, once a second.
+/// Logs, once a second, the frame rate arriving from the compositor and
+/// leaving the encoder, when `BIGNETSCREEN_FPS_LOG=1`.
 ///
-/// The question it answers cannot be answered from the other end: a receiver
-/// showing a stuttering picture may be losing frames on the network, or may
-/// never have been sent them. This says which — it counts what left the
-/// encoder, before anything can be lost.
-///
-/// Enabled by `BIGNETSCREEN_FPS_LOG=1`, because it is a diagnostic and its
-/// place is in a bug report, not in every session's log.
+/// Both ends, because a stuttering receiver may be losing frames on the
+/// network or never have been sent them, and a still screen legitimately
+/// produces almost no capture buffers. Only the pair tells a quiet compositor
+/// from an encoder that cannot keep up.
 pub fn instrument_framerate(pipeline: &gst::Pipeline) {
-    use gst::prelude::*;
-
     if std::env::var("BIGNETSCREEN_FPS_LOG").as_deref() != Ok("1") {
         return;
     }
-    // Both ends of the pipeline, because they answer different questions. A
-    // compositor only repaints what changed, so a still screen legitimately
-    // produces almost no capture buffers — and `pipewiresrc`'s keepalive then
-    // resends the last one, which is a real frame rate of one per second. Told
-    // apart from an encoder that cannot keep up only by counting both.
-    for (element, pad, label) in [
-        (
-            CAPTURE_SOURCE_NAME,
-            "src",
-            "frames arriving from the compositor",
-        ),
-        (ENCODER_NAME, "src", "frames leaving the encoder"),
+    for (element, label) in [
+        (CAPTURE_SOURCE_NAME, "frames arriving from the compositor"),
+        (ENCODER_NAME, "frames leaving the encoder"),
     ] {
         let Some(pad) = pipeline
             .by_name(element)
-            .and_then(|element| element.static_pad(pad))
+            .and_then(|element| element.static_pad("src"))
         else {
             tracing::debug!(element, "not in this pipeline; frame rate not instrumented");
             continue;
         };
-        let frames = std::sync::atomic::AtomicU64::new(0);
-        let since = std::sync::Mutex::new(std::time::Instant::now());
+        let frames = AtomicU64::new(0);
+        let since = Mutex::new(Instant::now());
         pad.add_probe(gst::PadProbeType::BUFFER, move |_, info| {
             if let Some(gst::PadProbeData::Buffer(buffer)) = &info.data {
-                let bytes = buffer.size() as u64;
-                let count = frames.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                let mut mark = since.lock().unwrap_or_else(|e| e.into_inner());
+                let count = frames.fetch_add(1, Ordering::Relaxed) + 1;
+                let mut mark = since.lock().unwrap_or_else(PoisonError::into_inner);
                 let elapsed = mark.elapsed();
-                if elapsed >= std::time::Duration::from_secs(1) {
+                if elapsed >= Duration::from_secs(1) {
                     tracing::info!(
                         fps = format!("{:.1}", count as f64 / elapsed.as_secs_f64()),
-                        last_frame_bytes = bytes,
+                        last_frame_bytes = buffer.size(),
                         "{label}"
                     );
-                    frames.store(0, std::sync::atomic::Ordering::Relaxed);
-                    *mark = std::time::Instant::now();
+                    frames.store(0, Ordering::Relaxed);
+                    *mark = Instant::now();
                 }
             }
             gst::PadProbeReturn::Ok
@@ -95,17 +79,10 @@ pub fn instrument_framerate(pipeline: &gst::Pipeline) {
 
 /// Counts buffers leaving a named element, for as long as the pipeline lives.
 ///
-/// Two atomics, installed unconditionally, because the one question every
-/// report of a slow picture turns on — were those frames ever made? — took a
-/// special run with `BIGNETSCREEN_FPS_LOG=1` to answer, three times over. A
-/// compositor delivering 7 frames a second and an encoder keeping up with it
-/// look identical from the far end of the pipeline.
-///
-/// `None` when the element is not in this pipeline, which is normal: not every
-/// path has a capture.
+/// Cheap enough to install on every session, so a report of a slow picture
+/// already says whether the frames were ever made. `None` when the element is
+/// not in this pipeline: not every path has a capture.
 pub fn count_buffers(pipeline: &gst::Pipeline, element: &str) -> Option<Arc<AtomicU64>> {
-    use gst::prelude::*;
-
     let pad = pipeline.by_name(element)?.static_pad("src")?;
     let count = Arc::new(AtomicU64::new(0));
     let counter = count.clone();
@@ -116,6 +93,10 @@ pub fn count_buffers(pipeline: &gst::Pipeline, element: &str) -> Option<Arc<Atom
     Some(count)
 }
 
+/// Where `pts` falls on the pad's running-time line, through its SEGMENT.
+///
+/// Encoders may offset timestamps by hours, so a raw PTS is not comparable
+/// with the clock.
 fn pad_running_time(pad: &gst::Pad, pts: gst::ClockTime) -> Option<gst::ClockTime> {
     let event = pad.sticky_event::<gst::event::Segment>(0)?;
     event
@@ -124,15 +105,28 @@ fn pad_running_time(pad: &gst::Pad, pts: gst::ClockTime) -> Option<gst::ClockTim
         .to_running_time(pts)
 }
 
-/// Measure sender-side frame age using each pad's SEGMENT, not raw encoder PTS.
-/// This diagnostic excludes network transit and receiver buffering/decoding.
-pub fn instrument_latency(pipeline: &gst::Pipeline) {
-    use gst::prelude::*;
+/// How long ago, in running time, the buffer passing `pad` was captured.
+fn frame_age(pad: &gst::Pad, buffer: &gst::BufferRef) -> Option<gst::ClockTime> {
+    let parent = pad.parent_element()?;
+    let now = parent.clock()?.time().checked_sub(parent.base_time()?)?;
+    now.checked_sub(pad_running_time(pad, buffer.pts()?)?)
+}
 
-    // A probe on **every** element, not just the sink: knowing the total is
-    // 83 ms says nothing about where those milliseconds are born. With the
-    // frame's age at each stage's output, the step between two neighbours is
-    // the cost of that stage.
+/// Frame ages seen at one element since the last report.
+struct AgeWindow {
+    since: Instant,
+    frames: u64,
+    total_ms: u64,
+    worst_ms: u64,
+}
+
+/// Logs every five seconds how old frames are as they leave each element,
+/// when `BIGNETSCREEN_LATENCY` is set.
+///
+/// Every element gets a probe, so the step between two neighbours is the cost
+/// of that stage. The ages cover this machine only: no network transit and no
+/// receiver buffering.
+pub fn instrument_latency(pipeline: &gst::Pipeline) {
     let mut found = 0;
     for element in pipeline.iterate_elements().into_iter().flatten() {
         let Some(pad) = element
@@ -142,51 +136,35 @@ pub fn instrument_latency(pipeline: &gst::Pipeline) {
             continue;
         };
         let name = element.name().to_string();
-        let state = std::sync::Mutex::new((std::time::Instant::now(), 0u64, 0u64, 0u64));
-
+        let window = Mutex::new(AgeWindow {
+            since: Instant::now(),
+            frames: 0,
+            total_ms: 0,
+            worst_ms: 0,
+        });
         pad.add_probe(gst::PadProbeType::BUFFER, move |pad, info| {
-            let Some(buffer) = info.buffer() else {
+            let Some(age) = info.buffer().and_then(|buffer| frame_age(pad, buffer)) else {
                 return gst::PadProbeReturn::Ok;
             };
-            let Some(pts) = buffer.pts() else {
-                return gst::PadProbeReturn::Ok;
-            };
-            // Frame age = now (running time) − the frame's running time.
-            let Some(parent) = pad.parent_element() else {
-                return gst::PadProbeReturn::Ok;
-            };
-            let (Some(clock), Some(base)) = (parent.clock(), parent.base_time()) else {
-                return gst::PadProbeReturn::Ok;
-            };
-            let Some(now) = clock.time().checked_sub(base) else {
-                return gst::PadProbeReturn::Ok;
-            };
-            let Some(running_time) = pad_running_time(pad, pts) else {
-                return gst::PadProbeReturn::Ok;
-            };
-            let Some(age) = now.checked_sub(running_time) else {
-                return gst::PadProbeReturn::Ok;
-            };
-
             let ms = age.mseconds();
-            if let Ok(mut guard) = state.lock() {
-                let (ref mut last, ref mut n, ref mut sum, ref mut worst) = *guard;
-                *n += 1;
-                *sum += ms;
-                *worst = (*worst).max(ms);
-                if last.elapsed() >= std::time::Duration::from_secs(5) {
-                    tracing::info!(
-                        sink = %name,
-                        mean_ms = *sum / (*n).max(1),
-                        worst_ms = *worst,
-                        frames = *n,
-                        "latency inside the pipeline (no network, no receiver)"
-                    );
-                    *last = std::time::Instant::now();
-                    *n = 0;
-                    *sum = 0;
-                    *worst = 0;
-                }
+            let mut window = window.lock().unwrap_or_else(PoisonError::into_inner);
+            window.frames += 1;
+            window.total_ms += ms;
+            window.worst_ms = window.worst_ms.max(ms);
+            if window.since.elapsed() >= Duration::from_secs(5) {
+                tracing::info!(
+                    sink = %name,
+                    mean_ms = window.total_ms / window.frames,
+                    worst_ms = window.worst_ms,
+                    frames = window.frames,
+                    "latency inside the pipeline (no network, no receiver)"
+                );
+                *window = AgeWindow {
+                    since: Instant::now(),
+                    frames: 0,
+                    total_ms: 0,
+                    worst_ms: 0,
+                };
             }
             gst::PadProbeReturn::Ok
         });
@@ -195,22 +173,15 @@ pub fn instrument_latency(pipeline: &gst::Pipeline) {
     tracing::debug!(sinks = found, "latency probes installed");
 }
 
-/// What the capture settled on, and whether it could have done better.
+/// The capture's negotiated caps, and what it offers when asked for a DMA-BUF.
 ///
-/// Returns the negotiated caps and what the source says when asked for a GPU
-/// buffer specifically.
-///
-/// The two answer different questions. Negotiated caps of plain `video/x-raw`
-/// mean the frame is in system memory, but not why: the compositor may offer
-/// nothing else, or our own scaler and converter may have forced the download
-/// by being unable to accept a GPU buffer. Asking with a `memory:DMABuf` filter
-/// separates those — `pipewiresrc` builds that feature from the modifiers the
-/// producer advertises (`gstpipewireformat.c`), so an empty answer means there
-/// is nothing to import and a non-empty one means importing it is available to
-/// be taken.
+/// Plain `video/x-raw` caps say the frame is in system memory but not why:
+/// the compositor may offer nothing else, or the scaler may have forced the
+/// download. `pipewiresrc` builds the `memory:DMABuf` feature from the
+/// modifiers the producer advertises (`gstpipewireformat.c`), so `"none"`
+/// means there is nothing to import and anything else means an import was
+/// available.
 pub fn capture_memory(pipeline: &gst::Pipeline) -> Option<(String, String)> {
-    use gst::prelude::*;
-
     let pad = pipeline.by_name(CAPTURE_SOURCE_NAME)?.static_pad("src")?;
     let negotiated = pad.current_caps()?.to_string();
     let dmabuf = gst::Caps::builder("video/x-raw")
@@ -232,7 +203,6 @@ mod tests {
 
     #[test]
     fn diagnostics_map_the_encoder_pts_offset_through_its_segment() {
-        use gst::prelude::*;
         init().unwrap();
         let pad = gst::Pad::builder(gst::PadDirection::Src).build();
         pad.set_active(true).unwrap();
