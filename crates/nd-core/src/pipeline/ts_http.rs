@@ -107,19 +107,10 @@ pub fn ts_http_pipeline_description(
         },
         src = source.description(),
         convert = cfg.convert_scale(target),
-        vqueue = if source.is_media() {
-            cfg.video_queue().replace("leaky=downstream", "leaky=no")
-        } else {
-            cfg.video_queue()
-        },
+        vqueue = cfg.video_queue(source),
         enc = cfg.encoder_stage(false),
         sink = TS_HTTP_SINK_NAME,
-        audio = if source.is_media() {
-            cfg.audio_branch("mux.")
-                .replace("leaky=downstream", "leaky=no")
-        } else {
-            cfg.audio_branch("mux.")
-        },
+        audio = cfg.audio_branch(source, "mux."),
     )
 }
 

@@ -88,11 +88,7 @@ alignment=au ! \
         } else {
             cfg.convert_scale(VideoTarget::UpTo(ceiling))
         },
-        vqueue = if source.is_media() {
-            cfg.video_queue().replace("leaky=downstream", "leaky=no")
-        } else {
-            cfg.video_queue()
-        },
+        vqueue = cfg.video_queue(source),
         enc = cfg.encoder_stage(gpu),
         video_sink = MIRROR_VIDEO_SINK,
         audio = audio,

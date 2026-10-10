@@ -127,11 +127,7 @@ pub fn wfd_pipeline_description(
         // Wi-Fi Display agreed a mode with the sink in M3/M4; sending any
         // other size is a mode it never accepted.
         convert = cfg.convert_scale(VideoTarget::Exact((cfg.width, cfg.height))),
-        vqueue = if source.is_media() {
-            cfg.video_queue().replace("leaky=downstream", "leaky=no")
-        } else {
-            cfg.video_queue()
-        },
+        vqueue = cfg.video_queue(source),
         enc = cfg.encoder_stage(false),
         video_pid = WFD_VIDEO_PID,
         // A screen produces frames at the pace of the screen, so waiting on
@@ -147,12 +143,7 @@ pub fn wfd_pipeline_description(
         ip = transport.sink_ip,
         port = transport.rtp_port,
         local = transport.local_rtp_port,
-        audio = if source.is_media() {
-            cfg.audio_branch(&format!("mux.sink_{}", WFD_AUDIO_PID))
-                .replace("leaky=downstream", "leaky=no")
-        } else {
-            cfg.audio_branch(&format!("mux.sink_{}", WFD_AUDIO_PID))
-        },
+        audio = cfg.audio_branch(source, &format!("mux.sink_{}", WFD_AUDIO_PID)),
     )
 }
 

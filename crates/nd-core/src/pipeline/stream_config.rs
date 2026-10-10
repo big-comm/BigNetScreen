@@ -5,7 +5,7 @@
 //! negotiated and the person's preferences (`crate::settings`); the path
 //! builders in `wfd`, `mirror` and `ts_http` read every stage from it.
 
-use super::{AudioSource, H264Encoder, H264Profile};
+use super::{AudioSource, H264Encoder, H264Profile, VideoSource};
 
 /// A cast session's parameters (negotiated resolution/fps/bitrate).
 #[derive(Clone, Copy, Debug)]
@@ -274,22 +274,24 @@ impl StreamConfig {
         }
     }
 
-    pub(super) fn video_queue(&self) -> String {
+    pub(super) fn video_queue(&self, source: &VideoSource) -> String {
         format!(
             "queue max-size-buffers={b} max-size-time={t}000000 max-size-bytes=0 \
-             leaky=downstream",
+             leaky={leaky}",
             b = VIDEO_QUEUE_BUFFERS,
             t = VIDEO_QUEUE_MS,
+            leaky = leaky(source),
         )
     }
 
     /// The audio branch's queue on the muxed path.
-    pub(super) fn audio_queue(&self) -> String {
+    pub(super) fn audio_queue(&self, source: &VideoSource) -> String {
         format!(
             "queue max-size-buffers={b} max-size-time={t}000000 max-size-bytes=0 \
-             leaky=downstream",
+             leaky={leaky}",
             b = AUDIO_QUEUE_BUFFERS,
             t = AUDIO_QUEUE_MS,
+            leaky = leaky(source),
         )
     }
 
@@ -313,14 +315,27 @@ impl StreamConfig {
     ///
     /// `mux_pad` is `"mux."` for Chromecast (automatic PID) and
     /// `"mux.sink_4352"` for WFD, which requires PID 0x1100.
-    pub(super) fn audio_branch(&self, mux_pad: &str) -> String {
+    pub(super) fn audio_branch(&self, source: &VideoSource, mux_pad: &str) -> String {
         format!(
             "{src} ! audioconvert ! audioresample ! \
              audio/x-raw,rate=48000,channels=2 ! {queue} ! \
              avenc_aac bitrate=128000 ! aacparse ! {mux_pad}",
             src = self.audio.description(),
-            queue = self.audio_queue(),
+            queue = self.audio_queue(source),
         )
+    }
+}
+
+/// What a queue in front of the encoder or the muxer does when it is full.
+///
+/// A capture drops its oldest buffer: a stale frame is worth less than the
+/// next one. A file is decoded faster than it plays, so its queues hold the
+/// decoder back instead of throwing the film away.
+fn leaky(source: &VideoSource) -> &'static str {
+    if source.is_media() {
+        "no"
+    } else {
+        "downstream"
     }
 }
 
@@ -418,7 +433,10 @@ mod tests {
 
         // The generated description has to reflect both choices.
         let cfg = StreamConfig::default();
-        assert!(cfg.audio_queue().contains("leaky=downstream"));
+        assert!(
+            cfg.audio_queue(&VideoSource::Test)
+                .contains("leaky=downstream")
+        );
         assert!(!cfg.mirror_audio_queue().contains("leaky"));
     }
 
