@@ -32,7 +32,7 @@ distributions, sandboxed apps and systems without Polkit/pacman receive manual
 installation guidance and a link to the official NDI SDK page instead.
 
 Avahi is used for discovery.
-The package install hook enables and starts `avahi-daemon.service` for
+The package install and upgrade hook enables and starts `avahi-daemon.service` for
 network discovery. A masked service is not unmasked; installation reports a
 warning if service configuration fails.
 
