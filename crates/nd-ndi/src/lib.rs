@@ -1,4 +1,9 @@
-//! Open-source NDI sender integration. The vendor runtime is an optional system dependency.
+//! Publishing the screen as an NDI source.
+//!
+//! The open-source GStreamer plugin in `vendor/gst-plugin-ndi` is compiled in
+//! and registered statically; the proprietary runtime it loads (`libndi`) is
+//! an optional system dependency, checked by [`runtime_check`] before any
+//! capture starts. See `docs/ndi.md`.
 
 use std::sync::{Mutex, OnceLock};
 
@@ -63,11 +68,6 @@ pub fn runtime_check() -> RuntimeCheck {
             RuntimeCheck::Ready { version }
         }
     }
-}
-
-/// `true` when publishing can be attempted (see [`runtime_check`]).
-pub fn runtime_available() -> bool {
-    matches!(runtime_check(), RuntimeCheck::Ready { .. })
 }
 
 /// How often the sink is asked how many receivers are connected.
@@ -272,13 +272,13 @@ mod tests {
     #[ignore = "Requires an absent or incompatible NDI runtime"]
     fn missing_runtime_is_reported_before_capture() {
         assert!(available());
-        assert!(!runtime_available());
+        assert!(!matches!(runtime_check(), RuntimeCheck::Ready { .. }));
     }
 
     #[test]
     #[ignore = "Requires a compatible NDI runtime"]
     fn installed_runtime_passes_preflight() {
-        assert!(runtime_available());
+        assert!(matches!(runtime_check(), RuntimeCheck::Ready { .. }));
     }
 
     #[test]
@@ -441,9 +441,9 @@ mod tests {
 
     #[test]
     fn captured_frames_pass_through_in_their_own_format() {
-        // The screen arrives as BGRx; forcing UYVY cost a conversion pass per
-        // frame. With the sink's formats listed, `videoconvert` must leave a
-        // BGRx stream alone and only convert what the sink cannot take.
+        // The screen arrives as BGRx, and forcing UYVY would cost a conversion
+        // pass per frame. With the sink's formats listed, `videoconvert` must
+        // leave a BGRx stream alone and only convert what the sink cannot take.
         pipeline::init().unwrap();
         for (source_format, expected) in [("BGRx", "BGRx"), ("NV12", "NV12"), ("YUY2", "UYVY")] {
             let description = video_branch(&pipeline::VideoSource::Test, (320, 240), 30).replace(
@@ -477,8 +477,8 @@ mod tests {
         }
     }
 
-    /// CPU spent per frame with the old forced-UYVY branch versus the native
-    /// pass-through, both feeding a real NDI sender (so the runtime's own
+    /// CPU spent per frame converting to UYVY versus passing the captured
+    /// format through, both feeding a real NDI sender (so the runtime's own
     /// compression is part of the measurement). Prints the numbers; run with
     /// `--ignored --nocapture`.
     #[test]
@@ -531,8 +531,8 @@ mod tests {
         assert!(available());
         let frames = 600;
         for _ in 0..2 {
-            run("forced UYVY (old)", "UYVY", frames);
-            run("native BGRx (new)", NATIVE_FORMATS, frames);
+            run("forced UYVY", "UYVY", frames);
+            run("native BGRx", NATIVE_FORMATS, frames);
         }
     }
 
