@@ -99,7 +99,7 @@ fn parse_response(status: u32, mut properties: Properties) -> Result<StartedStre
         .map(u64::try_from)
         .transpose()
         .map_err(error)?;
-    if serial == Some(0) || (serial.is_none() && (node_id == 0 || node_id == u32::MAX)) {
+    if !crate::is_valid_pipewire_target(node_id, serial) {
         return Err(error("portal returned an invalid PipeWire target"));
     }
     let size = stream

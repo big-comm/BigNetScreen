@@ -144,16 +144,36 @@ impl Dispatch<Stream, ()> for StreamState {
             StreamEvent::Serial {
                 object_serial_hi,
                 object_serial_low,
-            } => {
-                state.serial =
-                    Some((u64::from(object_serial_hi) << 32) | u64::from(object_serial_low))
-            }
+            } => state.serial = Some(object_serial(object_serial_hi, object_serial_low)),
             StreamEvent::Failed { error } => state.failed = Some(error),
             // The compositor dropped the screen. `stop` is what closes our
             // side; there is nothing to undo here.
             StreamEvent::Closed => {}
         }
     }
+}
+
+/// The protocol splits the 64-bit PipeWire serial into two `uint` halves.
+fn object_serial(high: u32, low: u32) -> u64 {
+    (u64::from(high) << 32) | u64::from(low)
+}
+
+/// The PipeWire node and serial KWin announced, or why there is none.
+fn announced_target(state: StreamState) -> Result<(u32, Option<u64>)> {
+    if let Some(error) = state.failed {
+        return Err(NdError::Capture(format!(
+            "KWin refused the screen: {error}"
+        )));
+    }
+    let node = state
+        .node
+        .ok_or_else(|| NdError::Capture("KWin announced no PipeWire node".into()))?;
+    if !crate::is_valid_pipewire_target(node, state.serial) {
+        return Err(NdError::Capture(
+            "KWin announced an invalid PipeWire target".into(),
+        ));
+    }
+    Ok((node, state.serial))
 }
 
 /// A live virtual screen. Dropping the connection destroys it in KWin.
@@ -239,15 +259,8 @@ fn open_virtual_screen(width: u32, height: u32) -> Result<(ActiveStream, u32, Op
         }
     }
 
-    if let Some(error) = state.failed {
-        return Err(NdError::Capture(format!(
-            "KWin refused the screen: {error}"
-        )));
-    }
-    let node = state
-        .node
-        .expect("loop only exits with a node or a failure");
-    Ok((ActiveStream { connection, stream }, node, state.serial))
+    let (node, serial) = announced_target(state)?;
+    Ok((ActiveStream { connection, stream }, node, serial))
 }
 
 #[async_trait]
@@ -348,10 +361,35 @@ mod tests {
 
     #[test]
     fn the_serial_event_rebuilds_a_64_bit_value_from_its_halves() {
-        let mut state = StreamState::default();
-        // The dispatch is what the compositor calls; exercise the same maths.
-        let (hi, low) = (0x0000_0001u32, 0xffff_fffeu32);
-        state.serial = Some((u64::from(hi) << 32) | u64::from(low));
-        assert_eq!(state.serial, Some(0x0000_0001_ffff_fffe));
+        assert_eq!(object_serial(1, 0xffff_fffe), 0x0000_0001_ffff_fffe);
+    }
+
+    fn announced(node: Option<u32>, serial: Option<u64>) -> Result<(u32, Option<u64>)> {
+        announced_target(StreamState {
+            node,
+            serial,
+            failed: None,
+        })
+    }
+
+    #[test]
+    fn a_stream_is_captured_only_by_a_valid_target() {
+        let serial = u64::from(u32::MAX) + 7;
+        assert_eq!(
+            announced(Some(42), Some(serial)).unwrap(),
+            (42, Some(serial))
+        );
+        assert_eq!(announced(Some(42), None).unwrap(), (42, None));
+        // A malformed serial fails closed rather than falling back to the node.
+        assert!(announced(Some(42), Some(0)).is_err());
+        assert!(announced(Some(0), None).is_err());
+        assert!(announced(Some(u32::MAX), None).is_err());
+        assert!(announced(None, Some(serial)).is_err());
+        let refused = StreamState {
+            node: Some(42),
+            serial: Some(serial),
+            failed: Some("no".into()),
+        };
+        assert!(announced_target(refused).is_err());
     }
 }

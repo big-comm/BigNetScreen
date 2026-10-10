@@ -506,6 +506,19 @@ pub fn is_sandboxed() -> bool {
     std::path::Path::new("/.flatpak-info").exists() || std::env::var_os("FLATPAK_ID").is_some()
 }
 
+/// Can a capture target this PipeWire object?
+///
+/// A present serial decides alone, and 0 never names a stream, so a malformed
+/// one fails closed instead of falling back to the reusable node id. Without
+/// a serial, node 0 (the PipeWire core) and `u32::MAX` (`SPA_ID_INVALID`) name
+/// no stream either.
+pub(crate) fn is_valid_pipewire_target(node_id: u32, serial: Option<u64>) -> bool {
+    match serial {
+        Some(serial) => serial != 0,
+        None => node_id != 0 && node_id != u32::MAX,
+    }
+}
+
 /// The GStreamer source fragment for a PipeWire node in the session's own
 /// daemon (no descriptor to pass).
 pub(crate) fn pipeline_source(node_id: u32) -> String {
