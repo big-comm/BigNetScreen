@@ -25,7 +25,7 @@ jobs:
             gtk4 libadwaita \
             gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad \
             gst-plugins-ugly gst-libav gst-plugin-pipewire \
-            pipewire libnice networkmanager gettext
+            gst-plugin-rswebrtc pipewire libnice networkmanager gettext
 
       - uses: actions/checkout@v7
 

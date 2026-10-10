@@ -12,9 +12,6 @@ publish.workspace = true
 [dependencies]
 nd-core.workspace = true
 gstreamer.workspace = true
-# The high-level WebRTC elements (`whepserversink`), linked statically like the
-# NDI plugin. Only the WHEP signaller is built.
-gst-plugin-webrtc = { version = "0.15.3", default-features = false, features = ["static", "whep"] }
 async-trait.workspace = true
 futures.workspace = true
 tokio.workspace = true
@@ -29,7 +26,3 @@ bytes = "1"
 [dev-dependencies]
 tracing-subscriber.workspace = true
 tokio = { workspace = true, features = ["signal"] }
-
-# Imported under its library name gstrswebrtc for static plugin registration.
-[package.metadata.cargo-machete]
-ignored = ["gst-plugin-webrtc"]

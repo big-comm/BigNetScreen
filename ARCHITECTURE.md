@@ -69,7 +69,7 @@ Cast STOP addresses only the session this sender launched. Heartbeat continues w
 | Cast HTTP | H.264/AAC MPEG-TS, token/IP-scoped HTTP server, Default Media Receiver prebuffering. |
 | Miracast | Negotiated mode/profile, WFD-specific MPEG-TS PIDs and RTSP keepalives. |
 | DLNA | UPnP AVTransport and MPEG-TS over HTTP; receiver profile and playback buffering differ from Cast. |
-| WebRTC | Bundled Rust plugin plus system webrtcbin, ICE and DTLS-SRTP; local PIN/WHEP proxy. |
+| WebRTC | System `whepserversink` (gst-plugins-rs) over webrtcbin, ICE and DTLS-SRTP; local PIN/WHEP proxy. |
 | NDI | Tracked plugin loads an optional external proprietary runtime. |
 
 Encoded PTS is not necessarily running time. Segment conversion and coherent RTCP clock mapping are required; encoder offsets can be extremely large. Queue limits, frame-ID windows and pacing bound local backlog. Cast adjusts encoder bitrate from retransmissions and dropped frames, within negotiated limits; this is not a bandwidth estimate or proof of sustained FPS. The GUI's TCP response measurement is network response, not Wi-Fi signal strength or end-to-end picture delay.

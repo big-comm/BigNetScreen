@@ -8,7 +8,7 @@ Check its Cast/Screen Mirroring mode, the selected protocol and whether automati
 
 Record which path is active: Cast mirroring, Cast HTTP, Miracast, DLNA, browser or NDI. For Cast HTTP and DLNA, seconds of receiver buffering are possible. Try a modest resolution and compare a still desktop with motion. Record the negotiated resolution/FPS and encoder; available CPU/GPU capacity alone does not prove network/decoder capacity. Test the same receiver after Stop and a new connection.
 
-A missing GStreamer factory is a dependency problem. WebRTC needs `nicesink` and `nicesrc` from the GStreamer libnice plugin, not just the shared libnice library. NDI needs its separate runtime; [NDI setup](docs/ndi.md) describes that optional path. Portal/virtual-screen failures need the desktop, compositor and portal backend versions.
+A missing GStreamer factory is a dependency problem. WebRTC needs `whepserversink` from the gst-plugins-rs WebRTC plugin (`gst-plugin-rswebrtc` on Arch) and `nicesink`/`nicesrc` from the GStreamer libnice plugin, not just the shared libnice library. NDI needs its separate runtime; [NDI setup](docs/ndi.md) describes that optional path. Portal/virtual-screen failures need the desktop, compositor and portal backend versions.
 
 ## A Cast receiver "did not prove it is the same device"
 

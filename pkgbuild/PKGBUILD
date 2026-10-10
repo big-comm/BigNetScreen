@@ -20,6 +20,7 @@ depends=(
   'gst-plugin-pipewire'  # pipewiresrc
   'pipewire'
   'libnice'             # nicesink/nicesrc for WebRTC ICE
+  'gst-plugin-rswebrtc' # whepserversink: sharing with web browsers
   'xdg-desktop-portal'
   'libpulse'            # pactl: the virtual sound output
   'avahi'               # NDI discovery

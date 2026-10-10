@@ -13,7 +13,7 @@ Present a window without sharing the rest of your desktop, send local video and 
 | Chromecast / Google Cast | Computer and receiver on the same trusted LAN | Raw-RTP mirroring where supported; HTTP media fallback otherwise. Files and music can be sent too. |
 | Miracast / Wi-Fi Display | Native installation, compatible Wi-Fi Direct hardware and receiver | A direct wireless link, managed through NetworkManager. |
 | DLNA television | Computer and television on the same trusted LAN | A live stream played by the television's media player, which buffers more than mirroring does. Files and music can be sent too. |
-| Web browser | GStreamer WebRTC/ICE plugins on the sender | A local page and PIN, without installing a viewer application. |
+| Web browser | The gst-plugins-rs WebRTC plugin and the libnice plugin on the sender | A local page and PIN, without installing a viewer application. |
 | NDI receiver | Separately installed proprietary NDI runtime | Optional publishing for compatible production tools. Other paths do not need NDI. |
 
 Hardware H.264 encoding is preferred where the driver and plugins can actually produce frames; software encoding remains available. Resolution, frame rate and quality depend on the source, receiver, encoder and network. No single latency or FPS figure applies to every combination.

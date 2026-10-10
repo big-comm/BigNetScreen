@@ -18,8 +18,6 @@ allow = [
     "MPL-2.0",
     "GPL-3.0",
     "LGPL-2.1",
-    # webpki-roots (Mozilla CA list), pulled by gst-plugin-webrtc's WHEP client.
-    "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.9
 

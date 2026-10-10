@@ -4,8 +4,8 @@
 //! types the four-digit PIN shown on this computer, and the picture appears.
 //! OBS gets it the same way through a *Browser Source*.
 //!
-//! Under the hood this is WebRTC with WHEP signalling. The bundled
-//! `whepserversink` (from gst-plugins-rs) encodes with the best encoder it
+//! Under the hood this is WebRTC with WHEP signalling. `whepserversink`, from
+//! the system's gst-plugins-rs `rswebrtc` plugin, encodes with the best encoder it
 //! finds, adapts the bitrate to the network and retransmits what gets lost;
 //! `server` is the front door in front of it, serving the page and holding
 //! the PIN. The element itself listens on the loopback interface only.
@@ -37,18 +37,11 @@ const SINK_NAME: &str = "web-output";
 /// How often the receiver count is read off the element.
 const RECEIVERS_POLL: Duration = Duration::from_secs(1);
 
-static PLUGIN: OnceLock<std::result::Result<(), String>> = OnceLock::new();
-
-/// Registers the bundled plugin once; `true` when publishing is possible.
-///
-/// Besides the bundled element this needs `webrtcbin`, DTLS-SRTP and the
-/// H.264/VP8 payloaders from the system's GStreamer, so the answer can be
-/// `false` on a minimal installation.
+/// Whether publishing is possible: `whepserversink` (package
+/// `gst-plugin-rswebrtc`) and the `webrtcbin`, DTLS-SRTP and payloader
+/// elements it builds on are all installed.
 pub fn available() -> bool {
     pipeline::init().is_ok()
-        && PLUGIN
-            .get_or_init(|| gstrswebrtc::plugin_register_static().map_err(|err| err.to_string()))
-            .is_ok()
         && [
             "whepserversink",
             "webrtcbin",
@@ -437,7 +430,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bundled_plugin_registers() {
+    fn the_publishing_elements_are_installed() {
         assert!(available());
     }
 
@@ -469,7 +462,7 @@ mod tests {
         }
     }
 
-    /// A real receiver (`whepclientsrc`, bundled with the same plugin) joins
+    /// A real receiver (`whepclientsrc`, from the same plugin) joins
     /// through the front door with the PIN and gets decoded video.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn a_receiver_joins_with_the_pin_and_gets_video() {

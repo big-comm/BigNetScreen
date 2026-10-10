@@ -13,7 +13,7 @@ Apresente uma janela sem mostrar o restante da área de trabalho, envie vídeos 
 | Chromecast / Google Cast | Computador e receptor na mesma rede local confiável. O programa tenta espelhamento e oferece um caminho HTTP de compatibilidade. Também envia arquivos e músicas. |
 | Miracast | Instalação nativa, adaptador Wi-Fi Direct compatível e receptor no modo de espelhamento. |
 | Televisão DLNA | Computador e televisão na mesma rede local confiável. O reprodutor da televisão acumula mais atraso que o espelhamento. Também recebe arquivos e músicas. |
-| Navegador | Plugins WebRTC/ICE no computador transmissor. Quem assiste abre o endereço ou QR code e informa o PIN. |
+| Navegador | Plugin WebRTC do gst-plugins-rs e plugin libnice no computador transmissor. Quem assiste abre o endereço ou QR code e informa o PIN. |
 | NDI | Runtime proprietário instalado separadamente, apenas para esse modo. Os demais modos não dependem dele. |
 
 O programa prefere codificação H.264 por hardware quando os drivers e plugins conseguem produzir vídeo; há alternativas por software. Resolução, FPS e atraso variam com a origem, o receptor e a rede. Não prometemos o mesmo desempenho em todos os aparelhos.
