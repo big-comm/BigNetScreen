@@ -7,24 +7,18 @@
 //! [`H264Encoder::encoder_description`] rather than sharing one format string.
 //! Which encoder a machine runs is `encoder_selection`'s question.
 
+use gst::prelude::*;
 use gstreamer as gst;
 
 use super::StreamConfig;
 
-/// Changes a running encoder's bitrate, in kbit/s.
+/// Changes a running encoder's bitrate, given in kbit/s and converted to the
+/// encoder's own unit.
 ///
-/// Lives here because the unit is the encoder's and they disagree — the same
-/// disagreement the module header warns about, which once fed kbit/s to an
-/// element measuring bit/s. A caller adapting the rate should not have to know
-/// which is which.
-///
-/// `false` when this encoder cannot be retuned while it runs: `v4l2h264enc`
-/// carries its bitrate inside `extra-controls`, which is not a property to be
-/// set on a playing pipeline. The session keeps the rate it started with,
-/// which is what it did before any of this existed.
+/// `false` when the encoder cannot be retuned while it runs: `v4l2h264enc`
+/// carries its bitrate inside `extra-controls`, which is not a property to set
+/// on a playing pipeline, so the session keeps the rate it started with.
 pub fn set_encoder_bitrate(pipeline: &gst::Pipeline, encoder: H264Encoder, kbps: u32) -> bool {
-    use gst::prelude::*;
-
     let Some(element) = pipeline.by_name(ENCODER_NAME) else {
         return false;
     };
@@ -43,14 +37,12 @@ pub fn set_encoder_bitrate(pipeline: &gst::Pipeline, encoder: H264Encoder, kbps:
 
 /// Automatic latency: the pipeline uses the minimum it reports itself.
 ///
-/// Measured in the field on a real 1080p60 Miracast link: **41 ms**. The 20 ms
-/// this module once forced sat *below* that minimum — and the effect was not
-/// "faster", it was the sink receiving data and displaying nothing.
+/// A fixed value below that minimum does not make the picture faster: the sink
+/// drops every buffer as late and shows nothing.
 pub const PIPELINE_LATENCY_AUTO: u64 = 0;
 
-/// `openh264enc` with `usage-type=screen` has latency spikes after scene
-/// changes; it alone justifies fixed headroom (the reference C project's
-/// value).
+/// Fixed headroom for `openh264enc`, whose `usage-type=screen` mode has
+/// latency spikes after scene changes.
 pub const OPENH264_PIPELINE_LATENCY_MS: u64 = 500;
 
 /// The H.264 feature set a path's receiver is known to decode.
@@ -64,10 +56,8 @@ pub enum H264Profile {
     /// the safe assumption for a receiver that declared nothing.
     #[default]
     ConstrainedBaseline,
-    /// CABAC and the 8x8 transform. Measured at a fixed QP 26 against
-    /// constrained baseline, on the same NVENC and the same two clips:
-    /// **13.5% fewer bits** on screen-like content, **12.6%** on dense detail.
-    /// At a fixed bitrate that is the same 13% spent on the picture instead.
+    /// CABAC and the 8x8 transform: about an eighth fewer bits for the same
+    /// picture, on screen content and on dense detail alike.
     High,
 }
 
@@ -86,44 +76,23 @@ impl H264Profile {
     }
 }
 
-/// Candidate H.264 encoders, in order of preference.
+/// The H.264 encoders a session may run, hardware first.
 ///
-/// ## Why `vulkanh264enc` is not one of them
-///
-/// GStreamer 1.28.6 ships it, and it works. Measured here against this list's
-/// own software encoder, 1280x720, same content and target bitrate:
-///
-/// | | x264 | vulkanh264enc |
-/// |---|---|---|
-/// | encoder latency | 0 ms | 4 frames — 133 ms at 30 Hz, 66 ms at 60 Hz |
-/// | slices per frame | one per thread | 1 |
-/// | input it accepts | the capture's own BGRx | `VulkanImage` NV12 only |
-///
-/// The four-frame depth is fixed: `num-ref-frames=1` and `b-frames=0` do not
-/// move it. That is the latency this project spent a week taking out of the
-/// path, and no amount of encoder quality buys it back.
-///
-/// Converting the capture for it is worse than it looks. `vulkancolorconvert`
-/// would do BGRx to NV12 on the card, and **segfaults** — reproducibly, on
-/// this driver, within five frames. So the conversion has to happen on the
-/// CPU, which is the cost the hardware path exists to avoid.
-///
-/// And a crash is not a fallback. [`working_encoder`] probes each candidate
-/// and moves on when one produces no frame; it cannot survive one that takes
-/// the process down, and since the session now lives in a service, that ends
-/// somebody's cast rather than one pipeline.
-///
-/// Worth revisiting when `vulkancolorconvert` stops crashing *and* the
-/// encoder's four-frame depth is gone. Either alone is not enough.
+/// `vulkanh264enc` (GStreamer 1.28) is left out on purpose. It holds four
+/// frames before emitting one whatever `num-ref-frames` and `b-frames` say,
+/// and it takes only NV12 `VulkanImage`s, while `vulkancolorconvert` crashed
+/// the process converting the capture's BGRx on the card. A crash is not a
+/// failure `working_encoder` can step past: it ends the service and everyone's
+/// session. Worth adding once both the delay and the crash are gone.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum H264Encoder {
-    /// `vah264enc` (the modern `va` plugin) — the best option on Intel/AMD.
+    /// `vah264enc`, from the `va` plugin: the first choice on Intel and AMD.
     VaH264,
-    /// `vaapih264enc` (plugin `vaapi` legado).
+    /// `vaapih264enc`, from the older `vaapi` plugin.
     VaapiH264,
-    /// `nvh264enc` (NVENC, placas NVIDIA).
+    /// `nvh264enc`: NVENC on NVIDIA cards.
     NvH264,
-    /// `v4l2h264enc` (encoders V4L2 stateful: RPi, Rockchip, Amlogic…).
+    /// `v4l2h264enc`: stateful V4L2 encoders (Raspberry Pi, Rockchip, Amlogic).
     V4l2H264,
     /// `x264enc` software, `tune=zerolatency`.
     X264,
@@ -132,7 +101,7 @@ pub enum H264Encoder {
 }
 
 impl H264Encoder {
-    /// Every known encoder (for scanning the registry).
+    /// Every known encoder, for scanning the registry.
     pub const ALL: [H264Encoder; 6] = [
         H264Encoder::VaH264,
         H264Encoder::VaapiH264,
@@ -142,7 +111,7 @@ impl H264Encoder {
         H264Encoder::OpenH264,
     ];
 
-    /// Nome do elemento GStreamer.
+    /// The GStreamer element name.
     pub fn element(self) -> &'static str {
         match self {
             H264Encoder::VaH264 => "vah264enc",
@@ -154,7 +123,7 @@ impl H264Encoder {
         }
     }
 
-    /// Peso de prioridade (maior = preferido).
+    /// Preference weight; higher is tried first.
     pub fn priority(self) -> u32 {
         match self {
             H264Encoder::VaH264 => 100,
@@ -166,12 +135,13 @@ impl H264Encoder {
         }
     }
 
-    /// Hardware encoding?
+    /// Whether the encoder runs on the graphics card or another device.
     pub fn is_hardware(self) -> bool {
         !matches!(self, H264Encoder::X264 | H264Encoder::OpenH264)
     }
 
-    /// Uses the VA-API stack (allowing conversion/scaling on the GPU with `vapostproc`).
+    /// Whether the encoder is on the VA-API stack, where `vapostproc` can
+    /// convert and scale on the card.
     pub fn is_va(self) -> bool {
         matches!(self, H264Encoder::VaH264 | H264Encoder::VaapiH264)
     }
@@ -186,17 +156,12 @@ impl H264Encoder {
 
     /// Every raw format this encoder takes, as a caps list.
     ///
-    /// A list rather than one choice, so negotiation can settle on whatever
-    /// the capture already is and leave the converter a passthrough. The
-    /// portal delivers BGRA and NVENC accepts BGRA, converting on the GPU as
-    /// part of encoding it — asking for NV12 first buys nothing and spends a
-    /// full-frame pass over the CPU to do it. Measured over 300 frames at
-    /// 2560x1440: 2.76s of CPU against 1.21s, and twice the wall clock.
-    ///
-    /// Only NVENC is listed from measurement, because it is the only hardware
-    /// encoder installed on the machine this was verified on. The others keep
-    /// the single format they had: a list nobody checked is a guess, and the
-    /// cost of guessing wrong here is a receiver that gets nothing.
+    /// A list lets negotiation settle on whatever the capture already is and
+    /// leave the converter a passthrough: NVENC converts the portal's BGRA on
+    /// the card while encoding, so asking for NV12 first only adds a CPU pass
+    /// over every frame. Only NVENC's list has been verified; the others keep
+    /// their single format, because a wrong list shows up as a receiver that
+    /// gets nothing.
     pub fn accepted_formats(self) -> &'static str {
         match self {
             H264Encoder::NvH264 => "{ BGRA, BGRx, RGBA, RGBx, NV12 }",
@@ -212,16 +177,14 @@ impl H264Encoder {
         }
     }
 
-    /// The encoder element's full description, already carrying every
-    /// low-latency property and the bitrate **in each encoder's correct
-    /// unit**.
+    /// The encoder element's description, with every low-latency property and
+    /// the bitrate in this encoder's own unit.
     pub fn encoder_description(self, cfg: &StreamConfig) -> String {
         let kbps = cfg.scaled_bitrate_kbps();
-        // `0` means the caller wants no schedule at all: key frames come when
-        // they are asked for. Each encoder spells that differently, and only
-        // the two verified on this machine are told directly — the rest keep a
-        // finite distance, because a driver that reads `0` as "every frame is
-        // an I-frame" would ruin a session nobody here can test.
+        // A GOP of `0` asks for no schedule: key frames come when the receiver
+        // asks. Each encoder spells that differently, and only NVENC and x264
+        // were verified; the rest keep a ten-second distance, because a driver
+        // that reads `0` as "every frame is an I-frame" would ruin the session.
         let gop = match (cfg.gop(), self) {
             (0, H264Encoder::NvH264) => "-1".to_string(),
             (0, H264Encoder::X264) => "0".to_string(),
@@ -232,39 +195,17 @@ impl H264Encoder {
         match self {
             H264Encoder::X264 => {
                 let intra = if cfg.intra_refresh { "true" } else { "false" };
-                // x264 asks for the buffer in milliseconds. The 50 ms this
-                // path has always used is a little under two frames at 30 Hz,
-                // which is why the oversized key frame never showed up here.
+                // x264 takes the buffer in milliseconds; without a path's own
+                // limit it gets 50 ms, a little under two frames at 30 Hz.
                 let vbv = match cfg.vbv_ms() {
                     0 => 50,
                     ms => ms,
                 };
                 format!(
-                    // `threads` decides how many slices each frame is cut
-                    // into, one per thread, and `tune=zerolatency` slices
-                    // whatever this says. `0` means one per core, so a
-                    // sixteen-core machine was sending eleven slices a frame.
-                    //
-                    // Measured at 1280x720, same content and bitrate:
-                    //
-                    // | threads | slices | bytes  | encoder latency |
-                    // |---------|--------|--------|-----------------|
-                    // | 1       | 1      | 42 418 | 0 ms            |
-                    // | 2       | 2      | 43 904 | 0 ms            |
-                    // | 4       | 4      | 46 000 | 0 ms            |
-                    // | 0 (11)  | 11     | 49 883 | 0 ms            |
-                    //
-                    // and at 2560x1440 the throughput is 60 fps on one thread,
-                    // 68 on three, 69 on all sixteen. So past a handful of
-                    // threads every extra slice costs bits and buys nothing:
-                    // four of them reach 68 of those 69 frames while spending
-                    // 8% fewer bits than eleven.
-                    //
-                    // `sliced-threads=false` would give one slice a frame and
-                    // is the trap here: it puts x264 back on frame threading,
-                    // which the same measurement showed declaring **700 ms**
-                    // of latency. One slice is not worth that, and the comment
-                    // this replaces claimed we already had it.
+                    // `threads` is also the number of slices per frame (see
+                    // `software_encode_threads`). `sliced-threads=false` would
+                    // give one slice but puts x264 back on frame threading,
+                    // which declares hundreds of milliseconds of latency.
                     "x264enc name=enc tune=zerolatency speed-preset=ultrafast \
                      rc-lookahead=0 sync-lookahead=0 bframes=0 b-adapt=false \
                      threads={threads} aud=true cabac={cabac} ref=1 \
@@ -273,9 +214,8 @@ impl H264Encoder {
                     threads = software_encode_threads()
                 )
             }
-            // `bitrate` in kbps. No B-frames and CBR: the VA-API defaults
-            // (VBR + B-frames) reorder frames and leave the "fast" path with
-            // more latency than x264.
+            // The VA-API defaults (VBR and B-frames) reorder frames and add
+            // more latency than x264, so both are overridden.
             H264Encoder::VaH264 => format!(
                 "vah264enc name=enc rate-control=cbr bitrate={kbps} key-int-max={gop} \
                  b-frames=0 ref-frames=1 num-slices=1 target-usage=6 \
@@ -285,14 +225,11 @@ impl H264Encoder {
                 "vaapih264enc name=enc rate-control=cbr bitrate={kbps} keyframe-period={gop} \
                  max-bframes=0 refs=1 num-slices=1 quality-level=7 cabac={cabac} aud=true"
             ),
-            // NVENC asks for the buffer in kbits. Its own default is a whole
-            // second, which is what let a key frame reach 908 KB on a 10 Mbit
-            // stream (see [`StreamConfig::vbv_frames`]).
-            //
-            // The property is only written when a path asks for it: it is
-            // "conditionally available" on this element, so a GPU that does
-            // not offer it would fail to build — and a path that never needed
-            // the limit should not lose its hardware encoder over it.
+            // NVENC takes the buffer in kbit, and its default holds a whole
+            // second (see `StreamConfig::vbv_frames`). The property is
+            // "conditionally available" on this element, so it is written only
+            // when a path asks for it: a GPU without it would fail to build, and
+            // a path that never needed the limit would lose its encoder.
             H264Encoder::NvH264 => {
                 let vbv = match cfg.vbv_frames {
                     0 => String::new(),
@@ -306,18 +243,19 @@ impl H264Encoder {
                      {vbv}gop-size={gop} bframes=0 zerolatency=true aud=true"
                 )
             }
-            // V4L2 stateful: as propriedades ficam em `extra-controls`.
+            // Stateful V4L2 encoders take their settings as `extra-controls`.
             H264Encoder::V4l2H264 => format!(
                 "v4l2h264enc name=enc extra-controls=\"controls,h264_profile={v4l2_profile},\
                  h264_i_frame_period={gop},video_bitrate={bps},\
                  repeat_sequence_header=1\"",
                 bps = kbps as u64 * 1000,
                 v4l2_profile = match cfg.profile {
-                    H264Profile::ConstrainedBaseline => 0, // Preserve the legacy WFD control.
-                    H264Profile::High => 4,                // V4L2_MPEG_VIDEO_H264_PROFILE_HIGH.
+                    // V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE and _HIGH.
+                    H264Profile::ConstrainedBaseline => 0,
+                    H264Profile::High => 4,
                 },
             ),
-            // CAREFUL: `openh264enc` measures `bitrate` in **bit/s**, not kbit/s.
+            // `openh264enc` takes `bitrate` in bit/s.
             H264Encoder::OpenH264 => format!(
                 "openh264enc name=enc usage-type=screen rate-control=bitrate \
                  complexity=low scene-change-detection=false \
@@ -332,11 +270,9 @@ impl H264Encoder {
 
 /// How many threads the software encoder gets.
 ///
-/// One slice per thread, so this is also how finely each frame is cut. Capped
-/// because the two pull apart: throughput stops improving after about three
-/// threads while every extra slice keeps costing bits, and a hardware decoder
-/// in a television has fewer pieces to reassemble. On a machine with four
-/// cores or fewer it changes nothing — that is already all there is.
+/// x264 cuts each frame into one slice per thread. Throughput stops improving
+/// after about three threads while every extra slice keeps costing bits, so
+/// four is the ceiling; machines with fewer cores use them all.
 pub fn software_encode_threads() -> u32 {
     std::thread::available_parallelism()
         .map(|n| n.get() as u32)
@@ -354,9 +290,8 @@ mod tests {
 
     #[test]
     fn only_the_path_that_asks_for_a_vbv_limit_gets_one() {
-        // The whole point of the setting being per-path: Miracast, NDI and the
-        // browser path were never measured here, so their encoder line has to
-        // come out exactly as it did before.
+        // The limit is per path: Miracast, NDI and the browser path ask for
+        // none, and their encoder line must not name the property.
         let untouched = StreamConfig {
             encoder: H264Encoder::NvH264,
             ..Default::default()
@@ -467,14 +402,11 @@ mod tests {
             fast.encoder.encoder_description(&fast)
         );
 
-        // Nought is the default and means the property is never written, which
-        // is what every path that hands its frames to a muxer gets. Removing it
-        // from Cast mirroring was tried and reverted: a tab switch became one
-        // enormous frame and the receiver could show none of the change until
-        // its last datagram arrived.
+        // Nought is the default and means the property is never written,
+        // which is what every path that hands its frames to a muxer gets.
         const _: () = assert!(
             CAST_VBV_FRAMES >= 2,
-            "one frame measured worse than no limit"
+            "a one-frame buffer overshoots worse than no limit"
         );
         let untouched = StreamConfig {
             encoder: H264Encoder::NvH264,
@@ -553,10 +485,8 @@ mod tests {
 
     #[test]
     fn low_latency_encoders_use_the_automatic_minimum() {
-        // A field regression: forcing 20 ms sat **below** the pipeline's real
-        // minimum (measured at 41 ms on a 1080p60 Miracast link) and the sink
-        // received megabits while showing a black screen. "Automatic" is the
-        // correct default.
+        // A fixed latency below the pipeline's own minimum leaves the sink
+        // receiving data and showing black, so automatic is the default.
         for enc in [
             H264Encoder::X264,
             H264Encoder::VaH264,
@@ -579,9 +509,9 @@ mod tests {
 
     #[test]
     fn the_software_encoder_is_not_cut_into_a_slice_per_core() {
-        // `threads` is also the slice count, and `0` means one per core. A
-        // sixteen-core machine was sending eleven slices a frame and paying
-        // 14% more bits for the privilege, with no throughput to show for it.
+        // `threads` is also the slice count, and `0` means one per core: on a
+        // large machine, a dozen slices a frame that cost bits and buy no
+        // throughput.
         let cfg = StreamConfig {
             encoder: H264Encoder::X264,
             ..Default::default()
@@ -598,13 +528,11 @@ mod tests {
             "{threads} threads means {threads} slices a frame"
         );
 
-        // The tempting fix for the slice count, and the reason it is not here:
-        // it returns x264 to frame threading, measured declaring 700 ms of
-        // latency. An assertion rather than a comment because the next person
-        // to read "one slice per frame" will reach for exactly this.
+        // The tempting fix for the slice count returns x264 to frame
+        // threading, which declares hundreds of milliseconds of latency.
         assert!(
             !desc.contains("sliced-threads"),
-            "sliced-threads=false costs 700 ms of latency: {desc}"
+            "sliced-threads=false puts x264 on frame threading: {desc}"
         );
     }
 
