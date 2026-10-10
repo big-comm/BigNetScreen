@@ -96,7 +96,20 @@ impl Thumbnail {
                 )
             })
             .flatten();
-        gdk::Texture::for_pixbuf(scaled.as_ref().unwrap_or(&pixbuf))
+        let image = scaled.as_ref().unwrap_or(&pixbuf);
+        let format = if image.has_alpha() {
+            gdk::MemoryFormat::R8g8b8a8
+        } else {
+            gdk::MemoryFormat::R8g8b8
+        };
+        gdk::MemoryTexture::new(
+            image.width(),
+            image.height(),
+            format,
+            &image.read_pixel_bytes(),
+            image.rowstride() as usize,
+        )
+        .upcast()
     }
 }
 
