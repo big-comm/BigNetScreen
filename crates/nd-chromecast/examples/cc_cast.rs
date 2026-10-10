@@ -1,4 +1,4 @@
-//! A full cast to a **real** Chromecast.
+//! A full cast to a real Chromecast over the HTTP path.
 //!
 //! ```sh
 //! # test pattern (opens no capture dialog)
@@ -11,7 +11,7 @@
 //! cargo run -p nd-chromecast --example cc_cast -- 192.168.68.108 screen 30
 //! ```
 //!
-//! ⚠️ This **takes over the receiver**: the app on the TV/projector is started
+//! This takes over the receiver: the app on the TV or projector is started
 //! and shows whatever is streamed. At the end (deadline or Ctrl-C) the session
 //! is closed and the app is shut down.
 //!

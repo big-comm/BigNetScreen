@@ -1,4 +1,4 @@
-//! Diagnostic: uses OUR mdns-sd to browse several mDNS services and print
+//! Diagnostic: uses the same mdns-sd as discovery to browse several mDNS services and print
 //! everything it finds. Useful for telling whether the stack is looking at the
 //! right network (e.g. whether Tailscale is skewing interface selection).
 //!
@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 
 fn main() {
-    let daemon = ServiceDaemon::new().expect("criar ServiceDaemon");
+    let daemon = ServiceDaemon::new().expect("create the mDNS daemon");
 
     let types = [
         "_googlecast._tcp.local.",

@@ -4,8 +4,7 @@
 //!
 //! Without `launch`: connects and prints the status (read-only, safe).
 //! With `launch`: also starts the Default Media Receiver — the "ready to cast"
-//! screen appears on the projector. Unlike the earlier version, a refusal from
-//! the receiver now becomes a visible error instead of going unnoticed.
+//! screen appears on the projector. A refusal from the receiver is an error.
 
 use std::net::IpAddr;
 use std::time::Duration;
@@ -42,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let channel = CastChannel::connect(ip, &ip.to_string()).await?;
     println!("TLS + CONNECT ok (certificate validated: chain and validity period)");
 
-    // The reply is now correlated by requestId: this genuinely waits.
+    // Waits for the reply carrying this request's requestId.
     let status = channel.status().await?;
     println!("receiver status: {status:#}");
 

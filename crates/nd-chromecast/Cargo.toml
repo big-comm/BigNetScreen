@@ -1,6 +1,6 @@
 [package]
 name = "nd-chromecast"
-description = "Provider e sink Chromecast: descoberta mDNS, canal Cast (protobuf/TLS) e servidor HTTP do stream"
+description = "Chromecast discovery over mDNS, the Cast control channel and the mirroring and HTTP streaming paths"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

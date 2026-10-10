@@ -1,12 +1,10 @@
 //! Integration test for the stream path, with no Chromecast required.
 //!
-//! It exists because of a real bug: the client socket was handed to
-//! `multisocketsink` while the pipeline was still in `Null`, GStreamer refused
-//! it with nothing but a `WARNING` on the bus, and the receiver got **zero
-//! bytes**. No unit test could see that — only running the whole path could.
-//!
-//! Here the complete path is exercised: HTTP server → request triage → handing
-//! the descriptor to GStreamer → real MPEG-TS bytes on the connection.
+//! A client socket handed to `multisocketsink` while the pipeline is in
+//! `Null` is refused with only a `WARNING` on the bus, and the receiver gets
+//! zero bytes; only the whole path shows that. Exercised here: HTTP server,
+//! request triage, the descriptor handed to GStreamer, and real MPEG-TS bytes
+//! on the connection.
 
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
@@ -101,8 +99,8 @@ async fn serves_real_mpegts_bytes_to_the_receiver() {
     let (gst_pipeline, _events) =
         pipeline::build_pipeline(&desc, cfg.latency_ms()).expect("pipeline");
 
-    // A direct regression for the bug: `build_pipeline` has to leave `Null`,
-    // otherwise `multisocketsink` refuses the client and the stream is empty.
+    // `build_pipeline` has to leave `Null`, or `multisocketsink` refuses the
+    // client and the stream is empty.
     let (_, state, _) = gst_pipeline.state(gst::ClockTime::from_seconds(1));
     assert_ne!(
         state,

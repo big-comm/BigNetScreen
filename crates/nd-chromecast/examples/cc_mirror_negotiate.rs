@@ -1,4 +1,4 @@
-//! Negotiates a Cast **mirroring** session and prints the result.
+//! Negotiates a Cast mirroring session and prints the result.
 //!
 //! cargo run -p nd-chromecast --example cc_mirror_negotiate -- <IP>
 //!

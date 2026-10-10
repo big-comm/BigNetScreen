@@ -568,7 +568,7 @@ mod tests {
             "the receiver accepted no usable stream".into()
         )));
 
-        // A network or pipeline failure mid-session must **not** restart over
+        // A network or pipeline failure mid-session must not restart over
         // HTTP: that would trade one problem for another, at twice the delay.
         assert!(!is_unsupported(&NdError::Network(
             "connection dropped".into()
@@ -628,8 +628,8 @@ mod lifecycle_tests {
             offer,
         };
         let before = rx_threads();
-        // The session builds and starts the pipeline before negotiating now,
-        // so the test does the same rather than handing `stream` a source.
+        // The session builds and starts the pipeline before negotiating, so
+        // the test hands `stream` a running pipeline too.
         let desc = pipeline::mirror_pipeline_description(
             &cfg,
             &pipeline::VideoSource::Test,

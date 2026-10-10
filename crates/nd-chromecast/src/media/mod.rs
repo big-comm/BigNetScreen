@@ -226,7 +226,9 @@ impl Shared {
     }
 }
 
-/// Immutable HTTP indexes survive removal of pending files.
+/// The items left to play, each with its index on the file server. Indexes
+/// are fixed when the session starts, so removing an item does not move the
+/// URL of another.
 struct Queue {
     pending: VecDeque<(usize, MediaItem)>,
     completed: usize,
@@ -275,7 +277,7 @@ impl Queue {
         }
     }
 
-    /// Returns true if the current item was removed and must stop.
+    /// Applies `Next` or `Remove`. True when the current item must stop.
     fn edit(&mut self, command: &MediaCommand, shared: &Shared) -> bool {
         let advance = match command {
             MediaCommand::Next => {

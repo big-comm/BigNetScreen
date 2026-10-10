@@ -149,7 +149,7 @@ impl DrainController {
 
     /// A stall-free sample: after enough stability, it tightens.
     ///
-    /// This is how the target converges **downwards** without stuttering the
+    /// This is how the target converges downwards without stuttering the
     /// picture: instead of finding the floor by falling into it, it comes
     /// close from above and stops.
     fn on_stable(&mut self) {

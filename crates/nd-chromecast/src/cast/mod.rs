@@ -329,8 +329,8 @@ impl CastChannel {
         Ok(app)
     }
 
-    /// STOP only the session we launched, then CLOSE its virtual connection.
-    /// A transport-level reply is not sufficient: verify the app is gone.
+    /// STOPs only the session we launched, then CLOSEs its virtual connection.
+    /// Succeeds only when a receiver status shows that session gone.
     pub async fn stop_app(&self, app: &LaunchedApp) -> Result<()> {
         // Keep PING/PONG alive while STOP is awaiting confirmation. Only the
         // terminal platform CLOSE stops heartbeat traffic under the writer lock.
@@ -369,8 +369,9 @@ impl CastChannel {
         }
     }
 
-    /// Terminal and idempotent: no heartbeat/request is sent after platform
-    /// CLOSE. Bound the TLS shutdown too, including a receiver that stops reading.
+    /// Sends the platform CLOSE and ends the channel. Idempotent; nothing is
+    /// sent after it, and the TLS shutdown is bounded for a receiver that
+    /// stopped reading.
     pub async fn close(&self) {
         self.writer.send_platform_close().await;
         self.ping_task.abort();
@@ -388,8 +389,10 @@ impl CastChannel {
         }
     }
 
-    /// Preserve the original failure; do not call an unconfirmed disconnect a
-    /// success. Explicit callers keep the channel alive until this completes.
+    /// Tears the app down in order (STOP of our session, its confirmation,
+    /// app CLOSE, platform CLOSE) and returns the session's outcome. The
+    /// original failure wins and an unconfirmed STOP is not a success; the
+    /// channel must stay alive until this returns.
     pub async fn finish_app(&self, app: &LaunchedApp, result: Result<()>) -> Result<()> {
         let stopped = self.stop_app(app).await;
         self.close().await;

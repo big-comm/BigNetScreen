@@ -1,4 +1,4 @@
-//! Validates the stream server **without needing a Chromecast**.
+//! Validates the stream server without a Chromecast.
 //!
 //! It brings up the HTTP server and the pipeline (a test pattern) listening on
 //! `127.0.0.1`, prints the URL and serves it. In another terminal:

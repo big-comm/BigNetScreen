@@ -1,4 +1,5 @@
-//! Cast Streaming — the Chromecast **mirroring** path.
+//! Cast Streaming: the OFFER/ANSWER negotiation of the Chromecast mirroring
+//! path. [`crate::mirror_session`] streams what is negotiated here.
 //!
 //! Unlike the Default Media Receiver (`CC1AD845` + HTTP), which is a file
 //! player and pre-buffers for seconds, here we talk to the mirroring app built
