@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let transport = WfdTransport::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 19000);
     let desc = pipeline::wfd_pipeline_description(&cfg, &VideoSource::Test, &transport);
 
-    println!("encoder: {encoder:?}  modo: {width}x{height}@{fps}");
+    println!("encoder: {encoder:?}  mode: {width}x{height}@{fps}");
     println!("\n--- pipeline description ---\n{desc}\n---\n");
     println!("read it with:  ffprobe -v error -show_streams rtp://127.0.0.1:19000\n");
 

@@ -311,7 +311,6 @@ pub mod cast {
     use std::net::IpAddr;
     use std::time::Duration;
 
-    use nd_core::pipeline;
     use nd_net::firewall;
     use tokio::net::TcpListener;
 
@@ -501,10 +500,8 @@ pub mod cast {
         tracing::info!(%addr, "the sink connected");
 
         status.set(SinkState::WaitStreaming);
-        let driver = nd_net::detect_gpu_driver();
-        let encoder = pipeline::best_encoder(driver, pipeline::Acceleration::preferred())?;
         // The captured screen's aspect ratio guides the WFD mode choice.
-        let mut cfg = WfdCastConfig::new(our_ip, addr.ip(), source.video_source(), encoder)
+        let mut cfg = WfdCastConfig::new(our_ip, addr.ip(), source.video_source())
             .with_audio(source.audio_source())
             .with_source_size(source.size_or((1920, 1080)));
         cfg.media_control = source

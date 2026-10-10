@@ -11,7 +11,7 @@
 
 use std::time::Duration;
 
-use nd_core::pipeline::{self, AudioSource, VideoSource};
+use nd_core::pipeline::{AudioSource, VideoSource};
 use nd_net::firewall;
 use nd_net::p2p::P2pDevice;
 use nd_wfd::rtsp::{RTSP_PORT, WfdCastConfig, cast_to_sink};
@@ -86,10 +86,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tokio::time::timeout(Duration::from_secs(40), listener.accept()).await??;
         eprintln!("the sink connected from {addr}! negotiating + streaming…");
 
-        let driver = nd_net::detect_gpu_driver();
-        let encoder = pipeline::best_encoder(driver, pipeline::Acceleration::preferred())?;
-        eprintln!("encoder: {encoder:?} (driver {driver:?})");
-
         // Real capture or a test pattern, depending on the argument.
         let capture = match source_type {
             Some(source_type) => {
@@ -126,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             AudioSource::Silence
         };
 
-        let mut cfg = WfdCastConfig::new(our_ip, addr.ip(), video, encoder)
+        let mut cfg = WfdCastConfig::new(our_ip, addr.ip(), video)
             .with_source_size(source_size)
             .with_audio(audio);
         // `WFD_MAX_RES=1280x720` caps the negotiated mode — handy for bisecting

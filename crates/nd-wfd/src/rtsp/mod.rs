@@ -343,8 +343,6 @@ pub struct WfdCastConfig {
     /// built: a file brings its own sound, and mixing the computer's system
     /// audio over a film is not what anybody meant.
     pub audio: nd_core::pipeline::AudioSource,
-    /// The encoder chosen from the registry/driver.
-    pub encoder: nd_core::pipeline::H264Encoder,
     /// The captured screen's resolution (it sets the target aspect ratio).
     pub source_size: (u32, u32),
     /// A resolution cap (bounds the chosen mode; useful on weak machines).
@@ -352,19 +350,15 @@ pub struct WfdCastConfig {
 }
 
 impl WfdCastConfig {
-    pub fn new(
-        our_ip: IpAddr,
-        sink_ip: IpAddr,
-        video: VideoSource,
-        encoder: nd_core::pipeline::H264Encoder,
-    ) -> Self {
+    /// The encoder is chosen once PLAY arrives, by trying the candidates
+    /// (see `start_pipeline`).
+    pub fn new(our_ip: IpAddr, sink_ip: IpAddr, video: VideoSource) -> Self {
         Self {
             media_control: None,
             our_ip,
             sink_ip,
             video,
             audio: nd_core::pipeline::AudioSource::detect(),
-            encoder,
             source_size: (1920, 1080),
             max_resolution: (1920, 1080),
         }
