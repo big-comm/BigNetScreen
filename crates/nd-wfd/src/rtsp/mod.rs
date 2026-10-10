@@ -14,7 +14,7 @@
 //! - **M6/M7** sink→us: `SETUP`/`PLAY` → streaming begins
 //! - **M16** us→sink: an empty periodic `GET_PARAMETER` (keepalive)
 //!
-//! Capabilities and the mode chosen from them live in [`capabilities`]; the
+//! Capabilities and the mode chosen from them live in `capabilities`; the
 //! byte-level framing in `message`.
 
 mod capabilities;

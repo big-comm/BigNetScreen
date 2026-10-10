@@ -7,7 +7,7 @@
 //! Under the hood this is WebRTC with WHEP signalling. The bundled
 //! `whepserversink` (from gst-plugins-rs) encodes with the best encoder it
 //! finds, adapts the bitrate to the network and retransmits what gets lost;
-//! [`server`] is the front door in front of it, serving the page and holding
+//! `server` is the front door in front of it, serving the page and holding
 //! the PIN. The element itself listens on the loopback interface only.
 
 mod net;
