@@ -70,13 +70,21 @@ pub async fn set_uri(
     size: Option<(u32, u32)>,
     media: MediaType,
 ) -> Result<()> {
-    let metadata = didl_lite(url, title, size, media);
+    set_av_transport_uri(control, url, &stream_didl(url, title, size, media)).await
+}
+
+/// `SetAVTransportURI` with its item description.
+///
+/// The metadata is escaped here, once, as a whole: it travels inside a SOAP
+/// string argument. Escaping it while building it as well would double it,
+/// and a renderer shown `&amp;lt;` finds no item at all.
+async fn set_av_transport_uri(control: &Endpoint, url: &str, metadata: &str) -> Result<()> {
     let arguments = format!(
         "<InstanceID>0</InstanceID>\
          <CurrentURI>{url}</CurrentURI>\
          <CurrentURIMetaData>{metadata}</CurrentURIMetaData>",
         url = upnp::escape(url),
-        metadata = upnp::escape(&metadata),
+        metadata = upnp::escape(metadata),
     );
     upnp::soap(control, SERVICE_TYPE, "SetAVTransportURI", &arguments).await?;
     Ok(())
@@ -122,6 +130,19 @@ pub async fn set_file(
     size: u64,
     duration: Option<f64>,
 ) -> Result<()> {
+    let metadata = file_didl(url, title, class, content_type, size, duration);
+    set_av_transport_uri(control, url, &metadata).await
+}
+
+/// The item description for [`set_file`], unescaped like [`stream_didl`].
+fn file_didl(
+    url: &str,
+    title: &str,
+    class: &str,
+    content_type: &str,
+    size: u64,
+    duration: Option<f64>,
+) -> String {
     // Without a duration a Panasonic plays the item but reports it as
     // 0:00:00 long and 0:00:00 in, for as long as it plays.
     let mut attributes = String::new();
@@ -131,7 +152,7 @@ pub async fn set_file(
     if let Some(duration) = duration {
         attributes.push_str(&format!(" duration=\"{}.000\"", clock(duration)));
     }
-    let metadata = format!(
+    format!(
         "<DIDL-Lite xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\" \
          xmlns:dc=\"http://purl.org/dc/elements/1.1/\" \
          xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\">\
@@ -142,17 +163,10 @@ pub async fn set_file(
          DLNA.ORG_FLAGS={FILE_FLAGS}\"{attributes}>{url}</res>\
          </item></DIDL-Lite>",
         title = upnp::escape(title),
+        class = upnp::escape(class),
+        content_type = upnp::escape(content_type),
         url = upnp::escape(url),
-    );
-    let arguments = format!(
-        "<InstanceID>0</InstanceID>\
-         <CurrentURI>{url}</CurrentURI>\
-         <CurrentURIMetaData>{metadata}</CurrentURIMetaData>",
-        url = upnp::escape(url),
-        metadata = upnp::escape(&metadata),
-    );
-    upnp::soap(control, SERVICE_TYPE, "SetAVTransportURI", &arguments).await?;
-    Ok(())
+    )
 }
 
 /// Moves the renderer's own playback to `seconds` into the item.
@@ -217,12 +231,9 @@ pub async fn transport_state(control: &Endpoint) -> Result<TransportState> {
         .unwrap_or(TransportState::Idle))
 }
 
-/// The item description a renderer expects alongside a URI.
-///
-/// Returned unescaped: it travels inside a SOAP string argument, so the caller
-/// escapes it once as a whole. Escaping here as well would double it, and a
-/// renderer shown `&amp;lt;` finds no item at all.
-fn didl_lite(url: &str, title: &str, size: Option<(u32, u32)>, media: MediaType) -> String {
+/// The item description a renderer expects alongside our stream's URI,
+/// unescaped (see [`set_av_transport_uri`]).
+fn stream_didl(url: &str, title: &str, size: Option<(u32, u32)>, media: MediaType) -> String {
     // Resolution is optional in DIDL-Lite. It is not known until the TV's GET
     // starts capture; advertising logical portal coordinates would be false.
     let resolution = size
@@ -252,7 +263,7 @@ mod tests {
 
     #[test]
     fn a_file_stream_says_the_renderer_may_pause_it() {
-        let didl = didl_lite("http://x/y", "BigNetScreen", None, DLNA_FILE_MEDIA);
+        let didl = stream_didl("http://x/y", "BigNetScreen", None, DLNA_FILE_MEDIA);
         assert!(
             didl.contains("DLNA.ORG_OP=00;DLNA.ORG_FLAGS=8d300000"),
             "{didl}"
@@ -266,14 +277,14 @@ mod tests {
 
     #[test]
     fn the_item_describes_a_live_stream_with_no_seeking() {
-        let didl = didl_lite(
+        let didl = stream_didl(
             "http://192.168.1.41:7236/abc",
             "BigNetScreen",
             None,
             DLNA_MEDIA,
         );
         assert!(!didl.contains("resolution="), "{didl}");
-        let known = didl_lite("http://x/y", "BigNetScreen", Some((1920, 1080)), DLNA_MEDIA);
+        let known = stream_didl("http://x/y", "BigNetScreen", Some((1920, 1080)), DLNA_MEDIA);
         assert!(known.contains(r#"resolution="1920x1080""#), "{known}");
         assert!(didl.contains("object.item.videoItem"), "{didl}");
         assert!(didl.contains("http-get:*:video/mpeg:"), "{didl}");
@@ -289,7 +300,7 @@ mod tests {
         // The title reaches here from the user's settings, and the URL from
         // our own server, but neither is a reason to skip escaping: one
         // unescaped `<` ends the element early and the rest is anyone's.
-        let didl = didl_lite(
+        let didl = stream_didl(
             "http://x/y",
             "</dc:title><upnp:class>object.item</upnp:class>",
             None,
@@ -302,6 +313,21 @@ mod tests {
         assert!(didl.contains("&lt;/dc:title&gt;"), "{didl}");
         // Exactly one real class element survives.
         assert_eq!(didl.matches("<upnp:class>").count(), 1, "{didl}");
+    }
+
+    #[test]
+    fn a_file_item_escapes_every_value_it_carries() {
+        let didl = file_didl(
+            "http://x/a?b&c",
+            "Tom & Jerry",
+            "object.item\"><x>",
+            "audio/x\"><y>",
+            0,
+            None,
+        );
+        assert!(!didl.contains("<x>") && !didl.contains("<y>"), "{didl}");
+        assert!(didl.contains("Tom &amp; Jerry"), "{didl}");
+        assert!(didl.contains(">http://x/a?b&amp;c</res>"), "{didl}");
     }
 
     #[test]
