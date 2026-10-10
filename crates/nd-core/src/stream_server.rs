@@ -1,41 +1,24 @@
 //! The HTTP server that delivers the stream to a receiver that fetches it.
 //!
-//! Two protocols work this way and share every byte of this module. Neither
-//! gets media over its control channel: we hand the receiver a **URL** — Cast's
-//! `LOAD`, DLNA's `SetAVTransportURI` — and it opens a `GET` back to us. This
-//! is that other side. The only difference between them is what the response
-//! says the body is, which is [`MediaType`].
+//! Cast (`LOAD`) and DLNA (`SetAVTransportURI`) both hand the receiver a URL,
+//! and the receiver opens a `GET` back to us; this module is that other side,
+//! shared by both. They differ only in how the response describes the body,
+//! which is [`MediaType`].
 //!
-//! ## Why hand-written HTTP instead of `hyper`
+//! HTTP is hand-written because the pipeline's `multisocketsink` writes
+//! straight into the receiver's socket, which means handing GStreamer the
+//! descriptor once the headers are out; an HTTP framework does not give the
+//! raw connection back halfway through a response. The surface is one `GET`
+//! and one response that ends when the connection closes.
 //!
-//! The pipeline ends in `multisocketsink`, which writes **straight into the
-//! receiver's socket** — no intermediate copy, and no bytes passing through
-//! the async runtime. That requires handing the socket descriptor to GStreamer
-//! after the headers have been written, and an HTTP framework will not give
-//! back the raw connection halfway through a response. It is the same design
-//! as the reference C project (`src/cc/cc-http-server.c`, libsoup +
-//! `wrote-headers` → `add`).
-//!
-//! The HTTP surface is tiny (one `GET`, one EOF-terminated response), which
-//! makes a hand-written parser a reasonable trade for the latency gain.
-//!
-//! ## Protections
-//!
-//! The stream is the user's screen: anyone on the LAN who can reach it is
-//! watching their desktop. Two barriers, as in the C code:
-//!
-//! 1. **A random 128-bit token in the path.** A portscan will not find the
-//!    stream; the path has to be guessed. A wrong path gives `404` (not
-//!    `403`), without disclosing whether a particular protected path exists.
-//! 2. **An allowlist for the receiver's IP.** Even someone who learned the
-//!    token is only served if they come from the Chromecast the session was
-//!    opened with.
-//!
-//! The socket also listens **only on the IP of the interface that reaches the
-//! receiver**, never on `0.0.0.0`.
+//! The stream is the person's screen, so it is guarded three ways: a random
+//! 128-bit token in the path (a wrong path gets `404`, never revealing that a
+//! protected one exists), an allowlist of the one receiver address the session
+//! was opened with, and a listener bound only to the interface that reaches
+//! that receiver.
 
 use std::io::Read;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::time::Duration;
 
 use gio::prelude::*;
@@ -140,10 +123,10 @@ pub fn random_token() -> Result<String> {
 /// guessing the first interface: on a machine with a VPN (Tailscale, say) the
 /// wrong IP leaves the Chromecast unable to connect back.
 pub fn local_ip_towards(peer: IpAddr) -> Result<IpAddr> {
-    let bind: SocketAddr = if peer.is_ipv4() {
-        "0.0.0.0:0".parse().unwrap()
+    let bind = if peer.is_ipv4() {
+        SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0))
     } else {
-        "[::]:0".parse().unwrap()
+        SocketAddr::from((Ipv6Addr::UNSPECIFIED, 0))
     };
     let socket = std::net::UdpSocket::bind(bind).map_err(net_err)?;
     socket.connect((peer, 9)).map_err(net_err)?;
@@ -153,7 +136,7 @@ pub fn local_ip_towards(peer: IpAddr) -> Result<IpAddr> {
 /// The outcome of triaging a request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Verdict {
-    /// Serve o stream.
+    /// Serve the stream.
     Stream,
     /// Headers only (the receiver sometimes probes with `HEAD`).
     HeadOnly,
@@ -238,9 +221,10 @@ fn response_headers(verdict: Verdict, media: MediaType) -> String {
     }
 }
 
-/// Minimal origin-form HTTP/1.x requests, no body or ambiguous framing.
-/// Kept shared with file serving so both token-protected paths reject the same
-/// malformed syntax. These endpoints intentionally do not implement uploads.
+/// The method and target of a complete origin-form HTTP/1.x request head, or
+/// `None` for anything with a body, ambiguous framing or malformed syntax.
+///
+/// Public so file serving rejects exactly what this server rejects.
 pub fn request_line(request: &str) -> Option<(&str, &str)> {
     if !request.is_ascii() || request.len() > MAX_REQUEST_BYTES {
         return None;
@@ -295,7 +279,8 @@ fn token_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b)
 }
 
-/// The deadline covers the WHOLE request, not a fresh timeout per byte/chunk.
+/// Reads one request head, at most [`MAX_REQUEST_BYTES`], within one deadline
+/// for the whole request so a client trickling bytes cannot hold the reader.
 pub async fn read_request<R: AsyncRead + Unpin>(stream: &mut R) -> Result<String> {
     read_request_with_timeout(stream, REQUEST_TIMEOUT).await
 }
@@ -316,7 +301,7 @@ async fn read_request_with_timeout<R: AsyncRead + Unpin>(
             return Err(NdError::Network("incomplete HTTP headers".into()));
         }
         buffer.extend_from_slice(&chunk[..read]);
-        // Check BEFORE accepting a terminating delimiter in an oversized last chunk.
+        // Checked before the delimiter, so an oversized last chunk is refused.
         if buffer.len() > MAX_REQUEST_BYTES {
             return Err(NdError::Network("HTTP request too large".into()));
         }
@@ -332,8 +317,10 @@ async fn read_request_with_timeout<R: AsyncRead + Unpin>(
     Ok(request)
 }
 
-/// Cancelled writes are followed by dropping the connection, never a retry on
-/// the same partially written response. File bodies also have a per-chunk limit.
+/// Writes to a peer that must keep reading: five seconds, then an error.
+///
+/// After a timeout the connection is dropped, never retried on a partially
+/// written response.
 pub async fn write_bounded(stream: &mut TcpStream, bytes: &[u8]) -> Result<()> {
     tokio::time::timeout(Duration::from_secs(5), stream.write_all(bytes))
         .await
@@ -353,11 +340,12 @@ pub struct StreamServer {
 }
 
 impl StreamServer {
-    /// Brings the server up on an ephemeral port of the IP that reaches `receiver`.
+    /// Brings the server up on the address that reaches `receiver`, at the
+    /// port set in the preferences or, when that is `0`, one the kernel picks.
     pub async fn bind(receiver: IpAddr, media: MediaType) -> Result<Self> {
         let local_ip = local_ip_towards(receiver)?;
-        // Port 0 = the kernel picks. Listening on this IP alone keeps the
-        // stream off the other interfaces (VPN, docker0, loopback…).
+        // Listening on this address alone keeps the stream off the other
+        // interfaces (VPN, docker0, loopback).
         let listener = TcpListener::bind((local_ip, crate::settings::current().port))
             .await
             .map_err(net_err)?;
@@ -374,12 +362,12 @@ impl StreamServer {
         })
     }
 
-    /// The URL to hand the receiver.
     /// How the responses describe the stream.
     pub fn media(&self) -> MediaType {
         self.media
     }
 
+    /// The URL to hand the receiver; it carries the secret path.
     pub fn url(&self) -> String {
         let host = match self.local_addr.ip() {
             IpAddr::V4(ip) => ip.to_string(),
@@ -420,10 +408,9 @@ impl StreamServer {
             }
             None
         });
-        // Closing the descriptor is this side's job once GStreamer gives it
-        // back — it was this side that handed it over. Wired here rather than
-        // by each caller so a second protocol cannot forget it and leak a
-        // socket per disconnect.
+        // `multisocketsink` hands a removed client's socket back without
+        // closing it. Closing it here rather than in each caller means no
+        // protocol can leak a descriptor per disconnect.
         sink.connect("client-socket-removed", false, |values| {
             if let Ok(socket) = values[1].get::<gio::Socket>() {
                 let _ = socket.close();
@@ -452,7 +439,7 @@ impl StreamServer {
                 }
             };
 
-            let (mut stream, peer) = match accepted {
+            let (stream, peer) = match accepted {
                 Ok(pair) => pair,
                 Err(err) => {
                     tracing::warn!(%err, "failed to accept a connection");
@@ -464,52 +451,13 @@ impl StreamServer {
             if peer.ip() != self.allowed {
                 continue;
             }
-            let read = tokio::select! {
-                result = read_request(&mut stream) => result,
+            let admitted = tokio::select! {
+                admitted = self.admit(stream, peer) => admitted,
                 _ = cancel.changed() => return Ok(()),
             };
-            let request = match read {
-                Ok(request) => request,
-                Err(err) => {
-                    tracing::debug!(%peer, %err, "request discarded");
-                    let _ = write_bounded(
-                        &mut stream,
-                        response_headers(Verdict::BadRequest, self.media).as_bytes(),
-                    )
-                    .await;
-                    continue;
-                }
-            };
-
-            let verdict = triage(&request, &self.path, self.allowed, peer.ip());
-            if verdict != Verdict::Stream {
-                if verdict == Verdict::Forbidden {
-                    tracing::warn!(
-                        %peer, expected = %self.allowed,
-                        "refusing a stream request from another address"
-                    );
-                } else {
-                    tracing::debug!(%peer, ?verdict, "request refused");
-                }
-                let _ = write_bounded(
-                    &mut stream,
-                    response_headers(verdict, self.media).as_bytes(),
-                )
-                .await;
-                // Dropping TcpStream closes it; no unbounded shutdown wait.
+            let Some(stream) = admitted else {
                 continue;
-            }
-
-            // Headers first; only then does GStreamer take the socket over.
-            let headers = response_headers(Verdict::Stream, self.media);
-            let written = tokio::select! {
-                result = write_bounded(&mut stream, headers.as_bytes()) => result,
-                _ = cancel.changed() => return Ok(()),
             };
-            if let Err(err) = written {
-                tracing::warn!(%peer, %err, "failed to write the headers");
-                continue;
-            }
             if *cancel.borrow() {
                 return Ok(());
             }
@@ -528,29 +476,65 @@ impl StreamServer {
             }
         }
     }
+
+    /// Reads one request and answers it, unless it is a valid `GET`: then the
+    /// stream's headers are written and the socket is returned for the sink.
+    async fn admit(&self, mut stream: TcpStream, peer: SocketAddr) -> Option<TcpStream> {
+        let request = match read_request(&mut stream).await {
+            Ok(request) => request,
+            Err(err) => {
+                tracing::debug!(%peer, %err, "request discarded");
+                let _ = write_bounded(
+                    &mut stream,
+                    response_headers(Verdict::BadRequest, self.media).as_bytes(),
+                )
+                .await;
+                return None;
+            }
+        };
+        let verdict = triage(&request, &self.path, self.allowed, peer.ip());
+        if verdict != Verdict::Stream {
+            if verdict == Verdict::Forbidden {
+                tracing::warn!(
+                    %peer, expected = %self.allowed,
+                    "refusing a stream request from another address"
+                );
+            } else {
+                tracing::debug!(%peer, ?verdict, "request refused");
+            }
+            // Dropping the stream closes it; there is no shutdown wait.
+            let _ = write_bounded(
+                &mut stream,
+                response_headers(verdict, self.media).as_bytes(),
+            )
+            .await;
+            return None;
+        }
+        // Headers first; only then does GStreamer take the socket over.
+        let headers = response_headers(Verdict::Stream, self.media);
+        if let Err(err) = write_bounded(&mut stream, headers.as_bytes()).await {
+            tracing::warn!(%peer, %err, "failed to write the headers");
+            return None;
+        }
+        Some(stream)
+    }
 }
 
 /// The kernel's share of a slow reader's backlog.
 ///
-/// Left to autotuning, a stream socket's send buffer grows toward
-/// `net.ipv4.tcp_wmem`'s maximum, which BigLinux raises to 32 MiB: against a
-/// reader that stopped, 18.5 MB piled up there, out of `multisocketsink`'s
-/// sight. Its queue limit then fired tens of seconds late, and each of those
-/// seconds reached the television as delay once it read again. Fixed, the
-/// sink's own limit is the bound on every kernel. 256 KiB, which the kernel
-/// doubles, still covers a 21 Mbit/s stream over a 150 ms round trip.
+/// Left to autotuning, the send buffer grows toward `net.ipv4.tcp_wmem`'s
+/// maximum (32 MiB on BigLinux), where a stopped reader's backlog piles up
+/// out of `multisocketsink`'s sight and its queue limit fires tens of seconds
+/// late. Fixed, the sink's own limit is the bound. 256 KiB, which the kernel
+/// doubles, covers a 21 Mbit/s stream over a 150 ms round trip.
 const SEND_BUFFER_BYTES: i32 = 256 * 1024;
 
 /// Transfers ownership of the TCP socket to `multisocketsink`.
 ///
-/// A detail that only shows up in practice: the descriptor coming from tokio
-/// is in **non-blocking** mode, but `multisocketsink` writes from its own
-/// streaming thread and expects a blocking socket. Without this GStreamer
-/// would see `EAGAIN` and treat it as a client error.
-///
-/// Ownership of the descriptor passes to the `gio::Socket` (and from there to
-/// GStreamer); if construction fails, the `OwnedFd` is consumed and closed
-/// right there.
+/// tokio's descriptor is non-blocking, but `multisocketsink` writes from its
+/// own streaming thread and treats `EAGAIN` as a client error, so the socket
+/// is made blocking first. The `gio::Socket` takes ownership of the
+/// descriptor; if building it fails, the descriptor is closed there.
 fn hand_socket_to_sink(stream: TcpStream, sink: &gst::Element) -> Result<()> {
     let std_stream = stream.into_std().map_err(net_err)?;
     std_stream.set_nonblocking(false).map_err(net_err)?;
@@ -572,7 +556,7 @@ mod tests {
     use std::net::Ipv4Addr;
 
     const CAST: IpAddr = IpAddr::V4(Ipv4Addr::new(192, 168, 0, 50));
-    const INTRUSO: IpAddr = IpAddr::V4(Ipv4Addr::new(192, 168, 0, 99));
+    const STRANGER: IpAddr = IpAddr::V4(Ipv4Addr::new(192, 168, 0, 99));
 
     fn get(path: &str) -> String {
         format!("GET {path} HTTP/1.1\r\nHost: x\r\n\r\n")
@@ -590,7 +574,7 @@ mod tests {
     #[test]
     fn serves_the_receiver_on_the_right_path() {
         assert_eq!(
-            triage(&get("/segredo"), "/segredo", CAST, CAST),
+            triage(&get("/secret"), "/secret", CAST, CAST),
             Verdict::Stream
         );
     }
@@ -599,11 +583,11 @@ mod tests {
     fn wrong_path_is_404_not_403() {
         // Do not distinguish protected resources from unknown paths.
         assert_eq!(
-            triage(&get("/chute"), "/segredo", CAST, CAST),
+            triage(&get("/guess"), "/secret", CAST, CAST),
             Verdict::NotFound
         );
         // Including for those already on the allowlist.
-        assert_eq!(triage(&get("/"), "/segredo", CAST, CAST), Verdict::NotFound);
+        assert_eq!(triage(&get("/"), "/secret", CAST, CAST), Verdict::NotFound);
     }
 
     #[test]
@@ -611,7 +595,7 @@ mod tests {
         // Defence in depth: even with the token leaked, only the session's
         // receiver is served.
         assert_eq!(
-            triage(&get("/segredo"), "/segredo", CAST, INTRUSO),
+            triage(&get("/secret"), "/secret", CAST, STRANGER),
             Verdict::Forbidden
         );
     }
@@ -619,31 +603,31 @@ mod tests {
     #[test]
     fn query_string_is_not_part_of_the_secret() {
         assert_eq!(
-            triage(&get("/segredo?x=1"), "/segredo", CAST, CAST),
+            triage(&get("/secret?x=1"), "/secret", CAST, CAST),
             Verdict::Stream
         );
     }
 
     #[test]
     fn head_probe_is_answered_without_a_body() {
-        let request = "HEAD /segredo HTTP/1.1\r\nHost: x\r\n\r\n";
-        assert_eq!(triage(request, "/segredo", CAST, CAST), Verdict::HeadOnly);
+        let request = "HEAD /secret HTTP/1.1\r\nHost: x\r\n\r\n";
+        assert_eq!(triage(request, "/secret", CAST, CAST), Verdict::HeadOnly);
     }
 
     #[test]
     fn other_methods_are_refused() {
-        let request = "POST /segredo HTTP/1.1\r\nHost: x\r\n\r\n";
+        let request = "POST /secret HTTP/1.1\r\nHost: x\r\n\r\n";
         assert_eq!(
-            triage(request, "/segredo", CAST, CAST),
+            triage(request, "/secret", CAST, CAST),
             Verdict::MethodNotAllowed
         );
     }
 
     #[test]
     fn malformed_requests_do_not_panic() {
-        for raw in ["", "\r\n", "LIXO", "GET", "GET  \r\n"] {
-            let verdict = triage(raw, "/segredo", CAST, CAST);
-            assert_ne!(verdict, Verdict::Stream, "aceitou {raw:?}");
+        for raw in ["", "\r\n", "JUNK", "GET", "GET  \r\n"] {
+            let verdict = triage(raw, "/secret", CAST, CAST);
+            assert_ne!(verdict, Verdict::Stream, "accepted {raw:?}");
         }
     }
 
