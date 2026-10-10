@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "  profile/level:     {:#04x}/{:#04x}",
         caps.profile, caps.level
     );
-    println!("\n  {} modos suportados:", caps.modes.len());
+    println!("\n  {} supported modes:", caps.modes.len());
     for mode in &caps.modes {
         println!(
             "    {:>4}x{:<4} @{:>2}Hz {:?}{}",

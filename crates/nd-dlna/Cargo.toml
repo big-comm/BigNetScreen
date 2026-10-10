@@ -1,6 +1,6 @@
 [package]
 name = "nd-dlna"
-description = "Transmissão para receptores DLNA/UPnP (SSDP + AVTransport + MPEG-TS por HTTP)"
+description = "Casting to DLNA/UPnP renderers: SSDP discovery, AVTransport control and MPEG-TS over HTTP"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
