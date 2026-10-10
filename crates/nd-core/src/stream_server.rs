@@ -279,7 +279,7 @@ fn token_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b)
 }
 
-/// Reads one request head, at most [`MAX_REQUEST_BYTES`], within one deadline
+/// Reads one request head, at most `MAX_REQUEST_BYTES`, within one deadline
 /// for the whole request so a client trickling bytes cannot hold the reader.
 pub async fn read_request<R: AsyncRead + Unpin>(stream: &mut R) -> Result<String> {
     read_request_with_timeout(stream, REQUEST_TIMEOUT).await
