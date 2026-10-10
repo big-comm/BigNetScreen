@@ -1,6 +1,9 @@
-//! Cast's wire frame id is only eight bits. Keep the expanded, monotonic ACK
-//! locally, and never allow an unacknowledged window to reach half that range.
-//! This is a protocol safety limit, NOT an adaptive congestion controller.
+//! The ACK window of one mirroring track.
+//!
+//! Cast's wire frame id is eight bits. The expanded, monotonic checkpoint is
+//! kept here, and the unacknowledged window never reaches half that range, so
+//! a wire id always names one frame. This bounds the protocol; adapting to
+//! the link is [`crate::rate`]'s job.
 
 use std::time::Instant;
 
@@ -38,8 +41,8 @@ impl AckWindow {
         self.checkpoint
     }
 
-    /// Publish before the first packet can reach the receiver, so a fast ACK
-    /// does not race with recording its own frame. Errors then end the session.
+    /// Records `frame_id` as sent. Called before its first packet leaves, so
+    /// a fast ACK cannot arrive for a frame not yet recorded.
     pub(crate) fn sent(&mut self, frame_id: u32) {
         debug_assert!(self.can_send());
         debug_assert_eq!(i64::from(frame_id), self.last_sent + 1);
@@ -52,10 +55,11 @@ impl AckWindow {
         self.last_sent = i64::from(frame_id);
     }
 
-    /// Expand to the most recent SENT id matching the wire byte. Never accept
-    /// a future id or move a checkpoint backwards on reordered UDP feedback.
-    /// XR reference time additionally distinguishes older datagrams across
-    /// whole 256-frame cycles when the receiver supplies it.
+    /// Applies a checkpoint from the wire: the byte expands to the most recent
+    /// sent id it matches. A future id, or one behind the checkpoint from
+    /// reordered feedback, is refused (`false`). An XR reference time, when
+    /// the receiver supplies one, also refuses datagrams a whole 256-frame
+    /// cycle old.
     pub(crate) fn acknowledge(&mut self, wire: u8, reference_time: Option<u64>) -> bool {
         if let (Some(new), Some(old)) = (reference_time, self.newest_reference_time)
             && new < old
@@ -106,7 +110,7 @@ mod tests {
         window.last_progress = before - Duration::from_secs(60);
         window.sent(0);
         assert!(window.last_progress >= before);
-        // Adding more outstanding frames must NOT keep renewing the timeout.
+        // More outstanding frames must not keep renewing the timeout.
         let original = window.last_progress;
         window.sent(1);
         assert_eq!(window.last_progress, original);

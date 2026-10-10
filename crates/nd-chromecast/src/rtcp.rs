@@ -1,12 +1,13 @@
-//! Cast Streaming RTCP: *sender reports*.
+//! Cast Streaming RTCP, both directions.
 //!
-//! The receiver needs to know which wall-clock instant a given RTP timestamp
-//! corresponds to — that pairing is what lets it schedule display and keep
-//! audio and video in sync. Without a sender report it receives the packets
-//! with no way to decide **when** to show them.
+//! Outgoing, the sender report: it pairs a wall-clock instant with an RTP
+//! timestamp, which is what lets the receiver schedule display and keep audio
+//! and video in sync. Incoming, the receiver's compound datagrams: Cast
+//! feedback (checkpoint and NACKs) and picture-loss requests, parsed only
+//! after the whole datagram validates, since the bytes come off the network.
 //!
-//! The format is standard RTCP (RFC 3550, §6.4.1), which is what Open Screen
-//! serialises in `sender_report_builder.cc`:
+//! The sender report is standard RTCP (RFC 3550, §6.4.1), as Open Screen
+//! serialises it in `sender_report_builder.cc`:
 //!
 //! ```text
 //!  0                   1                   2                   3
@@ -87,124 +88,29 @@ pub fn build_sender_report(ssrc: u32, ntp: u64, rtp_timestamp: u32, stats: Sende
     packet
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn sender_report_has_the_rfc_layout() {
-        let stats = SenderStats {
-            packets: 1234,
-            octets: 567_890,
-        };
-        let packet = build_sender_report(0xDEAD_BEEF, 0x0123_4567_89AB_CDEF, 90_000, stats);
-
-        assert_eq!(packet.len(), 28);
-        assert_eq!(packet[0], 0b1000_0000, "version 2, no padding, RC=0");
-        assert_eq!(packet[1], 200, "packet type = SR");
-        // Length in 32-bit words minus one: 28/4 - 1 = 6.
-        assert_eq!(u16::from_be_bytes([packet[2], packet[3]]), 6);
-
-        assert_eq!(
-            u32::from_be_bytes([packet[4], packet[5], packet[6], packet[7]]),
-            0xDEAD_BEEF
-        );
-        assert_eq!(
-            u64::from_be_bytes(packet[8..16].try_into().unwrap()),
-            0x0123_4567_89AB_CDEF
-        );
-        assert_eq!(
-            u32::from_be_bytes(packet[16..20].try_into().unwrap()),
-            90_000
-        );
-        assert_eq!(u32::from_be_bytes(packet[20..24].try_into().unwrap()), 1234);
-        assert_eq!(
-            u32::from_be_bytes(packet[24..28].try_into().unwrap()),
-            567_890
-        );
-    }
-
-    #[test]
-    fn ntp_conversion_uses_the_1900_epoch() {
-        // The Unix epoch is second 2_208_988_800 of the NTP scale.
-        let ntp = ntp_timestamp(UNIX_EPOCH);
-        assert_eq!(ntp >> 32, NTP_UNIX_OFFSET_SECS);
-        assert_eq!(ntp & 0xFFFF_FFFF, 0, "no fraction at the exact epoch");
-    }
-
-    #[test]
-    fn ntp_fraction_scales_to_2_pow_32() {
-        // Half a second must be exactly half of the fractional scale.
-        let half = UNIX_EPOCH + Duration::from_millis(500);
-        let ntp = ntp_timestamp(half);
-        let fraction = ntp & 0xFFFF_FFFF;
-        assert!(
-            (fraction as i64 - 0x8000_0000i64).abs() < 1000,
-            "unexpected fraction: {fraction:#x}"
-        );
-    }
-
-    #[test]
-    fn ntp_advances_with_time() {
-        let earlier = ntp_timestamp(UNIX_EPOCH + Duration::from_secs(10));
-        let later = ntp_timestamp(UNIX_EPOCH + Duration::from_secs(11));
-        assert!(later > earlier);
-        assert_eq!((later >> 32) - (earlier >> 32), 1);
-    }
-
-    #[test]
-    fn stats_accumulate() {
-        let mut stats = SenderStats::default();
-        stats.record(100);
-        stats.record(250);
-        assert_eq!(stats.packets, 2);
-        assert_eq!(stats.octets, 350);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// What the receiver sends back
-// ---------------------------------------------------------------------------
-
 /// The RTCP packet types that matter on the return path.
-pub const PT_RECEIVER_REPORT: u8 = 201;
-pub const PT_APPLICATION_DEFINED: u8 = 204;
-pub const PT_PAYLOAD_SPECIFIC: u8 = 206;
-pub const PT_EXTENDED_REPORTS: u8 = 207;
+const PT_RECEIVER_REPORT: u8 = 201;
+const PT_APPLICATION_DEFINED: u8 = 204;
+const PT_PAYLOAD_SPECIFIC: u8 = 206;
+const PT_EXTENDED_REPORTS: u8 = 207;
 
-/// A readable summary of a packet coming from the receiver.
-///
-/// The receiver talks back: it sends reports, asks for whatever it lost to be
-/// resent, and says when it needs a key frame. Ignoring that channel loses the
-/// diagnostics — and, in the key-frame case, breaks recovery after any loss.
+/// What one block from the receiver is.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ReceiverPacket {
+enum ReceiverPacket {
     ReceiverReport,
     /// The receiver lost track and wants a key frame.
     PictureLossIndication,
-    /// Feedback do Cast (checkpoint, NACKs).
+    /// Cast feedback (checkpoint, NACKs).
     CastFeedback,
     ExtendedReport,
     ReceiverLog,
     Other(u8),
 }
 
-/// Walks a **compound** RTCP datagram and returns every block.
-///
-/// A Cast packet carries several concatenated blocks (report, reference time,
-/// key-frame request, feedback with NACKs, log). Looking only at the first one
-/// hides precisely what matters.
-pub fn parse_compound(packet: &[u8]) -> Vec<ReceiverPacket> {
-    validated_blocks(packet)
-        .unwrap_or_default()
-        .into_iter()
-        .map(classify_block)
-        .collect()
-}
-
-/// Validate the WHOLE datagram before publishing any state. A valid prefix
-/// followed by a truncated block must not acknowledge frames or request IDRs.
-/// Returned slices exclude RTCP padding (only legal on the last block).
+/// The blocks of a compound datagram, or `None` unless the whole datagram is
+/// valid: a valid prefix followed by a truncated block must not acknowledge
+/// frames or request IDRs. The slices exclude RTCP padding, legal only on the
+/// last block.
 fn validated_blocks(packet: &[u8]) -> Option<Vec<&[u8]>> {
     if packet.is_empty() {
         return None;
@@ -283,14 +189,8 @@ fn classify_block(block: &[u8]) -> ReceiverPacket {
     }
 }
 
-/// Classifies a fully validated RTCP datagram; RTP and malformed tails fail.
-pub fn classify_receiver_packet(packet: &[u8]) -> Option<ReceiverPacket> {
-    validated_blocks(packet)?
-        .first()
-        .map(|block| classify_block(block))
-}
-
-/// PLI must address a negotiated pair, not merely arrive on the right socket.
+/// Whether the datagram carries a picture-loss request from `receiver_ssrc`
+/// about `sender_ssrc`: arriving on the session's socket is not enough.
 pub fn picture_loss_for(packet: &[u8], receiver_ssrc: u32, sender_ssrc: u32) -> bool {
     validated_blocks(packet).is_some_and(|blocks| {
         blocks.into_iter().any(|block| {
@@ -301,9 +201,207 @@ pub fn picture_loss_for(packet: &[u8], receiver_ssrc: u32, sender_ssrc: u32) -> 
     })
 }
 
+/// Identifier word of the Cast feedback block.
+const CAST_IDENTIFIER: &[u8; 4] = b"CAST";
+
+/// A retransmission request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Nack {
+    /// The requested frame (id truncated to 8 bits, as on the wire).
+    pub frame_id: u8,
+    /// The first packet. `0xFFFF` means the whole frame.
+    pub packet_id: u16,
+    /// Bitmap of the 8 packets following `packet_id`.
+    pub bitmask: u8,
+}
+
+impl Nack {
+    /// Every packet this request covers.
+    ///
+    /// `None` when the request is for the whole frame.
+    pub fn packet_ids(&self) -> Option<Vec<u16>> {
+        if self.packet_id == 0xFFFF {
+            return None;
+        }
+        let mut ids = vec![self.packet_id];
+        for bit in 0..8u16 {
+            if self.bitmask & (1 << bit) != 0
+                && let Some(id) = self
+                    .packet_id
+                    .checked_add(bit + 1)
+                    .filter(|id| *id != 0xFFFF)
+            {
+                ids.push(id);
+            }
+        }
+        Some(ids)
+    }
+}
+
+/// The contents of a Cast feedback block.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CastFeedback {
+    /// The receiver that sent this report (must match ANSWER.ssrcs).
+    pub receiver_ssrc: u32,
+    /// The XR reference timestamp, when sent; reordered feedback is told
+    /// apart by it.
+    pub reference_time: Option<u64>,
+    /// The sender SSRC this feedback refers to.
+    ///
+    /// Video and audio are separate streams, each with its own SSRC; without
+    /// this, one stream's retransmission requests would land on the other.
+    pub sender_ssrc: u32,
+    /// The last frame the receiver holds complete.
+    pub checkpoint_frame_id: u8,
+    /// What is missing.
+    pub nacks: Vec<Nack>,
+}
+
+/// Every Cast feedback block in a datagram: a compound packet can carry one
+/// per negotiated track. The receiver sends these many times a second while
+/// something is missing, and waits for the resend.
+pub fn parse_cast_feedbacks(packet: &[u8]) -> Vec<CastFeedback> {
+    let Some(blocks) = validated_blocks(packet) else {
+        return Vec::new();
+    };
+    let mut feedbacks = Vec::new();
+    for block in &blocks {
+        if classify_block(block) != ReceiverPacket::CastFeedback || block.len() < 20 {
+            continue;
+        }
+        let receiver_ssrc = u32::from_be_bytes(block[4..8].try_into().unwrap());
+        let sender_ssrc = u32::from_be_bytes(block[8..12].try_into().unwrap());
+        let mut reference_time = None;
+        for xr in &blocks {
+            if xr[1] != PT_EXTENDED_REPORTS || xr[4..8] != receiver_ssrc.to_be_bytes() {
+                continue;
+            }
+            let mut pos = 8;
+            while pos < xr.len() {
+                let size = (usize::from(u16::from_be_bytes([xr[pos + 2], xr[pos + 3]])) + 1) * 4;
+                if xr[pos] == 4 {
+                    reference_time = Some(u64::from_be_bytes(
+                        xr[pos + 4..pos + 12].try_into().unwrap(),
+                    ));
+                }
+                pos += size;
+            }
+        }
+        let mut nacks = Vec::with_capacity(usize::from(block[17]));
+        for loss in block[20..20 + usize::from(block[17]) * 4]
+            .as_chunks::<4>()
+            .0
+        {
+            nacks.push(Nack {
+                frame_id: loss[0],
+                packet_id: u16::from_be_bytes([loss[1], loss[2]]),
+                bitmask: loss[3],
+            });
+        }
+        feedbacks.push(CastFeedback {
+            receiver_ssrc,
+            reference_time,
+            sender_ssrc,
+            checkpoint_frame_id: block[16],
+            nacks,
+        });
+    }
+    feedbacks
+}
+
 #[cfg(test)]
-mod incoming_tests {
+mod tests {
     use super::*;
+
+    /// Every block of a compound datagram, classified.
+    fn parse_compound(packet: &[u8]) -> Vec<ReceiverPacket> {
+        validated_blocks(packet)
+            .unwrap_or_default()
+            .into_iter()
+            .map(classify_block)
+            .collect()
+    }
+
+    /// The first block of a fully validated datagram.
+    fn classify_receiver_packet(packet: &[u8]) -> Option<ReceiverPacket> {
+        validated_blocks(packet)?
+            .first()
+            .map(|block| classify_block(block))
+    }
+
+    fn parse_cast_feedback(packet: &[u8]) -> Option<CastFeedback> {
+        parse_cast_feedbacks(packet).into_iter().next()
+    }
+
+    #[test]
+    fn sender_report_has_the_rfc_layout() {
+        let stats = SenderStats {
+            packets: 1234,
+            octets: 567_890,
+        };
+        let packet = build_sender_report(0xDEAD_BEEF, 0x0123_4567_89AB_CDEF, 90_000, stats);
+
+        assert_eq!(packet.len(), 28);
+        assert_eq!(packet[0], 0b1000_0000, "version 2, no padding, RC=0");
+        assert_eq!(packet[1], 200, "packet type = SR");
+        // Length in 32-bit words minus one: 28/4 - 1 = 6.
+        assert_eq!(u16::from_be_bytes([packet[2], packet[3]]), 6);
+
+        assert_eq!(
+            u32::from_be_bytes([packet[4], packet[5], packet[6], packet[7]]),
+            0xDEAD_BEEF
+        );
+        assert_eq!(
+            u64::from_be_bytes(packet[8..16].try_into().unwrap()),
+            0x0123_4567_89AB_CDEF
+        );
+        assert_eq!(
+            u32::from_be_bytes(packet[16..20].try_into().unwrap()),
+            90_000
+        );
+        assert_eq!(u32::from_be_bytes(packet[20..24].try_into().unwrap()), 1234);
+        assert_eq!(
+            u32::from_be_bytes(packet[24..28].try_into().unwrap()),
+            567_890
+        );
+    }
+
+    #[test]
+    fn ntp_conversion_uses_the_1900_epoch() {
+        // The Unix epoch is second 2_208_988_800 of the NTP scale.
+        let ntp = ntp_timestamp(UNIX_EPOCH);
+        assert_eq!(ntp >> 32, NTP_UNIX_OFFSET_SECS);
+        assert_eq!(ntp & 0xFFFF_FFFF, 0, "no fraction at the exact epoch");
+    }
+
+    #[test]
+    fn ntp_fraction_scales_to_2_pow_32() {
+        // Half a second must be exactly half of the fractional scale.
+        let half = UNIX_EPOCH + Duration::from_millis(500);
+        let ntp = ntp_timestamp(half);
+        let fraction = ntp & 0xFFFF_FFFF;
+        assert!(
+            (fraction as i64 - 0x8000_0000i64).abs() < 1000,
+            "unexpected fraction: {fraction:#x}"
+        );
+    }
+
+    #[test]
+    fn ntp_advances_with_time() {
+        let earlier = ntp_timestamp(UNIX_EPOCH + Duration::from_secs(10));
+        let later = ntp_timestamp(UNIX_EPOCH + Duration::from_secs(11));
+        assert!(later > earlier);
+        assert_eq!((later >> 32) - (earlier >> 32), 1);
+    }
+
+    #[test]
+    fn stats_accumulate() {
+        let mut stats = SenderStats::default();
+        stats.record(100);
+        stats.record(250);
+        assert_eq!(stats.packets, 2);
+        assert_eq!(stats.octets, 350);
+    }
 
     fn packet(first: u8, pt: u8, words: u16, extra: usize) -> Vec<u8> {
         let mut p = vec![first, pt];
@@ -360,11 +458,6 @@ mod incoming_tests {
         let p = packet(0x41, PT_RECEIVER_REPORT, 1, 4);
         assert_eq!(classify_receiver_packet(&p), None, "invalid version");
     }
-}
-
-#[cfg(test)]
-mod compound_tests {
-    use super::*;
 
     fn block(first: u8, pt: u8, payload_words: u16) -> Vec<u8> {
         let mut b = vec![first, pt];
@@ -413,129 +506,6 @@ mod compound_tests {
         rtp.resize(60, 0);
         assert!(classify_receiver_packet(&rtp).is_none());
     }
-}
-
-// ---------------------------------------------------------------------------
-// Cast feedback: retransmission requests
-// ---------------------------------------------------------------------------
-
-/// Identifier word of the Cast feedback block.
-const CAST_IDENTIFIER: &[u8; 4] = b"CAST";
-
-/// A retransmission request.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Nack {
-    /// The requested frame (id truncated to 8 bits, as on the wire).
-    pub frame_id: u8,
-    /// The first packet. `0xFFFF` means **the whole frame**.
-    pub packet_id: u16,
-    /// Bitmap of the 8 packets following `packet_id`.
-    pub bitmask: u8,
-}
-
-impl Nack {
-    /// Every packet this request covers.
-    ///
-    /// `Ok(None)` when the request is for the whole frame.
-    pub fn packet_ids(&self) -> Option<Vec<u16>> {
-        if self.packet_id == 0xFFFF {
-            return None;
-        }
-        let mut ids = vec![self.packet_id];
-        for bit in 0..8u16 {
-            if self.bitmask & (1 << bit) != 0
-                && let Some(id) = self
-                    .packet_id
-                    .checked_add(bit + 1)
-                    .filter(|id| *id != 0xFFFF)
-            {
-                ids.push(id);
-            }
-        }
-        Some(ids)
-    }
-}
-
-/// The contents of a Cast feedback block.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct CastFeedback {
-    /// The receiver that sent this report (must match ANSWER.ssrcs).
-    pub receiver_ssrc: u32,
-    /// Optional XR reference timestamp used to discard reordered feedback.
-    pub reference_time: Option<u64>,
-    /// The **sender** SSRC this feedback refers to.
-    ///
-    /// Video and audio are separate streams, each with its own SSRC; without
-    /// this, one stream's retransmission requests would land on the other.
-    pub sender_ssrc: u32,
-    /// The last frame the receiver holds complete.
-    pub checkpoint_frame_id: u8,
-    /// What is missing.
-    pub nacks: Vec<Nack>,
-}
-
-/// Extracts the retransmission requests from a compound datagram.
-///
-/// The receiver sends these blocks dozens of times per second when something
-/// is missing. Ignoring them freezes the picture: it waits forever for a packet
-/// that is never resent.
-pub fn parse_cast_feedback(packet: &[u8]) -> Option<CastFeedback> {
-    parse_cast_feedbacks(packet).into_iter().next()
-}
-
-/// A compound packet can contain feedback for more than one negotiated track.
-pub fn parse_cast_feedbacks(packet: &[u8]) -> Vec<CastFeedback> {
-    let Some(blocks) = validated_blocks(packet) else {
-        return Vec::new();
-    };
-    let mut feedbacks = Vec::new();
-    for block in &blocks {
-        if classify_block(block) != ReceiverPacket::CastFeedback || block.len() < 20 {
-            continue;
-        }
-        let receiver_ssrc = u32::from_be_bytes(block[4..8].try_into().unwrap());
-        let sender_ssrc = u32::from_be_bytes(block[8..12].try_into().unwrap());
-        let mut reference_time = None;
-        for xr in &blocks {
-            if xr[1] != PT_EXTENDED_REPORTS || xr[4..8] != receiver_ssrc.to_be_bytes() {
-                continue;
-            }
-            let mut pos = 8;
-            while pos < xr.len() {
-                let size = (usize::from(u16::from_be_bytes([xr[pos + 2], xr[pos + 3]])) + 1) * 4;
-                if xr[pos] == 4 {
-                    reference_time = Some(u64::from_be_bytes(
-                        xr[pos + 4..pos + 12].try_into().unwrap(),
-                    ));
-                }
-                pos += size;
-            }
-        }
-        let mut nacks = Vec::with_capacity(usize::from(block[17]));
-        for loss in block[20..20 + usize::from(block[17]) * 4]
-            .as_chunks::<4>()
-            .0
-        {
-            nacks.push(Nack {
-                frame_id: loss[0],
-                packet_id: u16::from_be_bytes([loss[1], loss[2]]),
-                bitmask: loss[3],
-            });
-        }
-        feedbacks.push(CastFeedback {
-            receiver_ssrc,
-            reference_time,
-            sender_ssrc,
-            checkpoint_frame_id: block[16],
-            nacks,
-        });
-    }
-    feedbacks
-}
-
-#[cfg(test)]
-mod feedback_tests {
-    use super::*;
 
     /// Builds a feedback block the way the receiver sends it.
     fn feedback_block(checkpoint: u8, losses: &[(u8, u16, u8)]) -> Vec<u8> {
@@ -544,7 +514,7 @@ mod feedback_tests {
         let mut b = vec![0x8F, PT_PAYLOAD_SPECIFIC];
         b.extend_from_slice(&words.to_be_bytes());
         b.extend_from_slice(&100_002u32.to_be_bytes()); // receiver ssrc
-        b.extend_from_slice(&100_001u32.to_be_bytes()); // ssrc do emissor
+        b.extend_from_slice(&100_001u32.to_be_bytes()); // sender ssrc
         b.extend_from_slice(CAST_IDENTIFIER);
         b.push(checkpoint);
         b.push(losses.len() as u8);
@@ -562,7 +532,7 @@ mod feedback_tests {
         let block = feedback_block(42, &[(43, 5, 0b0000_0011), (44, 0, 0)]);
         let feedback = parse_cast_feedback(&block).expect("feedback block");
         assert_eq!(feedback.checkpoint_frame_id, 42);
-        assert_eq!(feedback.sender_ssrc, 100_001, "identifica a stream");
+        assert_eq!(feedback.sender_ssrc, 100_001, "names the stream");
         assert_eq!(feedback.nacks.len(), 2);
         assert_eq!(feedback.nacks[0].frame_id, 43);
         assert_eq!(feedback.nacks[0].packet_id, 5);
@@ -599,7 +569,7 @@ mod feedback_tests {
 
     #[test]
     fn finds_the_feedback_inside_a_compound_packet() {
-        // O feedback quase nunca vem sozinho.
+        // Feedback rarely arrives alone.
         let mut packet = vec![0x81, PT_RECEIVER_REPORT, 0x00, 0x07];
         packet.resize(32, 0);
         packet.extend(feedback_block(7, &[(8, 0, 0)]));

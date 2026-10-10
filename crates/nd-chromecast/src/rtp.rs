@@ -51,7 +51,7 @@ type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
 /// The IV is derived from the frame id: its low 32 bits written big-endian at
 /// offset 8 of a zeroed block, XORed with the mask negotiated in the OFFER.
 /// This is Open Screen's construction (`frame_crypto.cc`); any divergence
-/// produces unreadable video **with no error at all**.
+/// produces unreadable video with no error anywhere.
 pub fn encrypt_frame(key: &[u8; 16], iv_mask: &[u8; 16], frame_id: u32, data: &[u8]) -> Vec<u8> {
     let mut nonce = [0u8; 16];
     nonce[8..12].copy_from_slice(&frame_id.to_be_bytes());
@@ -74,7 +74,7 @@ pub struct Frame<'a> {
     pub reference_frame_id: Option<u32>,
     /// Timestamp in the stream's time base (90 kHz for video).
     pub rtp_timestamp: u32,
-    /// The **already encrypted** data.
+    /// The data, already encrypted.
     pub payload: &'a [u8],
 }
 
@@ -141,7 +141,6 @@ impl Packetizer {
             RTP_HEADER_SIZE + CAST_HEADER_SIZE + usize::from(!is_key) + chunk.len(),
         );
 
-        // --- RTP ---
         packet.push(RTP_FIRST_BYTE);
         // The marker flags the frame's last packet.
         packet.push(if is_last { MARKER_BIT } else { 0 } | (self.payload_type & 0x7F));
@@ -150,7 +149,7 @@ impl Packetizer {
         packet.extend_from_slice(&self.ssrc.to_be_bytes());
         self.sequence = self.sequence.wrapping_add(1);
 
-        // --- Cast ---
+        // The Cast header.
         let mut flags = 0u8;
         if is_key {
             flags |= KEY_FRAME_BIT;
@@ -337,13 +336,11 @@ mod tests {
         }) {
             assert!(
                 packet.len() <= MAX_PACKET_SIZE,
-                "fragmentaria em IP: {} bytes",
+                "would fragment at the IP layer: {} bytes",
                 packet.len()
             );
         }
     }
-
-    // --- criptografia ---
 
     #[test]
     fn encryption_round_trips() {

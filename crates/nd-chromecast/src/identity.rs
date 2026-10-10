@@ -2,10 +2,10 @@
 //!
 //! Trust on first use, as VLC does with a Chromecast: the first connection to
 //! a receiver records the key that proved its identity, and a later
-//! connection that proves a different key — or no longer proves one — is
-//! refused. VLC remembers the TLS key; a Chromecast replaces that every two
+//! connection that proves a different key, or stops proving one, is
+//! refused. VLC remembers the TLS key; a Chromecast rotates that every two
 //! days, so what is remembered here is the device key from DeviceAuth (see
-//! `cast::authenticate_device`), which stays with the hardware.
+//! `cast::device_auth`), which stays with the hardware.
 //!
 //! This does not establish that the first device was genuine, only that it
 //! is still the same one. Receivers are keyed by the identity the person

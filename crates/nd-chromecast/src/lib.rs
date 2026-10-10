@@ -1,10 +1,10 @@
 //! Receiver discovery over mDNS, and streaming to Chromecast.
 //!
-//! [`MdnsProvider`] browses **several service types with a single
-//! `ServiceDaemon`**. There used to be one daemon per protocol: two sockets on
-//! 5353, two copies of the multicast traffic and two bridging threads — and
-//! none of them was shut down on drop (mdns-sd's `ServiceDaemon` requires an
-//! explicit `shutdown()`).
+//! [`MdnsProvider`] browses several service types with a single mdns-sd
+//! `ServiceDaemon`: one socket on 5353 and one copy of the multicast traffic,
+//! however many protocols are listed. [`MdnsSink`] streams to a Chromecast,
+//! by mirroring ([`mirror_session`]) or, when the receiver has no mirroring
+//! app, by the HTTP path ([`session`]). AirPlay receivers are listed only.
 
 pub mod cast;
 pub mod file_server;
@@ -79,7 +79,7 @@ impl MdnsProvider {
         })
     }
 
-    /// Browses Chromecast **and** AirPlay on a single daemon (the app's case).
+    /// Browses Chromecast and AirPlay on a single daemon.
     pub fn all_media_receivers() -> Result<Self> {
         Self::new(
             "mdns",
@@ -87,23 +87,12 @@ impl MdnsProvider {
             vec![ServiceKind::CHROMECAST, ServiceKind::AIRPLAY],
         )
     }
-
-    /// Chromecast only (`_googlecast._tcp.local.`).
-    pub fn chromecast() -> Result<Self> {
-        Self::new("chromecast", "Chromecast", vec![ServiceKind::CHROMECAST])
-    }
-
-    /// AirPlay only (`_airplay._tcp.local.`) — discovery alone.
-    pub fn airplay() -> Result<Self> {
-        Self::new("airplay", "AirPlay", vec![ServiceKind::AIRPLAY])
-    }
 }
 
 impl Drop for MdnsProvider {
     fn drop(&mut self) {
-        // mdns-sd's `ServiceDaemon` keeps its background thread alive until an
-        // explicit `shutdown()`: without this, every provider created leaked a
-        // thread and a multicast socket for the rest of the process.
+        // mdns-sd's `ServiceDaemon` keeps its background thread and multicast
+        // socket until an explicit `shutdown()`, not until it is dropped.
         for service in &self.services {
             let _ = self.daemon.stop_browse(service.service_type);
         }
@@ -183,16 +172,15 @@ impl Provider for MdnsProvider {
 
 /// Picks, among the announced addresses, one that can actually be connected to.
 ///
-/// IPv4 first (most receivers announce nothing else), then routable IPv6 —
-/// IPv6-only networks used to make the receiver invisible.
+/// IPv4 first, since most receivers announce nothing else, then routable
+/// IPv6, so a receiver on an IPv6-only network still appears.
 ///
-/// **Link-local addresses are excluded.** An `fe80::…` is only usable together
+/// Link-local addresses are excluded. An `fe80::…` is only usable together
 /// with the interface index, which does not survive the conversion to
-/// `IpAddr`; connecting without it fails immediately with `EINVAL`. The same
-/// goes for IPv4's `169.254.0.0/16`. Since the same device usually announces
-/// itself more than once, each announcement carrying a different set of
-/// addresses, what this looked like in practice was a receiver that worked and
-/// then, on the next announcement, started returning "Invalid argument".
+/// `IpAddr`, and connecting without it fails with `EINVAL`; IPv4's
+/// `169.254.0.0/16` likewise. A device announces itself several times with
+/// different address sets, so taking one would make a working receiver fail
+/// after its next announcement.
 fn best_address(addresses: impl Iterator<Item = IpAddr>) -> Option<IpAddr> {
     addresses
         .filter(|ip| !ip.is_loopback() && !is_link_local(ip))
@@ -203,8 +191,7 @@ fn best_address(addresses: impl Iterator<Item = IpAddr>) -> Option<IpAddr> {
 fn is_link_local(ip: &IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => v4.is_link_local(),
-        // `is_unicast_link_local` is not stable for general use here yet.
-        IpAddr::V6(v6) => (v6.segments()[0] & 0xffc0) == 0xfe80,
+        IpAddr::V6(v6) => v6.is_unicast_link_local(),
     }
 }
 
@@ -275,16 +262,6 @@ impl MdnsSink {
             session: Mutex::new(None),
         }
     }
-
-    /// The receiver's resolved IP address.
-    pub fn ip(&self) -> Option<IpAddr> {
-        self.address
-    }
-
-    /// The port announced over mDNS (8009 on Chromecasts).
-    pub fn port(&self) -> u16 {
-        self.port
-    }
 }
 
 #[async_trait]
@@ -328,12 +305,9 @@ impl Sink for MdnsSink {
         self.status.reset();
 
         // Mirroring first: direct RTP, no media player in the middle, with a
-        // delay of hundreds of milliseconds rather than seconds.
-        //
-        // Not every Cast device ships the mirroring app (some speakers and
-        // older TVs only have the Default Media Receiver), so the fall back to
-        // the HTTP path is automatic — and only happens if the **negotiation**
-        // fails, never in the middle of a stream that already started.
+        // delay of hundreds of milliseconds rather than seconds. Not every
+        // Cast device ships the mirroring app, so the HTTP path follows when
+        // the negotiation fails, never in the middle of a stream that started.
         let video = source.video_source();
         let size = source.size_or((1920, 1080));
 
@@ -443,18 +417,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn service_kinds_use_the_right_mdns_types() {
-        assert_eq!(
-            ServiceKind::CHROMECAST.service_type,
-            "_googlecast._tcp.local."
-        );
-        assert_eq!(ServiceKind::AIRPLAY.service_type, "_airplay._tcp.local.");
-    }
-
-    #[test]
     fn one_daemon_serves_both_protocols() {
-        // A performance regression: two providers created two ServiceDaemons,
-        // duplicating 5353 sockets and multicast traffic.
+        // One daemon per protocol would duplicate the 5353 socket and the
+        // multicast traffic.
         let Ok(provider) = MdnsProvider::all_media_receivers() else {
             return; // no network in the test environment
         };
