@@ -1,7 +1,7 @@
 //! The window: a sidebar, a page for each thing the application does, and the
 //! state that outlives any one of them.
 //!
-//! The window is a client of the session service ([`service`]): it asks for
+//! The window is a client of the session service ([`service_link`]): it asks for
 //! actions over D-Bus and draws what the service publishes. Closing it stops
 //! the drawing, never a running session.
 //!
@@ -12,7 +12,7 @@
 //!   saying why, and a refused action replaces the status line.
 
 mod dialogs;
-mod service;
+mod service_link;
 mod wording;
 
 use std::cell::Cell;
@@ -36,7 +36,7 @@ use crate::pages::home::{HomeMsg, HomeOutput, HomePage};
 use crate::pages::media::{MediaMsg, MediaOutput, MediaPage};
 use crate::pages::settings::{SettingsMsg, SettingsOutput, SettingsPage};
 use crate::tr;
-use service::{Connection, ServiceState, follow_the_service};
+use service_link::{Connection, ServiceState, follow_the_service};
 use wording::{audio_summary, describe_refusal, describe_status, friendly_reason, web_page_text};
 
 pub struct AppModel {
@@ -421,34 +421,28 @@ impl Component for AppModel {
             }
         });
 
-        // The sidebar's entries, in the same order as `Page::all()` — the
-        // selection handler maps a row index straight onto that array.
+        // The sidebar rows follow `Page::all()`: the selection handler maps a
+        // row index straight onto that array.
         for page in Page::all() {
             let row = adw::ActionRow::builder().title(page.title()).build();
             row.add_prefix(&gtk::Image::from_icon_name(page.icon()));
             widgets.nav.append(&row);
+            let content: &gtk::Widget = match page {
+                Page::Home => model.home.widget().upcast_ref(),
+                Page::Devices => model.devices.widget().upcast_ref(),
+                Page::Media => model.media.widget().upcast_ref(),
+                Page::Settings => model.settings_page.widget().upcast_ref(),
+            };
+            widgets.stack.add_named(content, Some(page.id()));
         }
         if let Some(row) = widgets.nav.row_at_index(0) {
             widgets.nav.select_row(Some(&row));
         }
 
-        widgets
-            .stack
-            .add_named(model.home.widget(), Some(Page::Home.id()));
-        widgets
-            .stack
-            .add_named(model.devices.widget(), Some(Page::Devices.id()));
-        widgets
-            .stack
-            .add_named(model.media.widget(), Some(Page::Media.id()));
-        widgets
-            .stack
-            .add_named(model.settings_page.widget(), Some(Page::Settings.id()));
-
         // The pages are added after the view is built, so the first pass of
         // `set_visible_child_name` ran against an empty stack. Setting it here
-        // is what keeps the window from opening blank for a fraction of a
-        // second (and GTK from warning that "home" does not exist).
+        // keeps the window from opening blank, and GTK from warning that
+        // "home" does not exist.
         widgets.stack.set_visible_child_name(model.page.id());
 
         model.home.emit(HomeMsg::Searching(current.auto_discovery));
@@ -699,41 +693,7 @@ impl Component for AppModel {
                 self.status = describe_refusal(&reason);
                 self.failure = Some(reason);
             }
-            AppCmd::State(state) => {
-                let receivers_changed = state.receivers != self.state.receivers;
-                let session_changed = state.session != self.state.session
-                    || state.link_probe != self.state.link_probe;
-                let media_changed = state.media != self.state.media;
-                let searching_changed = state.status.kind != self.state.status.kind;
-                let virtual_changed = state.virtual_available != self.state.virtual_available;
-                let ndi_missing = state.status.kind == "ndi-runtime-missing"
-                    && self.state.status.kind != "ndi-runtime-missing";
-                let was_streaming = !self.state.session.is_idle();
-                self.state = *state;
-                self.status = describe_status(&self.state.status, &self.state.session);
-                if virtual_changed {
-                    self.home
-                        .emit(HomeMsg::VirtualAvailable(self.state.virtual_available));
-                }
-                if searching_changed {
-                    self.home
-                        .emit(HomeMsg::Searching(self.state.status.kind == "searching"));
-                }
-                if receivers_changed || session_changed {
-                    self.push_devices();
-                }
-                if media_changed {
-                    self.push_media_status();
-                }
-                if ndi_missing {
-                    sender.oneshot_command(async {
-                        AppCmd::NdiInstallOffer(crate::ndi_setup::can_install().await)
-                    });
-                }
-                if was_streaming && self.state.session.is_idle() {
-                    tracing::info!("the session ended");
-                }
-            }
+            AppCmd::State(state) => self.apply_state(*state, &sender),
         }
 
         self.update_view(widgets, sender);
@@ -801,6 +761,44 @@ impl AppModel {
         self.call_with_settings(sender, move |service| async move {
             service.cast(&id, &source, &page_text).await
         });
+    }
+
+    /// Takes a fresh reading of the service and tells each page only what
+    /// changed for it.
+    fn apply_state(&mut self, state: ServiceState, sender: &ComponentSender<Self>) {
+        let receivers_changed = state.receivers != self.state.receivers;
+        let session_changed =
+            state.session != self.state.session || state.link_probe != self.state.link_probe;
+        let media_changed = state.media != self.state.media;
+        let searching_changed = state.status.kind != self.state.status.kind;
+        let virtual_changed = state.virtual_available != self.state.virtual_available;
+        let ndi_missing = state.status.kind == "ndi-runtime-missing"
+            && self.state.status.kind != "ndi-runtime-missing";
+        let was_streaming = !self.state.session.is_idle();
+        self.state = state;
+        self.status = describe_status(&self.state.status, &self.state.session);
+        if virtual_changed {
+            self.home
+                .emit(HomeMsg::VirtualAvailable(self.state.virtual_available));
+        }
+        if searching_changed {
+            self.home
+                .emit(HomeMsg::Searching(self.state.status.kind == "searching"));
+        }
+        if receivers_changed || session_changed {
+            self.push_devices();
+        }
+        if media_changed {
+            self.push_media_status();
+        }
+        if ndi_missing {
+            sender.oneshot_command(async {
+                AppCmd::NdiInstallOffer(crate::ndi_setup::can_install().await)
+            });
+        }
+        if was_streaming && self.state.session.is_idle() {
+            tracing::info!("the session ended");
+        }
     }
 
     /// Pushes the current list to every page that shows receivers.
