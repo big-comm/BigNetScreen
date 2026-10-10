@@ -1,19 +1,15 @@
-//! Opening the WFD ports in firewalld.
+//! Opening the WFD ports in firewalld for the length of a Miracast session.
 //!
-//! On Manjaro/BigLinux firewalld is usually active, and in that case the
-//! Miracast sink **cannot reach TCP 7236** — the cast used to fail with no
-//! message at all, because `ensure_firewall_zone()` was an empty `Ok(())`.
+//! firewalld is usually active on Manjaro/BigLinux, and without these rules the
+//! receiver cannot reach TCP 7236 and the cast fails silently.
 //!
-//! The strategy:
-//! - the rules are **runtime only**, never written to the permanent
-//!   configuration: a reboot or a `firewall-cmd --reload` discards them;
-//! - the scope is the **P2P interface's zone**, not the whole machine;
-//! - if firewalld is not installed/active, everything becomes a silent no-op
-//!   (the user may be on ufw, raw nftables, or no firewall at all);
-//! - the rules applied are **remembered on disk** while they are open, so a
-//!   run that dies without releasing them (crash, `SIGKILL`) does not leave
-//!   the ports open until the next reboot: the next run closes them first
-//!   (see [`release_stale`]).
+//! - The rules are runtime only: a reboot or `firewall-cmd --reload` discards
+//!   them, and nothing is written to the permanent configuration.
+//! - They go in the P2P interface's zone, not the whole machine.
+//! - Without firewalld (ufw, raw nftables, no firewall) everything is a no-op.
+//! - The open rules are recorded on disk until released, so a run that dies
+//!   without releasing them (crash, `SIGKILL`) does not leave the ports open
+//!   until the next reboot: the next run closes them first ([`release_stale`]).
 
 use std::path::PathBuf;
 
@@ -56,6 +52,14 @@ trait FirewallZone {
     fn query_port(&self, zone: &str, port: &str, protocol: &str) -> zbus::Result<bool>;
 }
 
+/// The ports a session needs, as firewalld names them.
+fn wfd_ports() -> [(String, String); 2] {
+    [
+        (RTSP_PORT.to_string(), "tcp".to_string()),
+        (RTP_PORTS.to_string(), "udp".to_string()),
+    ]
+}
+
 /// The rules applied, so they can be undone exactly as they were made.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FirewallLease {
@@ -90,24 +94,22 @@ impl FirewallLease {
 
     /// Reads back what [`Self::to_file`] wrote; `None` if the file makes no
     /// sense (there is nothing safe to do with a half-written zone name).
+    ///
+    /// Only the WFD ports are accepted: the record is a file anyone with the
+    /// user's rights can edit, and it must not be able to close other rules.
     fn from_file(contents: &str) -> Option<Self> {
         let mut lines = contents.lines();
         let zone = lines.next()?.trim();
         if zone.is_empty() {
             return None;
         }
+        let known = wfd_ports();
         let ports = lines
             .filter(|line| !line.trim().is_empty())
             .map(|line| {
                 let mut parts = line.split_whitespace();
-                let port = parts.next()?;
-                let protocol = parts.next()?;
-                if parts.next().is_some()
-                    || !matches!((port, protocol), ("7236", "tcp") | ("16384-16385", "udp"))
-                {
-                    return None;
-                }
-                Some((port.to_string(), protocol.to_string()))
+                let rule = (parts.next()?.to_string(), parts.next()?.to_string());
+                (parts.next().is_none() && known.contains(&rule)).then_some(rule)
             })
             .collect::<Option<Vec<_>>>()?;
         if ports.len() > 2 || (ports.len() == 2 && ports[0] == ports[1]) {
@@ -193,7 +195,7 @@ async fn connect() -> Option<Connection> {
 /// default zone is used. Returns the "lease" to hand to [`release`].
 ///
 /// It never fails because firewalld is missing — only on a real error while
-/// applying a rule.
+/// applying a rule, after undoing the rules this call had applied.
 pub async fn ensure_ports_open(interface: Option<&str>) -> Result<FirewallLease> {
     let Some(conn) = connect().await else {
         return Ok(FirewallLease::noop());
@@ -207,82 +209,59 @@ pub async fn ensure_ports_open(interface: Option<&str>) -> Result<FirewallLease>
             return Ok(FirewallLease::noop());
         }
     };
-
-    // Find out which zone the P2P interface is in. A freshly created
-    // interface usually has no explicit zone: it lands in the default one.
-    //
-    // zbus proxies are lazy: firewalld's absence only shows up here, on the
-    // first call — which is why the degradation to a no-op happens at this
-    // point rather than when the proxy is created.
-    let zone = match interface {
-        Some(iface) => match zone_proxy.get_zone_of_interface(iface).await {
-            Ok(z) if !z.is_empty() => z,
-            _ => match default_zone(&conn).await? {
-                Some(z) => z,
-                None => return Ok(FirewallLease::noop()),
-            },
-        },
-        None => match default_zone(&conn).await? {
-            Some(z) => z,
-            None => return Ok(FirewallLease::noop()),
-        },
+    let Some(zone) = zone_of(&conn, &zone_proxy, interface).await? else {
+        return Ok(FirewallLease::noop());
     };
 
-    let wanted = [
-        (RTSP_PORT.to_string(), "tcp".to_string()),
-        (RTP_PORTS.to_string(), "udp".to_string()),
-    ];
-
-    let mut applied = Vec::new();
-    for (port, proto) in wanted {
-        // Already open by the user's configuration? Then it is not ours to close.
-        let already_open = match zone_proxy.query_port(&zone, &port, &proto).await {
-            Ok(open) => open,
-            Err(err) => {
-                release(FirewallLease {
-                    zone: zone.clone(),
-                    ports: applied,
-                })
-                .await;
-                return Err(NdError::Network(format!(
-                    "firewalld queryPort failed: {err}"
-                )));
-            }
-        };
-        if already_open {
-            tracing::debug!(%zone, %port, %proto, "port was already open");
-            continue;
-        }
-        match zone_proxy.add_port(&zone, &port, &proto, 0).await {
-            Ok(_) => {
-                tracing::info!(%zone, %port, %proto, "port opened in firewalld");
-                applied.push((port, proto));
-                // Record each successful mutation, including a failure/crash
-                // between opening the first and second port.
-                remember(&FirewallLease {
-                    zone: zone.clone(),
-                    ports: applied.clone(),
-                });
-            }
-            Err(err) => {
-                release(FirewallLease {
-                    zone: zone.clone(),
-                    ports: applied,
-                })
-                .await;
-                return Err(NdError::Network(format!(
-                    "firewalld could not open {port}/{proto}: {err}"
-                )));
-            }
-        }
-    }
-
-    let lease = FirewallLease {
+    let mut lease = FirewallLease {
         zone,
-        ports: applied,
+        ports: Vec::new(),
     };
-    remember(&lease);
+    for (port, proto) in wfd_ports() {
+        let zone = &lease.zone;
+        // Already open by the user's configuration? Then it is not ours to close.
+        let opened = match zone_proxy.query_port(zone, &port, &proto).await {
+            Ok(true) => {
+                tracing::debug!(%zone, %port, %proto, "port was already open");
+                continue;
+            }
+            Ok(false) => zone_proxy
+                .add_port(zone, &port, &proto, 0)
+                .await
+                .map_err(|err| format!("firewalld could not open {port}/{proto}: {err}")),
+            Err(err) => Err(format!("firewalld queryPort failed: {err}")),
+        };
+        if let Err(message) = opened {
+            release(lease).await;
+            return Err(NdError::Network(message));
+        }
+        tracing::info!(%zone, %port, %proto, "port opened in firewalld");
+        lease.ports.push((port, proto));
+        // Recorded after each rule, so a crash between the two leaves the
+        // first one on record.
+        remember(&lease);
+    }
     Ok(lease)
+}
+
+/// The zone `interface` is in, falling back to the default zone; `None` when
+/// firewalld is not there.
+///
+/// A freshly created interface usually has no explicit zone and lands in the
+/// default one. zbus proxies are lazy, so firewalld's absence only shows up on
+/// these first calls.
+async fn zone_of(
+    conn: &Connection,
+    zone_proxy: &FirewallZoneProxy<'_>,
+    interface: Option<&str>,
+) -> Result<Option<String>> {
+    if let Some(interface) = interface
+        && let Ok(zone) = zone_proxy.get_zone_of_interface(interface).await
+        && !zone.is_empty()
+    {
+        return Ok(Some(zone));
+    }
+    default_zone(conn).await
 }
 
 /// firewalld's default zone, or `None` when firewalld is not there.
@@ -315,11 +294,16 @@ pub async fn release(lease: FirewallLease) {
     if lease.is_noop() {
         return;
     }
+    // Any early return keeps the on-disk record for the next run.
     let Some(conn) = connect().await else {
-        return; // Keep the on-disk lease for the next run.
-    };
-    let Ok(zone_proxy) = FirewallZoneProxy::new(&conn).await else {
         return;
+    };
+    let zone_proxy = match FirewallZoneProxy::new(&conn).await {
+        Ok(proxy) => proxy,
+        Err(err) => {
+            tracing::warn!(%err, zone = %lease.zone, "firewalld unreachable; ports left open for the next run");
+            return;
+        }
     };
 
     let mut complete = true;
@@ -366,10 +350,7 @@ mod tests {
     fn lease_record_round_trips() {
         let lease = FirewallLease {
             zone: "public".into(),
-            ports: vec![
-                (RTSP_PORT.to_string(), "tcp".into()),
-                (RTP_PORTS.to_string(), "udp".into()),
-            ],
+            ports: wfd_ports().to_vec(),
         };
         assert_eq!(FirewallLease::from_file(&lease.to_file()), Some(lease));
         assert_eq!(FirewallLease::from_file(""), None);
