@@ -245,6 +245,19 @@ fn is_gone(e: &zbus::Error) -> bool {
     )
 }
 
+/// Did NetworkManager refuse a teardown because the group already went down?
+///
+/// Any other refusal (a policy denial, a bus failure) leaves the group up and
+/// has to reach the caller.
+fn already_inactive(e: &zbus::Error) -> bool {
+    is_gone(e)
+        || matches!(
+            e,
+            zbus::Error::MethodError(name, _, _)
+                if name.as_str() == "org.freedesktop.NetworkManager.ConnectionNotActive"
+        )
+}
+
 /// Tells "the service does not even exist here" from "the call failed".
 ///
 /// Previously every D-Bus error became the same `Deactivated`/`Network`, which
@@ -653,9 +666,8 @@ impl P2pDevice {
     pub async fn disconnect(&self, active: &OwnedObjectPath) -> Result<()> {
         match self.nm.deactivate_connection(&active.as_ref()).await {
             Ok(()) => Ok(()),
-            // It already went down on its own: not an error.
-            Err(zbus::Error::MethodError(..)) => Ok(()),
-            Err(e) => Err(err(e)),
+            Err(e) if already_inactive(&e) => Ok(()),
+            Err(e) => Err(classify(e, "DeactivateConnection")),
         }
     }
 
@@ -818,7 +830,9 @@ impl P2pDevice {
             let deadline = tokio::time::Instant::now() + per_attempt;
             loop {
                 if *cancel.borrow() {
-                    let _ = self.disconnect(&active).await;
+                    if let Err(err) = self.disconnect(&active).await {
+                        tracing::warn!(%err, "could not tear down the Wi-Fi Direct group");
+                    }
                     return Err(NdError::Cancelled);
                 }
                 if tokio::time::Instant::now() >= deadline {
@@ -876,7 +890,9 @@ impl P2pDevice {
             }
 
             tracing::warn!(attempt, err = %last, "the Wi-Fi Direct group attempt failed");
-            let _ = self.disconnect(&active).await;
+            if let Err(err) = self.disconnect(&active).await {
+                tracing::warn!(%err, "could not tear down the Wi-Fi Direct group");
+            }
             // Let the teardown finish. Asking for a new group while the old
             // activation is still being removed is how an attempt ends up
             // watching an object that is on its way out.
@@ -943,6 +959,35 @@ unsafe fn libc_getuid() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn method_error(name: &str) -> zbus::Error {
+        let call = zbus::Message::method_call("/", "DeactivateConnection")
+            .unwrap()
+            .build(&())
+            .unwrap();
+        zbus::Message::error(&call.header(), name)
+            .unwrap()
+            .build(&("detail",))
+            .unwrap()
+            .into()
+    }
+
+    #[test]
+    fn only_a_group_that_is_already_down_counts_as_torn_down() {
+        assert!(already_inactive(&method_error(
+            "org.freedesktop.NetworkManager.ConnectionNotActive"
+        )));
+        assert!(already_inactive(&method_error(
+            "org.freedesktop.DBus.Error.UnknownObject"
+        )));
+        // A refusal leaves the group up; reporting success would hide it.
+        assert!(!already_inactive(&method_error(
+            "org.freedesktop.NetworkManager.PermissionDenied"
+        )));
+        assert!(!already_inactive(&method_error(
+            "org.freedesktop.DBus.Error.AccessDenied"
+        )));
+    }
 
     #[test]
     fn active_state_mapping() {
