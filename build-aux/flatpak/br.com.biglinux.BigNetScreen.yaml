@@ -1,20 +1,17 @@
-# Manifesto Flatpak do BigNetScreen.
+# BigNetScreen Flatpak manifest.
 #
-# A structural limitation of the sandbox: NetworkManager and firewalld live on
-# the **system** bus, which Flatpak does not grant access to. Therefore:
+# NetworkManager and firewalld live on the system bus, which the sandbox does
+# not reach, so Miracast is unavailable here and the app says so. Screen
+# capture goes through the ScreenCast portal only, never Mutter or KWin.
 #
-#   Chromecast → network access is declared; receiver validation is separate
-#   Miracast   → unavailable; the app detects the sandbox and says so in the UI
-#
-# Screen capture goes exclusively through the portal (ashpd), never Mutter directly.
-#
-# Antes de construir, gere as fontes do Cargo:
+# Generate the Cargo sources before building:
 #   python3 flatpak-cargo-generator.py Cargo.lock -o cargo-sources.json
 # (https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo)
 
 app-id: br.com.biglinux.BigNetScreen
 runtime: org.gnome.Platform
-runtime-version: '49'
+# GNOME 50 is the first runtime with GTK 4.22 and libadwaita 1.9.
+runtime-version: '50'
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
@@ -26,7 +23,7 @@ build-options:
     CARGO_HOME: /run/build/bignetscreen/cargo
 
 finish-args:
-  # Descoberta mDNS e canal Cast.
+  # mDNS/SSDP discovery and every streaming transport.
   - --share=network
   - --socket=wayland
   - --socket=fallback-x11
@@ -52,9 +49,8 @@ modules:
       env:
         CARGO_NET_OFFLINE: 'true'
     build-commands:
-      - cargo build --release --offline --locked
-      - make PREFIX=/app DESTDIR= locale
-      - make PREFIX=/app DESTDIR= install CARGO_FLAGS="--release --offline --locked"
+      # `install` builds the binaries and the translations first.
+      - make PREFIX=/app install CARGO_FLAGS="--release --offline --locked"
     sources:
       - type: dir
         path: ../..
