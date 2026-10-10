@@ -9,15 +9,17 @@ BigNetScreen is a Rust workspace with a native GTK4/libadwaita/Relm4 UI, not a P
 | Location | Responsibility |
 | --- | --- |
 | `crates/nd-core` | Shared traits, capture sources, settings, media and GStreamer pipelines |
-| `crates/nd-capture` | ScreenCast portal and native Mutter backends |
+| `crates/nd-capture` | ScreenCast portal, plus native Mutter and KWin backends for virtual screens |
 | `crates/nd-net` | NetworkManager P2P, firewalld leases and hardware probing |
 | `crates/nd-chromecast` | mDNS, Cast control, RTP/RTCP, HTTP and media sessions |
+| `crates/nd-dlna` | SSDP discovery and UPnP AVTransport control of DLNA renderers |
 | `crates/nd-wfd` | Miracast RTSP negotiation and streaming |
 | `crates/nd-ndi` | Optional NDI publisher |
 | `crates/nd-webrtc` | Browser publisher, WHEP front door and PIN |
-| `crates/nd-gui` | Presentation, user actions and application lifetime |
-| `vendor/gst-plugin-ndi` | **Tracked source**, not a disposable dependency cache |
-| `vendor/relm4` | **Tracked source**; bounds shutdown-channel retention (see `PATCHES.md`) |
+| `crates/nd-service` | Session service (`bignetscreend`, `bignetscreenctl`): engine, session lifetime and the D-Bus API |
+| `crates/nd-gui` | Presentation and user actions; a D-Bus client of the session service |
+| `vendor/gst-plugin-ndi` | Tracked source, not a disposable dependency cache |
+| `vendor/relm4` | Tracked source; bounds shutdown-channel retention (see `PATCHES.md`) |
 
 ## Work and evidence
 
@@ -27,7 +29,7 @@ Classify failures as CODE, TEST, ENV, DEPENDENCY or UNKNOWN from the actual log.
 
 ## Build and test
 
-This review environment uses Rust **1.98.1**, isolated and verified with rustc/cargo/clippy/rustfmt version output. Reuse supplied offline tools; never install rustup or change system libraries merely to satisfy a sandbox. The manifest's MSRV is also 1.98.1 and keeps its own CI gate, so a newer local toolchain does not hide a regression.
+This review environment uses Rust 1.98.1, isolated and verified with rustc/cargo/clippy/rustfmt version output. Reuse supplied offline tools; never install rustup or change system libraries merely to satisfy a sandbox. The manifest's MSRV is also 1.98.1 and keeps its own CI gate, so a newer local toolchain does not hide a regression.
 
 ```sh
 cargo fmt --all -- --check

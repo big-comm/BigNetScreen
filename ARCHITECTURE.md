@@ -6,27 +6,29 @@ Build the window and service with `cargo build --locked -p nd-gui -p nd-service`
 
 ---
 
-Closing a window should not end a presentation. The session service owns discovery and transmission; the GTK window is a client that can leave and reconnect. The previous architecture narrative is retained in [history](docs/history/architecture-before-stable-review.md); its measurements and test counts are not evidence for the current tree.
+Closing a window should not end a presentation. The session service owns discovery and transmission; the GTK window is a client that can leave and reconnect.
 
 ## Ownership and flow
 
 ```text
-GTK/Relm4 UI ── D-Bus actions ── nd-service session
-    │                                          │
-    └── status and errors ◄─────────────────────┤
-                                               │
-portal or Mutter ── CaptureSource ── GStreamer ──┤
-                          │                    ├─ Cast RTP/RTCP + Cast TLS control
-                          └─ FD + stable ID    ├─ Cast HTTP MPEG-TS + Cast control
-                                               ├─ WFD MPEG-TS/RTP + RTSP
-                                               ├─ DLNA HTTP MPEG-TS + UPnP
-                                               ├─ NDI publishing
-                                               └─ WebRTC/WHEP browser publishing
+GTK/Relm4 window ── D-Bus calls ─────────► nd-service (bignetscreend)
+       ▲                                    │
+       └── state and errors ────────────────┤
+                                            │ owns the session
+                                            ▼
+portal / Mutter / KWin ─► CaptureSource ─► GStreamer pipeline
+  (PipeWire FD + stream ID)                 │
+                                            ├─ Cast RTP/RTCP + Cast TLS control
+                                            ├─ Cast HTTP MPEG-TS + Cast control
+                                            ├─ WFD MPEG-TS/RTP + RTSP
+                                            ├─ DLNA HTTP MPEG-TS + UPnP
+                                            ├─ NDI publishing
+                                            └─ WebRTC/WHEP browser publishing
 ```
 
-`nd-core` owns SourceType, CaptureSource, Provider/Sink traits, configuration and pipeline construction. `nd-capture` implements the ScreenCast portal and native Mutter fallback. `nd-net` owns NetworkManager LAN addresses, Wi-Fi Direct and temporary firewalld leases; `nd-wfd` handles RTSP negotiation. `nd-chromecast` owns mDNS and both Cast transports; `nd-dlna` owns SSDP and UPnP playback. `nd-ndi` and `nd-webrtc` adapt their GStreamer plugins. `nd-service` owns session lifetime and exports state through D-Bus. `nd-gui` owns presentation, never codec policy copied into widgets.
+`nd-core` owns SourceType, CaptureSource, Provider/Sink traits, configuration and pipeline construction. `nd-capture` implements the ScreenCast portal and, for virtual screens on native GNOME and KDE, the Mutter and KWin screencast APIs. `nd-net` owns NetworkManager LAN addresses, Wi-Fi Direct and temporary firewalld leases; `nd-wfd` handles RTSP negotiation. `nd-chromecast` owns mDNS and both Cast transports; `nd-dlna` owns SSDP and UPnP playback. `nd-ndi` and `nd-webrtc` adapt their GStreamer plugins. `nd-service` owns session lifetime and exports state through D-Bus. `nd-gui` owns presentation, never codec policy copied into widgets.
 
-The local `vendor/gst-plugin-ndi` is tracked, licensed source with local changes. The external Cargo offline vendor used by a review environment is a **different directory** and is not part of a source release.
+The local `vendor/gst-plugin-ndi` is tracked, licensed source with local changes. An offline Cargo vendor directory used to build without network is a different thing and is not part of a source release.
 
 `vendor/relm4` is also tracked source. Its local patch prunes closed component
 shutdown channels before registering another component, so window recreation
@@ -35,13 +37,13 @@ until the locked upstream version fixes that ownership; see its `PATCHES.md`.
 
 ## Capture identity
 
-The portal's restricted PipeWire FD and stream identity must survive until the encoding pipeline stops. Portal v6 supplies a u64 serial; the source targets that serial with `target-object`. Older portals and the Mutter backend currently use node IDs. A serial does not authorize access by itself: the portal FD still matters. The small `portal_start` adapter parses the raw Start response because the locked ashpd version does not expose the new property; remove that adapter only when the replacement API preserves it and the compatibility tests pass.
+The portal's restricted PipeWire FD and stream identity must survive until the encoding pipeline stops. Portal v6 supplies a u64 serial; the source targets that serial with `target-object`. Portals before v6 and the Mutter backend supply only a node ID; KWin's screencast protocol supplies a serial from version 6. A serial does not authorize access by itself: the portal FD still matters. The small `portal_start` adapter parses the raw Start response because the locked ashpd version does not expose the new property; remove that adapter only when the replacement API preserves it and the compatibility tests pass.
 
 Monitor authorization can be restored through portal tokens; windows request a fresh choice. Backend cancellation calls stop to release the compositor session. Virtual-monitor capabilities and actual negotiated dimensions are compositor-dependent. Do not force producer caps or fall back to an arbitrary camera when negotiation fails.
 
 ## Execution and lifecycle
 
-GTK/Relm4 runs on the GLib main context. Tokio handles D-Bus/network work; GStreamer owns its streaming threads. Cast mirroring currently has bounded packet history and per-stream workers sharing a pacing budget. Do not block the UI with socket or process waits.
+GTK/Relm4 runs on the GLib main context. Tokio handles D-Bus/network work; GStreamer owns its streaming threads. Cast mirroring has bounded packet history and per-stream workers sharing a pacing budget. Do not block the UI with socket or process waits.
 
 The service retains the active sink even if discovery refreshes its record. Stop signals the session, and the original session task returns only after cleanup. File playback follows the same rule: cancellation keeps its handle until cleanup finishes. Errors remain published until an explicit action replaces them. Closing the window flushes preferences and leaves the transmission running. An open window renews a lease every minute; once no session or client needs it, the service can exit after its idle grace period.
 
@@ -74,6 +76,6 @@ Encoded PTS is not necessarily running time. Segment conversion and coherent RTC
 
 ## Contracts and remaining limits
 
-See [testing](docs/testing.md) for deterministic and hardware gates, [Cast](docs/chromecast.md) for protocol-specific notes and [security](SECURITY.md) for trust boundaries. Receiver authentication, network behavior and compositor integration must not be inferred from a successful compile. Release status belongs in the review evidence and checklist, not in permanent architecture as an evergreen success claim.
+See [testing](docs/testing.md) for deterministic and hardware gates, [Cast](docs/chromecast.md) for protocol-specific notes and [security](SECURITY.md) for trust boundaries. Receiver authentication, network behavior and compositor integration must not be inferred from a successful compile.
 
 When changing behavior, ask: who owns the session after the window closes (Execution and lifecycle)? Which authorized PipeWire object is captured (Capture identity)? Which protocol owns the media constraints (Media paths are not interchangeable)?

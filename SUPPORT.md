@@ -2,17 +2,17 @@
 
 ## A receiver is not listed
 
-Check its Cast/Screen Mirroring mode, the selected protocol and whether automatic discovery is enabled. Cast needs local multicast discovery and a route back from the receiver; guest Wi-Fi isolation or VPN routing can prevent both. Miracast uses Wi-Fi Direct and needs compatible NetworkManager/hardware on a native installation. Do not disable your firewall globally as a troubleshooting step.
+Check its Cast/Screen Mirroring mode, the selected protocol and whether automatic discovery is enabled. Cast (mDNS) and DLNA (SSDP) need local multicast discovery and a route back from the receiver; guest Wi-Fi isolation or VPN routing can prevent both. Miracast uses Wi-Fi Direct and needs compatible NetworkManager/hardware on a native installation. Do not disable your firewall globally as a troubleshooting step.
 
 ## Video is slow, freezes, or is black
 
-Record which path is active: Cast mirroring, Cast HTTP, WFD, browser or NDI. For Cast HTTP, seconds of receiver buffering are possible. Try a modest resolution and compare a still desktop with motion. Record the negotiated resolution/FPS and encoder; available CPU/GPU capacity alone does not prove network/decoder capacity. Test the same receiver after Stop and a new connection.
+Record which path is active: Cast mirroring, Cast HTTP, Miracast, DLNA, browser or NDI. For Cast HTTP and DLNA, seconds of receiver buffering are possible. Try a modest resolution and compare a still desktop with motion. Record the negotiated resolution/FPS and encoder; available CPU/GPU capacity alone does not prove network/decoder capacity. Test the same receiver after Stop and a new connection.
 
 A missing GStreamer factory is a dependency problem. WebRTC needs `nicesink` and `nicesrc` from the GStreamer libnice plugin, not just the shared libnice library. NDI needs its separate runtime; [NDI setup](docs/ndi.md) describes that optional path. Portal/virtual-screen failures need the desktop, compositor and portal backend versions.
 
 ## A Cast receiver "did not prove it is the same device"
 
-BigNetScreen remembers the device key each Cast receiver proves the first time it is used, and refuses to send the screen when a later connection proves another key or none. Treat it first as someone on the network impersonating the receiver. If the receiver was really replaced and nobody else is on the network, delete `~/.local/share/bignetscreen/cast-receivers` (or under `$XDG_DATA_HOME`); every receiver is then remembered again on its next use.
+BigNetScreen remembers the device key each Cast receiver proves the first time it is used, and refuses to send the screen when a later connection proves another key or none. Treat it first as someone on the network impersonating the receiver. If the receiver was really replaced and nobody else is on the network, choose **Trust again** on that receiver in **Devices**; the device that answers next is remembered in its place. Deleting `$XDG_DATA_HOME/bignetscreen/cast-receivers` (usually `~/.local/share/bignetscreen/cast-receivers`) forgets every receiver at once.
 
 ## Safe diagnostic commands
 
