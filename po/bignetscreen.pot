@@ -272,7 +272,7 @@ msgstr ""
 msgid "Discovery and devices"
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:139 crates/nd-gui/src/pages/mod.rs:335 crates/nd-gui/src/pages/devices.rs:570
+#: crates/nd-gui/src/pages/mod.rs:139 crates/nd-gui/src/pages/mod.rs:319 crates/nd-gui/src/pages/devices.rs:570
 msgid "Discovery only"
 msgstr ""
 
