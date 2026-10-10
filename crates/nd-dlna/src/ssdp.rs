@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use futures::stream::{self, BoxStream, StreamExt};
+use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 
 use nd_core::provider::{DiscoveryEvent, Provider};
@@ -130,14 +131,12 @@ async fn search_announcements(
     .await
 }
 
-async fn search_on(
-    addresses: &[Ipv4Addr],
-    target: SocketAddr,
-    deliver: Option<mpsc::Sender<Announcement>>,
-) -> Result<Vec<Announcement>> {
+/// Sends the `M-SEARCH` from each local address and returns the sockets that
+/// sent it, for the replies to arrive on.
+async fn send_search(addresses: &[Ipv4Addr], target: SocketAddr) -> Result<Vec<UdpSocket>> {
     let mut sockets = Vec::new();
     for address in addresses {
-        if let Ok(socket) = tokio::net::UdpSocket::bind((*address, 0)).await {
+        if let Ok(socket) = UdpSocket::bind((*address, 0)).await {
             // Linux uses the bound local source to choose the multicast interface.
             let _ = socket.set_multicast_ttl_v4(4);
             sockets.push(socket);
@@ -169,6 +168,17 @@ async fn search_on(
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
 
+    Ok(sockets)
+}
+
+/// Searches from `addresses` and collects replies for [`LISTEN`], handing
+/// each new renderer to `deliver` as soon as it answers.
+async fn search_on(
+    addresses: &[Ipv4Addr],
+    target: SocketAddr,
+    deliver: Option<mpsc::Sender<Announcement>>,
+) -> Result<Vec<Announcement>> {
+    let mut sockets = send_search(addresses, target).await?;
     let mut found: Vec<Announcement> = Vec::new();
     let deadline = Instant::now() + LISTEN;
     while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
