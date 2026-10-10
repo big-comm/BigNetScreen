@@ -10,6 +10,7 @@ import os
 import re
 import sys
 import tomllib
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -23,15 +24,13 @@ PLURAL = re.compile(r'\btr_n!\(\s*"((?:[^"\\]|\\.)*)"\s*,\s*"((?:[^"\\]|\\.)*)"'
 
 def _timestamp() -> str:
     """POT-Creation-Date in the format gettext uses."""
-    from datetime import datetime, timezone
-
     epoch = os.environ.get("SOURCE_DATE_EPOCH")
     if epoch is not None:
         try:
             value = int(epoch)
             if value < 0:
                 raise ValueError("negative epoch")
-            return datetime.fromtimestamp(value, timezone.utc).strftime("%Y-%m-%d %H:%M%z")
+            return datetime.fromtimestamp(value, UTC).strftime("%Y-%m-%d %H:%M%z")
         except (ValueError, OverflowError, OSError) as error:
             raise ValueError("SOURCE_DATE_EPOCH must be a non-negative supported Unix timestamp") from error
     if OUTPUT.exists():

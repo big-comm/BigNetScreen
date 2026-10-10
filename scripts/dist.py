@@ -13,12 +13,12 @@ import argparse
 import gzip
 import hashlib
 import json
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import tempfile
 import tomllib
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -47,9 +47,12 @@ def main() -> int:
         source_name = f"bignetscreen-{version}.tar.gz"
         tar = staging / "source.tar"
         subprocess.run(["git", "-C", str(ROOT), "archive", "--format=tar", f"--prefix=bignetscreen-{version}/", "--output", str(tar), head], check=True, timeout=60)
-        with tar.open("rb") as src, (staging / source_name).open("wb") as target:
-            with gzip.GzipFile(filename="", mode="wb", fileobj=target, mtime=epoch) as compressed:
-                shutil.copyfileobj(src, compressed, length=1024 * 1024)
+        with (
+            tar.open("rb") as src,
+            (staging / source_name).open("wb") as target,
+            gzip.GzipFile(filename="", mode="wb", fileobj=target, mtime=epoch) as compressed,
+        ):
+            shutil.copyfileobj(src, compressed, length=1024 * 1024)
         tar.unlink()
         with (staging / source_name).open("rb") as stream:
             checksum = hashlib.file_digest(stream, "sha256").hexdigest()
