@@ -346,6 +346,66 @@ fn seek(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Counts the buffers reaching the `video` and `audio` fakesinks.
+    fn count_handoffs(pipeline: &gst::Pipeline) -> Vec<Arc<AtomicUsize>> {
+        ["video", "audio"]
+            .iter()
+            .map(|name| {
+                let count = Arc::new(AtomicUsize::new(0));
+                let observed = count.clone();
+                pipeline
+                    .by_name(name)
+                    .unwrap()
+                    .connect("handoff", false, move |_| {
+                        observed.fetch_add(1, Ordering::Relaxed);
+                        None
+                    });
+                count
+            })
+            .collect()
+    }
+
+    /// A receiver for the WFD RTP stream, fed through the `wire` appsrc and
+    /// decoding into the `video` and `audio` fakesinks.
+    fn ts_receiver() -> gst::Pipeline {
+        let receiver = gst::parse::launch(
+            "appsrc name=wire is-live=true do-timestamp=true format=time \
+             caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=MP2T,payload=33\" \
+             ! rtpjitterbuffer latency=30 ! rtpmp2tdepay ! tsdemux name=demux \
+             queue name=video-input ! h264parse ! avdec_h264 max-threads=2 \
+             ! fakesink name=video sync=false signal-handoffs=true \
+             queue name=audio-input ! aacparse ! avdec_aac \
+             ! fakesink name=audio sync=false signal-handoffs=true",
+        )
+        .unwrap()
+        .downcast::<gst::Pipeline>()
+        .unwrap();
+        let weak_receiver = receiver.downgrade();
+        receiver
+            .by_name("demux")
+            .unwrap()
+            .connect_pad_added(move |_, pad| {
+                let Some(receiver) = weak_receiver.upgrade() else {
+                    return;
+                };
+                let name = if pad.name().starts_with("video") {
+                    "video-input"
+                } else if pad.name().starts_with("audio") {
+                    "audio-input"
+                } else {
+                    return;
+                };
+                let sink = receiver.by_name(name).unwrap().static_pad("sink").unwrap();
+                // MPEG-TS updates its program map when the audio track joins.
+                if let Some(previous) = sink.peer() {
+                    previous.unlink(&sink).unwrap();
+                }
+                pad.link(&sink).unwrap();
+            });
+        receiver
+    }
 
     #[test]
     fn a_television_frame_is_16_by_9_and_holds_the_picture() {
@@ -446,11 +506,9 @@ mod tests {
         use crate::pipeline::{
             self, AudioSource, H264Encoder, PipelineGuard, StreamConfig, VideoSource, WfdTransport,
         };
-        use std::sync::{
-            Arc,
-            atomic::{AtomicUsize, Ordering},
-        };
         use std::time::{Duration, Instant};
+        // The sender's latency follows the global profile.
+        let _lock = crate::latency::exclusive();
         pipeline::init().unwrap();
         let path =
             std::env::temp_dir().join(format!("bns-transport-playback-{}.mkv", std::process::id()));
@@ -458,47 +516,9 @@ mod tests {
             "matroskamux name=mux ! filesink location=\"{}\" videotestsrc num-buffers=600 ! video/x-raw,width=160,height=90,framerate=30/1 ! vp8enc deadline=1 keyframe-max-dist=30 ! mux. audiotestsrc num-buffers=938 ! audio/x-raw,rate=48000 ! vorbisenc ! mux.",
             path.display()
         ));
-        let receiver = gst::parse::launch(
-            "appsrc name=wire is-live=true do-timestamp=true format=time caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=MP2T,payload=33\" ! rtpjitterbuffer latency=30 ! rtpmp2tdepay ! tsdemux name=demux queue name=video-input ! h264parse ! avdec_h264 max-threads=2 ! fakesink name=video sync=false signal-handoffs=true queue name=audio-input ! aacparse ! avdec_aac ! fakesink name=audio sync=false signal-handoffs=true"
-        ).unwrap().downcast::<gst::Pipeline>().unwrap();
+        let receiver = ts_receiver();
         let _receiver_guard = PipelineGuard::new(receiver.clone());
-        let weak_receiver = receiver.downgrade();
-        receiver
-            .by_name("demux")
-            .unwrap()
-            .connect_pad_added(move |_, pad| {
-                let Some(receiver) = weak_receiver.upgrade() else {
-                    return;
-                };
-                let name = if pad.name().starts_with("video") {
-                    "video-input"
-                } else if pad.name().starts_with("audio") {
-                    "audio-input"
-                } else {
-                    return;
-                };
-                let sink = receiver.by_name(name).unwrap().static_pad("sink").unwrap();
-                // MPEG-TS updates its program map when the audio track joins.
-                if let Some(previous) = sink.peer() {
-                    previous.unlink(&sink).unwrap();
-                }
-                pad.link(&sink).unwrap();
-            });
-        let counts: Vec<_> = ["video", "audio"]
-            .iter()
-            .map(|name| {
-                let count = Arc::new(AtomicUsize::new(0));
-                let observed = count.clone();
-                receiver
-                    .by_name(name)
-                    .unwrap()
-                    .connect("handoff", false, move |_| {
-                        observed.fetch_add(1, Ordering::Relaxed);
-                        None
-                    });
-                count
-            })
-            .collect();
+        let counts = count_handoffs(&receiver);
         receiver.set_state(gst::State::Playing).unwrap();
         let source = VideoSource::Media {
             source: crate::media::MediaSource::File(path.clone()),
@@ -612,10 +632,6 @@ mod tests {
     #[test]
     fn local_file_pause_seek_and_resume_preserve_audio_and_video() {
         use crate::pipeline::{self, AudioSource, PipelineGuard, VideoSource};
-        use std::sync::{
-            Arc,
-            atomic::{AtomicUsize, Ordering},
-        };
         use std::time::Duration;
         pipeline::init().unwrap();
         let path = std::env::temp_dir().join(format!("bns-playback-{}.mkv", std::process::id()));
@@ -635,21 +651,7 @@ mod tests {
         );
         let (pipeline, _) = pipeline::build_pipeline(&description, 0).unwrap();
         let guard = PipelineGuard::new(pipeline.clone());
-        let counts: Vec<_> = ["video", "audio"]
-            .iter()
-            .map(|name| {
-                let count = Arc::new(AtomicUsize::new(0));
-                let observed = count.clone();
-                pipeline
-                    .by_name(name)
-                    .unwrap()
-                    .connect("handoff", false, move |_| {
-                        observed.fetch_add(1, Ordering::Relaxed);
-                        None
-                    });
-                count
-            })
-            .collect();
+        let counts = count_handoffs(&pipeline);
         pipeline.set_state(gst::State::Playing).unwrap();
         pipeline.state(gst::ClockTime::from_seconds(3)).0.unwrap();
         let control = FilePlaybackControl::default();
