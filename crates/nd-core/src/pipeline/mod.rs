@@ -61,8 +61,7 @@ pub use ts_http::{
     CHROMECAST_MAX_RESOLUTION, DLNA_MAX_RESOLUTION, TS_HTTP_SINK_NAME, ts_http_pipeline_description,
 };
 pub use wfd::{
-    LOCAL_RTP_PORT, RTP_LATENCY_MS, WFD_AUDIO_PID, WFD_VIDEO_PID, WfdTransport, rtp_latency_ms,
-    wfd_pipeline_description,
+    LOCAL_RTP_PORT, WFD_AUDIO_PID, WFD_VIDEO_PID, WfdTransport, wfd_pipeline_description,
 };
 
 /// The memoised result of `gst::init()`.

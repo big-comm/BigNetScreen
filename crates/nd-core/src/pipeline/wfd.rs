@@ -2,59 +2,44 @@
 //!
 //! `nd-wfd` negotiates the mode and the sink's RTP port over RTSP and builds
 //! this description. Everything WFD-specific stays here: the fixed PES PIDs,
-//! constrained baseline, `rtpbin`'s sender reports and the RTP jitter buffer.
+//! constrained baseline, `rtpbin`'s sender reports and the pacing of the RTP
+//! sink.
 
 use std::net::IpAddr;
 
 use super::{H264Profile, StreamConfig, VideoSource, VideoTarget};
-
-/// The RTP jitter buffer's latency (`rtpbin`), when responding quickly.
-pub const RTP_LATENCY_MS: u64 = 20;
-
-/// The RTP jitter buffer to use, given the latency profile.
-///
-/// This is the buffer that actually absorbs network variance on the Miracast
-/// path: frames arriving unevenly are held here and released on schedule. It
-/// costs exactly its own size in delay, pointer included.
-pub fn rtp_latency_ms() -> u64 {
-    if crate::latency::is_film() {
-        crate::latency::FILM_RTP_LATENCY_MS
-    } else {
-        RTP_LATENCY_MS
-    }
-}
 
 /// Local RTP port used as the source of the WFD stream.
 pub const LOCAL_RTP_PORT: u16 = 16384;
 
 /// The video PES PID the Wi-Fi Display specification requires (0x1011).
 ///
-/// `mpegtsmux` assigns PIDs automatically when the generic `mux.` pad is used;
-/// WFD sinks look for video on **this** PID. It is the difference between the
-/// projector showing the picture and sitting black while receiving data.
+/// Through the generic `mux.` pad `mpegtsmux` picks PIDs itself, and a WFD
+/// sink that finds no video on this one receives data and shows black.
 pub const WFD_VIDEO_PID: u16 = 0x1011;
 
 /// The audio PES PID the specification requires (0x1100).
 pub const WFD_AUDIO_PID: u16 = 0x1100;
 
-/// Should the RTP `udpsink` wait on the clock before sending each packet?
+/// Whether the RTP `udpsink` holds each packet until its running time plus
+/// the pipeline latency.
 ///
-/// With `sync=true` (the element's default) a frame captured at `T` only hits
-/// the network at `T + pipeline-latency`. Since the source is already live —
-/// it produces at the screen's pace — that wait is **pure delay** in mirroring:
-/// the RTP timestamps remain correct and the sink does its own scheduling.
-///
-/// `BIGNETSCREEN_RTP_SYNC=1` restores the old behaviour for comparison.
-fn rtp_sink_syncs_to_clock() -> bool {
-    std::env::var("BIGNETSCREEN_RTP_SYNC")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false)
+/// A screen capture is already paced by the screen, so for it the wait is
+/// pure delay unless the film profile asked for exactly that buffering: a
+/// send-only `rtpbin` has no jitter buffer, so this sink is the only place it
+/// can happen. A file is decoded as fast as it can be read and is always
+/// paced. `BIGNETSCREEN_RTP_SYNC=1` forces the wait, for comparison.
+fn rtp_sink_syncs_to_clock(source: &VideoSource) -> bool {
+    source.is_media()
+        || crate::latency::is_film()
+        || std::env::var("BIGNETSCREEN_RTP_SYNC")
+            .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
 }
 
 /// A WFD session's RTP destination.
 #[derive(Clone, Copy, Debug)]
 pub struct WfdTransport {
-    /// IP do sink (TV/projetor) no link P2P.
+    /// The sink's address on the Wi-Fi Direct or LAN link.
     pub sink_ip: IpAddr,
     /// The RTP port the sink asked for (`wfd_client_rtp_ports` / `client_port=`).
     pub rtp_port: u16,
@@ -74,27 +59,20 @@ impl WfdTransport {
 
 /// Builds the WFD (Miracast) pipeline description.
 ///
-/// `source → videorate → scale/convert → encoder → h264parse → mpegtsmux →
-///  rtpmp2tpay → rtpbin → udpsink`, with a **mandatory AAC audio branch**.
-///
-/// Correctness notes (all verified against the reference C project, which is
-/// this protocol's interoperability oracle):
-/// - the MPEG-TS programme has to contain audio **and** video: a WFD sink
-///   advertises an A/V session and discards an incomplete programme;
-/// - **the PIDs are fixed**: video on 0x1011 and audio on 0x1100. Using the
-///   generic `mux.` pad lets `mpegtsmux` choose arbitrary PIDs, and the sink
-///   simply cannot find the video — it receives megabits and shows a black
-///   screen;
-/// - **`rtpmp2tpay perfect-rtptime=false`**: the default (`true`) derives the
-///   RTP timestamp from the buffer count rather than the send clock, and the
-///   sink uses that timestamp to schedule display;
-/// - `video/x-h264,profile=constrained-baseline` is required by the WFD
-///   profile;
-/// - `h264parse config-interval=-1` reinserts SPS/PPS at every IDR, so the sink
-///   can join the stream at any moment;
-/// - `rtpbin` generates the RTCP Sender Reports the sink uses to synchronise;
-/// - the queue before the payloader is **short and non-leaky**: dropping a
-///   piece of a TS packet would corrupt the flow.
+/// `source ! convert_scale ! encoder ! h264parse ! mpegtsmux ! rtpmp2tpay !
+/// rtpbin ! udpsink`, with an AAC branch into the same multiplex. What a WFD
+/// sink requires of it:
+/// - audio and video in one programme: the sink declared an audio and video
+///   session and discards a programme missing either;
+/// - video on PID 0x1011 and audio on 0x1100;
+/// - `perfect-rtptime=false`, so RTP timestamps follow the send clock rather
+///   than the buffer count; the sink schedules display by them;
+/// - constrained baseline, required by the WFD profile;
+/// - SPS and PPS at every IDR (`config-interval=-1`), so the sink can join at
+///   any moment;
+/// - RTCP sender reports from `rtpbin`, which the sink synchronises by;
+/// - a short, non-leaky queue before the payloader: dropping part of a TS
+///   packet corrupts the stream.
 pub fn wfd_pipeline_description(
     cfg: &StreamConfig,
     source: &VideoSource,
@@ -109,7 +87,7 @@ pub fn wfd_pipeline_description(
     let rtcp_port = transport.rtp_port.wrapping_add(1);
     let local_rtcp = transport.local_rtp_port.wrapping_add(1);
     format!(
-        "rtpbin name=rtpbin rtp-profile=avp latency={rtp_latency} \
+        "rtpbin name=rtpbin rtp-profile=avp \
          {src} ! {convert} ! {vqueue} ! \
          {enc} ! video/x-h264,profile=constrained-baseline ! \
          h264parse config-interval=-1 ! mux.sink_{video_pid} \
@@ -122,24 +100,13 @@ pub fn wfd_pipeline_description(
          rtpbin.send_rtcp_src_0 ! \
          udpsink host={ip} port={rtcp_port} bind-port={local_rtcp} sync=false async=false \
          {audio}",
-        rtp_latency = rtp_latency_ms(),
         src = source.description(),
-        // Wi-Fi Display agreed a mode with the sink in M3/M4; sending any
-        // other size is a mode it never accepted.
+        // The sink agreed to one mode in M3/M4 and accepts no other size.
         convert = cfg.convert_scale(VideoTarget::Exact((cfg.width, cfg.height))),
         vqueue = cfg.video_queue(source),
         enc = cfg.encoder_stage(false),
         video_pid = WFD_VIDEO_PID,
-        // A screen produces frames at the pace of the screen, so waiting on
-        // the clock before sending is pure delay. **A file does not**: with
-        // `sync=false` a decoder reads a film as fast as the disc allows and
-        // the receiver is sent an hour of video in a few seconds. So the file
-        // is the one case that has to be paced.
-        sync = if rtp_sink_syncs_to_clock() || source.is_media() {
-            "true"
-        } else {
-            "false"
-        },
+        sync = rtp_sink_syncs_to_clock(source),
         ip = transport.sink_ip,
         port = transport.rtp_port,
         local = transport.local_rtp_port,
@@ -214,5 +181,23 @@ mod tests {
         let desc = wfd_desc(&StreamConfig::default());
         assert!(desc.contains("perfect-rtptime=false"), "{desc}");
         assert!(desc.contains("ssrc=1"), "{desc}");
+    }
+
+    #[test]
+    fn film_mode_holds_the_stream_for_the_pipeline_latency() {
+        // A send-only `rtpbin` has no jitter buffer, so the only place the
+        // film profile's buffering can happen on this side is a sink that
+        // waits for the pipeline latency before sending.
+        let _lock = crate::latency::exclusive();
+        crate::latency::set(crate::latency::Profile::Film);
+        let film = wfd_desc(&StreamConfig::default());
+        crate::latency::set(crate::latency::Profile::Responsive);
+        let responsive = wfd_desc(&StreamConfig::default());
+        let rtp_sink = format!("port=19000 bind-port={LOCAL_RTP_PORT} sync=");
+        assert!(film.contains(&format!("{rtp_sink}true")), "{film}");
+        assert!(
+            responsive.contains(&format!("{rtp_sink}false")),
+            "{responsive}"
+        );
     }
 }

@@ -297,7 +297,7 @@ fn leaky(source: &VideoSource) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pipeline::{CHROMECAST_MAX_RESOLUTION, RTP_LATENCY_MS, rtp_latency_ms};
+    use crate::pipeline::CHROMECAST_MAX_RESOLUTION;
 
     fn cfg_at(width: u32, height: u32, fps: u32) -> StreamConfig {
         StreamConfig {
@@ -411,13 +411,7 @@ mod tests {
             spiky.latency_ms() >= spiky_responsive,
             "and never take away what an encoder already needs"
         );
-
-        // The RTP jitter buffer follows the same profile: it is where uneven
-        // arrival is actually absorbed on the Miracast path.
-        assert!(rtp_latency_ms() > RTP_LATENCY_MS);
-
         crate::latency::set(crate::latency::Profile::Responsive);
-        assert_eq!(rtp_latency_ms(), RTP_LATENCY_MS);
     }
 
     #[test]

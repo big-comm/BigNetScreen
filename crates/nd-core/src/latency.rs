@@ -22,18 +22,15 @@
 //! | [`Profile::Film`] | a few hundred ms | anything you only watch |
 //!
 //! It applies to every protocol, with a different knob for each: the pipeline
-//! latency and RTP jitter buffer on Miracast, the negotiated `targetDelay` on
-//! Cast mirroring, and leaving the receiver's own buffer alone on the Cast HTTP
+//! latency, held by the RTP sink, on Miracast; the negotiated `targetDelay` on
+//! Cast mirroring; and leaving the receiver's own buffer alone on the Cast HTTP
 //! path.
 //!
-//! Those knobs are not equally strong, and the difference is worth knowing
-//! before promising anything. On Miracast the buffering happens here and the
-//! delay is ours to set. On Cast the packets leave as soon as they are
-//! encoded, so the only lever is `targetDelay` — **a request**. The receiver
-//! runs its own buffer and may clamp or ignore what was asked, which is why
-//! someone can turn film mode on against a Chromecast and see nothing change.
-//! The negotiation logs the number that was asked for, so this can be checked
-//! rather than argued about.
+//! The knobs are not equally strong. On Miracast the buffering happens here
+//! and the delay is ours to set. On Cast the packets leave as soon as they are
+//! encoded, so the only lever is `targetDelay`, a request the receiver may
+//! clamp or ignore: film mode against a Chromecast can change nothing. The
+//! negotiation logs the delay it asked for.
 
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -62,9 +59,6 @@ pub enum Profile {
 /// Enough to ride out ordinary Wi-Fi variance; short enough that dragging a
 /// window onto the extra screen still feels connected to the hand doing it.
 pub const FILM_PIPELINE_LATENCY_MS: u64 = 400;
-
-/// The RTP jitter buffer in [`Profile::Film`], for the Miracast path.
-pub const FILM_RTP_LATENCY_MS: u64 = 200;
 
 /// The playout delay asked of a Cast receiver in [`Profile::Film`].
 pub const FILM_PLAYOUT_DELAY_MS: u32 = 400;
@@ -174,7 +168,5 @@ mod tests {
         // doing it.
         const _: () = assert!(FILM_PIPELINE_LATENCY_MS >= 150);
         const _: () = assert!(FILM_PIPELINE_LATENCY_MS <= 1000);
-        // The jitter buffer lives inside the pipeline's budget, not beyond it.
-        const _: () = assert!(FILM_RTP_LATENCY_MS < FILM_PIPELINE_LATENCY_MS);
     }
 }
