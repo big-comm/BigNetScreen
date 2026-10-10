@@ -4,9 +4,9 @@ import contextlib
 import importlib.util
 import io
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -48,9 +48,8 @@ class TranslationExtraction(unittest.TestCase):
 
     def test_invalid_epoch_is_not_silently_replaced_by_current_time(self):
         for epoch in ("-1", "not-a-timestamp", "9" * 60):
-            with patch.dict(os.environ, {"SOURCE_DATE_EPOCH": epoch}):
-                with self.assertRaises(ValueError):
-                    extract._timestamp()
+            with patch.dict(os.environ, {"SOURCE_DATE_EPOCH": epoch}), self.assertRaises(ValueError):
+                extract._timestamp()
 
     def test_missing_listed_source_does_not_erase_the_existing_template(self):
         self.output.write_text('"POT-Creation-Date: 2026-09-20 00:00+0000\\n"\nKEEP\n')
@@ -59,6 +58,17 @@ class TranslationExtraction(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(extract.main(), 1)
         self.assertEqual(self.output.read_bytes(), old)
+
+    def test_unlisted_source_with_strings_does_not_rewrite_the_template(self):
+        self.output.write_text("KEEP\n")
+        extra = self.root / "crates/nd-gui/src/extra.rs"
+        extra.parent.mkdir(parents=True)
+        extra.write_text('tr!("Close");\n')
+        errors = io.StringIO()
+        with contextlib.redirect_stderr(errors):
+            self.assertEqual(extract.main(), 1)
+        self.assertIn("crates/nd-gui/src/extra.rs", errors.getvalue())
+        self.assertEqual(self.output.read_text(), "KEEP\n")
 
 
 if __name__ == "__main__":

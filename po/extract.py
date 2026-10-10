@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import os
 import re
-import tomllib
 import sys
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -17,8 +17,8 @@ POTFILES = ROOT / "po" / "POTFILES.in"
 OUTPUT = ROOT / "po" / "bignetscreen.pot"
 
 # tr!("text") and tr!("text", args...) — the string may span several lines.
-SINGULAR = re.compile(r'\btr!\(\s*"((?:[^"\\]|\\.)*)"', re.S)
-PLURAL = re.compile(r'\btr_n!\(\s*"((?:[^"\\]|\\.)*)"\s*,\s*"((?:[^"\\]|\\.)*)"', re.S)
+SINGULAR = re.compile(r'\btr!\(\s*"((?:[^"\\]|\\.)*)"', re.DOTALL)
+PLURAL = re.compile(r'\btr_n!\(\s*"((?:[^"\\]|\\.)*)"\s*,\s*"((?:[^"\\]|\\.)*)"', re.DOTALL)
 
 
 def _timestamp() -> str:
@@ -52,6 +52,11 @@ def escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
+def marks_strings(path: Path) -> bool:
+    text = path.read_text(encoding="utf-8")
+    return bool(SINGULAR.search(text) or PLURAL.search(text))
+
+
 def main() -> int:
     stamp = _timestamp()
     version = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["workspace"]["package"]["version"]
@@ -61,17 +66,25 @@ def main() -> int:
 
     sources = [
         ROOT / line.strip()
-        for line in POTFILES.read_text().splitlines()
+        for line in POTFILES.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.startswith("#") and line.strip().endswith(".rs")
     ]
+    # Either mistake drops strings from every catalogue without a sign, so both
+    # stop the extraction before the template is rewritten.
+    missing = [path for path in sources if not path.is_file()]
+    marked = [path for path in sorted((ROOT / "crates").rglob("*.rs")) if marks_strings(path)]
+    unlisted = [path for path in marked if path not in sources]
+    for path in missing:
+        print(f"error: {path.relative_to(ROOT)} is listed in po/POTFILES.in but does not exist", file=sys.stderr)
+    for path in unlisted:
+        print(f"error: {path.relative_to(ROOT)} marks strings but is not listed in po/POTFILES.in", file=sys.stderr)
+    if missing or unlisted:
+        return 1
 
     # msgid -> (references, optional plural)
     entries: dict[str, tuple[list[str], str | None]] = {}
 
     for path in sources:
-        if not path.exists():
-            print(f"error: listed translation source {path} does not exist", file=sys.stderr)
-            return 1
         text = path.read_text(encoding="utf-8")
         rel = path.relative_to(ROOT)
 
