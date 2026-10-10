@@ -132,7 +132,7 @@ impl Engine {
 async fn run_discovery(events: mpsc::Sender<Event>, generation: u64, protocol: Protocol) {
     let mut providers: Vec<Arc<dyn Provider>> = Vec::new();
 
-    // A preference for one protocol is honoured by **not starting** the other.
+    // A preference for one protocol is honoured by not starting the other.
     // Filtering the list afterwards would leave the radio scanning for Wi-Fi
     // Direct peers during a Cast session, which is the contention the
     // preference exists to avoid.

@@ -38,8 +38,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut messages = zbus::MessageStream::from(&connection);
     // Being asked to stop (the session ending, the service manager, Ctrl+C) goes
-    // through the same shutdown as going idle. A signal that killed the process
-    // outright skipped it, and with it the removal of the virtual sound card.
+    // through the same shutdown as going idle; SIGTERM's default action would
+    // skip it, and with it the removal of the virtual sound card.
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! {
         _ = async { while let Some(Ok(_)) = messages.next().await {} } => {

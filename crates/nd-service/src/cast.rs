@@ -52,7 +52,7 @@ pub async fn run(
     // on. This covers the switch having been set in a previous run of the
     // service, or the sound server having been restarted since.
     //
-    // **Failing here ends the cast rather than falling back.** Asking to send
+    // Failing here ends the cast rather than falling back. Asking to send
     // only what was routed to the card and being given the whole computer's
     // sound instead is the one outcome worse than not transmitting: it is a
     // notification, or a private call, leaving the machine. Better to say why

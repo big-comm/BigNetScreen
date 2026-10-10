@@ -25,10 +25,9 @@ impl Engine {
         self.refused.take_if(|(refused, _)| *refused == id);
 
         self.media_owner = None;
-        // From the file, every time. The window writes it and this process
-        // cached its own copy at start-up; a session built from that copy ran
-        // on whatever was configured whenever the service happened to be
-        // activated — resolution, frame rate and latency profile included.
+        // From the file, every time: the window writes it, and the copy this
+        // process read at start-up holds whatever was configured when the
+        // service happened to be activated.
         self.settings = settings::reload();
 
         let sink: Arc<dyn Sink> = if id == nd_ndi::ID {
@@ -84,9 +83,9 @@ impl Engine {
 
     /// Starts sending files to the receiver a client chose.
     ///
-    /// The two protocols do genuinely different things here: a **Chromecast**
-    /// is given a URL and plays the file itself, so this computer only serves
-    /// bytes; a **Miracast** receiver is a screen and nothing else, so the file
+    /// The two protocols do genuinely different things here: a Chromecast is
+    /// given a URL and plays the file itself, so this computer only serves
+    /// bytes; a Miracast receiver is a screen and nothing else, so the file
     /// is decoded here and streamed as the picture.
     pub(super) fn send_media(
         &mut self,

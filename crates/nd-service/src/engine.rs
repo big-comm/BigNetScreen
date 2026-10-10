@@ -268,12 +268,10 @@ impl Engine {
                 _ = poll.tick(), if self.active_cast.is_some() || self.media_session.is_some() || self.audio_pending => {
                     self.reap_finished_media();
                     self.measure_link();
-                    // The session's own progress moves no event of its own, so
-                    // without this the status only catches up when discovery
-                    // happens to chatter. An mDNS provider re-announces often
-                    // enough to hide that; an SSDP one, which only speaks when
-                    // something changed, left the status reading "connecting"
-                    // for a session that had been on the wall for a minute.
+                    // A session's progress raises no event of its own. Without
+                    // this the status would only catch up when discovery
+                    // chatters, and SSDP speaks only when something changed,
+                    // so a DLNA session could read "connecting" for minutes.
                     self.refresh_status();
                 }
             }
@@ -306,13 +304,12 @@ impl Engine {
         {
             tracing::warn!("session cleanup did not finish before service shutdown");
         }
-        // The card goes with the service. Left behind, a sink that discards
-        // everything stayed on the machine's output list after the last
-        // transmission, and whoever had picked it to transmit — or a session
-        // manager that fell back to it — kept a computer with no sound. The
-        // next start puts it back (`reconcile_audio`, and every cast that
-        // needs it), and the session manager remembers what was routed to it
-        // by name, so the routing survives the gap.
+        // The card goes with the service: left behind, a sink that discards
+        // everything stays on the output list, and whoever picked it, or a
+        // session manager that fell back to it, has a computer with no sound.
+        // The next start puts it back (`reconcile_audio`, and every cast that
+        // needs it), and the session manager remembers by name what was routed
+        // to it, so the routing survives the gap.
         if let Err(err) = nd_core::virtual_sink::remove().await {
             tracing::warn!(%err, "could not remove the virtual sound card on the way out");
         }
@@ -623,7 +620,7 @@ impl Engine {
 
 /// The receivers that can be sent a file, for a client to choose from.
 ///
-/// There is deliberately **no** "best guess" anywhere above this: casting to a
+/// There is deliberately no "best guess" anywhere above this: casting to a
 /// device is visible to whoever is standing in front of it, so it takes an
 /// explicit choice every time.
 pub fn can_receive_files(receiver: &Receiver) -> bool {

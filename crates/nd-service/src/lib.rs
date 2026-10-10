@@ -14,7 +14,7 @@
 //!
 //! It may be started by D-Bus activation with a bare environment, and its
 //! clients can each be under a different locale, so it reports state and never
-//! prose. The one exception is the page a **web browser** is shown when someone
+//! prose. The one exception is the page a web browser is shown when someone
 //! shares to one: that text is not for a client, it is for a stranger on the
 //! network, and the client that started the session passes it in already
 //! translated. Without it the page stays in the source language — see
@@ -29,10 +29,9 @@ pub mod wire;
 ///
 /// `.Service` on the end, and not the bare application id: GTK claims its
 /// application id on the session bus for every `GApplication`, so the window
-/// already owns `br.com.biglinux.BigNetScreen`. Sharing it meant the service
-/// could never take the name while a window was open, and a client calling it
-/// reached the window — which serves no interface of ours. Found by running
-/// the two together; neither one alone shows it.
+/// already owns `br.com.biglinux.BigNetScreen`. Sharing it, the service could
+/// never take the name while a window was open, and a client calling it would
+/// reach the window, which serves no interface of ours.
 pub const BUS_NAME: &str = "br.com.biglinux.BigNetScreen.Service";
 pub const OBJECT_PATH: &str = "/br/com/biglinux/BigNetScreen";
 
