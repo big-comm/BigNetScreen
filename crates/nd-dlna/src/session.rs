@@ -1,6 +1,6 @@
 //! Running one transmission to a DLNA renderer.
 //!
-//! ## The order matters, and getting it wrong cost a field run
+//! ## The order matters
 //!
 //! 1. **the stream server listening**;
 //! 2. **the pipeline built and in `Ready`**: `multisocketsink` refuses `add`
@@ -645,8 +645,8 @@ mod tests {
                 if headers.contains("#SetAVTransportURI") {
                     uris += 1;
                     assert!(!body.contains("resolution="));
-                    // Fetch inside SetAVTransportURI, after the old two-second
-                    // one-shot caps measurement would already have fired.
+                    // Fetch inside SetAVTransportURI, more than two seconds
+                    // in: the caps must still be measured once it starts.
                     tokio::time::sleep(Duration::from_millis(2100)).await;
                     let url = crate::upnp::tag_text(&body, "CurrentURI").unwrap();
                     let endpoint = Endpoint::parse(url).unwrap();

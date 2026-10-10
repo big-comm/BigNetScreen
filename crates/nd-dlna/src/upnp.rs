@@ -165,12 +165,10 @@ fn truncated(text: &str) -> String {
 
 /// Reads one response, framed the way the device actually framed it.
 ///
-/// **`Content-Length` first, EOF only as the fallback.** We ask for
+/// `Content-Length` first, EOF only as the fallback. We ask for
 /// `Connection: close`, and a Panasonic answers with a length and then holds
-/// the connection open anyway. Reading to EOF against that device blocks for
-/// the whole request timeout and every SOAP call fails — measured, after the
-/// first field test refused to start a session while the same request made
-/// with `curl` succeeded, because `curl` honours the length.
+/// the connection open anyway: reading to EOF against it blocks for the whole
+/// request timeout and every SOAP call fails.
 async fn read_response<R: AsyncRead + Unpin>(stream: &mut R) -> Result<String> {
     let mut raw = Vec::with_capacity(4096);
     let mut chunk = [0u8; 4096];
@@ -333,11 +331,9 @@ mod tests {
 
     #[tokio::test]
     async fn a_reply_is_framed_by_its_length_even_if_the_device_keeps_the_socket_open() {
-        // This is the bug that cost one field run: we ask for
-        // `Connection: close`, the Panasonic answers with a length and holds
-        // the socket open anyway, and reading to EOF hangs until the request
-        // times out. The writer here is never dropped, so the read only
-        // returns if the length was honoured.
+        // We ask for `Connection: close`, and the Panasonic answers with a
+        // length and holds the socket open anyway. The writer here is never
+        // dropped, so the read only returns if the length was honoured.
         let (mut device, mut ours) = tokio::io::duplex(4096);
         let body = "<ok/>";
         tokio::io::AsyncWriteExt::write_all(

@@ -11,7 +11,7 @@
 //!   SetAVTransportURI(url) ── Play ─┘  → the television opens the GET
 //! ```
 //!
-//! The media half is not new: the transport stream, the HTTP server and the
+//! The media half is shared: the transport stream, the HTTP server and the
 //! socket handover are the same [`nd_core::stream_server`] and
 //! [`nd_core::pipeline::ts_http_pipeline_description`] the Cast fallback uses.
 //! What this crate adds is the two halves DLNA does differently — finding the
@@ -169,10 +169,10 @@ impl Sink for DlnaSink {
         self.status.reset();
 
         let result = session::run(self.address, &self.control, source, &self.status, cancel).await;
-        // Over, however it ended. Left in place, a session that ended on its
-        // own — the file finished, the viewer stopped it on the remote — kept
-        // refusing every later one until the service restarted. Only ours:
-        // a stopped session may still be finishing when the next one starts.
+        // Cleared however it ended: a session that ended on its own (the file
+        // finished, the viewer stopped it on the remote) must not refuse the
+        // next one. Only ours: a stopped session may still be finishing when
+        // the next one starts.
         {
             let mut slot = self.session.lock().unwrap_or_else(PoisonError::into_inner);
             if slot.as_ref().is_some_and(|(current, _)| *current == number) {
