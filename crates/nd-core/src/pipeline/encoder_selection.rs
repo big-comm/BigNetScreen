@@ -7,20 +7,23 @@
 //! produces frames: a hardware encoder can exist, accept its configuration and
 //! encode nothing.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use gst::prelude::*;
 use gstreamer as gst;
 
 use super::{
     ENCODER_NAME, H264Encoder, PipelineEvents, PipelineGuard, StreamConfig, VideoTarget,
-    build_pipeline, init,
+    build_pipeline, count_buffers, init,
 };
 use crate::{NdError, Result};
 
-/// The detected KMS driver (used to decide whether HW encoding is trustworthy).
+/// The kernel driver behind the graphics card, which decides which hardware
+/// encoders can run at all.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GpuDriver {
     I915,
-    /// Intel `xe`: encode VA-API **trava** — preferir software.
     Xe,
     Amdgpu,
     Nvidia,
@@ -41,28 +44,19 @@ impl GpuDriver {
         }
     }
 
-    /// Is hardware encoding considered trustworthy on this driver?
+    /// Whether a hardware encoder is worth trying on this driver.
     ///
-    /// The C project blocked VA-API on Intel's `xe` driver because it hung
-    /// during encoding. **Verified in the field on 2026-08-07** on a Core
-    /// Ultra 200H with `xe`: `vah264enc` encodes 1080p60 stably, at ~14% CPU
-    /// (against software) and with less perceived delay. The block became cost
-    /// without benefit, so it went — anyone with problematic hardware can
-    /// force software with `BIGNETSCREEN_ENCODER=x264enc`.
+    /// Only `nouveau` is ruled out: it exposes no usable NVENC. Elsewhere the
+    /// hardware is tried and [`working_encoder`] moves on when it produces no
+    /// frame; `BIGNETSCREEN_ENCODER=x264enc` forces software on a machine whose
+    /// hardware produces a wrong picture.
     pub fn hardware_encode_is_reliable(self) -> bool {
-        match self {
-            // `nouveau` exposes no usable NVENC.
-            GpuDriver::Nouveau => false,
-            _ => true,
-        }
+        self != GpuDriver::Nouveau
     }
 }
 
-/// Scans GStreamer's registry and returns the encoders actually installed.
-///
-/// Without this, [`select_encoder`] never received a candidate list and the
-/// project always fell back to the fixed encoder in
-/// `StreamConfig::default()`.
+/// The encoders installed in GStreamer's registry, in [`H264Encoder::ALL`]
+/// order; empty when GStreamer cannot start.
 pub fn probe_encoders() -> Vec<H264Encoder> {
     if init().is_err() {
         return Vec::new();
@@ -108,10 +102,9 @@ fn encoder_fits_driver(enc: H264Encoder, driver: GpuDriver) -> bool {
 
 /// Whether a session may encode on the graphics card.
 ///
-/// A parameter rather than a read of the preferences from in here: this module
-/// is also where the tests for encoder selection live, and a function that
-/// consults the machine's settings file gives a different answer on the
-/// machine of whoever runs them.
+/// Passed in rather than read from the preferences here, so the selection rules
+/// give the same answer whatever the settings file of the machine running the
+/// tests says.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Acceleration {
     Allowed,
@@ -138,27 +131,33 @@ impl Acceleration {
     }
 }
 
+/// The encoder `BIGNETSCREEN_ENCODER` names, when it is installed.
+///
+/// It overrides the driver rules and the acceleration preference alike: it
+/// exists to measure one encoder on one machine, and a preference that
+/// silently overruled it would make the measurement about something else.
+fn forced_encoder(installed: &[H264Encoder]) -> Option<H264Encoder> {
+    let name = std::env::var("BIGNETSCREEN_ENCODER").ok()?;
+    let forced = installed.iter().copied().find(|e| e.element() == name);
+    match forced {
+        Some(forced) => tracing::warn!(?forced, "encoder forced by BIGNETSCREEN_ENCODER"),
+        None => {
+            tracing::warn!(%name, ?installed, "BIGNETSCREEN_ENCODER not available; ignoring it")
+        }
+    }
+    forced
+}
+
 /// The order in which encoders are tried: hardware first, software in reserve.
 ///
-/// This replaces the driver blacklist. A blacklist gets the hardware that
-/// existed when it was written right and everything else wrong — Intel's `xe`
-/// driver, for instance, hung during encoding in 2022 and works fine today.
-/// Here the decision is made **at runtime**: the GPU is tried and, if it
-/// produces no frames, we fall back to software (see [`MonitoredPipeline`]).
-///
-/// Only the structural filtering stays static: NVENC does not run without an
-/// NVIDIA card, and VA-API does not run under NVIDIA's proprietary driver.
+/// Only what cannot work is filtered out here (NVENC without an NVIDIA card,
+/// VA-API under NVIDIA's own driver). Whether a hardware encoder really works
+/// is decided by running it, in [`working_encoder`].
 pub fn encoder_candidates(driver: GpuDriver, acceleration: Acceleration) -> Vec<H264Encoder> {
     let available = probe_encoders();
-
-    if let Ok(name) = std::env::var("BIGNETSCREEN_ENCODER") {
-        if let Some(forced) = available.iter().copied().find(|e| e.element() == name) {
-            tracing::warn!(?forced, "encoder forced by BIGNETSCREEN_ENCODER");
-            return vec![forced];
-        }
-        tracing::warn!(%name, ?available, "BIGNETSCREEN_ENCODER not available; ignoring it");
+    if let Some(forced) = forced_encoder(&available) {
+        return vec![forced];
     }
-
     let mut candidates: Vec<H264Encoder> = available
         .into_iter()
         .filter(|enc| acceleration.permits(*enc) && encoder_fits_driver(*enc, driver))
@@ -168,17 +167,21 @@ pub fn encoder_candidates(driver: GpuDriver, acceleration: Acceleration) -> Vec<
     candidates
 }
 
+/// A pipeline that counts the frames leaving its encoder.
+///
+/// The count is what tells a working hardware encoder from one that exists,
+/// accepts its configuration and encodes nothing.
 pub struct MonitoredPipeline {
     pub pipeline: gst::Pipeline,
     pub events: PipelineEvents,
     pub encoder: H264Encoder,
-    frames: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    frames: Arc<AtomicU64>,
 }
 
 impl MonitoredPipeline {
     /// How many frames have left the encoder so far.
     pub fn frames_encoded(&self) -> u64 {
-        self.frames.load(std::sync::atomic::Ordering::Relaxed)
+        self.frames.load(Ordering::Relaxed)
     }
 
     /// Shuts the pipeline down (used when this encoder is discarded).
@@ -194,19 +197,10 @@ pub fn build_monitored(
     encoder: H264Encoder,
 ) -> Result<MonitoredPipeline> {
     let (pipeline, events) = build_pipeline(description, latency_ms)?;
-
-    let frames = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
-    if let Some(element) = pipeline.by_name(ENCODER_NAME) {
-        if let Some(pad) = element.static_pad("src") {
-            let counter = frames.clone();
-            pad.add_probe(gst::PadProbeType::BUFFER, move |_, _| {
-                counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                gst::PadProbeReturn::Ok
-            });
-        }
-    } else {
+    let frames = count_buffers(&pipeline, ENCODER_NAME).unwrap_or_else(|| {
         tracing::warn!("element `{ENCODER_NAME}` not found; no encoder output verification");
-    }
+        Arc::new(AtomicU64::new(0))
+    });
 
     Ok(MonitoredPipeline {
         pipeline,
@@ -218,13 +212,10 @@ pub fn build_monitored(
 
 /// Select an encoder that produces frames at the requested mode.
 ///
-/// `session` is the configuration the caller is about to stream with, its
-/// `encoder` field ignored — this replaces it with each candidate in turn. It
-/// takes the whole thing rather than a size and a frame rate because the probe
-/// is only worth anything if it builds the *same* encoder the session will:
-/// with a partial configuration it once validated a pipeline that differed
-/// from the real one in every property but two, so a property the hardware
-/// rejects would have passed here and failed on the screen.
+/// `session` is the configuration the caller is about to stream with; its
+/// `encoder` field is replaced with each candidate in turn. The probe builds
+/// the same encoder description the session will, so a property the hardware
+/// rejects fails here rather than on the receiver.
 pub async fn working_encoder(
     driver: GpuDriver,
     acceleration: Acceleration,
@@ -261,25 +252,12 @@ pub async fn working_encoder(
     ))
 }
 
-/// Convenience: scans the registry and picks the best encoder for the driver.
+/// The highest-priority installed encoder the driver and the preference allow,
+/// without running it.
 pub fn best_encoder(driver: GpuDriver, acceleration: Acceleration) -> Result<H264Encoder> {
     let installed = probe_encoders();
-
-    // `BIGNETSCREEN_ENCODER=vah264enc` forces a specific encoder. It is there
-    // to measure in the field whether a quirk (such as Intel `xe`'s) still
-    // holds on current hardware, rather than carrying it forever out of
-    // inertia.
-    // Read against everything installed, before the preference is applied.
-    // This variable exists to measure a specific encoder in the field, and a
-    // switch in the preferences silently overruling it makes it useless for
-    // exactly the session somebody is trying to diagnose — which cost one
-    // measurement in the session that wrote this.
-    if let Ok(name) = std::env::var("BIGNETSCREEN_ENCODER") {
-        if let Some(forced) = installed.iter().copied().find(|e| e.element() == name) {
-            tracing::warn!(?forced, "encoder forced by BIGNETSCREEN_ENCODER");
-            return Ok(forced);
-        }
-        tracing::warn!(%name, ?installed, "BIGNETSCREEN_ENCODER not available; ignoring it");
+    if let Some(forced) = forced_encoder(&installed) {
+        return Ok(forced);
     }
     let available: Vec<H264Encoder> = installed
         .into_iter()
@@ -303,10 +281,8 @@ mod tests {
 
     #[test]
     fn hardware_is_preferred_on_every_intel_driver() {
-        // The Intel `xe` driver block is gone: it hung during encoding in 2022
-        // and works fine in 2026 (verified in the field on a Core Ultra 200H).
-        // Problematic hardware is now detected at runtime, by the absence of
-        // frames — see [`MonitoredPipeline`].
+        // A driver that hangs or stalls is caught at runtime by the absence of
+        // frames, so no Intel driver is ruled out in advance.
         let avail = [H264Encoder::VaH264, H264Encoder::X264];
         for driver in [GpuDriver::I915, GpuDriver::Xe, GpuDriver::Amdgpu] {
             assert_eq!(
@@ -374,12 +350,9 @@ mod tests {
         // `nouveau` exposes no usable NVENC, so it gets nothing in hardware.
         assert_eq!(allowed(GpuDriver::Nouveau), vec![X264, OpenH264]);
 
-        // Intel `xe` is the odd one: the enum says VA-API encode hangs there
-        // and software is preferred, and the filter still offers VA-API. That
-        // is deliberate — `working_encoder` probes each candidate and moves on
-        // when it produces no frame — but it costs the probe's timeout on
-        // every session that starts on such a machine, and it is the only
-        // driver where the comment and the filter say different things.
+        // Intel `xe` is offered VA-API like any other driver. On a machine
+        // whose encoder stalls, what saves the session is `working_encoder`
+        // moving on after the probe's timeout.
         assert!(
             encoder_fits_driver(VaH264, GpuDriver::Xe),
             "if this ever changes, the probe is no longer what saves an xe machine"
