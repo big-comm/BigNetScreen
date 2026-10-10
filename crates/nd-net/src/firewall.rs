@@ -76,11 +76,6 @@ impl FirewallLease {
         self.ports.is_empty()
     }
 
-    /// The zone the rules were applied in.
-    pub fn zone(&self) -> &str {
-        &self.zone
-    }
-
     /// The on-disk form: the zone, then one `port protocol` per line.
     fn to_file(&self) -> String {
         let mut out = format!("{}\n", self.zone);

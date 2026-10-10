@@ -29,8 +29,7 @@ pub fn detect_gpu_driver() -> GpuDriver {
     detect_gpu_driver_in(Path::new("/sys/class/drm"))
 }
 
-/// A testable version of [`detect_gpu_driver`], parameterised by the sysfs root.
-pub fn detect_gpu_driver_in(drm_root: &Path) -> GpuDriver {
+fn detect_gpu_driver_in(drm_root: &Path) -> GpuDriver {
     let Ok(entries) = std::fs::read_dir(drm_root) else {
         tracing::debug!("DRM sysfs unavailable; assuming an unknown GPU");
         return GpuDriver::Unknown;
@@ -39,7 +38,7 @@ pub fn detect_gpu_driver_in(drm_root: &Path) -> GpuDriver {
     let mut cards: Vec<_> = entries
         .flatten()
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        // "card0", "card1"… (ignora "card0-HDMI-A-1" e "renderD128")
+        // `card0`, `card1`; not connectors (`card0-HDMI-A-1`) or `renderD128`.
         .filter(|name| {
             name.starts_with("card") && name["card".len()..].chars().all(|c| c.is_ascii_digit())
         })
@@ -78,10 +77,26 @@ mod tests {
     }
 
     #[test]
-    fn detects_the_real_driver_on_this_machine() {
-        // It does not assert which one (that varies per machine), only that
-        // the function runs without panicking over the real sysfs.
-        let driver = detect_gpu_driver();
-        tracing::info!(?driver, "driver detected");
+    fn the_first_card_with_a_known_driver_wins() {
+        use std::os::unix::fs::symlink;
+        let root = std::env::temp_dir().join(format!("nd-net-drm-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for (entry, module) in [
+            ("card0-HDMI-A-1", "i915"),
+            ("renderD128", "i915"),
+            ("card0", "simpledrm"),
+            ("card1", "amdgpu"),
+        ] {
+            let device = root.join(entry).join("device");
+            std::fs::create_dir_all(&device).unwrap();
+            symlink(
+                format!("../../bus/pci/drivers/{module}"),
+                device.join("driver"),
+            )
+            .unwrap();
+        }
+        let driver = detect_gpu_driver_in(&root);
+        std::fs::remove_dir_all(&root).unwrap();
+        assert_eq!(driver, GpuDriver::Amdgpu);
     }
 }

@@ -36,7 +36,7 @@ use nd_core::{NdError, Result};
 /// Subelement 0 (Device Information), length 6:
 /// `0x0090` = device type source + WSD; `0x1c44` = 7236 (the RTSP port);
 /// `0x00c8` = 200 (the declared maximum throughput, in Mbps).
-pub const WFD_SOURCE_IES: &[u8] = &[0x00, 0x00, 0x06, 0x00, 0x90, 0x1c, 0x44, 0x00, 0xc8];
+const WFD_SOURCE_IES: &[u8] = &[0x00, 0x00, 0x06, 0x00, 0x90, 0x1c, 0x44, 0x00, 0xc8];
 
 /// The duration of each scan requested from NetworkManager.
 ///
@@ -44,11 +44,11 @@ pub const WFD_SOURCE_IES: &[u8] = &[0x00, 0x00, 0x06, 0x00, 0x90, 0x1c, 0x44, 0x
 /// [`P2pDevice::keep_finding`]) rather than one long one: that way the radio
 /// returns to the normal network's channel periodically and the main Wi-Fi
 /// connection suffers less.
-pub const FIND_TIMEOUT: Duration = Duration::from_secs(30);
+const FIND_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The scan renewal interval (shorter than [`FIND_TIMEOUT`], so there is no
 /// dead window between one scan and the next).
-pub const FIND_RENEW_INTERVAL: Duration = Duration::from_secs(20);
+const FIND_RENEW_INTERVAL: Duration = Duration::from_secs(20);
 
 /// How often a forming group's state is read.
 const GROUP_STATE_POLL: Duration = Duration::from_millis(500);
@@ -429,11 +429,6 @@ impl P2pDevice {
         ))
     }
 
-    /// The device's D-Bus path.
-    pub fn path(&self) -> &str {
-        self.path.as_str()
-    }
-
     /// Advertises this machine as a Wi-Fi Display **source** during discovery.
     ///
     /// A sink decides whether to answer with its own WFD Information Elements
@@ -768,9 +763,9 @@ impl P2pDevice {
                 .map_err(err)?;
             // `IpInterface` is the link's real name; `Interface` serves as a
             // fallback while the device is still coming up.
-            let mut name = device.ip_interface().await.ok().flatten_empty();
+            let mut name = device.ip_interface().await.ok().filter(|n| !n.is_empty());
             if name.is_none() {
-                name = device.interface().await.ok().flatten_empty();
+                name = device.interface().await.ok().filter(|n| !n.is_empty());
             }
             if let Some(name) = name {
                 return Ok(Some(name));
@@ -927,23 +922,6 @@ async fn cancelled_during(
     }
 }
 
-/// Pequeno auxiliar: `Ok("")` vira `None`.
-trait FlattenEmpty {
-    fn flatten_empty(self) -> Option<String>;
-}
-
-impl FlattenEmpty for Option<String> {
-    fn flatten_empty(self) -> Option<String> {
-        self.filter(|s| !s.is_empty())
-    }
-}
-
-impl FlattenEmpty for String {
-    fn flatten_empty(self) -> Option<String> {
-        if self.is_empty() { None } else { Some(self) }
-    }
-}
-
 /// The current user's name.
 ///
 /// `$USER` does not exist under systemd/services; we fall back to `getpwuid`
@@ -961,7 +939,7 @@ fn current_username() -> Option<String> {
         return Some(user);
     }
     // A last resort with no extra dependency: resolve the uid in /etc/passwd.
-    let uid = unsafe { libc_getuid() };
+    let uid = current_uid();
     let passwd = std::fs::read_to_string("/etc/passwd").ok()?;
     passwd.lines().find_map(|line| {
         let mut fields = line.split(':');
@@ -973,10 +951,11 @@ fn current_username() -> Option<String> {
 }
 
 /// `getuid(2)` without pulling the `libc` crate into the dependency graph.
-unsafe fn libc_getuid() -> u32 {
+fn current_uid() -> u32 {
     unsafe extern "C" {
         fn getuid() -> u32;
     }
+    // SAFETY: getuid takes no arguments, touches no memory and cannot fail.
     unsafe { getuid() }
 }
 
