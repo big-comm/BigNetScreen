@@ -163,13 +163,28 @@ fn not_found() -> Reply {
     reply(StatusCode::NOT_FOUND, "")
 }
 
-/// The `token` query parameter, if any.
-fn token_of(request: &Request<Incoming>) -> Option<&str> {
+/// Whether the request's `token` query parameter is the session token.
+fn carries_token(request: &Request<Incoming>, token: &str) -> bool {
     request
         .uri()
-        .query()?
-        .split('&')
-        .find_map(|pair| pair.strip_prefix("token="))
+        .query()
+        .and_then(|query| {
+            query
+                .split('&')
+                .find_map(|pair| pair.strip_prefix("token="))
+        })
+        .is_some_and(|guess| same_secret(guess, token))
+}
+
+/// Compares a guess with a secret without stopping at the first difference,
+/// so how long a wrong guess takes does not say how much of it was right.
+/// The length is not secret: tokens and PINs have fixed sizes.
+fn same_secret(guess: &str, secret: &str) -> bool {
+    let difference = guess
+        .bytes()
+        .zip(secret.bytes())
+        .fold(0, |difference, (a, b)| difference | (a ^ b));
+    guess.len() == secret.len() && std::hint::black_box(difference) == 0
 }
 
 async fn read_body(request: Request<Incoming>) -> Option<Bytes> {
@@ -209,14 +224,14 @@ async fn handle(
         (Method::GET, "/favicon.ico") => reply(StatusCode::NO_CONTENT, ""),
         (Method::POST, "/pin") => check_pin(&shared, peer, request).await,
         (Method::POST, "/whep") => {
-            if token_of(&request) != Some(shared.config.token.as_str()) {
+            if !carries_token(&request, &shared.config.token) {
                 not_found()
             } else {
                 forward(&shared, request, "/whep/endpoint").await
             }
         }
         (Method::PATCH | Method::DELETE, path) if path.starts_with("/whep/resource/") => {
-            if token_of(&request) != Some(shared.config.token.as_str()) {
+            if !carries_token(&request, &shared.config.token) {
                 not_found()
             } else {
                 let upstream_path = path.to_string();
@@ -250,8 +265,8 @@ async fn check_pin(shared: &Shared, peer: SocketAddr, request: Request<Incoming>
         .guard
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    // Recheck AFTER the asynchronous read, while holding the same lock that
-    // records the attempt. Parallel partial POSTs cannot bypass the lockout.
+    // Checked again after the body read, under the lock that records the
+    // attempt, so parallel slow POSTs cannot slip past a lockout.
     let status = record_pin_attempt(&mut guard, attempt, &shared.config.pin, Instant::now());
     if status == StatusCode::OK {
         tracing::info!(%peer, "receiver accepted with the PIN");
@@ -275,7 +290,7 @@ fn record_pin_attempt(
     if guard.locked_until.is_some_and(|until| now < until) {
         return StatusCode::TOO_MANY_REQUESTS;
     }
-    if attempt == expected {
+    if same_secret(attempt, expected) {
         *guard = PinGuard::default();
         return StatusCode::OK;
     }
@@ -540,7 +555,7 @@ mod tests {
     fn delayed_parallel_attempt_cannot_bypass_newly_acquired_pin_lockout() {
         let now = Instant::now();
         let mut guard = PinGuard::default();
-        // These represent bodies whose reads started BEFORE the lockout.
+        // Bodies whose reads started before the lockout.
         for _ in 0..PIN_ATTEMPTS {
             record_pin_attempt(&mut guard, "0000", "1234", now);
         }
@@ -554,6 +569,14 @@ mod tests {
             record_pin_attempt(&mut guard, "1234", "1234", now + PIN_LOCKOUT),
             StatusCode::OK
         );
+    }
+
+    #[test]
+    fn secrets_match_only_in_full() {
+        assert!(same_secret("feedface", "feedface"));
+        for guess in ["feedfacf", "feedfac", "feedface0", "", "Feedface"] {
+            assert!(!same_secret(guess, "feedface"), "{guess}");
+        }
     }
 
     #[tokio::test]
