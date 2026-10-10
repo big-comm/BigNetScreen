@@ -700,12 +700,12 @@ msgstr ""
 msgid "Share with a web browser"
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:164
-msgid "Share your screen over Miracast, Chromecast and NDI"
-msgstr ""
-
 #: crates/nd-gui/src/app/mod.rs:163
 msgid "Share your screen wirelessly"
+msgstr ""
+
+#: crates/nd-gui/src/app/dialogs.rs:164
+msgid "Share your screen with TVs, projectors and web browsers"
 msgstr ""
 
 #: crates/nd-gui/src/pages/home.rs:224

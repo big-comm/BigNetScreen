@@ -161,7 +161,9 @@ pub(super) fn about(root: &adw::ApplicationWindow) {
         .developer_name("BigCommunity")
         .license_type(gtk::License::Gpl30)
         .website("https://github.com/big-comm/BigNetScreen")
-        .comments(tr!("Share your screen over Miracast, Chromecast and NDI"))
+        .comments(tr!(
+            "Share your screen with TVs, projectors and web browsers"
+        ))
         .build();
     about.present(Some(root));
 }
