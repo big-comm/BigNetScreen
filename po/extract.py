@@ -101,7 +101,7 @@ def main() -> int:
             refs.append(f"{rel}:{line}")
             entries[msgid] = (refs, plural)
 
-    # The header must NOT be marked `fuzzy`, and its fields must not be left at
+    # The header is never marked `fuzzy`, and its fields must not be left at
     # the template defaults. gettext ignores the metadata of a fuzzy header, and
     # tooling that reads the catalogue then sees a project with no name at all —
     # which is exactly how translation tools end up reporting an empty
