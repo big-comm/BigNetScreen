@@ -766,7 +766,7 @@ impl MediaPage {
             let row = adw::ActionRow::builder()
                 .title(file.title())
                 .use_markup(false)
-                .subtitle(glib::markup_escape_text(&file.path.to_string_lossy()))
+                .subtitle(file.path.to_string_lossy())
                 .build();
             let picture = gtk::Image::builder()
                 .icon_name(match file.kind {
@@ -1174,6 +1174,17 @@ mod tests {
         assert!(
             page.model().tiles.get(0).unwrap().selected,
             "picked files must appear selected"
+        );
+        let row = page
+            .widgets()
+            .queue_list
+            .row_at_index(0)
+            .and_downcast::<adw::ActionRow>()
+            .expect("queue row");
+        assert_eq!(
+            row.subtitle().as_deref(),
+            Some("/tmp/Video & friends.mp4"),
+            "a plain-text row shows the path as written"
         );
         page.emit(MediaMsg::Scanned(0, vec![second.clone()]));
         flush();
