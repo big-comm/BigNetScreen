@@ -469,28 +469,9 @@ pub mod cast {
         let (stream, addr) = match accepted {
             Ok(result) => result.map_err(|e| NdError::Network(e.to_string()))?,
             Err(_) => {
-                // Which step failed changes the advice, so look before
-                // speaking: did anything at all take an address on this link?
-                let peers = interface
-                    .map(nd_net::p2p::peers_on_link)
-                    .unwrap_or_default();
-                let reason = if peers.is_empty() {
-                    tracing::warn!(
-                        ?interface,
-                        "nothing joined the Wi-Fi Direct link; the receiver paired and dropped"
-                    );
-                    "the receiver paired and then never joined — trying again with a fresh \
-                     connection"
-                        .to_string()
-                } else {
-                    tracing::warn!(?peers, "the receiver joined but never opened RTSP");
-                    "the receiver joined but never started mirroring — check that Screen \
-                     Mirroring is still open on it"
-                        .to_string()
-                };
                 return Err(NdError::SinkNeverConnected {
                     capture: Box::new(source),
-                    reason,
+                    reason: never_connected_reason(interface),
                 });
             }
         };
@@ -522,6 +503,29 @@ pub mod cast {
         // pipeline for the whole session.
         drop(source);
         result
+    }
+
+    /// Why the receiver never opened RTSP. Which step failed changes the
+    /// advice, so look before speaking: did anything at all take an address
+    /// on this link?
+    fn never_connected_reason(interface: Option<&str>) -> String {
+        let peers = interface
+            .map(nd_net::p2p::peers_on_link)
+            .unwrap_or_default();
+        if peers.is_empty() {
+            tracing::warn!(
+                ?interface,
+                "nothing joined the Wi-Fi Direct link; the receiver paired and dropped"
+            );
+            "the receiver paired and then never joined — trying again with a fresh \
+             connection"
+                .to_string()
+        } else {
+            tracing::warn!(?peers, "the receiver joined but never opened RTSP");
+            "the receiver joined but never started mirroring — check that Screen \
+             Mirroring is still open on it"
+                .to_string()
+        }
     }
 
     /// An alias for the D-Bus path type, to keep `zbus` out of the signature.
