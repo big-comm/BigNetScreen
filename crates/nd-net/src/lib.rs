@@ -11,6 +11,7 @@
 //! this crate.
 
 pub mod firewall;
+mod network_manager;
 pub mod p2p;
 pub mod probe;
 
