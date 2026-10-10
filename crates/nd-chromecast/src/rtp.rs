@@ -390,6 +390,28 @@ mod tests {
     }
 
     #[test]
+    fn encryption_matches_the_aes_ctr_standard() {
+        // NIST SP 800-38A F.5.1. Frame 0 leaves the mask as the initial
+        // counter, and the second block checks the big-endian carry out of
+        // the last byte.
+        fn bytes(hex: &str) -> Vec<u8> {
+            (0..hex.len())
+                .step_by(2)
+                .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).unwrap())
+                .collect()
+        }
+        let key: [u8; 16] = bytes("2b7e151628aed2a6abf7158809cf4f3c")
+            .try_into()
+            .unwrap();
+        let counter: [u8; 16] = bytes("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff")
+            .try_into()
+            .unwrap();
+        let plain = bytes("6bc1bee22e409f96e93d7e117393172aae2d8a571e03ac9c9eb76fac45af8e51");
+        let cipher = bytes("874d6191b620e3261bef6864990db6ce9806f66b7970fdff8617187bb9fffdff");
+        assert_eq!(encrypt_frame(&key, &counter, 0, &plain), cipher);
+    }
+
+    #[test]
     fn encryption_preserves_length() {
         // CTR is a stream cipher: the length does not change, and the split
         // into packets depends on that.
