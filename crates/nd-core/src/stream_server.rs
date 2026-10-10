@@ -399,26 +399,7 @@ impl StreamServer {
     where
         F: FnMut() -> Result<()> + Send,
     {
-        let (slow_client, mut slow_client_rx) = tokio::sync::watch::channel(false);
-        sink.connect("client-removed", false, move |values| {
-            if gst::glib::EnumValue::from_value(&values[2])
-                .is_some_and(|(_, status)| status.nick() == "slow")
-            {
-                slow_client.send_replace(true);
-            }
-            None
-        });
-        // `multisocketsink` hands a removed client's socket back without
-        // closing it. Closing it here rather than in each caller means no
-        // protocol can leak a descriptor per disconnect.
-        sink.connect("client-socket-removed", false, |values| {
-            if let Ok(socket) = values[1].get::<gio::Socket>() {
-                let _ = socket.close();
-            }
-            tracing::info!("the receiver disconnected from the stream");
-            None
-        });
-
+        let mut slow_client = watch_clients(&sink);
         let mut cancel = cancel;
         let mut served_any = false;
 
@@ -428,7 +409,7 @@ impl StreamServer {
             }
             let accepted = tokio::select! {
                 result = self.listener.accept() => result,
-                _ = slow_client_rx.changed() => {
+                _ = slow_client.changed() => {
                     return Err(NdError::Network(
                         "the receiver stopped reading fast enough; the stream queue limit was reached".into(),
                     ));
@@ -518,6 +499,32 @@ impl StreamServer {
         }
         Some(stream)
     }
+}
+
+/// Wires the sink's client signals: a removed client's socket is closed, and
+/// the returned receiver changes when a client is dropped for reading too
+/// slowly.
+fn watch_clients(sink: &gst::Element) -> tokio::sync::watch::Receiver<bool> {
+    let (slow_client, slow_client_rx) = tokio::sync::watch::channel(false);
+    sink.connect("client-removed", false, move |values| {
+        if gst::glib::EnumValue::from_value(&values[2])
+            .is_some_and(|(_, status)| status.nick() == "slow")
+        {
+            slow_client.send_replace(true);
+        }
+        None
+    });
+    // `multisocketsink` hands a removed client's socket back without
+    // closing it. Closing it here rather than in each caller means no
+    // protocol can leak a descriptor per disconnect.
+    sink.connect("client-socket-removed", false, |values| {
+        if let Ok(socket) = values[1].get::<gio::Socket>() {
+            let _ = socket.close();
+        }
+        tracing::info!("the receiver disconnected from the stream");
+        None
+    });
+    slow_client_rx
 }
 
 /// The kernel's share of a slow reader's backlog.
