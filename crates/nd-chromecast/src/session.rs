@@ -44,6 +44,9 @@ use nd_core::stream_server::{CAST_MEDIA, StreamServer};
 const FIRST_CLIENT_TIMEOUT: Duration = Duration::from_secs(20);
 /// How often we ask the receiver where it is playing.
 const LAG_PROBE_INTERVAL: Duration = Duration::from_secs(2);
+/// Delay samples kept for the session's median: the receiver also reports on
+/// its own, so the count follows its messages and needs a bound.
+const MAX_LAG_SAMPLES: usize = 512;
 
 /// The initial delay target, in seconds.
 ///
@@ -626,7 +629,7 @@ pub async fn run_with_video(
         if let Some(median) = lag.median() {
             tracing::info!(
                 median_delay_s = format!("{median:.2}"),
-                amostras = lag.samples.len(),
+                samples = lag.samples.len(),
                 "receiver delay in this session"
             );
         }
@@ -655,7 +658,8 @@ struct LagMeter {
     /// The instant the receiver opened the connection — the stream's zero from
     /// its point of view. It only exists once that has happened.
     started: Option<std::time::Instant>,
-    samples: Vec<f64>,
+    /// The most recent [`MAX_LAG_SAMPLES`] delays, oldest first.
+    samples: std::collections::VecDeque<f64>,
     /// The last sample (instant, position), for detecting stalls.
     previous: Option<(std::time::Instant, f64)>,
     /// Did the last observation indicate the receiver stopped advancing?
@@ -666,7 +670,7 @@ impl LagMeter {
     fn new() -> Self {
         Self {
             started: None,
-            samples: Vec::new(),
+            samples: std::collections::VecDeque::new(),
             previous: None,
             stalled: false,
         }
@@ -714,7 +718,10 @@ impl LagMeter {
             None => false,
         };
         self.previous = Some((now, current));
-        self.samples.push(lag);
+        if self.samples.len() == MAX_LAG_SAMPLES {
+            self.samples.pop_front();
+        }
+        self.samples.push_back(lag);
         tracing::info!(
             delay_s = format!("{lag:.2}"),
             position_s = format!("{current:.2}"),
@@ -724,7 +731,7 @@ impl LagMeter {
 
     /// The most recent measured sample.
     fn last(&self) -> Option<f64> {
-        self.samples.last().copied()
+        self.samples.back().copied()
     }
 
     /// The samples' median — resistant to the spikes at the start.
@@ -732,8 +739,8 @@ impl LagMeter {
         if self.samples.is_empty() {
             return None;
         }
-        let mut sorted = self.samples.clone();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let mut sorted = Vec::from(self.samples.clone());
+        sorted.sort_by(f64::total_cmp);
         Some(sorted[sorted.len() / 2])
     }
 }
@@ -1074,6 +1081,16 @@ mod tests {
         std::thread::sleep(Duration::from_millis(600));
         meter.observe(&json!({"status": [{"currentTime": 8.05}]}));
         assert!(meter.stalled, "a stalled position should register a stall");
+    }
+
+    #[test]
+    fn lag_samples_stay_bounded_through_a_long_session() {
+        let mut meter = LagMeter::new();
+        meter.start(std::time::Instant::now() - Duration::from_secs(10));
+        for _ in 0..MAX_LAG_SAMPLES * 3 {
+            meter.observe(&json!({"status": [{"currentTime": 8.0}]}));
+        }
+        assert_eq!(meter.samples.len(), MAX_LAG_SAMPLES);
     }
 
     #[test]
