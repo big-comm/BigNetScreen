@@ -175,9 +175,6 @@ pub struct MediaPage {
     refused: Vec<String>,
     /// The receivers that can play a file: (id, name).
     targets: Vec<(String, String)>,
-    /// Set while the chooser is being rebuilt, so that the selection signal it
-    /// emits on the way is not read as the person picking something.
-    settling: bool,
     /// The one chosen to send to. Never filled in automatically — sending to
     /// the wrong device is visible in someone else's room and cannot be undone
     /// from here.
@@ -405,7 +402,7 @@ impl Component for MediaPage {
                     // it is built empty here.
                     connect_selected_notify[sender] => move |chooser| {
                         sender.input(MediaMsg::TargetPicked(chooser.selected() as usize));
-                    },
+                    } @target_picked_handler,
                 },
 
                 gtk::Button {
@@ -521,7 +518,6 @@ impl Component for MediaPage {
             chosen: Vec::new(),
             refused: Vec::new(),
             targets: Vec::new(),
-            settling: false,
             chosen_target: None,
             status: None,
             scan_generation: 0,
@@ -690,15 +686,7 @@ impl Component for MediaPage {
                 }
             }
             MediaMsg::TargetPicked(index) => {
-                if self.settling {
-                    return;
-                }
-                // Index 0 is the "choose a device" placeholder, which is not a
-                // device — picking it means nothing is selected.
-                self.chosen_target = index
-                    .checked_sub(1)
-                    .and_then(|index| self.targets.get(index))
-                    .map(|(id, _)| id.clone());
+                self.chosen_target = target_at(&self.targets, index);
             }
             MediaMsg::Remove(path) => {
                 self.chosen.retain(|file| file.path != path);
@@ -809,14 +797,18 @@ impl MediaPage {
     ///
     /// The first entry is a placeholder rather than a device, so that a page
     /// which has just opened is not silently pointing at somebody's television.
-    fn fill_chooser(&mut self, widgets: &MediaPageWidgets) {
-        self.settling = true;
+    ///
+    /// The selection signal is blocked meanwhile: its message would arrive
+    /// after this returns and read as the person picking a device.
+    fn fill_chooser(&self, widgets: &MediaPageWidgets) {
+        let chooser = &widgets.target_chooser;
+        chooser.block_signal(&widgets.target_picked_handler);
         let list = gtk::StringList::new(&[]);
         list.append(&tr!("Choose a device…"));
         for (_, name) in &self.targets {
             list.append(name);
         }
-        widgets.target_chooser.set_model(Some(&list));
+        chooser.set_model(Some(&list));
 
         let selected = self
             .chosen_target
@@ -824,11 +816,9 @@ impl MediaPage {
             .and_then(|chosen| self.targets.iter().position(|(id, _)| id == chosen))
             .map(|index| index as u32 + 1)
             .unwrap_or(0);
-        widgets.target_chooser.set_selected(selected);
-        widgets
-            .target_chooser
-            .set_sensitive(!self.targets.is_empty());
-        self.settling = false;
+        chooser.set_selected(selected);
+        chooser.set_sensitive(!self.targets.is_empty());
+        chooser.unblock_signal(&widgets.target_picked_handler);
     }
 
     /// What is missing before anything can be sent.
@@ -912,6 +902,15 @@ impl MediaPage {
             error
         )
     }
+}
+
+/// The receiver at a chooser position. Position 0 is the "choose a device"
+/// placeholder, so it and any position past the end select nothing.
+fn target_at(targets: &[(String, String)], index: usize) -> Option<String> {
+    index
+        .checked_sub(1)
+        .and_then(|index| targets.get(index))
+        .map(|(id, _)| id.clone())
 }
 
 fn format_time(seconds: f64) -> String {
@@ -1287,20 +1286,10 @@ mod tests {
         window.close();
     }
 
-    /// The chooser's positions: 0 is the placeholder, devices start at 1.
-    fn target_at(targets: &[(String, String)], index: usize) -> Option<String> {
-        index
-            .checked_sub(1)
-            .and_then(|index| targets.get(index))
-            .map(|(id, _): &(String, String)| id.clone())
-    }
-
     #[test]
     fn nothing_is_selected_until_someone_selects_it() {
-        // The bug this pins down: with no destination chosen, the application
-        // fell back to the first Chromecast it had found and played a song on
-        // a projector in another room. Position 0 is a placeholder, and a
-        // placeholder is not a device.
+        // A file plays on whatever receiver this returns, possibly in another
+        // room: the placeholder must never resolve to a device.
         let targets = vec![
             ("id-a".to_string(), "Living room".to_string()),
             ("id-b".to_string(), "Mum's projector".to_string()),
