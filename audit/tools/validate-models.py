@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent Python models and static checks; DOES NOT execute Rust code."""
+"""Independent Python models and static checks; does not execute Rust code."""
 from __future__ import annotations
 import collections
 import json
