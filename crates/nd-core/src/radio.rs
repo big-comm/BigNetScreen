@@ -1,19 +1,13 @@
 //! Radio silence while a stream is running.
 //!
-//! Looking for receivers and streaming to one of them compete for the **same
-//! antenna**. A Wi-Fi Direct scan is not a discreet query: it makes the radio
-//! hop across the social channels, and on every hop the link to the access
-//! point goes silent for tens of milliseconds.
+//! Looking for receivers and streaming to one compete for the same antenna. A
+//! Wi-Fi Direct scan hops the radio across the social channels, and on every
+//! hop the link to the access point goes silent for tens of milliseconds:
+//! video recovers by retransmission, but late audio is a hole in the sound.
 //!
-//! This went unnoticed for a long time because protocol work gets tested with
-//! example programs, and those look for nothing while they stream. Through the
-//! GUI — which keeps scanning so that a device switched on later still shows up
-//! in the list — the very same code produced choppy audio and extra delay:
-//! video recovers by asking for retransmission, audio has a deadline to be
-//! played and whatever misses it becomes a hole in the sound.
-//!
-//! So while a stream is running, scanning stops. mDNS discovery keeps going: a
-//! handful of multicast packets on the channel we are already on, no hopping.
+//! So while a stream is running, Wi-Fi Direct scanning stops. mDNS discovery
+//! keeps going: a handful of multicast packets on the current channel, no
+//! hopping.
 
 use std::sync::OnceLock;
 

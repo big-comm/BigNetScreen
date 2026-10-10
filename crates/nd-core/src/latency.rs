@@ -41,10 +41,9 @@ pub enum Profile {
     ///
     /// Only the Cast paths can go below [`Profile::Responsive`]: on Miracast
     /// the buffering is ours and responsive already asks for the pipeline's own
-    /// minimum, so there is nothing left to give up. Measured against a 4K
-    /// Google TV Stick on a working network, 50 ms held; a busier network or a
-    /// receiver with less patience will stutter, which is why it is offered
-    /// rather than assumed.
+    /// minimum, so there is nothing left to give up. A busy network or an
+    /// impatient receiver stutters, which is why it is offered rather than
+    /// assumed.
     Low,
     /// The lowest delay the pipeline can sustain.
     #[default]
@@ -70,16 +69,9 @@ pub const FILM_PLAYOUT_DELAY_MS: u32 = 400;
 /// television, and this profile is the one a person picks to *use* the computer
 /// on that television rather than watch it.
 ///
-/// The trade is the whole of it: with no buffer, a packet that arrives late
-/// arrives too late, and on a congested network that is a visible stutter
-/// rather than a smoothed-over one. `Responsive` and `Film` keep theirs.
-///
-/// Chosen after a session against a 4K Google TV Stick on a wired link to the
-/// access point, with video playing throughout. Worth knowing about that
-/// evidence: the override used to test it clamped anything under 50 back up to
-/// 50, so the runs that reported "zero works" had in fact sent 50. The clamp is
-/// gone and zero now reaches the receiver — this value is newer than the
-/// measurement that suggested it.
+/// The trade: with no buffer a late packet is too late, and on a congested
+/// network that is a visible stutter. Zero has not been verified against a
+/// receiver; 50 ms has.
 pub const LOW_PLAYOUT_DELAY_MS: u32 = 0;
 
 static PROFILE: AtomicU8 = AtomicU8::new(0);

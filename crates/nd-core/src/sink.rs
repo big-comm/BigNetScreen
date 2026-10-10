@@ -1,8 +1,5 @@
-//! The **sink** (receiver) abstraction: the lifecycle of a cast session.
-//!
-//! It mirrors the good design of the C project's `NdSink`, but with the state
-//! machine spelled out in an `enum` (instead of loose integers) and an `async`
-//! lifecycle (instead of the callback soup plus a hand-rolled `GCancellable`).
+//! The sink (receiver) abstraction: the lifecycle of a cast session as a
+//! state machine ([`SinkState`]) behind an async trait ([`Sink`]).
 
 use std::net::SocketAddr;
 use std::sync::{Mutex, PoisonError};
@@ -78,9 +75,8 @@ impl SinkKind {
 
 /// The possible states of a session.
 ///
-/// The transition into [`SinkState::Error`] is **terminal** and must not be
-/// silently overwritten by `Disconnected` (a real bug in the C code, where
-/// `closed_cb` masked the error in the UI). [`SinkStatus::set`] enforces that.
+/// [`SinkState::Error`] is terminal: a later `Disconnected` must not hide the
+/// cause from the person. [`SinkStatus::set`] enforces that.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SinkState {
     /// Idle, available to connect.
@@ -114,9 +110,8 @@ impl SinkState {
 
 /// A sink's shared state, poisoning-proof.
 ///
-/// `Mutex::lock().unwrap()` turned any single panic into a cascade of panics on
-/// every later state read. The contents here are small and consistent by
-/// construction, so recovering from poisoning is safe.
+/// Every write leaves the contents consistent, so a lock poisoned by a panic
+/// elsewhere is recovered rather than turned into a panic on every read.
 #[derive(Debug, Default)]
 pub struct SinkStatus {
     inner: Mutex<StatusInner>,
@@ -242,9 +237,8 @@ impl SinkStatus {
         if state != SinkState::Error {
             guard.message = None;
         }
-        // The negotiated mode describes a *running* session. Keeping it past
-        // the end would leave "1920 × 1080 · 60 Hz" on screen next to a
-        // receiver that is no longer connected.
+        // The negotiated mode describes a running session; kept past the end,
+        // "1920 × 1080 · 60 Hz" would stay on screen beside an idle receiver.
         if matches!(state, SinkState::Disconnected | SinkState::Error) {
             guard.link = None;
         }
@@ -392,8 +386,7 @@ mod tests {
 
     #[test]
     fn error_state_is_not_masked_by_disconnect() {
-        // A real bug in the C code: `closed_cb` overwrote the error and the UI
-        // only showed "disconnected", with no cause.
+        // A teardown that reports `Disconnected` must not hide why it failed.
         let status = SinkStatus::new();
         status.fail("no route to host");
         status.set(SinkState::Disconnected);

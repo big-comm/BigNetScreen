@@ -1,8 +1,4 @@
-//! Unified error type for the core.
-//!
-//! In Rust, error handling goes through `Result`, which rules out by
-//! construction the "GError by value / NULL-deref" class of bug that used to
-//! crash the daemon in the C project (see the audit, `nd-daemon.c:86`).
+//! The error type shared by the core and the protocol crates.
 
 use thiserror::Error;
 

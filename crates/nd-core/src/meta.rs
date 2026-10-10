@@ -3,11 +3,9 @@
 //! Merges the discovery streams of several providers (Chromecast, WFD-P2P,
 //! WFD-MICE) into the single stream the GUI consumes.
 //!
-//! Providers that fail to start (e.g. WFD under Flatpak, with no
-//! NetworkManager) are **not silenced**: the failure becomes a
-//! [`DiscoveryEvent::ProviderUnavailable`] carrying readable text, so the UI
-//! can explain to the user why Miracast is missing. The app degrades
-//! gracefully instead of failing outright — without hiding the reason.
+//! A provider that fails to start (WFD under Flatpak, with no NetworkManager)
+//! becomes a [`DiscoveryEvent::ProviderUnavailable`] carrying readable text,
+//! so the UI can say why Miracast is missing while the other providers go on.
 
 use std::sync::Arc;
 
@@ -40,10 +38,13 @@ impl MetaProvider {
         let streams = self.providers.iter().cloned().map(|provider| {
             futures::stream::once(async move {
                 let id = provider.id();
-                match tokio::time::timeout(std::time::Duration::from_secs(15), provider.discover())
-                    .await
-                {
-                    Ok(Ok(stream)) => {
+                let timeout = std::time::Duration::from_secs(15);
+                let started = match tokio::time::timeout(timeout, provider.discover()).await {
+                    Ok(started) => started.map_err(|err| err.to_string()),
+                    Err(_) => Err("discovery initialization timed out".to_string()),
+                };
+                match started {
+                    Ok(stream) => {
                         tracing::info!(provider = id, "discovery started");
                         // The "ready" event comes before the provider's findings.
                         let ready = futures::stream::once(async move {
@@ -51,12 +52,7 @@ impl MetaProvider {
                         });
                         ready.chain(stream).boxed()
                     }
-                    result => {
-                        let reason = match result {
-                            Ok(Err(err)) => err.to_string(),
-                            Err(_) => "discovery initialization timed out".to_string(),
-                            Ok(Ok(_)) => unreachable!(),
-                        };
+                    Err(reason) => {
                         tracing::warn!(provider = id, %reason, "provider unavailable");
                         futures::stream::once(async move {
                             DiscoveryEvent::ProviderUnavailable {
@@ -132,8 +128,8 @@ mod tests {
 
     #[tokio::test]
     async fn failure_becomes_a_visible_event() {
-        // Regression: the failure used to be just a `warn` and the UI sat on
-        // "Searching…" forever, with no explanation.
+        // A provider that cannot start must say so, or the UI waits on
+        // "Searching…" with no explanation.
         let meta = MetaProvider::new(vec![Arc::new(FailingProvider)]);
         let rt = meta.discover().await.collect::<Vec<_>>().await;
         assert_eq!(rt.len(), 1);

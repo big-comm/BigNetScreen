@@ -14,12 +14,11 @@
 //!
 //! The module belongs to the audio server, not to this process, so nothing
 //! takes it away but us: the service calls [`remove`] on its way out, and
-//! [`ensure`] when it starts with the option on or a cast needs it. It used to
-//! outlive the service on purpose, so that routing survived; it does anyway,
-//! because the session manager remembers a stream's target by the sink's name.
-//! What outliving it cost was a sink that discards everything sitting on the
-//! output list of a machine that was no longer transmitting — and a person who
-//! had chosen it as their output, to transmit, left with no sound at all.
+//! [`ensure`] when it starts with the option on or a cast needs it. Routing
+//! survives the removal, because the session manager remembers a stream's
+//! target by the sink's name. Left loaded, the card would sit on the output
+//! list of a machine that is not transmitting, discarding the sound of anyone
+//! who picked it.
 //!
 //! Nothing here changes a default device. Adding an output is not choosing one.
 

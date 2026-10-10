@@ -136,20 +136,13 @@ impl CaptureSource {
 
     /// The size the portal announced, or the given guess.
     ///
-    /// Known to be wrong under fractional scaling, and knowingly used anyway.
-    /// The portal announces a size in the compositor's coordinate space, which
-    /// the spec warns "may not be equivalent to a size in a pixel coordinate
-    /// space": measured on a 2560x1440 panel at 110%, announced 2328x1310 and
-    /// delivered 2560x1440. Encoding at the announced size resamples every
-    /// frame away from the size it arrived in.
-    ///
-    /// Only the negotiated caps carry the truth, and they do not exist until
-    /// the pipeline runs — after the Cast OFFER has committed to a size. A
-    /// second PipeWire connection cannot be used to ask early: the portal's
-    /// node is not resolvable from one, which nineteen consecutive attempts
-    /// per session established before this went back to the announced size.
-    /// Cast mirroring and DLNA instead use the pipeline's negotiated caps
-    /// for the encoded dimensions.
+    /// Wrong under fractional scaling: the portal announces a size in the
+    /// compositor's coordinate space, which the specification warns "may not
+    /// be equivalent to a size in a pixel coordinate space". Only the
+    /// negotiated caps carry the delivered size, and a second PipeWire
+    /// connection cannot look up the portal's node to ask early, so Cast
+    /// mirroring and DLNA read the size from the running pipeline instead
+    /// (`crate::pipeline::negotiated_video_size`).
     pub fn size_or(&self, default: (u32, u32)) -> (u32, u32) {
         self.size.unwrap_or(default)
     }

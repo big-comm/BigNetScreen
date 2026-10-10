@@ -425,9 +425,8 @@ mod tests {
 
     #[test]
     fn openh264_bitrate_is_in_bits_per_second() {
-        // A regression: `openh264enc` measures bitrate in bit/s. Feeding it
-        // kbit/s produced 10 kbit/s — an unrecognisable picture on the software
-        // fallback.
+        // `openh264enc` measures bitrate in bit/s; fed kbit/s, the software
+        // fallback sends 10 kbit/s of unrecognisable picture.
         let cfg = StreamConfig {
             encoder: H264Encoder::OpenH264,
             ..Default::default()

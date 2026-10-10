@@ -18,10 +18,8 @@ pub const MAX_RECEIVERS: usize = 256;
 
 /// A discovery event emitted by a provider.
 ///
-/// The diagnostic variants exist so that **failures are visible**: before them,
-/// a provider that failed to start became a `warn` in the log while the user
-/// stared at "Searching…" forever, with no way to tell "there is no receiver on
-/// this network" from "Miracast never even started".
+/// The provider variants make failures visible, so the person can tell "there
+/// is no receiver on this network" from "Miracast never started".
 #[derive(Clone)]
 pub enum DiscoveryEvent {
     /// A new receiver showed up.

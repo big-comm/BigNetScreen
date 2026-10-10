@@ -386,11 +386,10 @@ pub fn current() -> Settings {
 
 /// Re-reads the file, discarding whatever this process had cached.
 ///
-/// [`current`] answers from the cache and never looks at the disk again. That
-/// is right for a process that owns its own preferences and wrong for one that
-/// has just been told another process changed them — the session service is
-/// the second kind, and calling `current` there left it running on whatever it
-/// read when it started, latency profile included.
+/// [`current`] answers from the cache and never looks at the disk again, which
+/// suits a process that owns its preferences. The session service is told
+/// when the window changed them, and reloads with this, latency profile
+/// included.
 pub fn reload() -> Settings {
     if let Ok(mut guard) = CURRENT.write() {
         *guard = None;
@@ -440,9 +439,7 @@ mod tests {
     fn reload_sees_past_what_this_process_had_cached() {
         // The service's whole relationship with the preferences file. The
         // sentinel is a name no file on any machine holds, so the assertion
-        // holds whatever the person running the tests has configured — an
-        // earlier version of this test compared against the defaults and only
-        // passed on a machine with no settings file at all.
+        // holds whatever the person running the tests has configured.
         let _lock = crate::latency::exclusive();
         let restore = current();
         const SENTINEL: &str = "cache-only-never-written-to-any-file";
@@ -526,8 +523,8 @@ mod tests {
 
     #[test]
     fn an_upgraded_file_keeps_the_choice_the_film_switch_recorded() {
-        // The switch this replaced wrote a boolean. Someone who had turned it
-        // on should not find their preference quietly reset by an update.
+        // Older files carry a `film_mode` boolean; someone who had turned it
+        // on keeps the film profile.
         assert_eq!(
             Settings::from_file("film_mode = true").latency,
             crate::latency::Profile::Film
