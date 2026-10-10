@@ -2,8 +2,8 @@
 //! very first program table.
 //!
 //! An integration test, not a unit test beside the pipeline code: it encodes
-//! for real, and run alongside the unit tests it starves the timing-sensitive
-//! Miracast playback test of CPU.
+//! for real, and run alongside the unit tests it would starve the
+//! timing-sensitive Miracast playback test of CPU.
 
 use gst::prelude::*;
 use gstreamer as gst;
@@ -13,22 +13,13 @@ use nd_core::pipeline::{self, AudioSource, PipelineGuard, StreamConfig, VideoSou
 fn a_file_stream_announces_its_picture_in_the_first_program_table() {
     pipeline::init().unwrap();
     let path = std::env::temp_dir().join(format!("nd-first-pmt-{}.webm", std::process::id()));
-    let fixture = gst::parse::launch(&format!(
+    write_fixture(&format!(
         "webmmux name=mux ! filesink location=\"{}\" \
          videotestsrc num-buffers=60 ! video/x-raw,width=320,height=240,framerate=30/1 \
          ! vp8enc deadline=1 ! mux. \
          audiotestsrc num-buffers=94 ! audio/x-raw,rate=48000 ! vorbisenc ! mux.",
         path.display()
-    ))
-    .unwrap();
-    let guard = PipelineGuard::new(fixture.clone().downcast::<gst::Pipeline>().unwrap());
-    fixture.set_state(gst::State::Playing).unwrap();
-    fixture
-        .bus()
-        .unwrap()
-        .timed_pop_filtered(gst::ClockTime::from_seconds(10), &[gst::MessageType::Eos])
-        .expect("fixture written");
-    drop(guard);
+    ));
 
     let cfg = StreamConfig {
         width: 320,
@@ -55,7 +46,7 @@ fn a_file_stream_announces_its_picture_in_the_first_program_table() {
     guard.pipeline().set_state(gst::State::Playing).unwrap();
     let sink = guard.pipeline().by_name("ts").unwrap();
 
-    // The first PMT section (PID 0x20, payload start) and its stream types.
+    // Pull the multiplex until its first program table has gone by.
     let mut ts = Vec::new();
     let stream_types = loop {
         let sample = sink
@@ -65,26 +56,7 @@ fn a_file_stream_announces_its_picture_in_the_first_program_table() {
             )
             .expect("the multiplex must produce data");
         ts.extend_from_slice(&sample.buffer().unwrap().map_readable().unwrap());
-        let table = ts.as_chunks::<188>().0.iter().find(|p| {
-            p[0] == 0x47
-                && (u16::from(p[1] & 0x1f) << 8 | u16::from(p[2])) == 0x20
-                && p[1] & 0x40 != 0
-        });
-        if let Some(packet) = table {
-            let mut at = 4 + if (packet[3] >> 4) & 3 == 3 {
-                1 + usize::from(packet[4])
-            } else {
-                0
-            };
-            at += 1 + usize::from(packet[at]);
-            let t = &packet[at..];
-            let length = usize::from(t[1] & 0x0f) << 8 | usize::from(t[2]);
-            let mut i = 12 + (usize::from(t[10] & 0x0f) << 8 | usize::from(t[11]));
-            let mut types = Vec::new();
-            while i < 3 + length - 4 {
-                types.push(t[i]);
-                i += 5 + (usize::from(t[i + 3] & 0x0f) << 8 | usize::from(t[i + 4]));
-            }
+        if let Some(types) = first_pmt_stream_types(&ts) {
             break types;
         }
     };
@@ -101,22 +73,13 @@ fn the_position_is_what_is_playing_not_what_was_read() {
     use nd_core::media::{FilePlaybackControl, MediaKind, MediaSource, PlaybackStart};
     pipeline::init().unwrap();
     let path = std::env::temp_dir().join(format!("nd-position-{}.webm", std::process::id()));
-    let fixture = gst::parse::launch(&format!(
+    write_fixture(&format!(
         "webmmux name=mux ! filesink location=\"{}\" \
          videotestsrc num-buffers=600 ! video/x-raw,width=160,height=90,framerate=30/1 \
          ! vp8enc deadline=1 ! mux. \
          audiotestsrc num-buffers=938 ! audio/x-raw,rate=48000 ! vorbisenc ! mux.",
         path.display()
-    ))
-    .unwrap();
-    let guard = PipelineGuard::new(fixture.clone().downcast::<gst::Pipeline>().unwrap());
-    fixture.set_state(gst::State::Playing).unwrap();
-    fixture
-        .bus()
-        .unwrap()
-        .timed_pop_filtered(gst::ClockTime::from_seconds(20), &[gst::MessageType::Eos])
-        .expect("fixture written");
-    drop(guard);
+    ));
 
     let video = VideoSource::Media {
         source: MediaSource::File(path.clone()),
@@ -158,24 +121,60 @@ fn the_original_size_is_read_from_the_file() {
     use nd_core::media::{MediaSource, tv_frame};
     pipeline::init().unwrap();
     let path = std::env::temp_dir().join(format!("nd-tv-frame-{}.webm", std::process::id()));
-    let fixture = gst::parse::launch(&format!(
+    write_fixture(&format!(
         "videotestsrc num-buffers=5 ! video/x-raw,width=640,height=268,framerate=24/1 \
          ! vp8enc deadline=1 ! webmmux ! filesink location=\"{}\"",
         path.display()
-    ))
-    .unwrap();
-    let guard = PipelineGuard::new(fixture.clone().downcast::<gst::Pipeline>().unwrap());
-    fixture.set_state(gst::State::Playing).unwrap();
-    fixture
-        .bus()
-        .unwrap()
-        .timed_pop_filtered(gst::ClockTime::from_seconds(10), &[gst::MessageType::Eos])
-        .expect("fixture written");
-    drop(guard);
+    ));
     let frame = tv_frame(&MediaSource::File(path.clone()), 0);
     std::fs::remove_file(&path).unwrap();
     // 2.39:1 at 640 wide: the 16:9 frame that holds it.
     assert_eq!(frame, Some((640, 360)));
     // Unreadable: no guess.
     assert_eq!(tv_frame(&MediaSource::File(path), 0), None);
+}
+
+/// Writes a test media file with a `gst-launch` description, until it ends.
+fn write_fixture(description: &str) {
+    let fixture = gst::parse::launch(description)
+        .unwrap()
+        .downcast::<gst::Pipeline>()
+        .unwrap();
+    let guard = PipelineGuard::new(fixture);
+    guard.pipeline().set_state(gst::State::Playing).unwrap();
+    let message = guard
+        .pipeline()
+        .bus()
+        .unwrap()
+        .timed_pop_filtered(
+            gst::ClockTime::from_seconds(20),
+            &[gst::MessageType::Eos, gst::MessageType::Error],
+        )
+        .expect("the fixture pipeline must finish");
+    assert_eq!(message.type_(), gst::MessageType::Eos, "{message:?}");
+}
+
+/// The stream types listed by the first PMT section (PID 0x20, payload unit
+/// start) in a run of 188-byte transport packets.
+fn first_pmt_stream_types(ts: &[u8]) -> Option<Vec<u8>> {
+    let packet = ts.as_chunks::<188>().0.iter().find(|p| {
+        p[0] == 0x47 && (u16::from(p[1] & 0x1f) << 8 | u16::from(p[2])) == 0x20 && p[1] & 0x40 != 0
+    })?;
+    // Skip the adaptation field, then the pointer field.
+    let mut at = 4 + if (packet[3] >> 4) & 3 == 3 {
+        1 + usize::from(packet[4])
+    } else {
+        0
+    };
+    at += 1 + usize::from(packet[at]);
+    let table = &packet[at..];
+    let section_length = usize::from(table[1] & 0x0f) << 8 | usize::from(table[2]);
+    let mut i = 12 + (usize::from(table[10] & 0x0f) << 8 | usize::from(table[11]));
+    let mut types = Vec::new();
+    // Elementary stream entries end four bytes (the CRC) before the section.
+    while i < 3 + section_length - 4 {
+        types.push(table[i]);
+        i += 5 + (usize::from(table[i + 3] & 0x0f) << 8 | usize::from(table[i + 4]));
+    }
+    Some(types)
 }
