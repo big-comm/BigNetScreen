@@ -26,7 +26,8 @@ mod stream_config;
 mod ts_http;
 mod wfd;
 
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use gst::prelude::*;
 use gstreamer as gst;
@@ -80,7 +81,9 @@ pub fn init() -> Result<()> {
 pub enum PipelineEvent {
     /// Fatal error: the pipeline stopped producing media.
     Error { message: String, debug: String },
-    /// Non-fatal warning.
+    /// Non-fatal warning. Not sent: warnings are logged where they arise, so
+    /// a burst of them cannot crowd errors and end of stream out of the
+    /// bounded channel.
     Warning { message: String },
     /// End of stream.
     Eos,
@@ -89,7 +92,13 @@ pub enum PipelineEvent {
 /// The channel through which bus events reach the caller.
 pub type PipelineEvents = futures::channel::mpsc::Receiver<PipelineEvent>;
 
-/// End synthetic tracks when all finite decoder tracks reach EOS.
+/// Ends the synthetic tracks of a file once every decoded track has ended.
+///
+/// A file's silence (`file-silence`) and drawn picture (`file-picture`) are
+/// live sources that never end by themselves; without this a song or a film
+/// with no audio track would never reach end of stream. A decoded file with no
+/// audio leaves `file-audio-queue` unlinked, which is ended at once. A photo
+/// is held on screen by `imagefreeze` and never ends.
 fn finish_file_sources(pipeline: &gst::Pipeline) {
     let Some(decoder) = pipeline.by_name("filedec") else {
         return;
@@ -108,19 +117,19 @@ fn finish_file_sources(pipeline: &gst::Pipeline) {
     if pipeline.by_name("file-photo").is_some() {
         return;
     }
-    let remaining = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let remaining = Arc::new(AtomicUsize::new(0));
     let weak = pipeline.downgrade();
     decoder.connect_pad_added(move |_, pad| {
-        remaining.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        remaining.fetch_add(1, Ordering::SeqCst);
         let remaining = remaining.clone();
         let weak = weak.clone();
-        let ended = std::sync::atomic::AtomicBool::new(false);
+        let ended = AtomicBool::new(false);
         pad.add_probe(gst::PadProbeType::EVENT_DOWNSTREAM, move |_, info| {
             if info
                 .event()
                 .is_some_and(|event| event.type_() == gst::EventType::Eos)
-                && !ended.swap(true, std::sync::atomic::Ordering::SeqCst)
-                && remaining.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1
+                && !ended.swap(true, Ordering::SeqCst)
+                && remaining.fetch_sub(1, Ordering::SeqCst) == 1
                 && let Some(pipeline) = weak.upgrade()
             {
                 pipeline.call_async(|pipeline| {
@@ -136,6 +145,12 @@ fn finish_file_sources(pipeline: &gst::Pipeline) {
     });
 }
 
+/// Builds a pipeline from a `gst-launch` description, applies the latency,
+/// installs the diagnostics and leaves it in READY.
+///
+/// `latency_ms` of [`PIPELINE_LATENCY_AUTO`] lets GStreamer use the minimum
+/// the pipeline reports. Errors and end of stream arrive on the returned
+/// channel.
 pub fn build_pipeline(
     description: &str,
     latency_ms: u64,
@@ -143,7 +158,8 @@ pub fn build_pipeline(
     build_configured_pipeline(description, latency_ms, |_| Ok(()))
 }
 
-/// Set properties before READY can create external resources.
+/// [`build_pipeline`], with `configure` run on the parsed pipeline before
+/// READY, when elements may open devices or sockets.
 pub fn build_configured_pipeline(
     description: &str,
     latency_ms: u64,
@@ -168,89 +184,34 @@ pub fn build_configured_pipeline(
         .map_err(|_| NdError::Gst("the description did not produce a Pipeline".into()))?;
     configure(&pipeline)?;
 
-    // `0` = automatic: let GStreamer use the minimum latency the pipeline
-    // itself reports. That is the right default — forcing a value **below**
-    // that minimum makes sinks drop late buffers (the sink receives megabits
-    // and shows a black screen), and forcing one far **above** it only adds
-    // lag. Setting it explicitly is for giving headroom to spiky encoders.
+    // Below the minimum the pipeline reports, sinks drop every buffer as late
+    // and the receiver shows black; above it is only delay. A fixed value is
+    // for headroom over an encoder with latency spikes.
     if latency_ms > 0 {
         pipeline.set_latency(gst::ClockTime::from_mseconds(latency_ms));
     }
-    // Every pipeline, because the question "were those frames ever made?" is
-    // asked of whichever one is misbehaving. Costs nothing unless asked for.
     instrument_framerate(&pipeline);
-
-    // Optional diagnostic: how long a frame spends in here. Kept behind an
-    // environment variable because it installs a probe on every buffer.
     if std::env::var("BIGNETSCREEN_LATENCY").is_ok() {
         instrument_latency(&pipeline);
     }
     finish_file_sources(&pipeline);
 
+    // Bounded: a pipeline nobody drains must not grow without limit, and
+    // `try_send` drops what does not fit rather than block a streaming thread.
     let (tx, rx) = futures::channel::mpsc::channel(32);
-    let tx = std::sync::Mutex::new(tx);
+    let tx = Mutex::new(tx);
     let weak_pipeline = pipeline.downgrade();
     if let Some(bus) = pipeline.bus() {
-        bus.set_sync_handler(move |_, msg| {
-            match msg.view() {
-                gst::MessageView::Error(err) => {
-                    // HTTP diagnostics can repeat credentials or redirected
-                    // URLs. Publish categories, not the upstream strings.
-                    let (message, details) = if remote_media {
-                        ("Could not read or decode the online media. Check the link and connection.".into(),
-                         format!("resource={:?}; stream={:?}", err.error().kind::<gst::ResourceError>(), err.error().kind::<gst::StreamError>()))
-                    } else {
-                        (err.error().to_string(), err.debug().map(|d| d.to_string()).unwrap_or_default())
-                    };
-                    tracing::error!(%message, %details, "pipeline error");
-                    let _ = tx
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .try_send(PipelineEvent::Error {
-                            message,
-                            debug: details,
-                        });
-                }
-                gst::MessageView::Warning(w) => {
-                    let message = if remote_media {
-                        format!("online media warning (resource={:?}; stream={:?})", w.error().kind::<gst::ResourceError>(), w.error().kind::<gst::StreamError>())
-                    } else { w.error().to_string() };
-                    tracing::warn!(%message, "pipeline warning");
-                }
-                gst::MessageView::Eos(_) => {
-                    let _ = tx
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .try_send(PipelineEvent::Eos);
-                }
-                gst::MessageView::Latency(_) => {
-                    // GstBin does not act on this by itself: the application
-                    // has to redistribute the latency. Hardware encoders often
-                    // learn their delay only once the first caps arrive, after
-                    // `Playing`; ignoring the message leaves the synchronised
-                    // sinks dropping every frame as "late". The query walks
-                    // the whole graph and this is a streaming thread, so it
-                    // runs on its own thread instead.
-                    if let Some(pipeline) = weak_pipeline.upgrade() {
-                        std::thread::spawn(move || {
-                            if let Err(err) = pipeline.recalculate_latency() {
-                                tracing::debug!(%err, "latency could not be recalculated");
-                            } else {
-                                tracing::debug!("pipeline latency recalculated");
-                            }
-                        });
-                    }
-                }
-                _ => {}
-            }
-            // `Drop` keeps the bus queue empty: there is no guaranteed main
-            // loop on the protocol threads to consume it.
+        bus.set_sync_handler(move |_, message| {
+            forward_bus_message(message, remote_media, &tx, &weak_pipeline);
+            // There is no main loop guaranteed on the protocol threads to pop
+            // the bus, so nothing is left queued on it.
             gst::BusSyncReply::Drop
         });
     }
 
-    // See the note in the documentation: leaving `Null` is a prerequisite for
-    // sinks to accept clients before `Playing`.
+    // `multisocketsink` accepts a receiver's socket only once out of NULL, and
+    // the HTTP server hands it one before the pipeline plays.
     if let Err(err) = pipeline.set_state(gst::State::Ready) {
         let _ = pipeline.set_state(gst::State::Null);
         return Err(NdError::Gst(format!(
@@ -261,19 +222,80 @@ pub fn build_configured_pipeline(
     Ok((pipeline, rx))
 }
 
-/// A pipeline under observation: it knows whether the encoder really produced
-/// frames.
+/// Turns one bus message into a [`PipelineEvent`], from a streaming thread.
+fn forward_bus_message(
+    message: &gst::Message,
+    remote_media: bool,
+    events: &Mutex<futures::channel::mpsc::Sender<PipelineEvent>>,
+    pipeline: &gst::glib::WeakRef<gst::Pipeline>,
+) {
+    let send = |event| {
+        let _ = events
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .try_send(event);
+    };
+    match message.view() {
+        gst::MessageView::Error(err) => {
+            // Errors from an HTTP source can repeat credentials or redirected
+            // URLs, so online media reports error categories only.
+            let (message, details) = if remote_media {
+                (
+                    "Could not read or decode the online media. Check the link and connection."
+                        .to_string(),
+                    format!(
+                        "resource={:?}; stream={:?}",
+                        err.error().kind::<gst::ResourceError>(),
+                        err.error().kind::<gst::StreamError>()
+                    ),
+                )
+            } else {
+                (
+                    err.error().to_string(),
+                    err.debug().map(|d| d.to_string()).unwrap_or_default(),
+                )
+            };
+            tracing::error!(%message, %details, "pipeline error");
+            send(PipelineEvent::Error {
+                message,
+                debug: details,
+            });
+        }
+        gst::MessageView::Warning(warning) => {
+            let message = if remote_media {
+                format!(
+                    "online media warning (resource={:?}; stream={:?})",
+                    warning.error().kind::<gst::ResourceError>(),
+                    warning.error().kind::<gst::StreamError>()
+                )
+            } else {
+                warning.error().to_string()
+            };
+            tracing::warn!(%message, "pipeline warning");
+        }
+        gst::MessageView::Eos(_) => send(PipelineEvent::Eos),
+        gst::MessageView::Latency(_) => {
+            // A bin does not redistribute latency by itself. Hardware encoders
+            // often learn their delay from the first caps, after PLAYING, and
+            // without a recalculation the synchronised sinks drop every frame
+            // as late. The query walks the whole graph, so it leaves this
+            // streaming thread.
+            if let Some(pipeline) = pipeline.upgrade() {
+                std::thread::spawn(move || match pipeline.recalculate_latency() {
+                    Ok(()) => tracing::debug!("pipeline latency recalculated"),
+                    Err(err) => tracing::debug!(%err, "latency could not be recalculated"),
+                });
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Takes the pipeline to NULL when it goes out of scope.
 ///
-/// This is what makes it possible to discover at runtime that a hardware
-/// encoder "exists, accepts the configuration and encodes nothing" — the silent
-/// failure the driver blacklist was trying to guess at.
-/// Takes the pipeline to `NULL` when it goes out of scope.
-///
-/// Dropping a pipeline in `PLAYING` makes GStreamer complain with a `CRITICAL`
-/// and leaves elements uncleaned — in practice, the app closed when Stop was
-/// pressed. Calling `set_state(Null)` at the end of the function was not
-/// enough: a `?` midway, or cancellation itself (which **drops the future**),
-/// skipped that line. Tied to a lifetime, every exit path goes through here.
+/// A pipeline dropped while PLAYING logs a GStreamer `CRITICAL` and leaves its
+/// elements running. Tied to a scope, the teardown also runs on an early `?`
+/// return and when a cancelled future is dropped mid-await.
 #[derive(Debug)]
 pub struct PipelineGuard {
     pipeline: gst::Pipeline,
@@ -408,7 +430,7 @@ mod tests {
             );
             let (pipeline, mut events) = build_pipeline(&description, 0).unwrap();
             let guard = PipelineGuard::new(pipeline.clone());
-            let frames = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let frames = Arc::new(AtomicUsize::new(0));
             let count = frames.clone();
             pipeline
                 .by_name("video-check")
@@ -416,7 +438,7 @@ mod tests {
                 .static_pad("sink")
                 .unwrap()
                 .add_probe(gst::PadProbeType::BUFFER, move |_, _| {
-                    count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    count.fetch_add(1, Ordering::Relaxed);
                     gst::PadProbeReturn::Ok
                 });
             let start = std::time::Instant::now();
@@ -429,7 +451,7 @@ mod tests {
                 matches!(event, PipelineEvent::Eos),
                 "audio={with_audio}: {event:?}"
             );
-            assert_eq!(frames.load(std::sync::atomic::Ordering::Relaxed), 15);
+            assert_eq!(frames.load(Ordering::Relaxed), 15);
             assert!(start.elapsed() >= std::time::Duration::from_millis(400));
             drop(guard);
             std::fs::remove_file(path).unwrap();
