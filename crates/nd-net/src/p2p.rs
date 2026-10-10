@@ -50,6 +50,9 @@ pub const FIND_TIMEOUT: Duration = Duration::from_secs(30);
 /// dead window between one scan and the next).
 pub const FIND_RENEW_INTERVAL: Duration = Duration::from_secs(20);
 
+/// How often a forming group's state is read.
+const GROUP_STATE_POLL: Duration = Duration::from_millis(500);
+
 /// `NM_DEVICE_TYPE_WIFI_P2P`.
 /// NetworkManager's device type for an ordinary Wi-Fi station.
 const DEVICE_TYPE_WIFI: u32 = 2;
@@ -829,19 +832,15 @@ impl P2pDevice {
 
             let deadline = tokio::time::Instant::now() + per_attempt;
             loop {
-                if *cancel.borrow() {
-                    if let Err(err) = self.disconnect(&active).await {
-                        tracing::warn!(%err, "could not tear down the Wi-Fi Direct group");
-                    }
-                    return Err(NdError::Cancelled);
-                }
                 if tokio::time::Instant::now() >= deadline {
                     last = NdError::Network("the Wi-Fi Direct group was not ready in time".into());
                     break;
                 }
-                tokio::select! {
-                    _ = tokio::time::sleep(Duration::from_millis(500)) => {},
-                    _ = cancel.changed() => continue,
+                if cancelled_during(cancel, GROUP_STATE_POLL).await {
+                    if let Err(err) = self.disconnect(&active).await {
+                        tracing::warn!(%err, "could not tear down the Wi-Fi Direct group");
+                    }
+                    return Err(NdError::Cancelled);
                 }
 
                 // A vanished activation is **this attempt failing**, not a
@@ -896,10 +895,35 @@ impl P2pDevice {
             // Let the teardown finish. Asking for a new group while the old
             // activation is still being removed is how an attempt ends up
             // watching an object that is on its way out.
-            tokio::time::sleep(Self::TEARDOWN_SETTLE).await;
+            if cancelled_during(cancel, Self::TEARDOWN_SETTLE).await {
+                return Err(NdError::Cancelled);
+            }
         }
 
         Err(last)
+    }
+}
+
+/// Waits `duration` unless `cancel` asks to stop first; `true` means stop.
+///
+/// A dropped sender also means stop: nobody is left to use the group, and a
+/// closed channel answers `changed()` at once, which would otherwise spin.
+async fn cancelled_during(
+    cancel: &mut tokio::sync::watch::Receiver<bool>,
+    duration: Duration,
+) -> bool {
+    let sleep = tokio::time::sleep(duration);
+    tokio::pin!(sleep);
+    loop {
+        if *cancel.borrow_and_update() {
+            return true;
+        }
+        tokio::select! {
+            _ = &mut sleep => return false,
+            changed = cancel.changed() => if changed.is_err() {
+                return true;
+            }
+        }
     }
 }
 
@@ -987,6 +1011,25 @@ mod tests {
         assert!(!already_inactive(&method_error(
             "org.freedesktop.DBus.Error.AccessDenied"
         )));
+    }
+
+    #[tokio::test]
+    async fn a_dropped_cancel_sender_ends_the_wait() {
+        let (sender, mut cancel) = tokio::sync::watch::channel(false);
+        drop(sender);
+        let wait = cancelled_during(&mut cancel, Duration::from_millis(200));
+        assert_eq!(
+            tokio::time::timeout(Duration::from_millis(100), wait).await,
+            Ok(true)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_wait_ends_early_only_when_cancelled() {
+        let (sender, mut cancel) = tokio::sync::watch::channel(false);
+        assert!(!cancelled_during(&mut cancel, Duration::from_millis(10)).await);
+        sender.send_replace(true);
+        assert!(cancelled_during(&mut cancel, Duration::from_secs(60)).await);
     }
 
     #[test]
