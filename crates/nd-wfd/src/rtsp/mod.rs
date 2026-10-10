@@ -94,6 +94,7 @@ struct Negotiation {
     caps_requested: bool,
     mode: Option<WfdMode>,
     sink_rtp_port: u16,
+    streaming: bool,
 }
 
 impl Negotiation {
@@ -257,7 +258,11 @@ impl Negotiation {
                 self.outbox.push(format!(
                     "RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\nSession: 1\r\n\r\n"
                 ));
-                return Ok(Next::Stream(mode, self.sink_rtp_port));
+                // PAUSE leaves the stream running, so a later PLAY has
+                // nothing to start.
+                if !std::mem::replace(&mut self.streaming, true) {
+                    return Ok(Next::Stream(mode, self.sink_rtp_port));
+                }
             }
             Some("TEARDOWN") => {
                 self.outbox
@@ -627,6 +632,15 @@ mod tests {
         }
     }
 
+    const MODE: WfdMode = WfdMode {
+        width: 1280,
+        height: 720,
+        fps: 60,
+        interlaced: false,
+        table: ResolutionTable::Cea,
+        index: 6,
+    };
+
     #[test]
     fn the_sink_options_are_answered_and_capabilities_asked_once() {
         let mut session = Negotiation::default();
@@ -655,6 +669,26 @@ mod tests {
             ]
         );
         assert_eq!(session.pending.get(&2), Some(&Awaiting::GetParameter));
+    }
+
+    #[test]
+    fn a_repeated_play_keeps_the_running_stream() {
+        // A sink that pauses (M9) and plays again (M7) must not get a second
+        // pipeline: it would find the local RTP port taken and end the session.
+        let mut session = Negotiation {
+            mode: Some(MODE),
+            sink_rtp_port: 19000,
+            ..Default::default()
+        };
+        let play = message("PLAY rtsp://localhost/wfd1.0 RTSP/1.0", 6);
+        assert_eq!(
+            session.on_request(&play).unwrap(),
+            Next::Stream(MODE, 19000)
+        );
+        let pause = message("PAUSE rtsp://localhost/wfd1.0 RTSP/1.0", 7);
+        assert_eq!(session.on_request(&pause).unwrap(), Next::Continue);
+        assert_eq!(session.on_request(&play).unwrap(), Next::Continue);
+        assert_eq!(session.outbox.len(), 3, "every request is answered");
     }
 
     #[test]
