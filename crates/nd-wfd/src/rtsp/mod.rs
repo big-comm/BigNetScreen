@@ -32,12 +32,13 @@ use gst::prelude::*;
 use gstreamer as gst;
 use tokio::io::BufReader;
 use tokio::net::TcpStream;
+use tokio::net::tcp::OwnedWriteHalf;
 
 use nd_core::pipeline::{self, StreamConfig, VideoSource, WfdTransport};
 use nd_core::sink::{SinkStatus, StreamLink};
 use nd_core::{NdError, Result};
 
-use message::{read_message, send};
+use message::{RtspMessage, read_message, send};
 
 /// The WFD RTSP server's port, the one the firewall lease opens.
 pub use nd_net::firewall::RTSP_PORT;
@@ -59,6 +60,227 @@ const NEGOTIATION_TIMEOUT: Duration = Duration::from_secs(30);
 /// hardware encoder to initialise its driver.
 const ENCODER_PROBE: Duration = Duration::from_millis(1200);
 
+/// What we are waiting for on each `CSeq` we sent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Awaiting {
+    Options,
+    GetParameter,
+    SetFormat,
+    TriggerSetup,
+    Keepalive,
+}
+
+/// What a request from the sink leads to, once answered.
+#[derive(Debug, PartialEq, Eq)]
+enum Next {
+    Continue,
+    /// PLAY: stream `mode` to the sink's RTP port.
+    Stream(WfdMode, u16),
+    /// TEARDOWN.
+    End,
+}
+
+/// The source side of one RTSP connection: what we asked and what was agreed.
+///
+/// Protocol state only. The caller owns the socket, the timers and the
+/// pipeline: every message it reads goes through [`Self::on_response`] or
+/// [`Self::on_request`], and whatever those queue in `outbox` is sent, in
+/// order, before the next read.
+#[derive(Default)]
+struct Negotiation {
+    cseq: u32,
+    pending: HashMap<u32, Awaiting>,
+    outbox: Vec<String>,
+    caps_requested: bool,
+    mode: Option<WfdMode>,
+    sink_rtp_port: u16,
+}
+
+impl Negotiation {
+    fn request(&mut self, awaiting: Awaiting, message: impl FnOnce(u32) -> String) {
+        self.cseq += 1;
+        self.pending.insert(self.cseq, awaiting);
+        self.outbox.push(message(self.cseq));
+    }
+
+    /// M1, which opens the negotiation.
+    fn begin(&mut self) {
+        self.request(Awaiting::Options, |cseq| {
+            format!("OPTIONS * RTSP/1.0\r\nCSeq: {cseq}\r\nRequire: org.wfa.wfd1.0\r\n\r\n")
+        });
+    }
+
+    /// M16. Fails while the previous one is unanswered: the sink is gone.
+    fn keepalive(&mut self) -> Result<()> {
+        if self.pending.values().any(|a| *a == Awaiting::Keepalive) {
+            return Err(NdError::Protocol(
+                "RTSP keepalive was not acknowledged".into(),
+            ));
+        }
+        self.request(Awaiting::Keepalive, |cseq| {
+            format!("GET_PARAMETER {WFD_URL} RTSP/1.0\r\nCSeq: {cseq}\r\nSession: 1\r\n\r\n")
+        });
+        Ok(())
+    }
+
+    /// The request `response` answers, or `None` when it answers nothing we
+    /// are waiting for. A refusal ends the session, except for a keepalive.
+    fn answered(&mut self, response: &RtspMessage) -> Result<Option<Awaiting>> {
+        let Some(awaiting) = self.pending.remove(&response.cseq()) else {
+            tracing::debug!(cseq = response.cseq(), "response with no matching request");
+            return Ok(None);
+        };
+        if response.is_success() {
+            return Ok(Some(awaiting));
+        }
+        if awaiting == Awaiting::Keepalive {
+            tracing::warn!(status = ?response.status(), "keepalive refused");
+            return Ok(None);
+        }
+        Err(NdError::Protocol(format!(
+            "the sink refused {awaiting:?}: {}",
+            response.start_line
+        )))
+    }
+
+    fn on_response(&mut self, response: &RtspMessage, cfg: &WfdCastConfig) -> Result<()> {
+        match self.answered(response)? {
+            Some(Awaiting::GetParameter) => {
+                let format = self.choose_format(&parse_caps(&response.body), cfg)?;
+                self.request(Awaiting::SetFormat, |cseq| set_parameter(cseq, &format));
+            }
+            Some(Awaiting::SetFormat) => self.request(Awaiting::TriggerSetup, |cseq| {
+                set_parameter(cseq, "wfd_trigger_method: SETUP\r\n")
+            }),
+            Some(Awaiting::TriggerSetup) => tracing::debug!("waiting for the sink's SETUP"),
+            Some(Awaiting::Options | Awaiting::Keepalive) | None => {}
+        }
+        Ok(())
+    }
+
+    /// Picks the mode from what the sink accepts and returns M4's body.
+    fn choose_format(&mut self, caps: &SinkCaps, cfg: &WfdCastConfig) -> Result<String> {
+        if caps.rtp_port != 0 {
+            self.sink_rtp_port = caps.rtp_port;
+        }
+        // The pipeline sends AAC stereo at 48 kHz, bit 0 of the AAC modes.
+        let aac = caps
+            .audio_codecs
+            .as_deref()
+            .unwrap_or("")
+            .split(',')
+            .any(|codec| {
+                let mut fields = codec.split_whitespace();
+                fields.next() == Some("AAC")
+                    && fields
+                        .next()
+                        .and_then(|v| u32::from_str_radix(v, 16).ok())
+                        .is_some_and(|bits| bits & 1 != 0)
+            });
+        if !aac {
+            return Err(NdError::Unsupported(
+                "receiver does not support AAC stereo at 48 kHz".into(),
+            ));
+        }
+        let fps = nd_core::settings::current().fps;
+        let limit = StreamConfig::capped_by_preference(cfg.max_resolution);
+        let mode = caps
+            .preferred_mode(cfg.source_size, limit, fps)
+            .ok_or_else(|| {
+                NdError::Protocol(format!(
+                    "receiver has no compatible video mode within {}x{} at {} FPS; choose a larger resolution or frame rate limit",
+                    limit.0, limit.1, fps
+                ))
+            })?;
+        tracing::info!(
+            w = mode.width, h = mode.height, fps = mode.fps,
+            table = ?mode.table, "video mode negotiated"
+        );
+        self.mode = Some(mode);
+
+        let url = format!("rtsp://{}:{RTSP_PORT}/wfd1.0/streamid=0", cfg.our_ip);
+        Ok(format!(
+            "wfd_video_formats: {}\r\n\
+             wfd_audio_codecs: AAC 00000001 00\r\n\
+             wfd_presentation_URL: {url} none\r\n\
+             wfd_client_rtp_ports: RTP/AVP/UDP;unicast {} 0 mode=play\r\n\
+             wfd_content_protection: none\r\n",
+            m4_video_formats(&mode, caps.profile, caps.level),
+            self.sink_rtp_port,
+        ))
+    }
+
+    fn on_request(&mut self, request: &RtspMessage) -> Result<Next> {
+        let cseq = request.cseq_str();
+        match request.method() {
+            Some("OPTIONS") => {
+                self.outbox.push(format!(
+                    "RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\nPublic: {WFD_METHODS}\r\n\r\n"
+                ));
+                // That was M2; M3 follows it, once.
+                if !std::mem::replace(&mut self.caps_requested, true) {
+                    self.request(Awaiting::GetParameter, m3_request);
+                }
+            }
+            Some("SETUP") => {
+                if let Some(port) = request
+                    .headers
+                    .get("transport")
+                    .and_then(|t| parse_client_port(t))
+                {
+                    self.sink_rtp_port = port;
+                }
+                if self.sink_rtp_port == 0 || self.sink_rtp_port == u16::MAX {
+                    return Err(NdError::Protocol(
+                        "the sink reported no RTP port, neither in M3 nor in SETUP".into(),
+                    ));
+                }
+                let (sink, local) = (self.sink_rtp_port, pipeline::LOCAL_RTP_PORT);
+                self.outbox.push(format!(
+                    "RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\nSession: 1;timeout=60\r\n\
+                     Transport: RTP/AVP/UDP;unicast;client_port={sink}-{};server_port={local}-{};mode=play\r\n\r\n",
+                    sink + 1,
+                    local + 1
+                ));
+            }
+            Some("PLAY") => {
+                // `udpsink port=0` is accepted silently, and the picture
+                // simply never appears.
+                if self.sink_rtp_port == 0 || self.sink_rtp_port == u16::MAX {
+                    return Err(NdError::Protocol(
+                        "PLAY received with no negotiated RTP port".into(),
+                    ));
+                }
+                let mode = self.mode.ok_or_else(|| {
+                    NdError::Protocol("PLAY received before the format was negotiated".into())
+                })?;
+                self.outbox.push(format!(
+                    "RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\nSession: 1\r\n\r\n"
+                ));
+                return Ok(Next::Stream(mode, self.sink_rtp_port));
+            }
+            Some("TEARDOWN") => {
+                self.outbox
+                    .push(format!("RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\n\r\n"));
+                return Ok(Next::End);
+            }
+            // The sink's keepalive and any other method.
+            _ => self
+                .outbox
+                .push(format!("RTSP/1.0 200 OK\r\nCSeq: {cseq}\r\n\r\n")),
+        }
+        Ok(Next::Continue)
+    }
+}
+
+/// Sends what the negotiation queued, in order.
+async fn flush(writer: &mut OwnedWriteHalf, outbox: &mut Vec<String>) -> Result<()> {
+    for message in outbox.drain(..) {
+        send(writer, &message).await?;
+    }
+    Ok(())
+}
+
 /// Performs the WFD M1–M3 handshake and returns the sink's advertised
 /// capabilities.
 ///
@@ -66,64 +288,20 @@ const ENCODER_PROBE: Duration = Duration::from_millis(1200);
 pub async fn negotiate_caps(stream: TcpStream) -> Result<SinkCaps> {
     let (read_half, mut writer) = stream.into_split();
     let mut reader = BufReader::new(read_half);
-    let mut cseq = 0u32;
-
-    cseq += 1;
-    send(
-        &mut writer,
-        &format!("OPTIONS * RTSP/1.0\r\nCSeq: {cseq}\r\nRequire: org.wfa.wfd1.0\r\n\r\n"),
-    )
-    .await?;
-    tracing::debug!("WFD M1 OPTIONS sent");
-
-    let mut m3_cseq = None;
+    let mut session = Negotiation::default();
+    session.begin();
     let deadline = tokio::time::Instant::now() + NEGOTIATION_TIMEOUT;
-
     loop {
-        let msg = tokio::time::timeout_at(deadline, read_message(&mut reader))
+        flush(&mut writer, &mut session.outbox).await?;
+        let message = tokio::time::timeout_at(deadline, read_message(&mut reader))
             .await
             .map_err(|_| {
                 NdError::Protocol("the sink did not finish the negotiation in time".into())
             })??;
-
-        if msg.is_response() {
-            if Some(msg.cseq()) == m3_cseq {
-                if !msg.is_success() {
-                    return Err(NdError::Protocol(format!(
-                        "the sink refused M3 ({})",
-                        msg.start_line
-                    )));
-                }
-                return Ok(parse_caps(&msg.body));
-            }
-            continue;
-        }
-
-        match msg.method() {
-            Some("OPTIONS") => {
-                send(
-                    &mut writer,
-                    &format!(
-                        "RTSP/1.0 200 OK\r\nCSeq: {}\r\nPublic: {WFD_METHODS}\r\n\r\n",
-                        msg.cseq_str()
-                    ),
-                )
-                .await?;
-                if m3_cseq.is_none() {
-                    cseq += 1;
-                    send(&mut writer, &m3_request(cseq)).await?;
-                    m3_cseq = Some(cseq);
-                    tracing::debug!("WFD M3 GET_PARAMETER sent");
-                }
-            }
-            other => {
-                tracing::debug!(method = ?other, "unexpected request; answering 200");
-                send(
-                    &mut writer,
-                    &format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\n\r\n", msg.cseq_str()),
-                )
-                .await?;
-            }
+        if !message.is_response() {
+            session.on_request(&message)?;
+        } else if session.answered(&message)? == Some(Awaiting::GetParameter) {
+            return Ok(parse_caps(&message.body));
         }
     }
 }
@@ -137,14 +315,12 @@ fn m3_request(cseq: u32) -> String {
     )
 }
 
-/// What we are waiting for on each `CSeq` we sent.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Awaiting {
-    Options,
-    GetParameter,
-    SetFormat,
-    TriggerSetup,
-    Keepalive,
+fn set_parameter(cseq: u32, body: &str) -> String {
+    format!(
+        "SET_PARAMETER {WFD_URL} RTSP/1.0\r\nCSeq: {cseq}\r\n\
+         Content-Type: text/parameters\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    )
 }
 
 /// Parameters of the WFD cast session.
@@ -219,22 +395,12 @@ pub async fn cast_to_sink(
     let (read_half, mut writer) = stream.into_split();
     let mut reader = BufReader::new(read_half);
 
-    let mut cseq = 0u32;
-    let mut pending: HashMap<u32, Awaiting> = HashMap::new();
-    let mut caps = SinkCaps::default();
-    let mut chosen: Option<WfdMode> = None;
-    let mut sink_rtp_port = 0u16;
+    let mut session = Negotiation::default();
+    session.begin();
+    // Ending through an error, a TEARDOWN or the Stop button all have to take
+    // the pipeline through `NULL` just the same.
     let mut playing: Option<pipeline::PipelineGuard> = None;
-    let mut pipeline_events: Option<nd_core::pipeline::PipelineEvents> = None;
-
-    // M1
-    cseq += 1;
-    send(
-        &mut writer,
-        &format!("OPTIONS * RTSP/1.0\r\nCSeq: {cseq}\r\nRequire: org.wfa.wfd1.0\r\n\r\n"),
-    )
-    .await?;
-    pending.insert(cseq, Awaiting::Options);
+    let mut pipeline_events: Option<pipeline::PipelineEvents> = None;
 
     let mut keepalive = tokio::time::interval(KEEPALIVE_INTERVAL);
     keepalive.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -242,7 +408,11 @@ pub async fn cast_to_sink(
 
     let negotiation_deadline = tokio::time::Instant::now() + NEGOTIATION_TIMEOUT;
     let result = 'session: loop {
-        // Keep the same read future and deadline across keepalive ticks.
+        if let Err(err) = flush(&mut writer, &mut session.outbox).await {
+            break Err(err);
+        }
+        // One read future for the whole wait: dropping it on a keepalive tick
+        // would lose whatever part of a message it had already consumed.
         let msg = {
             let incoming = tokio::time::timeout(IDLE_TIMEOUT, read_message(&mut reader));
             tokio::pin!(incoming);
@@ -268,225 +438,57 @@ pub async fn cast_to_sink(
                         break 'session Err(NdError::Protocol("RTSP negotiation timed out".into()));
                     }
                     _ = keepalive.tick(), if playing.is_some() => {
-                        if pending.values().any(|request| matches!(request, Awaiting::Keepalive)) {
-                            break 'session Err(NdError::Protocol("RTSP keepalive was not acknowledged".into()));
+                        let sent = match session.keepalive() {
+                            Ok(()) => flush(&mut writer, &mut session.outbox).await,
+                            Err(err) => Err(err),
+                        };
+                        if let Err(err) = sent {
+                            break 'session Err(err);
                         }
-                        cseq += 1;
-                        let request = format!("GET_PARAMETER {WFD_URL} RTSP/1.0\r\nCSeq: {cseq}\r\nSession: 1\r\n\r\n");
-                        if let Err(err) = send(&mut writer, &request).await { break 'session Err(err); }
-                        pending.insert(cseq, Awaiting::Keepalive);
                     }
                 }
             }
         };
 
-        if msg.is_response() {
-            let Some(awaiting) = pending.remove(&msg.cseq()) else {
-                tracing::debug!(cseq = msg.cseq(), "response with no matching request");
-                continue;
-            };
-
-            // A refusal must not advance the negotiation: the session would
-            // die later with no diagnosis.
-            if !msg.is_success() {
-                if awaiting == Awaiting::Keepalive {
-                    tracing::warn!(status = ?msg.status(), "keepalive refused");
-                    continue;
-                }
-                break Err(NdError::Protocol(format!(
-                    "the sink refused {awaiting:?}: {}",
-                    msg.start_line
-                )));
-            }
-
-            match awaiting {
-                Awaiting::Options | Awaiting::Keepalive => {}
-                Awaiting::GetParameter => {
-                    caps = parse_caps(&msg.body);
-                    if caps.rtp_port != 0 {
-                        sink_rtp_port = caps.rtp_port;
-                    }
-
-                    // Choose the mode from what the sink actually accepts.
-                    let preferences = nd_core::settings::current();
-                    let limit = StreamConfig::capped_by_preference(cfg.max_resolution);
-                    let aac = caps
-                        .audio_codecs
-                        .as_deref()
-                        .unwrap_or("")
-                        .split(',')
-                        .any(|codec| {
-                            let mut fields = codec.split_whitespace();
-                            fields.next() == Some("AAC")
-                                && fields
-                                    .next()
-                                    .and_then(|v| u32::from_str_radix(v, 16).ok())
-                                    .is_some_and(|bits| bits & 1 != 0)
-                        });
-                    if !aac {
-                        return Err(NdError::Unsupported(
-                            "receiver does not support AAC stereo at 48 kHz".into(),
-                        ));
-                    }
-                    let mode = caps
-                        .preferred_mode(cfg.source_size, limit, preferences.fps)
-                        .ok_or_else(|| {
-                            NdError::Protocol(format!(
-                                "receiver has no compatible video mode within {}x{} at {} FPS; choose a larger resolution or frame rate limit",
-                                limit.0, limit.1, preferences.fps
-                            ))
-                        })?;
-                    tracing::info!(
-                        w = mode.width, h = mode.height, fps = mode.fps,
-                        table = ?mode.table, "video mode negotiated"
-                    );
-                    chosen = Some(mode);
-
-                    let url = format!("rtsp://{}:{RTSP_PORT}/wfd1.0/streamid=0", cfg.our_ip);
-                    let body = format!(
-                        "wfd_video_formats: {}\r\n\
-                         wfd_audio_codecs: AAC 00000001 00\r\n\
-                         wfd_presentation_URL: {url} none\r\n\
-                         wfd_client_rtp_ports: RTP/AVP/UDP;unicast {} 0 mode=play\r\n\
-                         wfd_content_protection: none\r\n",
-                        m4_video_formats(&mode, caps.profile, caps.level),
-                        sink_rtp_port,
-                    );
-                    cseq += 1;
-                    send(&mut writer, &set_parameter(cseq, &body)).await?;
-                    pending.insert(cseq, Awaiting::SetFormat);
-                }
-                Awaiting::SetFormat => {
-                    cseq += 1;
-                    send(
-                        &mut writer,
-                        &set_parameter(cseq, "wfd_trigger_method: SETUP\r\n"),
-                    )
-                    .await?;
-                    pending.insert(cseq, Awaiting::TriggerSetup);
-                }
-                Awaiting::TriggerSetup => {
-                    tracing::debug!("waiting for the sink's SETUP");
-                }
-            }
-            continue;
-        }
-
-        // A request coming from the sink.
-        match msg.method() {
-            Some("OPTIONS") => {
-                send(
-                    &mut writer,
-                    &format!(
-                        "RTSP/1.0 200 OK\r\nCSeq: {}\r\nPublic: {WFD_METHODS}\r\n\r\n",
-                        msg.cseq_str()
-                    ),
-                )
-                .await?;
-                // The sink's M2 → we send M3, exactly once.
-                if !pending.values().any(|a| *a == Awaiting::GetParameter) && caps.modes.is_empty()
-                {
-                    cseq += 1;
-                    send(&mut writer, &m3_request(cseq)).await?;
-                    pending.insert(cseq, Awaiting::GetParameter);
-                }
-            }
-            Some("SETUP") => {
-                if let Some(port) = msg
-                    .headers
-                    .get("transport")
-                    .and_then(|t| parse_client_port(t))
-                {
-                    sink_rtp_port = port;
-                }
-                if sink_rtp_port == 0 || sink_rtp_port == u16::MAX {
-                    break Err(NdError::Protocol(
-                        "the sink reported no RTP port, neither in M3 nor in SETUP".into(),
-                    ));
-                }
-                let local = pipeline::LOCAL_RTP_PORT;
-                let transport = format!(
-                    "RTP/AVP/UDP;unicast;client_port={sink_rtp_port}-{};server_port={local}-{};mode=play",
-                    sink_rtp_port + 1,
-                    local + 1
-                );
-                send(
-                    &mut writer,
-                    &format!(
-                        "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: 1;timeout=60\r\nTransport: {transport}\r\n\r\n",
-                        msg.cseq_str()
-                    ),
-                )
-                .await?;
-            }
-            Some("PLAY") => {
-                send(
-                    &mut writer,
-                    &format!(
-                        "RTSP/1.0 200 OK\r\nCSeq: {}\r\nSession: 1\r\n\r\n",
-                        msg.cseq_str()
-                    ),
-                )
-                .await?;
-
-                // Validate before bringing the pipeline up: `udpsink port=0`
-                // was accepted silently and the cast simply never appeared.
-                if sink_rtp_port == 0 || sink_rtp_port == u16::MAX {
-                    break Err(NdError::Protocol(
-                        "PLAY received with no negotiated RTP port".into(),
-                    ));
-                }
-                let mode = chosen.ok_or_else(|| {
-                    NdError::Protocol("PLAY received before the format was negotiated".into())
-                })?;
-
-                tracing::info!(sink = %cfg.sink_ip, port = sink_rtp_port, "PLAY — starting the stream");
-                let monitored = start_pipeline(&cfg, &mode, sink_rtp_port, status).await?;
-                // A guard rather than a bare value: ending through an error,
-                // a TEARDOWN or the Stop button all have to pass through
-                // `NULL` just the same.
+        let next = if msg.is_response() {
+            session.on_response(&msg, &cfg).map(|()| Next::Continue)
+        } else {
+            session.on_request(&msg)
+        };
+        // The answer goes out first: TEARDOWN's before closing, PLAY's
+        // before the encoder probe delays it.
+        let next = match next {
+            Ok(next) => flush(&mut writer, &mut session.outbox).await.map(|()| next),
+            Err(err) => Err(err),
+        };
+        match next {
+            Ok(Next::Continue) => {}
+            Ok(Next::End) => break Ok(()),
+            Ok(Next::Stream(mode, port)) => {
+                tracing::info!(sink = %cfg.sink_ip, port, "PLAY — starting the stream");
+                let monitored = match start_pipeline(&cfg, &mode, port, status).await {
+                    Ok(monitored) => monitored,
+                    Err(err) => break Err(err),
+                };
                 if let Some(control) = &cfg.media_control {
                     control.attach(&monitored.pipeline);
                 }
                 playing = Some(pipeline::PipelineGuard::new(monitored.pipeline));
                 pipeline_events = Some(monitored.events);
             }
-            Some("TEARDOWN") => {
-                send(
-                    &mut writer,
-                    &format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\n\r\n", msg.cseq_str()),
-                )
-                .await?;
-                break Ok(());
-            }
-            // The sink's keepalive and any other method: 200 OK.
-            _ => {
-                send(
-                    &mut writer,
-                    &format!("RTSP/1.0 200 OK\r\nCSeq: {}\r\n\r\n", msg.cseq_str()),
-                )
-                .await?;
-            }
+            Err(err) => break Err(err),
         }
     };
 
     drop(playing);
     // If the pipeline reported an error, it is more informative than the protocol's.
     if let Some(mut events) = pipeline_events
-        && let Ok(nd_core::pipeline::PipelineEvent::Error { message, .. }) = events.try_recv()
+        && let Ok(pipeline::PipelineEvent::Error { message, .. }) = events.try_recv()
     {
         return Err(NdError::Gst(message));
     }
 
     result
-}
-
-fn set_parameter(cseq: u32, body: &str) -> String {
-    format!(
-        "SET_PARAMETER {WFD_URL} RTSP/1.0\r\nCSeq: {cseq}\r\n\
-         Content-Type: text/parameters\r\nContent-Length: {}\r\n\r\n{body}",
-        body.len()
-    )
 }
 
 /// Extracts the RTP port from SETUP's `Transport` header.
@@ -615,5 +617,58 @@ mod tests {
         );
         assert_eq!(parse_client_port("RTP/AVP;client_port=65535"), None);
         assert_eq!(parse_client_port("RTP/AVP/UDP;unicast"), None);
+    }
+
+    fn message(start_line: &str, cseq: u32) -> RtspMessage {
+        RtspMessage {
+            start_line: start_line.into(),
+            headers: HashMap::from([("cseq".to_string(), cseq.to_string())]),
+            body: String::new(),
+        }
+    }
+
+    #[test]
+    fn the_sink_options_are_answered_and_capabilities_asked_once() {
+        let mut session = Negotiation::default();
+        session.begin();
+        assert!(
+            session
+                .outbox
+                .remove(0)
+                .starts_with("OPTIONS * RTSP/1.0\r\nCSeq: 1\r\n")
+        );
+        for cseq in [1, 2] {
+            let next = session.on_request(&message("OPTIONS * RTSP/1.0", cseq));
+            assert_eq!(next.unwrap(), Next::Continue);
+        }
+        let sent: Vec<_> = session
+            .outbox
+            .iter()
+            .map(|m| m.lines().next().unwrap())
+            .collect();
+        assert_eq!(
+            sent,
+            [
+                "RTSP/1.0 200 OK",
+                "GET_PARAMETER rtsp://localhost/wfd1.0 RTSP/1.0",
+                "RTSP/1.0 200 OK"
+            ]
+        );
+        assert_eq!(session.pending.get(&2), Some(&Awaiting::GetParameter));
+    }
+
+    #[test]
+    fn an_unanswered_keepalive_ends_the_session_and_a_refused_one_does_not() {
+        let mut session = Negotiation::default();
+        session.keepalive().unwrap();
+        assert!(session.keepalive().is_err());
+        let refused = message("RTSP/1.0 404 Not Found", 1);
+        assert_eq!(session.answered(&refused).unwrap(), None);
+        session.keepalive().unwrap();
+        let refused_setup = {
+            session.request(Awaiting::SetFormat, |_| String::new());
+            message("RTSP/1.0 400 Bad Request", session.cseq)
+        };
+        assert!(session.answered(&refused_setup).is_err());
     }
 }
