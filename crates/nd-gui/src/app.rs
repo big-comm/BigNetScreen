@@ -220,10 +220,11 @@ impl Component for AppModel {
                             set_margin_all: 8,
                             add_css_class: "navigation-sidebar",
                             connect_row_selected[sender] => move |_, row| {
-                                if let Some(row) = row {
-                                    sender.input(AppMsg::Navigate(
-                                        Page::all()[row.index().max(0) as usize],
-                                    ));
+                                if let Some(page) = row
+                                    .and_then(|row| usize::try_from(row.index()).ok())
+                                    .and_then(|index| Page::all().get(index).copied())
+                                {
+                                    sender.input(AppMsg::Navigate(page));
                                 }
                             },
                         },
@@ -771,7 +772,7 @@ impl Component for AppModel {
                     dialog.present(Some(root));
                 }
             },
-            AppCmd::NdiInstalled(result) => self.ndi_installed(result, &sender, root),
+            AppCmd::NdiInstalled(result) => self.ndi_installed(result, root),
             AppCmd::NdiInstallOffer(can_install) => {
                 if self.state.status.kind == "ndi-runtime-missing" {
                     self.offer_ndi_install(can_install, &sender, root);
@@ -996,7 +997,6 @@ impl AppModel {
     fn ndi_installed(
         &mut self,
         result: std::result::Result<(), String>,
-        _sender: &ComponentSender<Self>,
         root: &adw::ApplicationWindow,
     ) {
         self.ndi_installing.set(false);
@@ -1086,7 +1086,8 @@ fn follow_the_service(sender: &ComponentSender<AppModel>) {
         shutdown.register(async move {
             let mut retry = Duration::from_secs(2);
             loop {
-                let result: Result<(), String> = async {
+                // The session only ends in an error: the reason to show.
+                let result: Result<std::convert::Infallible, String> = async {
                     let connection = zbus::Connection::session().await.map_err(|e| e.to_string())?;
                     let service = ServiceProxy::builder(&connection)
                         .cache_properties(zbus::proxy::CacheProperties::No)
@@ -1135,7 +1136,8 @@ fn follow_the_service(sender: &ComponentSender<AppModel>) {
                         }
                     }
                 }.await;
-                if out.send(AppCmd::Unreachable(result.unwrap_err())).is_err() { return; }
+                let Err(reason) = result;
+                if out.send(AppCmd::Unreachable(reason)).is_err() { return; }
                 tokio::time::sleep(retry).await;
                 retry = (retry * 2).min(Duration::from_secs(30));
             }
