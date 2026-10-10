@@ -380,8 +380,7 @@ pub mod cast {
                 result => result?,
             };
             if *cancel.borrow() {
-                let _ = device.disconnect(&active).await;
-                return Ok(());
+                return disconnect(&device, &active).await;
             }
 
             // Radio silence **only once the group is formed**: forming it
@@ -396,11 +395,11 @@ pub mod cast {
             // Always tear the group down, errors and cancellation included.
             // The receiver has to see it go away before it will accept a new
             // one, which is exactly what the next attempt depends on.
-            let _ = device.disconnect(&active).await;
+            let teardown = disconnect(&device, &active).await;
             drop(quiet);
 
             match outcome {
-                Ok(()) => return Ok(()),
+                Ok(()) => return teardown,
                 Err(NdError::SinkNeverConnected { capture, reason })
                     if attempt < SESSION_ATTEMPTS =>
                 {
@@ -427,6 +426,14 @@ pub mod cast {
         Err(last.unwrap_or_else(|| {
             NdError::Protocol("the receiver never opened the connection".into())
         }))
+    }
+
+    /// Tears the group down. A failure is logged here because the caller
+    /// returns the session's own error first when there is one.
+    async fn disconnect(device: &P2pDevice, active: &zbus_types::ActivePath) -> Result<()> {
+        device.disconnect(active).await.inspect_err(|err| {
+            tracing::warn!(%err, "NetworkManager did not tear the Wi-Fi Direct group down");
+        })
     }
 
     async fn run_session(
