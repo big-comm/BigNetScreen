@@ -7,7 +7,7 @@
 
 use super::{AudioSource, H264Encoder, H264Profile, VideoSource};
 
-/// A cast session's parameters (negotiated resolution/fps/bitrate).
+/// One session's encoding parameters, as negotiated with the receiver.
 #[derive(Clone, Copy, Debug)]
 pub struct StreamConfig {
     pub width: u32,
@@ -25,45 +25,26 @@ pub struct StreamConfig {
     /// encoder's own default alone.
     ///
     /// This is the VBV (the "leaky bucket" H.264 rate control drains into),
-    /// expressed in frames because that is what bounds the size of a single
-    /// one; each encoder is told in whatever unit it wants.
-    ///
-    /// It matters on a packet network and almost nowhere else. Measured at
-    /// 1080p30, CBR 10 Mbit, `videotestsrc pattern=snow`:
-    ///
-    /// | VBV | key frame, mean | key frame, largest | delivered |
-    /// | --- | --- | --- | --- |
-    /// | NVENC default | 483 KB | 908 KB | 12.7 Mbit/s |
-    /// | 1 frame | 403 KB | 1414 KB | 12.5 Mbit/s |
-    /// | **2 frames** | **92 KB** | **154 KB** | **10.3 Mbit/s** |
-    /// | 3 frames | 116 KB | 175 KB | 10.1 Mbit/s |
-    ///
-    /// Two lessons in that table. NVENC's default buffer holds a whole second,
-    /// so a key frame is free to eat most of the second's budget — and the
-    /// stream then overran the CBR ceiling it was given by 27%. And one frame
-    /// is *worse* than no limit at all: the rate control cannot fit an IDR in
-    /// that bucket and overshoots wildly instead.
+    /// in frames because that bounds the size of a single one; each encoder
+    /// is told in its own unit. It matters on a packet network: NVENC's
+    /// default holds a whole second, so one key frame can take most of a
+    /// second's budget and the stream overruns its CBR ceiling. One frame is
+    /// worse than no limit, because an IDR cannot fit and the rate control
+    /// overshoots; two or three keep key frames small.
     pub vbv_frames: u32,
     /// Seconds between forced key frames, or `0` for none at all.
     ///
-    /// One by default, which is a direct link's answer: a periodic IDR bounds
-    /// recovery after loss where the receiver has no way to ask for one.
-    ///
-    /// Cast mirroring has two ways to ask. The receiver sends a picture loss
-    /// indication, which the sender turns into a key frame, and lost packets
-    /// are retransmitted on NACK before it comes to that — so scheduling them
-    /// as well buys nothing, and it is not free. An IDR is a whole picture
-    /// squeezed into a rate-control budget a few frames wide: it lands softer
-    /// than its neighbours and they sharpen it again, which at one per second
-    /// is the image visibly pulsing. Reported, repeatedly, as a blur every few
-    /// seconds.
+    /// One by default: on a direct link a periodic IDR bounds recovery after
+    /// loss, because the receiver has no way to ask for one. Cast mirroring
+    /// asks, with NACK and picture loss indications, so it sets `0`: an IDR
+    /// squeezed into a budget a few frames wide lands softer than its
+    /// neighbours, and one a second makes the picture pulse.
     pub gop_seconds: u32,
     /// The H.264 feature set the receiver on this path is known to decode.
     ///
-    /// Constrained baseline by default, which is what every path assumed
-    /// before there was a choice — and what the Wi-Fi Display profile
-    /// requires. Raising it is a per-path statement about the device on the
-    /// other end, never a global default.
+    /// Constrained baseline by default, which the Wi-Fi Display profile
+    /// requires and any receiver decodes. Raising it is a per-path statement
+    /// about the device on the other end.
     pub profile: H264Profile,
 }
 
@@ -84,19 +65,17 @@ impl Default for StreamConfig {
     }
 }
 
-/// The video queue before the encoder: few buffers, ~1 frame.
+/// The video queue before the encoder: about one frame.
 pub const VIDEO_QUEUE_BUFFERS: u32 = 3;
 
 /// The same, in milliseconds.
 pub const VIDEO_QUEUE_MS: u64 = 30;
 
-/// The audio queue on the muxed path (the reference C used 100000 — a bug).
+/// The audio queue on the muxed paths, in buffers.
 ///
-/// Small on purpose, and here leaking is the lesser evil: `mpegtsmux`
-/// interleaves the tracks by timestamp, so **video waits for audio**. Every bit
-/// of slack given to this queue becomes picture delay — at 200 ms Miracast left
-/// the measured ~40 ms behind and the lag became visible when moving the
-/// mouse.
+/// `mpegtsmux` interleaves the tracks by timestamp, so video waits for audio
+/// and every millisecond of slack here becomes picture delay. Leaking a
+/// capture's audio is the lesser evil.
 pub const AUDIO_QUEUE_BUFFERS: u32 = 4;
 
 /// The same, in milliseconds.
@@ -104,22 +83,19 @@ pub const AUDIO_QUEUE_MS: u64 = 40;
 
 /// The Cast mirroring audio queue, in frames.
 ///
-/// There is no muxer here: each track leaves through its own `appsink`, and the
-/// receiver aligns the two by their timestamps. With nobody waiting on the
-/// audio, the slack costs no picture latency — so this queue can be generous
-/// and, above all, **does not leak**: dropping samples does not bring the sound
-/// forward, it opens a hole in it.
+/// No muxer waits on this track (each leaves through its own `appsink` and the
+/// receiver aligns them by timestamp), so slack costs no picture delay. The
+/// queue is generous and never leaks: dropped samples are a hole in the sound,
+/// not a catch-up.
 pub const MIRROR_AUDIO_QUEUE_BUFFERS: u32 = 64;
 
 /// The same, in milliseconds.
 pub const MIRROR_AUDIO_QUEUE_MS: u64 = 200;
 
 impl StreamConfig {
-    /// The bitrate cap (CBR), scaled by resolution **and frame rate**.
-    ///
-    /// The original table (6/9/10/14/20 Mbit) was calibrated for 30 Hz; at
-    /// 60 Hz the same cap undersizes the stream and the picture blurs in
-    /// motion.
+    /// The CBR bitrate: [`Self::bitrate_kbps`] when set, otherwise a table by
+    /// resolution for 30 Hz, raised linearly up to half again at 60 Hz so
+    /// motion does not blur.
     pub fn scaled_bitrate_kbps(&self) -> u32 {
         if self.bitrate_kbps != 0 {
             return self.bitrate_kbps;
@@ -132,7 +108,6 @@ impl StreamConfig {
             _ => 20_000,
         };
         if self.fps > 30 {
-            // Linear interpolation between 30 and 60 Hz (a 1.5× ceiling).
             let factor = 1.0 + 0.5 * ((self.fps.min(60) - 30) as f32 / 30.0);
             (base as f32 * factor) as u32
         } else {
@@ -140,7 +115,7 @@ impl StreamConfig {
         }
     }
 
-    /// Shrinks a resolution to fit a cap **while preserving the aspect ratio**.
+    /// Shrinks a resolution to fit a cap, keeping its aspect ratio.
     ///
     /// It returns even dimensions (H.264 requires them) and never enlarges: a
     /// screen smaller than the cap is streamed at its original size, without
@@ -168,9 +143,8 @@ impl StreamConfig {
 
     /// The receiver's limit and the person's preference, whichever is lower.
     ///
-    /// Both are ceilings and they compose in only one direction: choosing
-    /// "medium quality" must be able to send *less* than the receiver can take,
-    /// and must never talk a receiver into a size it did not offer.
+    /// A lower quality preference sends less than the receiver can take; no
+    /// preference sends more than it offered.
     pub fn capped_by_preference(receiver_max: (u32, u32)) -> (u32, u32) {
         let (pw, ph) = crate::settings::current().resolution_limit();
         (receiver_max.0.min(pw), receiver_max.1.min(ph))
@@ -179,15 +153,10 @@ impl StreamConfig {
     /// The size to send when the protocol never states a maximum.
     ///
     /// Cast is the case: the sender declares a resolution in its OFFER and the
-    /// receiver takes it or refuses it — nothing is announced beforehand. So
-    /// the 1080p written here is a **safe default**, not a limit discovered
-    /// from the device, and a person who asks for more must be able to get it.
-    /// Reported from the field by someone with a 1440p screen watching it
-    /// arrive at 1080p with no way to say otherwise.
-    ///
-    /// Contrast with [`Self::capped_by_preference`], for Miracast, where the
-    /// sink lists the modes it accepts and going past them is not a choice we
-    /// are allowed to make.
+    /// receiver takes it or refuses it. `default_max` is a safe guess, used
+    /// while the quality preference is untouched; any other preference wins,
+    /// above the guess too. Miracast, where the sink lists its modes, uses
+    /// [`Self::capped_by_preference`] instead.
     pub fn preferred_or(default_max: (u32, u32)) -> (u32, u32) {
         let chosen = crate::settings::current().resolution_limit();
         if chosen == crate::settings::Quality::default().resolution() {
@@ -199,16 +168,15 @@ impl StreamConfig {
 
     /// The frame rate to use, given what the link negotiated.
     ///
-    /// The same rule: a preference of 60 cannot raise a link that agreed on 30,
-    /// because the other end would be sent frames it never asked for.
+    /// A preference can lower it but never raise a link that agreed on less.
     pub fn capped_fps(negotiated: u32) -> u32 {
         negotiated.min(crate::settings::current().fps).max(1)
     }
 
     /// [`Self::vbv_frames`] in milliseconds, for encoders that ask in time.
     ///
-    /// `0` stays `0` — it means "leave the encoder's default alone", and a
-    /// frame count that rounds to nothing must not turn into a real limit.
+    /// `0` stays `0`, "leave the encoder's default alone"; any other count is
+    /// at least one millisecond, so it never rounds into that meaning.
     pub fn vbv_ms(&self) -> u32 {
         match self.vbv_frames {
             0 => 0,
@@ -216,15 +184,8 @@ impl StreamConfig {
         }
     }
 
-    /// The maximum distance between keyframes.
-    ///
-    /// One second (not two): over an unstable Wi-Fi Direct link the GOP sets
-    /// the recovery time after packet loss, and more frequent IDRs keep the
-    /// bitrate curve flatter (less VBV jitter).
-    ///
-    /// That reasoning is a direct link's. [`Self::gop_seconds`] carries the
-    /// path's own answer, because Cast asks for a key frame rather than
-    /// scheduling one.
+    /// The maximum distance between key frames, in frames: [`Self::gop_seconds`]
+    /// at this frame rate, `0` for none. `BIGNETSCREEN_GOP` overrides it.
     pub fn gop(&self) -> u32 {
         if let Ok(value) = std::env::var("BIGNETSCREEN_GOP")
             && let Ok(gop) = value.parse::<u32>()
@@ -239,8 +200,8 @@ impl StreamConfig {
 
     /// The pipeline latency suited to the chosen encoder.
     ///
-    /// `BIGNETSCREEN_PIPELINE_LATENCY_MS` overrides it, for bisecting
-    /// interoperability problems in the field.
+    /// The film profile adds buffering on top. `BIGNETSCREEN_PIPELINE_LATENCY_MS`
+    /// overrides it, for bisecting interoperability problems.
     pub fn latency_ms(&self) -> u64 {
         if let Ok(value) = std::env::var("BIGNETSCREEN_PIPELINE_LATENCY_MS")
             && let Ok(ms) = value.parse::<u64>()
@@ -249,22 +210,16 @@ impl StreamConfig {
         }
         let encoder_latency = self.encoder.pipeline_latency_ms();
         if crate::latency::is_film() {
-            // Never *below* what the encoder needs: buffering is added on top,
-            // and going under the pipeline's own minimum makes sinks drop late
-            // buffers instead of playing them.
+            // Never below what the encoder needs: under the pipeline's own
+            // minimum, sinks drop late buffers instead of playing them.
             return encoder_latency.max(crate::latency::FILM_PIPELINE_LATENCY_MS);
         }
         encoder_latency
     }
 
-    /// The encoder, with the transfer to the card done by the element that is
-    /// best at it.
-    ///
-    /// NVENC uploads its own input when handed system memory, and `cudaupload`
-    /// does the same job measurably faster — 300 frames at 2560x1440 encode in
-    /// 1.15s through it against 1.30s without, repeatably, which is about a
-    /// fifth off the encoding stage. On the GPU path the frame is already on the
-    /// card and there is nothing to upload.
+    /// The encoder, preceded by `cudaupload` for NVENC fed from system memory:
+    /// it uploads faster than the encoder does by itself. On the GPU path the
+    /// frame is already on the card.
     pub(super) fn encoder_stage(&self, gpu: bool) -> String {
         let encoder = self.encoder.encoder_description(self);
         if gpu || self.encoder != H264Encoder::NvH264 {
@@ -355,18 +310,11 @@ mod tests {
 
     #[test]
     fn a_preference_may_exceed_the_cast_default_but_never_a_negotiated_mode() {
-        // The two caps mean different things, and treating them alike is what
-        // sent a 1440p screen to a Cast receiver at 1080p with no way to ask
-        // for more.
-        //
         // Cast: 1080p is our own safe guess, so a person who chooses 1440p
         // gets 1440p. Miracast: the sink listed the modes it accepts, and
-        // exceeding them is not ours to decide.
-        //
-        // The preference is set here rather than read from the machine running
-        // the tests. It used to be read, and the assertion then only held for
-        // someone whose `settings.conf` still said "high": choosing any other
-        // quality failed a test about a code path that was working correctly.
+        // exceeding them is not ours to decide. The preference is set here so
+        // the result does not depend on the settings of the machine running
+        // the tests.
         let _lock = crate::latency::exclusive();
         let restore = crate::settings::current();
 
@@ -422,8 +370,7 @@ mod tests {
     #[test]
     fn the_muxed_path_keeps_its_audio_queue_short() {
         // On the muxed path video is interleaved with audio, so slack given to
-        // the audio queue becomes picture delay. Raising this queue to 200 ms
-        // took Miracast away from the ~40 ms measured in the field.
+        // the audio queue becomes picture delay.
         const _: () = assert!(
             AUDIO_QUEUE_MS <= 50,
             "the muxed path's audio queue turns into picture delay"
@@ -442,10 +389,8 @@ mod tests {
 
     #[test]
     fn film_mode_buffers_without_going_under_the_encoder_minimum() {
-        // Buffering is added *on top of* what the encoder needs. Setting a
-        // latency below the pipeline's own minimum is what made sinks drop
-        // late buffers and show a black screen, so the film profile must never
-        // reduce it.
+        // Buffering is added on top of what the encoder needs: below the
+        // pipeline's own minimum, sinks drop late buffers and show black.
         let spiky = StreamConfig {
             encoder: H264Encoder::OpenH264,
             ..Default::default()
@@ -493,7 +438,7 @@ mod tests {
             StreamConfig::fit_within((1280, 800), (1920, 1080)),
             (1280, 800)
         );
-        // 4K 16:9 reduzido ao teto.
+        // 4K 16:9 is reduced to the cap.
         assert_eq!(
             StreamConfig::fit_within((3840, 2160), (1920, 1080)),
             (1920, 1080)
