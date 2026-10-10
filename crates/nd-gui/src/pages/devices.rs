@@ -667,9 +667,9 @@ mod tests {
     #[test]
     #[ignore = "requires a graphical GTK session and a temporary XDG_DATA_HOME"]
     fn trusting_a_refused_receiver_again_forgets_only_its_identity() {
-        let data = std::env::var_os("XDG_DATA_HOME").expect("XDG_DATA_HOME");
+        let data_home = std::env::var_os("XDG_DATA_HOME").expect("XDG_DATA_HOME");
         assert!(
-            std::path::Path::new(&data).starts_with(std::env::temp_dir()),
+            std::path::Path::new(&data_home).starts_with(std::env::temp_dir()),
             "run with a temporary XDG_DATA_HOME; this test forgets identities"
         );
         adw::init().expect("GTK session");
@@ -711,7 +711,7 @@ mod tests {
             page.model().status_line(),
             tr!("The device that answers on the next connection will be trusted")
         );
-        // Forgotten: a different device is now a first use, and remembered.
+        // Forgotten: a different device is a first use, and is remembered.
         nd_chromecast::identity::check_and_remember(receiver, Some(b"new-device")).unwrap();
         nd_chromecast::identity::check_and_remember(receiver, Some(b"old-device")).unwrap_err();
 

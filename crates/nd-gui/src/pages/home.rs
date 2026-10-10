@@ -15,13 +15,8 @@ use super::device_row::{DeviceRow, DeviceRowOutput, sync_rows};
 use super::{DeviceEntry, SessionInfo, latency_hint};
 use crate::tr;
 
-/// Which half of the decision the page is showing.
-///
-/// Two steps rather than one screen with everything on it. Choosing a receiver
-/// and choosing what to send are not the same kind of decision — the first is
-/// about the room, the second about this computer — and putting both in front
-/// of someone at once made the page a form to fill in rather than a thing to
-/// use.
+/// Which half of the decision the page is showing: first the receiver, which
+/// is about the room, then what to send, which is about this computer.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Step {
     /// Pick who receives.
@@ -42,8 +37,8 @@ pub struct HomePage {
     virtual_button: gtk::Button,
     media_button: gtk::Button,
     virtual_available: bool,
-    /// The address the QR code on screen encodes, so it is only redrawn when
-    /// it changes and not on every status poll.
+    /// The address the QR code on screen encodes, so the code is redrawn only
+    /// when the address changes.
     qr_for: Option<String>,
 }
 
@@ -561,40 +556,21 @@ impl Component for HomePage {
         let compact = adw::Breakpoint::new(
             adw::BreakpointCondition::parse("max-width: 720px").expect("valid breakpoint"),
         );
-        compact.add_setter(
+        let vertical = gtk::Orientation::Vertical.to_value();
+        for stacked in [
             &widgets.receivers_heading,
-            "orientation",
-            Some(&gtk::Orientation::Vertical.to_value()),
-        );
-        compact.add_setter(
             &widgets.columns,
-            "orientation",
-            Some(&gtk::Orientation::Vertical.to_value()),
-        );
+            &widgets.ndi_card,
+            &widgets.ndi_buttons,
+            &widgets.web_card,
+            &widgets.web_buttons,
+        ] {
+            compact.add_setter(stacked, "orientation", Some(&vertical));
+        }
         compact.add_setter(
             &widgets.advice_column,
             "width-request",
             Some(&(-1i32).to_value()),
-        );
-        compact.add_setter(
-            &widgets.ndi_card,
-            "orientation",
-            Some(&gtk::Orientation::Vertical.to_value()),
-        );
-        compact.add_setter(
-            &widgets.ndi_buttons,
-            "orientation",
-            Some(&gtk::Orientation::Vertical.to_value()),
-        );
-        compact.add_setter(
-            &widgets.web_card,
-            "orientation",
-            Some(&gtk::Orientation::Vertical.to_value()),
-        );
-        compact.add_setter(
-            &widgets.web_buttons,
-            "orientation",
-            Some(&gtk::Orientation::Vertical.to_value()),
         );
         big_gtk_kit::breakpoint::add(&root, compact);
 
@@ -630,8 +606,6 @@ impl Component for HomePage {
                 sync_rows(&mut self.devices, entries);
             }
             HomeMsg::Session(session) => {
-                // The QR code only changes with the address, not with every
-                // poll of the session's state.
                 let url = session
                     .as_ref()
                     .and_then(|s| s.access.as_ref())
@@ -787,10 +761,7 @@ impl HomePage {
     }
 }
 
-/// One thing that can be sent, as a button rather than a row.
-///
-/// A row with a switch asked the person to set a mode and then go looking for
-/// what applies it. A button is the verb itself: pressing it starts that.
+/// One thing that can be sent, as a tile button: pressing it starts sending.
 fn action_button(icon: &str, colour: &str, title: &str, subtitle: &str) -> gtk::Button {
     let image = gtk::Image::builder()
         .icon_name(icon)
