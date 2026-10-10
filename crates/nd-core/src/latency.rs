@@ -130,16 +130,24 @@ pub fn cast_playout_delay_ms(responsive: u32) -> u32 {
     }
 }
 
+/// Serializes the tests that change the profile or the settings that set it.
+///
+/// The profile is process-wide (it describes what the person is doing, not a
+/// property of one stream), and loading the settings file overwrites it with
+/// whatever the machine running the tests has configured. The settings are
+/// loaded before the lock is handed out, so a test that reads them without the
+/// lock finds them cached and never loads the file in the middle of another.
+#[cfg(test)]
+pub(crate) fn exclusive() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    crate::settings::current();
+    guard
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// The profile is global (it describes what the person is doing, not a
-    /// property of one stream), so these tests cannot run side by side.
-    fn exclusive() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        LOCK.lock().unwrap_or_else(|e| e.into_inner())
-    }
 
     #[test]
     fn responsive_is_the_default() {

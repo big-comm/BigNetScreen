@@ -2882,6 +2882,7 @@ mod tests {
         // the tests. It used to be read, and the assertion then only held for
         // someone whose `settings.conf` still said "high": choosing any other
         // quality failed a test about a code path that was working correctly.
+        let _lock = crate::latency::exclusive();
         let restore = crate::settings::current();
 
         let mut chosen = restore.clone();
@@ -3642,6 +3643,7 @@ mod tests {
         };
         let quick = StreamConfig::default();
 
+        let _lock = crate::latency::exclusive();
         crate::latency::set(crate::latency::Profile::Responsive);
         let quick_responsive = quick.latency_ms();
         let spiky_responsive = spiky.latency_ms();

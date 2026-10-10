@@ -443,6 +443,7 @@ mod tests {
         // holds whatever the person running the tests has configured — an
         // earlier version of this test compared against the defaults and only
         // passed on a machine with no settings file at all.
+        let _lock = crate::latency::exclusive();
         let restore = current();
         const SENTINEL: &str = "cache-only-never-written-to-any-file";
         set_in_memory(&Settings {
