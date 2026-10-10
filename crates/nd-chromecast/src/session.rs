@@ -587,37 +587,35 @@ pub async fn run_with_video(
 
                     if let (Some(current), Some(session_id)) =
                         (lag.last(), media_session_id(&status))
+                        && let Some(rate) = drain.wanted_rate(current)
+                        && (rate - playback_rate).abs() > f64::EPSILON
                     {
-                        {
-                            let wanted = drain.wanted_rate(current);
-                            if let Some(rate) = wanted
-                                && (rate - playback_rate).abs() > f64::EPSILON {
-                                    match channel
-                                        .request(
-                                            NS_MEDIA,
-                                            &app.transport_id,
-                                            json!({
-                                                "type": "SET_PLAYBACK_RATE",
-                                                "mediaSessionId": session_id,
-                                                "playbackRate": rate,
-                                            }),
-                                        )
-                                        .await
-                                    {
-                                        Ok(_) => {
-                                            playback_rate = rate;
-                                            tracing::info!(
-                                                rate,
-                                                delay_s = format!("{current:.2}"),
-                                                "playback rate adjusted"
-                                            );
-                                        }
-                                        Err(err) => {
-                                            tracing::warn!(%err, "the receiver refused to change the rate");
-                                            drain.enabled = false;
-                                        }
-                                    }
-                                }
+                        let reply = channel
+                            .request(
+                                NS_MEDIA,
+                                &app.transport_id,
+                                json!({
+                                    "type": "SET_PLAYBACK_RATE",
+                                    "mediaSessionId": session_id,
+                                    "playbackRate": rate,
+                                }),
+                            )
+                            .await;
+                        if reply.as_ref().is_ok_and(rate_change_confirmed) {
+                            playback_rate = rate;
+                            tracing::info!(
+                                rate,
+                                delay_s = format!("{current:.2}"),
+                                "playback rate adjusted"
+                            );
+                        } else {
+                            // Only the reply's type: a media status carries the stream URL.
+                            let refusal = match &reply {
+                                Ok(reply) => reply.get("type").and_then(Value::as_str).unwrap_or("").to_string(),
+                                Err(err) => err.to_string(),
+                            };
+                            tracing::warn!(%refusal, "the receiver refused to change the rate");
+                            drain.enabled = false;
                         }
                     }
                 }
@@ -753,6 +751,12 @@ fn media_session_id(payload: &Value) -> Option<i64> {
         .and_then(|list| list.first())
         .and_then(|st| st.get("mediaSessionId"))
         .and_then(Value::as_i64)
+}
+
+/// A media command is applied only when the receiver answers with its media
+/// status; a refusal (`INVALID_REQUEST`, `INVALID_PLAYER_STATE`) is a reply too.
+fn rate_change_confirmed(reply: &Value) -> bool {
+    reply.get("type").and_then(Value::as_str) == Some("MEDIA_STATUS")
 }
 
 /// Turns a receiver message into an error when it signals the media was
@@ -1091,6 +1095,14 @@ mod tests {
             meter.observe(&json!({"status": [{"currentTime": 8.0}]}));
         }
         assert_eq!(meter.samples.len(), MAX_LAG_SAMPLES);
+    }
+
+    #[test]
+    fn a_refused_rate_change_is_not_taken_as_applied() {
+        let refused = json!({"type": "INVALID_REQUEST", "reason": "INVALID_COMMAND"});
+        assert!(!rate_change_confirmed(&refused));
+        let applied = json!({"type": "MEDIA_STATUS", "status": [{"playbackRate": 1.2}]});
+        assert!(rate_change_confirmed(&applied));
     }
 
     #[test]
