@@ -2265,6 +2265,12 @@ pub fn wfd_pipeline_description(
     source: &VideoSource,
     transport: &WfdTransport,
 ) -> String {
+    // The caps below pin the profile, so the encoder must not be told
+    // otherwise: CABAC under constrained baseline is a stream the sink refuses.
+    let cfg = &StreamConfig {
+        profile: H264Profile::ConstrainedBaseline,
+        ..*cfg
+    };
     let rtcp_port = transport.rtp_port.wrapping_add(1);
     let local_rtcp = transport.local_rtp_port.wrapping_add(1);
     format!(
@@ -2945,6 +2951,7 @@ mod tests {
             &WfdTransport::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 19000),
         );
         assert!(wfd.contains("profile=constrained-baseline"), "{wfd}");
+        assert!(wfd.contains("cabac=false"), "{wfd}");
 
         // Cast mirroring takes whatever the session decided.
         assert!(
