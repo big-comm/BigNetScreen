@@ -37,8 +37,10 @@ const REQUEST_READ_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
 /// Wrong PINs tolerated before the door is locked.
 const PIN_ATTEMPTS: u32 = 5;
-/// How long the door stays locked after that.
+/// How long the door stays locked the first time; each later lockout in the
+/// same publication lasts twice the one before, up to [`PIN_LOCKOUT_MAX`].
 const PIN_LOCKOUT: Duration = Duration::from_secs(30);
+const PIN_LOCKOUT_MAX: Duration = Duration::from_secs(15 * 60);
 /// Time given to the element behind the door to answer.
 const UPSTREAM_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long to keep knocking while the element is still starting up.
@@ -64,6 +66,9 @@ pub struct FrontDoorConfig {
 struct PinGuard {
     failures: u32,
     locked_until: Option<Instant>,
+    /// The length of the last lockout, kept through a right PIN so that
+    /// someone else joining does not hand short lockouts back to a guesser.
+    last_lockout: Option<Duration>,
 }
 
 struct Shared {
@@ -291,13 +296,17 @@ fn record_pin_attempt(
         return StatusCode::TOO_MANY_REQUESTS;
     }
     if same_secret(attempt, expected) {
-        *guard = PinGuard::default();
+        guard.failures = 0;
         return StatusCode::OK;
     }
     guard.failures += 1;
     if guard.failures >= PIN_ATTEMPTS {
+        let lockout = guard
+            .last_lockout
+            .map_or(PIN_LOCKOUT, |last| (last * 2).min(PIN_LOCKOUT_MAX));
         guard.failures = 0;
-        guard.locked_until = Some(now + PIN_LOCKOUT);
+        guard.last_lockout = Some(lockout);
+        guard.locked_until = Some(now + lockout);
         return StatusCode::TOO_MANY_REQUESTS;
     }
     StatusCode::FORBIDDEN
@@ -569,6 +578,33 @@ mod tests {
             record_pin_attempt(&mut guard, "1234", "1234", now + PIN_LOCKOUT),
             StatusCode::OK
         );
+    }
+
+    #[test]
+    fn each_lockout_lasts_twice_the_last_up_to_a_ceiling() {
+        let mut now = Instant::now();
+        let mut guard = PinGuard::default();
+        let lock = |guard: &mut PinGuard, now: Instant| {
+            for _ in 0..PIN_ATTEMPTS {
+                record_pin_attempt(guard, "0000", "1234", now);
+            }
+            guard.locked_until.unwrap() - now
+        };
+        assert_eq!(lock(&mut guard, now), PIN_LOCKOUT);
+        now += PIN_LOCKOUT;
+        assert_eq!(lock(&mut guard, now), PIN_LOCKOUT * 2);
+        now += PIN_LOCKOUT * 2;
+        // Someone else joining does not hand an attacker short lockouts again.
+        assert_eq!(
+            record_pin_attempt(&mut guard, "1234", "1234", now),
+            StatusCode::OK
+        );
+        assert_eq!(lock(&mut guard, now), PIN_LOCKOUT * 4);
+        for _ in 0..20 {
+            now += PIN_LOCKOUT_MAX;
+            lock(&mut guard, now);
+        }
+        assert_eq!(lock(&mut guard, now + PIN_LOCKOUT_MAX), PIN_LOCKOUT_MAX);
     }
 
     #[test]
