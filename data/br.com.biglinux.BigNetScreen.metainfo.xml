@@ -5,26 +5,34 @@
   <project_license>GPL-3.0-or-later</project_license>
 
   <name>BigNetScreen</name>
-  <summary>Mirror your screen to Miracast and Chromecast receivers</summary>
-  <summary xml:lang="pt_BR">Transmita sua tela para receptores Miracast e Chromecast</summary>
+  <summary>Share your screen with TVs, projectors and web browsers</summary>
+  <summary xml:lang="pt_BR">Compartilhe sua tela com TVs, projetores e navegadores</summary>
 
   <description>
     <p>
-      BigNetScreen mirrors your Linux desktop to network displays: Miracast
-      (Wi-Fi Display) receivers over Wi-Fi Direct, and Chromecast devices over
-      your local network.
+      BigNetScreen sends your Linux screen, a single window or a virtual screen
+      to displays on your network: Chromecast devices, Miracast (Wi-Fi Display)
+      receivers over Wi-Fi Direct, DLNA televisions, NDI receivers and web
+      browsers. Video and music files can be sent to Chromecast and DLNA
+      receivers too.
+    </p>
+    <p xml:lang="pt_BR">
+      O BigNetScreen envia sua tela do Linux, uma única janela ou uma tela
+      virtual para telas da sua rede: dispositivos Chromecast, receptores
+      Miracast (Wi-Fi Display) via Wi-Fi Direct, televisões DLNA, receptores
+      NDI e navegadores. Arquivos de vídeo e música também podem ser enviados a
+      receptores Chromecast e DLNA.
     </p>
     <p>Highlights:</p>
+    <p xml:lang="pt_BR">Destaques:</p>
     <ul>
       <li>Hardware video encoding (VA-API, NVENC, V4L2) with a software fallback</li>
-      <li>Low-latency pipeline tuned for screen mirroring</li>
+      <li xml:lang="pt_BR">Codificação de vídeo por hardware (VA-API, NVENC, V4L2) com alternativa por software</li>
+      <li>Sharing keeps running in a background service when the window closes</li>
+      <li xml:lang="pt_BR">O compartilhamento continua em um serviço em segundo plano quando a janela é fechada</li>
       <li>Screen capture through the desktop portal, so it works on GNOME, KDE and under Flatpak</li>
+      <li xml:lang="pt_BR">Captura de tela pelo portal da área de trabalho, no GNOME, no KDE e no Flatpak</li>
     </ul>
-    <p xml:lang="pt_BR">
-      O BigNetScreen espelha sua área de trabalho Linux em telas de rede:
-      receptores Miracast (Wi-Fi Display) via Wi-Fi Direct e dispositivos
-      Chromecast na rede local.
-    </p>
   </description>
 
   <launchable type="desktop-id">br.com.biglinux.BigNetScreen.desktop</launchable>

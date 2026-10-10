@@ -2,10 +2,10 @@
 Name=BigNetScreen
 GenericName=Screen Mirroring
 GenericName[pt_BR]=Espelhamento de Tela
-Comment=Mirror your screen to Miracast and Chromecast receivers
-Comment[pt_BR]=Transmita sua tela para receptores Miracast e Chromecast
-Keywords=cast;miracast;chromecast;wifi display;mirror;screen;projector;tv;
-Keywords[pt_BR]=transmitir;espelhar;miracast;chromecast;tela;projetor;tv;
+Comment=Share your screen with TVs, projectors and web browsers
+Comment[pt_BR]=Compartilhe sua tela com TVs, projetores e navegadores
+Keywords=cast;miracast;chromecast;dlna;ndi;wifi display;mirror;screen;projector;tv;browser;
+Keywords[pt_BR]=transmitir;espelhar;miracast;chromecast;dlna;ndi;tela;projetor;tv;navegador;
 Exec=bignetscreen
 Icon=br.com.biglinux.BigNetScreen
 Terminal=false
