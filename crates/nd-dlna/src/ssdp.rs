@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use futures::stream::{self, BoxStream, StreamExt};
+use tokio::sync::mpsc;
 
 use nd_core::provider::{DiscoveryEvent, Provider};
 use nd_core::sink::Sink;
@@ -109,7 +110,7 @@ pub async fn search() -> Result<Vec<Announcement>> {
 }
 
 async fn search_announcements(
-    deliver: Option<tokio::sync::mpsc::Sender<Announcement>>,
+    deliver: Option<mpsc::Sender<Announcement>>,
 ) -> Result<Vec<Announcement>> {
     let mut addresses =
         tokio::time::timeout(Duration::from_secs(2), nd_net::p2p::local_ipv4_addresses())
@@ -132,7 +133,7 @@ async fn search_announcements(
 async fn search_on(
     addresses: &[Ipv4Addr],
     target: SocketAddr,
-    deliver: Option<tokio::sync::mpsc::Sender<Announcement>>,
+    deliver: Option<mpsc::Sender<Announcement>>,
 ) -> Result<Vec<Announcement>> {
     let mut sockets = Vec::new();
     for address in addresses {
@@ -229,112 +230,114 @@ impl Provider for DlnaProvider {
     }
 
     async fn discover(&self) -> Result<BoxStream<'static, DiscoveryEvent>> {
-        let (events, receiver) = tokio::sync::mpsc::channel(32);
+        let (events, mut receiver) = mpsc::channel(32);
         tokio::spawn(async move {
             let scan = async {
-                let mut known: HashMap<String, (Arc<DlnaSink>, u32)> = HashMap::new();
-                loop {
-                    let locations: HashMap<_, _> = known
-                        .iter()
-                        .map(|(usn, (sink, _))| (usn.clone(), sink.location().to_string()))
-                        .collect();
-                    let (deliver, mut announcements) =
-                        tokio::sync::mpsc::channel(nd_core::provider::MAX_RECEIVERS);
-                    let describe = async {
-                        let mut descriptions =
-                            stream::poll_fn(move |cx| announcements.poll_recv(cx))
-                                .filter(|announcement: &Announcement| {
-                                    futures::future::ready(
-                                        locations.get(&announcement.usn)
-                                            != Some(&announcement.location),
-                                    )
-                                })
-                                .map(|announcement| async move {
-                                    let result = DlnaSink::describe(&announcement).await;
-                                    (announcement.usn, result)
-                                })
-                                .buffer_unordered(4);
-                        while let Some((usn, result)) = descriptions.next().await {
-                            match result {
-                                Ok(sink) => {
-                                    let updated = known.contains_key(&usn);
-                                    if !updated && known.len() >= nd_core::provider::MAX_RECEIVERS {
-                                        continue;
-                                    }
-                                    let sink = Arc::new(sink);
-                                    known.insert(usn, (sink.clone(), 0));
-                                    let event = if updated {
-                                        DiscoveryEvent::Updated(sink)
-                                    } else {
-                                        DiscoveryEvent::Added(sink)
-                                    };
-                                    if events.send(event).await.is_err() {
-                                        return;
-                                    }
-                                }
-                                Err(err) => {
-                                    tracing::debug!(%err, "renderer did not describe itself")
-                                }
-                            }
-                        }
-                    };
-                    let (found, ()) = tokio::join!(search_announcements(Some(deliver)), describe);
-                    match found {
-                        Ok(found) => {
-                            if events
-                                .send(DiscoveryEvent::ProviderReady { provider: "dlna" })
-                                .await
-                                .is_err()
-                            {
-                                return;
-                            }
-                            let mut gone = Vec::new();
-                            for (usn, (sink, misses)) in &mut known {
-                                if found.iter().any(|a| &a.usn == usn) {
-                                    *misses = 0;
-                                    continue;
-                                }
-                                *misses += 1;
-                                if *misses >= MISSES_BEFORE_REMOVAL {
-                                    gone.push((usn.clone(), sink.info().id));
-                                }
-                            }
-                            for (usn, id) in gone {
-                                known.remove(&usn);
-                                if events.send(DiscoveryEvent::Removed(id)).await.is_err() {
-                                    return;
-                                }
-                            }
-                        }
-                        Err(err) => {
-                            if events
-                                .send(DiscoveryEvent::ProviderUnavailable {
-                                    provider: "dlna",
-                                    reason: err.to_string(),
-                                })
-                                .await
-                                .is_err()
-                            {
-                                return;
-                            }
-                        }
-                    }
+                let mut known = Known::new();
+                while sweep(&mut known, &events).await {
                     tokio::time::sleep(SWEEP_INTERVAL).await;
                 }
             };
             tokio::select! {
                 _ = events.closed() => {},
-                _ = scan => {},
+                () = scan => {},
             }
         });
-        Ok(Box::pin(tokio_stream(receiver)))
+        Ok(Box::pin(stream::poll_fn(move |cx| receiver.poll_recv(cx))))
     }
 }
 
-fn tokio_stream(
-    mut receiver: tokio::sync::mpsc::Receiver<DiscoveryEvent>,
-) -> impl futures::Stream<Item = DiscoveryEvent> {
-    futures::stream::poll_fn(move |cx| receiver.poll_recv(cx))
+/// Renderers listed so far, by USN, with the sweeps each has missed in a row.
+type Known = HashMap<String, (Arc<DlnaSink>, u32)>;
+
+/// One sweep: search, describe what is new or moved, and report what stayed
+/// silent too long as gone. `false` once nobody is listening.
+async fn sweep(known: &mut Known, events: &mpsc::Sender<DiscoveryEvent>) -> bool {
+    let (deliver, announcements) = mpsc::channel(nd_core::provider::MAX_RECEIVERS);
+    let (found, listening) = tokio::join!(
+        search_announcements(Some(deliver)),
+        describe_announced(announcements, known, events)
+    );
+    if !listening {
+        return false;
+    }
+    let found = match found {
+        Ok(found) => found,
+        Err(err) => {
+            let unavailable = DiscoveryEvent::ProviderUnavailable {
+                provider: "dlna",
+                reason: err.to_string(),
+            };
+            return events.send(unavailable).await.is_ok();
+        }
+    };
+    let ready = DiscoveryEvent::ProviderReady { provider: "dlna" };
+    if events.send(ready).await.is_err() {
+        return false;
+    }
+    let mut gone = Vec::new();
+    for (usn, (sink, misses)) in known.iter_mut() {
+        if found.iter().any(|a| &a.usn == usn) {
+            *misses = 0;
+            continue;
+        }
+        *misses += 1;
+        if *misses >= MISSES_BEFORE_REMOVAL {
+            gone.push((usn.clone(), sink.info().id));
+        }
+    }
+    for (usn, id) in gone {
+        known.remove(&usn);
+        if events.send(DiscoveryEvent::Removed(id)).await.is_err() {
+            return false;
+        }
+    }
+    true
+}
+
+/// Describes each renderer as its reply arrives, skipping those already
+/// listed at the same address. `false` once nobody is listening.
+async fn describe_announced(
+    mut announcements: mpsc::Receiver<Announcement>,
+    known: &mut Known,
+    events: &mpsc::Sender<DiscoveryEvent>,
+) -> bool {
+    let locations: HashMap<_, _> = known
+        .iter()
+        .map(|(usn, (sink, _))| (usn.clone(), sink.location().to_string()))
+        .collect();
+    let mut descriptions = stream::poll_fn(move |cx| announcements.poll_recv(cx))
+        .filter(|announcement: &Announcement| {
+            futures::future::ready(locations.get(&announcement.usn) != Some(&announcement.location))
+        })
+        .map(|announcement| async move {
+            let result = DlnaSink::describe(&announcement).await;
+            (announcement.usn, result)
+        })
+        .buffer_unordered(4);
+    while let Some((usn, result)) = descriptions.next().await {
+        let sink = match result {
+            Ok(sink) => Arc::new(sink),
+            Err(err) => {
+                tracing::debug!(%err, "renderer did not describe itself");
+                continue;
+            }
+        };
+        let updated = known.contains_key(&usn);
+        if !updated && known.len() >= nd_core::provider::MAX_RECEIVERS {
+            continue;
+        }
+        known.insert(usn, (sink.clone(), 0));
+        let event = if updated {
+            DiscoveryEvent::Updated(sink)
+        } else {
+            DiscoveryEvent::Added(sink)
+        };
+        if events.send(event).await.is_err() {
+            return false;
+        }
+    }
+    true
 }
 
 #[cfg(test)]
