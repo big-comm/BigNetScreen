@@ -18,7 +18,7 @@ tracing.workspace = true
 futures.workspace = true
 gstreamer.workspace = true
 gstreamer-app = "0.25"
-mdns-sd = "0.20"
+mdns-sd = "0.21"
 prost = "0.14"
 tokio = { workspace = true, features = ["signal", "fs"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "logging", "tls12"] }
