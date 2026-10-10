@@ -7,6 +7,7 @@
 //! receiver the capsfilter takes a range and the true size is only known once
 //! caps are negotiated ([`negotiated_video_size`]).
 
+use gst::prelude::*;
 use gstreamer as gst;
 
 use super::{CAPTURE_SOURCE_NAME, StreamConfig};
@@ -16,23 +17,19 @@ use crate::{NdError, Result};
 /// the pipeline has negotiated.
 pub const SCALE_CAPS: &str = "scale-caps";
 
-/// What size to encode at.
-///
-/// Two shapes because two situations, and telling them apart is the whole
-/// reason this is a type rather than a pair of numbers.
+/// What size to encode at: a size the receiver agreed to, or a ceiling.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VideoTarget {
-    /// Encode at exactly this. For a link that agreed on a mode and would
-    /// refuse anything else — Miracast negotiates one with the sink, and a Cast
-    /// receiver whose ANSWER declares a smaller decoder has done the same.
+    /// Encode at exactly this, for a link that agreed on a mode and refuses
+    /// anything else: Miracast's negotiated mode, or a Cast receiver whose
+    /// ANSWER declares a decoder smaller than the screen.
     Exact((u32, u32)),
     /// Encode at whatever the capture is, up to this ceiling.
     ///
-    /// The right shape wherever nothing was promised, because the portal
-    /// announces a size in the compositor's coordinate space rather than
-    /// pixels: measured, 2328x1310 announced for a 2560x1440 panel at 110%
-    /// scale. Pinning the announced number resamples every frame away from the
-    /// size it arrived in. A range lets the scaler stand aside.
+    /// For every link that promised nothing. The portal announces a size in
+    /// the compositor's coordinate space, which under fractional scaling is
+    /// not the pixel size delivered; pinning it would resample every frame,
+    /// where a range lets the scaler stand aside.
     UpTo((u32, u32)),
 }
 
@@ -53,81 +50,42 @@ impl VideoTarget {
     }
 }
 
-/// Whether to keep mirroring frames on the graphics card end to end.
+/// Whether to keep mirroring frames on the graphics card end to end, when
+/// `BIGNETSCREEN_GPU_PATH=1`.
 ///
-/// Off unless `BIGNETSCREEN_GPU_PATH=1`, and measured to be the right default.
-///
-/// The path works: KWin hands over a real DMA-BUF (`drm-format=AR24` with
-/// NVIDIA's block-linear modifier `0x0300000000606014`), `glupload` imports it
-/// and NVENC takes the texture, so the picture never crosses to the CPU. It is
-/// also **slower**. On a GeForce with that modifier, against the system-memory
-/// path carrying BGRx:
-///
-/// | | system memory | GPU |
-/// | --- | --- | --- |
-/// | frames from the compositor | 45-53/s | 16-26/s |
-/// | frames leaving the encoder | ~60/s | 21-41/s |
-///
-/// The cost is not the import and not our handling of it. Taking 300 frames at
-/// 2560x1440 apart stage by stage:
-///
-/// | pipeline | wall clock |
-/// | --- | --- |
-/// | generate only | 0.55s |
-/// | + `glupload` | 0.72s |
-/// | + `nvh264enc` from system memory | 1.44s |
-/// | + `nvh264enc` from GL memory | 4.74s |
-/// | `glupload ! cudaupload ! nvh264enc` | 3.74s |
-///
-/// The upload costs 0.17s and the encode 0.89s, but encoding *from a GL
-/// texture* costs 4.02s — four and a half times as much, and routing through
-/// `cudaupload` instead of letting the encoder do it saves only a third of that.
-/// The expense is the GL/CUDA bridge itself, wherever it is crossed.
-///
-/// There is no way around it here: GStreamer 1.28.6 ships no nvcodec element
-/// that accepts `memory:DMABuf`, so GL is the only import route, and the
-/// import is what makes the frame worth having.
-///
-/// Kept, switch and all, because the result is hardware-specific: another card,
-/// another compositor or a linear modifier could invert it, and the next person
-/// to wonder should be able to measure in one run rather than build this again.
-/// Promoting it to a default would also need a fallback, since a machine
-/// without the DMA-BUF or the interop does not start at all.
+/// Off by default because it is slower where it was measured: the capture's
+/// DMA-BUF is imported through GL, and NVENC encoding from a GL texture costs
+/// several times what encoding from system memory does. GStreamer 1.28 has no
+/// NVIDIA element that takes `memory:DMABuf` directly. The switch stays so
+/// another card, compositor or modifier can be measured in one run; making it
+/// the default would need a fallback, because a machine without the DMA-BUF
+/// or the GL interop does not start at all.
 pub fn gpu_path_requested() -> bool {
     std::env::var("BIGNETSCREEN_GPU_PATH").as_deref() == Ok("1")
 }
 
 /// The longest input gap `videorate` will fill with repeats, in nanoseconds.
 ///
-/// Comfortably more than the keepalive interval, so ordinary jitter is still
-/// smoothed. Anything past it is the capture having stopped, and repeating a
-/// frozen frame at full resolution is the most expensive way to display
-/// nothing.
+/// Well above the capture keepalive, so ordinary jitter is still smoothed.
+/// A longer gap is a stalled capture, and every repeat of it would pay a
+/// full-size scale and colour conversion to show nothing new.
 const MAX_DUPLICATION_NS: u64 = 500_000_000;
 
 /// The size the encoder will really be fed, once the pipeline has negotiated.
 ///
-/// This is the number the Cast OFFER has to carry, and it cannot be known any
-/// earlier: the portal announces a compositor-space size that is not pixels,
-/// and the only other way to ask — a second PipeWire stream — is refused by
-/// the session manager ("target not found"), because the portal's node has no
-/// session item to look up. So the pipeline is built first and asked here.
+/// The Cast OFFER carries this size, and nothing earlier knows it: the portal
+/// announces a compositor-space size, and a second PipeWire stream cannot
+/// look up the portal's node. Blocks, polling, until `deadline`.
 pub fn negotiated_video_size(
     pipeline: &gst::Pipeline,
     deadline: std::time::Instant,
 ) -> Option<(u32, u32)> {
-    use gst::prelude::*;
-
     let pad = pipeline
         .by_name(SCALE_CAPS)
         .and_then(|caps| caps.static_pad("src"))?;
     loop {
-        if let Some(caps) = pad.current_caps() {
-            let s = caps.structure(0)?;
-            let (w, h) = (s.get::<i32>("width").ok()?, s.get::<i32>("height").ok()?);
-            if w > 0 && h > 0 {
-                return Some((w as u32, h as u32));
-            }
+        if let Some(size) = pad.current_caps().as_deref().and_then(caps_size) {
+            return Some(size);
         }
         if std::time::Instant::now() >= deadline {
             tracing::info!("the capture did not negotiate a size in time");
@@ -142,8 +100,6 @@ pub fn negotiated_video_size(
 /// Only for a receiver whose ANSWER declares a decoder smaller than the screen.
 /// Left alone otherwise, so the capture reaches the encoder untouched.
 pub fn pin_video_size(pipeline: &gst::Pipeline, cfg: &StreamConfig) -> Result<()> {
-    use gst::prelude::*;
-
     let filter = pipeline
         .by_name(SCALE_CAPS)
         .ok_or_else(|| NdError::Gst("the mirroring capsfilter is missing".into()))?;
@@ -166,82 +122,52 @@ pub fn pin_video_size(pipeline: &gst::Pipeline, cfg: &StreamConfig) -> Result<()
 
 /// The size PipeWire is really delivering, from the capture's own pad.
 ///
-/// Read alongside [`negotiated_video_size`] so one line can say whether the
-/// scaler is doing anything: if the two agree, the capture reaches the encoder
-/// untouched.
+/// When it equals [`negotiated_video_size`], the scaler is a passthrough.
 pub fn delivered_capture_size(pipeline: &gst::Pipeline) -> Option<(u32, u32)> {
-    use gst::prelude::*;
-
     let caps = pipeline
         .by_name(CAPTURE_SOURCE_NAME)?
         .static_pad("src")?
         .current_caps()?;
-    let s = caps.structure(0)?;
-    let (w, h) = (s.get::<i32>("width").ok()?, s.get::<i32>("height").ok()?);
-    (w > 0 && h > 0).then_some((w as u32, h as u32))
+    caps_size(&caps)
+}
+
+/// The positive `width` and `height` of fixed video caps.
+fn caps_size(caps: &gst::CapsRef) -> Option<(u32, u32)> {
+    let structure = caps.structure(0)?;
+    let width = u32::try_from(structure.get::<i32>("width").ok()?).ok()?;
+    let height = u32::try_from(structure.get::<i32>("height").ok()?).ok()?;
+    (width > 0 && height > 0).then_some((width, height))
 }
 
 impl StreamConfig {
-    /// The `rate → scale → convert` fragment, tuned per encoder.
+    /// The `videorate ! scale ! capsfilter` stage every H.264 path runs.
     ///
-    /// Two performance decisions:
-    /// 1. `videorate` comes **before** scaling: frames that will be dropped pay
-    ///    for neither conversion nor scaling (which matters when the source is
-    ///    60 Hz and the sink negotiated 30);
-    /// 2. on the VA-API path `vapostproc` is used, converting and scaling **on
-    ///    the GPU** — at 4K that avoids hundreds of MB/s of GPU→RAM→GPU
-    ///    copying.
+    /// `videorate` comes first so frames it drops pay for no scaling. On the
+    /// VA-API path `vapostproc` converts and scales on the card instead of
+    /// copying every frame to memory and back.
     pub(super) fn convert_scale(&self, target: VideoTarget) -> String {
         let fmt = self.encoder.accepted_formats();
         let fps = self.fps;
-        // `videorate` fills a gap in the input by repeating the last frame
-        // until the timeline catches up. Over a short gap that is what keeps
-        // the output steady. Over a long one it is a flood: measured during a
-        // ten-second freeze, capture stalled at 0.5 fps while the encoder ran
-        // at 78 — above the 60 it was asked for — because every frame that did
-        // arrive carried a timestamp two seconds ahead and bought a hundred
-        // duplicates. Each of those is a full-size scale and colour convert, so
-        // the stall pays for its own continuation.
-        //
-        // Cap the gap it will fill. Anything longer is a stall, and a stalled
-        // picture should cost nothing until it recovers.
-        //
-        // This element is also the most expensive thing in the path, and it is
-        // staying. Instrumented at 2560x1440 it holds each frame **35 ms**
-        // waiting for the next, against 12 ms for the entire capture and 4 ms
-        // for upload and encode together — removing it measured 57 ms down to
-        // 22. It has been removed twice and put back twice, by two different
-        // routes:
-        //
-        // - `drop-only=true`, which stops it duplicating and therefore holding;
-        // - skipping it for `nvh264enc`, which negotiates `framerate=0/1`
-        //   where `x264enc` and `openh264enc` refuse to link at all.
-        //
-        // Both produce the same failure against a real receiver, and it is not
-        // subtle: `encoded frame has no valid running-time timestamp`, with a
-        // black picture on a shared screen and a session that drops seconds
-        // after a virtual one appears. Turning the compositor's variable
-        // cadence into a fixed one is what lets the Cast sender map an encoded
-        // frame through its segment, and nothing downstream reconstructs that.
-        //
-        // So the 35 ms is the price of the sender working. Anyone going after
-        // it again needs to fix the mapping first, not the cadence.
+        // `videorate` turns the compositor's variable cadence into a fixed
+        // one, which is what lets the Cast sender map each encoded frame
+        // through its segment; without it (`drop-only=true`, or skipping it
+        // for `nvh264enc`) frames arrive with no valid running time and the
+        // receiver shows black. It is also the costliest element in the path,
+        // holding each frame until the next. Removing that cost needs the
+        // mapping fixed first.
         let rate = format!("videorate max-duplication-time={MAX_DUPLICATION_NS}");
-        // `add-borders=true` is **not** vapostproc's default (unlike
-        // videoscale's): without it, a 16:10 screen sent to a 16:9 panel
-        // comes out stretched vertically.
+        // `add-borders` is off by default on `vapostproc`, unlike `videoscale`;
+        // without it a 16:10 screen is stretched on a 16:9 panel.
         let scale = if self.encoder.is_va() {
             "vapostproc add-borders=true".to_string()
         } else {
-            // Converted first: `videoscale` fills its borders wrongly in the
-            // 10-bit formats a HEVC film decodes to, and a film's black bars
-            // reached the television pink.
+            // Converted first: in the 10-bit formats an HEVC film decodes to,
+            // `videoscale` fills its borders pink.
             "videoconvert n-threads=0 ! videoscale add-borders=true".to_string()
         };
-        // Square pixels, or the borders never appear: with the aspect ratio
-        // left open the scaler fills the frame and records the stretch as a
-        // pixel shape, which receivers ignore — a 2.39:1 film then fills a
-        // 16:9 television, stretched vertically.
+        // Square pixels, or the borders never appear: with the ratio left
+        // open the scaler fills the frame and records the stretch as a pixel
+        // shape, which receivers ignore.
         let caps = format!(
             "video/x-raw,format={fmt},{dims},pixel-aspect-ratio=1/1,framerate={fps}/1",
             dims = target.caps_dimensions()
@@ -252,14 +178,10 @@ impl StreamConfig {
     /// The same stage, keeping the frame on the GPU from end to end.
     ///
     /// The capture is imported as a GL texture and handed to NVENC through GL
-    /// interop, so the picture is never read back to the CPU and never uploaded
-    /// again. What it cannot do is scale: `glcolorscale` will not link to this
-    /// encoder here (measured), so this shape only fits a screen that already
-    /// sits inside the person's ceiling — which is why the caller decides.
-    ///
-    /// Requesting `memory:DMABuf` explicitly is the point. Without it `glupload`
-    /// would happily accept system memory and upload it, which is what already
-    /// happens and would make this path a rename rather than a saving.
+    /// interop. It cannot scale (`glcolorscale` does not link to the encoder),
+    /// so the caller uses it only for a screen already inside the ceiling.
+    /// `memory:DMABuf` is demanded explicitly: otherwise `glupload` would
+    /// accept system memory and upload it, which saves nothing.
     pub(super) fn gpu_convert(&self, ceiling: (u32, u32)) -> String {
         let fps = self.fps;
         let dims = VideoTarget::UpTo(ceiling).caps_dimensions();
@@ -288,8 +210,8 @@ mod tests {
     /// minimum, which drove the ranged scaler to 2x2 (`videoscale`) or an
     /// overflow (`vapostproc`). With the ratio pinned the picture keeps its
     /// size. `videotestsrc` fixates a range to 1/1 by itself, so the second
-    /// run feeds the minimum as a fixed value — what the capture measured as
-    /// negotiated before the pin — to show the scaler still misbehaves on it.
+    /// run feeds the minimum as a fixed value, to show the scaler still
+    /// misbehaves on it without the pin.
     #[test]
     fn a_capture_offering_any_pixel_aspect_keeps_its_size() {
         use gst::prelude::*;
@@ -381,9 +303,9 @@ mod tests {
 
     #[test]
     fn every_encoder_keeps_the_element_that_fixes_the_cadence() {
-        // Removed twice, for 35 ms, and put back twice: without it the Cast
-        // sender cannot map an encoded frame through its segment, and the
-        // receiver shows black. The cost is deliberate.
+        // Without `videorate` the Cast sender cannot map an encoded frame
+        // through its segment and the receiver shows black. Its holding delay
+        // is the price of that.
         for encoder in [
             H264Encoder::NvH264,
             H264Encoder::X264,
@@ -449,8 +371,8 @@ mod tests {
         // and upload it — the same copy, behind a longer pipeline.
         assert!(desc.contains("video/x-raw(memory:DMABuf)"), "{desc}");
         assert!(desc.contains("glupload"), "{desc}");
-        // `glcolorscale` will not link to this encoder: measured, and the whole
-        // reason the caller only picks this path for a screen that fits.
+        // `glcolorscale` does not link to this encoder, which is why the caller
+        // picks this path only for a screen that fits.
         assert!(!desc.contains("glcolorscale"), "{desc}");
         assert!(!desc.contains("videoconvert"), "{desc}");
     }
@@ -481,11 +403,9 @@ mod tests {
 
     #[test]
     fn mirroring_asks_for_a_ceiling_rather_than_the_portal_s_guess() {
-        // Measured: a 2560x1440 panel at 110% scale is announced by the portal
-        // as 2328x1310 and delivered at 2560x1440. Pinning the announced size
-        // resampled every frame down and handed the receiver an off-standard
-        // mode to resample back up. A range lets the capture through at its
-        // own size and only bites above the person's ceiling.
+        // A 2560x1440 panel at 110% scale is announced by the portal as
+        // 2328x1310 and delivered at 2560x1440. A range lets the capture
+        // through at its own size and only bites above the person's ceiling.
         let cfg = StreamConfig {
             width: 2326,
             height: 1308,
@@ -506,10 +426,9 @@ mod tests {
 
     #[test]
     fn mirroring_lets_the_encoder_take_the_capture_s_own_format() {
-        // The portal delivers BGRA and NVENC accepts BGRA. Asking for NV12
-        // first spends a full-frame CPU pass to reach a format the GPU would
-        // have produced while encoding: measured over 300 frames at 2560x1440,
-        // 2.76s of CPU against 1.21s.
+        // The portal delivers BGRA and NVENC accepts it; asking for NV12 first
+        // spends a CPU pass over every frame on a conversion the card does
+        // while encoding.
         let nv = StreamConfig {
             encoder: H264Encoder::NvH264,
             ..Default::default()
@@ -520,9 +439,8 @@ mod tests {
             "{desc}"
         );
 
-        // Every other encoder keeps the one format it was verified with: this
-        // machine has no other hardware encoder to measure, and a format list
-        // that turns out to be wrong shows up as a receiver getting nothing.
+        // Every other encoder keeps the one format it was verified with: a
+        // wrong format list shows up as a receiver getting nothing.
         for encoder in [H264Encoder::X264, H264Encoder::VaH264] {
             let cfg = StreamConfig {
                 encoder,
