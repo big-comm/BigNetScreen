@@ -529,81 +529,75 @@ async fn start_pipeline(
                 .into(),
         ));
     }
-    let mut failure = None;
+    status.set_link(StreamLink {
+        width: mode.width,
+        height: mode.height,
+        fps: mode.fps,
+        // No endpoint: in Miracast we are the RTSP server and the sink
+        // listens on nothing we may rely on, so there is no address to
+        // measure a round trip against. The sink's IP on our own port
+        // would read as "the receiver is not answering" all through a
+        // healthy session.
+        endpoint: None,
+        receivers: None,
+    });
 
+    let mut failure = None;
     for encoder in candidates {
         // Encoding must match the mode already advertised in M4.
-        let (width, height) = (mode.width, mode.height);
         let stream_cfg = StreamConfig {
-            width,
-            height,
+            width: mode.width,
+            height: mode.height,
             fps: mode.fps,
             encoder,
             audio: cfg.audio,
             ..Default::default()
         };
-        status.set_link(StreamLink {
-            width: stream_cfg.width,
-            height: stream_cfg.height,
-            fps: stream_cfg.fps,
-            // No endpoint: in Miracast we are the RTSP server and the sink
-            // listens on nothing we may rely on, so there is no address to
-            // measure a round trip against. The sink's IP on our own port
-            // would read as "the receiver is not answering" all through a
-            // healthy session.
-            endpoint: None,
-            receivers: None,
-        });
-
         let desc = pipeline::wfd_pipeline_description(&stream_cfg, &cfg.video, &transport);
-
-        // `BIGNETSCREEN_PIPELINE_LATENCY_MS` overrides it, for field measurement.
-        let latency = match std::env::var("BIGNETSCREEN_PIPELINE_LATENCY_MS")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-        {
-            Some(ms) => ms,
-            None => stream_cfg.latency_ms(),
-        };
-
-        let monitored = match pipeline::build_monitored(&desc, latency, encoder) {
-            Ok(monitored) => monitored,
+        match probe_encoder(&desc, &stream_cfg).await {
+            Ok(monitored) => return Ok(monitored),
             Err(err) => {
-                tracing::warn!(?encoder, %err, "could not assemble the pipeline");
+                tracing::warn!(?encoder, %err, "encoder unusable; trying the next one");
                 failure = Some(err);
-                continue;
             }
-        };
-
-        let startup_guard = pipeline::PipelineGuard::new(monitored.pipeline.clone());
-        if let Err(err) = monitored.pipeline.set_state(gst::State::Playing) {
-            tracing::warn!(?encoder, %err, "the encoder refused to start running");
-            failure = Some(NdError::Gst(err.to_string()));
-            monitored.shutdown();
-            continue;
         }
+    }
+    Err(failure.unwrap_or_else(|| NdError::Gst("no usable encoder".into())))
+}
 
-        tokio::time::sleep(ENCODER_PROBE).await;
-        let frames = monitored.frames_encoded();
-        if frames > 0 {
-            tracing::info!(?encoder, frames, "encoder in use");
-            let _ = pipeline::query_min_latency_ms(&monitored.pipeline);
-            startup_guard.disarm();
-            return Ok(monitored);
-        }
+/// Starts the pipeline described by `desc` and keeps it only if its encoder
+/// produces frames within [`ENCODER_PROBE`].
+async fn probe_encoder(
+    desc: &str,
+    stream_cfg: &StreamConfig,
+) -> Result<pipeline::MonitoredPipeline> {
+    let encoder = stream_cfg.encoder;
+    // `BIGNETSCREEN_PIPELINE_LATENCY_MS` overrides it, for field measurement.
+    let latency = std::env::var("BIGNETSCREEN_PIPELINE_LATENCY_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or_else(|| stream_cfg.latency_ms());
+    let monitored = pipeline::build_monitored(desc, latency, encoder)?;
 
-        tracing::warn!(
-            ?encoder,
-            "the encoder produced no frames within {:?}; trying the next one",
-            ENCODER_PROBE
-        );
-        failure = Some(NdError::Gst(format!(
+    let startup_guard = pipeline::PipelineGuard::new(monitored.pipeline.clone());
+    if let Err(err) = monitored.pipeline.set_state(gst::State::Playing) {
+        monitored.shutdown();
+        return Err(NdError::Gst(format!(
+            "the {encoder:?} encoder refused to start: {err}"
+        )));
+    }
+    tokio::time::sleep(ENCODER_PROBE).await;
+    let frames = monitored.frames_encoded();
+    if frames == 0 {
+        monitored.shutdown();
+        return Err(NdError::Gst(format!(
             "the {encoder:?} encoder produced no frames"
         )));
-        monitored.shutdown();
     }
-
-    Err(failure.unwrap_or_else(|| NdError::Gst("no usable encoder".into())))
+    tracing::info!(?encoder, frames, "encoder in use");
+    let _ = pipeline::query_min_latency_ms(&monitored.pipeline);
+    startup_guard.disarm();
+    Ok(monitored)
 }
 
 #[cfg(test)]
