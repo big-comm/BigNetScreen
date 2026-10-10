@@ -84,9 +84,8 @@ impl Provider for WfdP2pProvider {
                     // The consumer went away: shut down for good.
                     Ok(()) => return,
                     Err(err) => {
-                        // A fixed regression: a single D-Bus failure used to
-                        // end discovery silently, leaving the user on
-                        // "Searching…" forever.
+                        // Retried rather than ended: a single D-Bus failure
+                        // would otherwise leave the list on "Searching…".
                         tracing::warn!(%err, "P2P discovery failed; retrying");
                         if tx
                             .send(DiscoveryEvent::ProviderUnavailable {
@@ -210,11 +209,8 @@ pub struct WfdSink {
     info: SinkInfo,
     peer_path: String,
     status: SinkStatus,
-    /// Signals that a running session should end.
-    ///
-    /// Without this, `stop_stream` only cleared the visual state: the Wi-Fi
-    /// Direct group, the RTSP server and the pipeline stayed up, and the
-    /// interface's stop button stopped nothing.
+    /// Signals that a running session should end. The session itself tears
+    /// down the Wi-Fi Direct group, the RTSP server and the pipeline.
     cancel: std::sync::Mutex<Option<tokio::sync::watch::Sender<bool>>>,
 }
 
@@ -330,11 +326,9 @@ pub mod cast {
     const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
     /// How long to wait for the sink to open the RTSP connection.
     ///
-    /// Measured, not guessed: in the sessions that worked, the receiver
-    /// associated one second after the group started and opened RTSP within
-    /// about ten. Waiting forty seconds only made a failure take forty seconds
-    /// — and the failure that does happen is not cured by waiting, it is cured
-    /// by forming the group again.
+    /// A receiver that works opens RTSP within seconds of the group forming.
+    /// One that does not is cured by forming the group again, not by waiting
+    /// longer.
     const ACCEPT_TIMEOUT: Duration = Duration::from_secs(20);
 
     /// How long to leave the radio alone between session attempts.
@@ -349,9 +343,6 @@ pub mod cast {
     const SESSION_ATTEMPTS: u32 = 3;
 
     /// Runs the whole session: P2P group → firewall → RTSP → streaming.
-    ///
-    /// It gathers what previously only existed copy-pasted inside the
-    /// examples.
     pub async fn run(
         sink: &WfdSink,
         source: CaptureSource,
