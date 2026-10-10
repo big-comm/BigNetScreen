@@ -1,6 +1,6 @@
 [package]
 name = "nd-capture"
-description = "Backends de captura de tela: portal (ashpd) e Mutter direto (zbus)"
+description = "Screen capture backends: the ScreenCast portal, Mutter and KWin"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

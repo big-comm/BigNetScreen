@@ -91,7 +91,7 @@ impl DlnaSink {
         // Off the network and straight into a label, so it is sanitised like
         // every other announced name.
         let display_name =
-            sanitize_name(upnp::tag_text(&description, "friendlyName").unwrap_or("Tela DLNA"));
+            sanitize_name(upnp::tag_text(&description, "friendlyName").unwrap_or("DLNA renderer"));
 
         Ok(Self {
             info: SinkInfo {

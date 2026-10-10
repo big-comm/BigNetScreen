@@ -1,6 +1,6 @@
 [package]
 name = "nd-service"
-description = "Serviço de sessão (D-Bus) e clientes de linha de comando"
+description = "The session service on D-Bus and its command-line client"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
