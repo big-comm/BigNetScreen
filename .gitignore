@@ -1,8 +1,8 @@
-# ===== Rust =====
+# Rust
 /target
 **/*.rs.bk
 
-# ===== Editores / IDEs =====
+# Editors
 .vscode/
 .idea/
 *.swp
@@ -10,46 +10,34 @@
 *~
 .DS_Store
 
-# ===== AI / tooling ephemera =====
+# Agent and tooling state
 .codex
 .serena/
 .claude/
 .cache/
 
-# ===== Translation tooling scratch =====
-# The catalogues live in `po/` — that is what the Makefile compiles and what
-# every gettext tool expects. Some translation tools scaffold a `locale/`
-# directory of their own; it is output, never source, and translating into it
-# means the work never reaches the package.
+# Some translation tools scaffold a `locale/` of their own. The catalogues
+# live in `po/`; anything written to `locale/` never reaches the package.
 /locale/
 
-# ===== Local build output (make) =====
-/build
-# Compiled .mo catalogues: produced by `make locale` and by translation
-# tooling. They are artefacts, not source.
-/usr
-
-# ===== Flatpak build =====
-.flatpak-builder/
-/build-aux/flatpak/.flatpak-builder/
-/repo/
-
-# Compiled translations and Makefile artefacts
+# `make` output: compiled catalogues
 /build/
 
-# Sources generated for Flatpak
+# makepkg working directories and packages
+/pkgbuild/*/
+*.pkg.tar.*
+
+# Flatpak build
+.flatpak-builder/
+/repo/
 /build-aux/flatpak/cargo-sources.json
 
-# Local verification and source-package output
+# Verification and source-package output
 .gate-state/
 /dist/
 __pycache__/
 *.pyc
 
-# Incoming review deliveries: bundles, patches and tarballs dropped here to be
-# applied. Their own documents link as if they sat at the repository root, so
-# they fail the link check too. Archive material, never project source.
+# Review deliveries dropped here to be applied: archive material whose own
+# links assume the repository root, so they also fail the link check.
 /docs/*-DELIVERY/
-
-# `makepkg` clones the git source here.
-/pkgbuild/bignetscreen/
