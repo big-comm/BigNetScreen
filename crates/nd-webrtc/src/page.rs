@@ -27,7 +27,8 @@ pub struct PageText {
     pub fullscreen_hint: String,
 }
 
-fn escape(text: &str) -> String {
+/// Escapes text for HTML element content.
+fn html_text(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
         match c {
@@ -42,18 +43,52 @@ fn escape(text: &str) -> String {
     out
 }
 
-/// Renders the page. Every text is escaped; nothing from the network goes in.
+/// A quoted JavaScript string literal holding `text`, safe inside `<script>`.
+///
+/// HTML entities are not decoded in a script, so HTML escaping would show a
+/// translation's apostrophe as `&#39;`; and a quote, backslash or line break
+/// would end the literal. `<` and `>` are escaped so no text can close the
+/// script element.
+fn js_string(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('\'');
+    for c in text.chars() {
+        if c.is_control()
+            || matches!(
+                c,
+                '\\' | '\'' | '"' | '<' | '>' | '&' | '\u{2028}' | '\u{2029}'
+            )
+        {
+            out.push_str(&format!("\\u{:04x}", u32::from(c)));
+        } else {
+            out.push(c);
+        }
+    }
+    out.push('\'');
+    out
+}
+
+/// Renders the page. Every text is escaped for where it lands: `{{key}}` in
+/// the markup, `{{js:key}}` as a string literal in the script.
 pub fn render(text: &PageText) -> String {
-    TEMPLATE
-        .replace("{{title}}", &escape(&text.title))
-        .replace("{{prompt}}", &escape(&text.prompt))
-        .replace("{{join}}", &escape(&text.join))
-        .replace("{{wrong_pin}}", &escape(&text.wrong_pin))
-        .replace("{{locked}}", &escape(&text.locked))
-        .replace("{{connecting}}", &escape(&text.connecting))
-        .replace("{{failed}}", &escape(&text.failed))
-        .replace("{{ended}}", &escape(&text.ended))
-        .replace("{{fullscreen_hint}}", &escape(&text.fullscreen_hint))
+    let texts = [
+        ("title", &text.title),
+        ("prompt", &text.prompt),
+        ("join", &text.join),
+        ("wrong_pin", &text.wrong_pin),
+        ("locked", &text.locked),
+        ("connecting", &text.connecting),
+        ("failed", &text.failed),
+        ("ended", &text.ended),
+        ("fullscreen_hint", &text.fullscreen_hint),
+    ];
+    let mut page = TEMPLATE.to_string();
+    for (key, value) in texts {
+        page = page
+            .replace(&format!("{{{{{key}}}}}"), &html_text(value))
+            .replace(&format!("{{{{js:{key}}}}}"), &js_string(value));
+    }
+    page
 }
 
 const TEMPLATE: &str = r#"<!DOCTYPE html>
@@ -117,8 +152,8 @@ const TEMPLATE: &str = r#"<!DOCTYPE html>
     fetch('/pin', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: code })
       .then(function (r) {
         if (r.status === 200) { return r.text(); }
-        if (r.status === 429) { throw new Error('{{locked}}'); }
-        throw new Error('{{wrong_pin}}');
+        if (r.status === 429) { throw new Error({{js:locked}}); }
+        throw new Error({{js:wrong_pin}});
       })
       .then(function (t) { token = t.trim(); gate.style.display = 'none'; stage.style.display = 'block'; start(); })
       .catch(function (e) { msg.textContent = e.message; pin.value = ''; pin.focus(); });
@@ -133,7 +168,7 @@ const TEMPLATE: &str = r#"<!DOCTYPE html>
   }
 
   function start() {
-    showStatus('{{connecting}}');
+    showStatus({{js:connecting}});
     var pc = new RTCPeerConnection({ iceServers: [] });
     var stream = new MediaStream();
     video.srcObject = stream;
@@ -143,8 +178,8 @@ const TEMPLATE: &str = r#"<!DOCTYPE html>
     pc.onconnectionstatechange = function () {
       var s = pc.connectionState;
       if (s === 'connected') { showStatus(''); setTimeout(function () { hint.style.opacity = 0; }, 6000); }
-      else if (s === 'failed') { showStatus('{{failed}}'); }
-      else if (s === 'disconnected' || s === 'closed') { showStatus('{{ended}}'); }
+      else if (s === 'failed') { showStatus({{js:failed}}); }
+      else if (s === 'disconnected' || s === 'closed') { showStatus({{js:ended}}); }
     };
     pc.createOffer().then(function (offer) {
       return pc.setLocalDescription(offer);
@@ -163,12 +198,12 @@ const TEMPLATE: &str = r#"<!DOCTYPE html>
         method: 'POST', headers: { 'Content-Type': 'application/sdp' }, body: pc.localDescription.sdp
       });
     }).then(function (r) {
-      if (r.status !== 201) { throw new Error('{{failed}}'); }
+      if (r.status !== 201) { throw new Error({{js:failed}}); }
       resource = r.headers.get('Location');
       return r.text();
     }).then(function (answer) {
       return pc.setRemoteDescription({ type: 'answer', sdp: answer });
-    }).catch(function (e) { showStatus(e.message || '{{failed}}'); });
+    }).catch(function (e) { showStatus(e.message || {{js:failed}}); });
 
     video.addEventListener('click', function () {
       var el = document.documentElement;
@@ -219,5 +254,24 @@ mod tests {
         assert!(!html.contains("{{"), "unfilled placeholder in the page");
         assert!(html.contains("/whep?token="));
         assert!(html.contains("fetch('/pin'"));
+    }
+
+    #[test]
+    fn script_texts_are_javascript_strings() {
+        let html = render(&PageText {
+            wrong_pin: "Check the computer's screen".into(),
+            locked: "a\\b\nc</script>".into(),
+            ..text()
+        });
+        let script = &html[html.find("<script>").unwrap()..];
+        assert!(
+            script.contains("'Check the computer\\u0027s screen'"),
+            "{script}"
+        );
+        assert!(
+            script.contains("'a\\u005cb\\u000ac\\u003c/script\\u003e'"),
+            "{script}"
+        );
+        assert!(!script.contains("&#39;"), "{script}");
     }
 }
