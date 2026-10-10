@@ -1,7 +1,7 @@
 # Maintainer: Tales A. Mendonça <talesam@gmail.com>
 
 pkgname=bignetscreen
-pkgdesc="Share your screen over Miracast, Chromecast, DLNA and NDI"
+pkgdesc="Share your screen over Chromecast, Miracast, DLNA, NDI and WebRTC"
 pkgver=$(date +%y.%m.%d)
 pkgrel=$(date +%H%M)
 arch=('x86_64' 'aarch64')
@@ -21,7 +21,7 @@ depends=(
   'pipewire'
   'libnice'             # nicesink/nicesrc for WebRTC ICE
   'xdg-desktop-portal'
-  'libpulse'            # pactl audio diagnostics
+  'libpulse'            # pactl: the virtual sound output
   'avahi'               # NDI discovery
 )
 optdepends=(
@@ -54,12 +54,7 @@ _root() {
   cd "$startdir/.." && pwd -P
 }
 
-# Use an install script if the repository carries one.
-if [ -e "${pkgname}.install" ]; then
-  install=${pkgname}.install
-elif [ -e "pkgbuild.install" ]; then
-  install=pkgbuild.install
-fi
+install=pkgbuild.install
 
 prepare() {
   cd "$(_root)" || return 1
@@ -70,18 +65,19 @@ prepare() {
 build() {
   cd "$(_root)" || return 1
   export RUSTUP_TOOLCHAIN=stable
-  export CARGO_TARGET_DIR=target
   make PREFIX=/usr
 }
 
 check() {
   cd "$(_root)" || return 1
-  export RUSTUP_TOOLCHAIN=stable
+  export RUSTUP_TOOLCHAIN=stable CARGO_INCREMENTAL=0
   cargo test --workspace --locked
 }
 
 package() {
   cd "$(_root)" || return 1
+  # `make install` checks the build is current, so it needs the same toolchain.
+  export RUSTUP_TOOLCHAIN=stable
   make DESTDIR="$pkgdir" PREFIX=/usr install
   install -Dm644 COPYING "$pkgdir/usr/share/licenses/$pkgname/COPYING"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
