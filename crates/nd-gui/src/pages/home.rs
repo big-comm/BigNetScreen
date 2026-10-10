@@ -157,10 +157,6 @@ pub struct HomePage {
     /// The "extra screen" button, whose availability depends on the desktop.
     virtual_button: gtk::Button,
     media_button: gtk::Button,
-    /// Is there any receiver at all in the list?
-    empty: bool,
-    /// Still worth saying "searching"?
-    searching: bool,
     virtual_available: bool,
     /// The address the QR code on screen encodes, so it is only redrawn when
     /// it changes and not on every status poll.
@@ -667,8 +663,6 @@ impl Component for HomePage {
             chosen: None,
             session: None,
             audio_summary: tr!("Audio"),
-            empty: true,
-            searching: true,
             virtual_available: false,
             qr_for: None,
         };
@@ -736,7 +730,6 @@ impl Component for HomePage {
                 let _ = sender.output(HomeOutput::AudioSettings);
             }
             HomeMsg::Devices(entries) => {
-                self.empty = entries.is_empty();
                 // The receiver being acted on may change state, or leave.
                 if let Some(chosen) = &self.chosen {
                     match entries.iter().find(|e| e.id == chosen.id) {
@@ -767,7 +760,6 @@ impl Component for HomePage {
                 self.session = session;
             }
             HomeMsg::Searching(searching) => {
-                self.searching = searching;
                 self.devices
                     .widget()
                     .set_placeholder(Some(&discovery_placeholder(searching)));
@@ -777,12 +769,13 @@ impl Component for HomePage {
                 // Left in place but insensitive: hiding it would leave the
                 // person wondering whether the feature exists at all.
                 self.virtual_button.set_sensitive(available);
-                if !available {
-                    self.virtual_button.set_tooltip_text(Some(&tr!(
+                let reason = (!available).then(|| {
+                    tr!(
                         "This desktop cannot create an extra screen (it needs GNOME running \
                          natively)"
-                    )));
-                }
+                    )
+                });
+                self.virtual_button.set_tooltip_text(reason.as_deref());
             }
             HomeMsg::Selected(id) => {
                 self.chosen = self
@@ -903,24 +896,10 @@ impl HomePage {
         if !state.is_empty() {
             parts.push(state);
         }
-        if let Some(hint) = latency_hint(sink_kind_of(&session.protocol)) {
+        if let Some(hint) = session.kind.and_then(latency_hint) {
             parts.push(hint);
         }
         parts.join(" · ")
-    }
-}
-
-/// Recovers the protocol from its label, for the latency hint.
-fn sink_kind_of(protocol: &str) -> nd_core::sink::SinkKind {
-    use nd_core::sink::SinkKind;
-    if protocol == super::protocol_label(SinkKind::WfdP2p) {
-        SinkKind::WfdP2p
-    } else if protocol == super::protocol_label(SinkKind::Chromecast) {
-        SinkKind::Chromecast
-    } else if protocol == super::protocol_label(SinkKind::Dlna) {
-        SinkKind::Dlna
-    } else {
-        SinkKind::AirPlay
     }
 }
 

@@ -942,6 +942,7 @@ impl AppModel {
         Some(SessionInfo {
             id: session.id.clone(),
             name: session.display_name.clone(),
+            kind,
             protocol: kind
                 .map(crate::pages::protocol_label)
                 .unwrap_or_else(|| session.kind.clone()),

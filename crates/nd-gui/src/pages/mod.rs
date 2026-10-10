@@ -230,6 +230,8 @@ pub fn latency_hint(kind: SinkKind) -> Option<String> {
 pub struct SessionInfo {
     pub id: String,
     pub name: String,
+    /// `None` when this build has no kind for the service's protocol name.
+    pub kind: Option<SinkKind>,
     pub protocol: String,
     pub address: String,
     /// "1920 × 1080 · 60 Hz", empty until the session negotiates it.
