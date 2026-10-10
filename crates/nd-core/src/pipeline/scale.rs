@@ -214,7 +214,6 @@ mod tests {
     /// misbehaves on it without the pin.
     #[test]
     fn a_capture_offering_any_pixel_aspect_keeps_its_size() {
-        use gst::prelude::*;
         init().unwrap();
         let cfg = StreamConfig {
             width: 1920,
@@ -262,7 +261,6 @@ mod tests {
 
     #[test]
     fn a_ten_bit_film_gets_black_bars() {
-        use gst::prelude::*;
         init().unwrap();
         let cfg = StreamConfig::default();
         let description = format!(
