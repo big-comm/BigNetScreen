@@ -6,6 +6,7 @@ yanked = "deny"
 [licenses]
 # The binary is GPL-3.0-or-later; these are the compatible licences accepted.
 allow = [
+    "GPL-3.0-or-later",
     "MIT",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
@@ -17,12 +18,16 @@ allow = [
     "MPL-2.0",
     "GPL-3.0",
     "LGPL-2.1",
+    # webpki-roots (Mozilla CA list), pulled by gst-plugin-webrtc's WHEP client.
+    "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.9
 
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Workspace crates are unpublished and pin each other by path.
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"

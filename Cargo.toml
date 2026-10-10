@@ -1,5 +1,4 @@
 # BigNetScreen — Rust workspace
-# A clean rewrite of the project (the C reference is no longer in tree).
 [workspace]
 resolver = "2"
 members = [
@@ -28,6 +27,7 @@ license = "GPL-3.0-or-later"
 authors = ["Tales A. Mendonça", "BigCommunity"]
 repository = "https://github.com/big-comm/BigNetScreen"
 rust-version = "1.98.1"
+publish = false
 
 [workspace.dependencies]
 # Internal crates
