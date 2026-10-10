@@ -293,7 +293,7 @@ impl CaptureBackend for PortalBackend {
 
 /// A backend that tries Mutter and falls back to the portal when it fails.
 ///
-/// `org.gnome.Mutter.ScreenCast` is a **private GNOME API**: it carries no
+/// `org.gnome.Mutter.ScreenCast` is a private GNOME API: it carries no
 /// stability guarantee across versions and may start refusing external calls.
 /// Being "available" on the bus does not mean `start()` will work — which is
 /// why the fall back to the portal happens at the point of failure, not only
@@ -369,15 +369,11 @@ impl CaptureBackend for MutterWithPortalFallback {
 /// Selects the capture backend that suits the environment and source type.
 ///
 /// The portal is the default: it works on every desktop, it is mandatory under
-/// Flatpak, and on GNOME it uses Mutter underneath anyway — the latency
-/// difference between the two paths is nil. Talking to Mutter directly is
-/// reserved for the **virtual monitor** (the one concrete win: a screen at
-/// exactly the resolution the sink negotiated, with no scaling and no change
-/// to the physical layout) and for whoever asks explicitly with
-/// `BIGNETSCREEN_CAPTURE=mutter`.
-///
-/// On KDE, Sway, Cosmic and the like Mutter simply is not on the bus and this
-/// path is never exercised.
+/// Flatpak, and on GNOME it uses Mutter underneath anyway. Talking to the
+/// compositor directly is reserved for the virtual monitor, the one case the
+/// portal cannot size (Mutter on GNOME, KWin on KDE), and for whoever asks
+/// with `BIGNETSCREEN_CAPTURE=mutter`. Elsewhere the portal handles all three
+/// source types.
 pub async fn select_backend_for(
     source_type: SourceType,
     virtual_limit: Option<(u32, u32)>,

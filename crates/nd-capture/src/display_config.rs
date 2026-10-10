@@ -2,24 +2,15 @@
 //!
 //! Adding a virtual monitor changes the set of monitors, and Mutter reacts by
 //! looking for a stored configuration for that new set. There is none, so it
-//! **generates a default one**, which uses each monitor's *preferred* mode and
-//! scale. Whatever the user had chosen for their laptop is thrown away.
+//! generates a default one from each monitor's preferred mode and scale,
+//! discarding what the user chose: a laptop panel at scale 1.0 comes back at
+//! 1.25 with variable refresh rate off, and casting looks like it made the
+//! screen smaller.
 //!
-//! Measured on a 1920x1200 panel:
-//!
-//! | | laptop | virtual |
-//! | --- | --- | --- |
-//! | before | 1920x1200@60 +VRR, scale 1.0 | — |
-//! | after `RecordVirtual` | 1920x1200@60, scale **1.25** | 1920x1080@60 |
-//!
-//! Scale 1.25 on that panel leaves 1536x960 of usable desktop: from the user's
-//! chair, "casting made my screen smaller". Variable refresh rate was dropped
-//! too.
-//!
-//! So this module takes the layout over instead of accepting Mutter's default:
-//! it snapshots the arrangement before the virtual monitor appears, and puts it
-//! back afterwards with the new screen appended to the right. The user's
-//! monitor keeps the exact mode, scale and position it had.
+//! So [`crate::mutter`] takes the layout over: it snapshots the arrangement
+//! before the virtual monitor appears and puts it back with the new screen
+//! appended to the right, then restores the snapshot when the session ends.
+//! The user's monitors keep the exact mode, scale and position they had.
 
 use std::collections::HashMap;
 
@@ -157,22 +148,7 @@ impl LayoutSnapshot {
                 // one: reapplying the preferred mode is the very thing that
                 // moved the user's screen to scale 1.25.
                 if let Some(mode) = current_mode_of(&monitors, connector) {
-                    let mut properties = HashMap::new();
-                    if let Some((_, _, props)) =
-                        monitors.iter().find(|((name, ..), ..)| name == connector)
-                    {
-                        if let Some(value) = props
-                            .get("is-underscanning")
-                            .and_then(|v| bool::try_from(v).ok())
-                        {
-                            properties.insert("underscanning".into(), Value::from(value));
-                        }
-                        if let Some(value) =
-                            props.get("color-mode").and_then(|v| u32::try_from(v).ok())
-                        {
-                            properties.insert("color-mode".into(), Value::from(value));
-                        }
-                    }
+                    let properties = applied_properties(&monitors, connector);
                     connectors.push((connector.clone(), mode, properties));
                 }
             }
@@ -322,6 +298,31 @@ impl LayoutSnapshot {
     }
 }
 
+/// The monitor properties `ApplyMonitorsConfig` takes back, as `GetCurrentState`
+/// reported them, so reapplying a layout keeps underscanning and color mode.
+fn applied_properties(
+    monitors: &[MonitorInfo],
+    connector: &str,
+) -> HashMap<String, Value<'static>> {
+    let mut properties = HashMap::new();
+    let Some((_, _, current)) = monitors.iter().find(|((name, ..), ..)| name == connector) else {
+        return properties;
+    };
+    if let Some(value) = current
+        .get("is-underscanning")
+        .and_then(|v| bool::try_from(v).ok())
+    {
+        properties.insert("underscanning".into(), Value::from(value));
+    }
+    if let Some(value) = current
+        .get("color-mode")
+        .and_then(|v| u32::try_from(v).ok())
+    {
+        properties.insert("color-mode".into(), Value::from(value));
+    }
+    properties
+}
+
 /// The id of the mode a connector is currently using.
 fn current_mode_of(monitors: &[MonitorInfo], connector: &str) -> Option<String> {
     let monitor = monitors.iter().find(|((c, ..), ..)| c == connector)?;
@@ -357,12 +358,9 @@ fn logical_width(
 /// Waits for the virtual monitor to show up and returns its connector name
 /// (`Meta-0`, `Meta-1`, …).
 ///
-/// Waiting is not optional. `RecordVirtual` cannot derive a size from an
-/// existing monitor, so Mutter leaves it to PipeWire to negotiate one — and
-/// **the monitor is only created once that negotiation finishes**, which
-/// happens when the pipeline connects to the stream, well after `start()`
-/// returns. Looking right away finds nothing, which is exactly what the first
-/// version of this code did.
+/// Waiting is not optional: the monitor is only created once PipeWire has
+/// negotiated its size, which happens when a pipeline connects to the stream,
+/// well after `Start` returns. Looking right away finds nothing.
 ///
 /// There is no API that reports the connector, so it is found by elimination:
 /// the one that was not there before.
@@ -375,13 +373,11 @@ pub async fn wait_for_virtual_connector(
         return None;
     };
 
-    // Driven by `MonitorsChanged` rather than by polling, and the difference is
-    // visible to the user. The moment the extra screen appears, Mutter has
-    // already replaced the layout with a generated default — which uses the
-    // panel's *preferred* scale, so the laptop's screen jumps to "everything
-    // bigger" until our own layout goes back on. Polling every 250 ms left that
-    // wrong layout on screen for up to a quarter of a second; reacting to the
-    // signal closes the gap to as little as the compositor allows.
+    // Driven by `MonitorsChanged`: the moment the extra screen appears, Mutter
+    // has already applied its generated default layout, and the user's screen
+    // shows the wrong scale until ours goes back on. Reacting to the signal
+    // keeps that as short as the compositor allows; the timeout below only
+    // covers a missed signal.
     let mut changed = proxy.receive_monitors_changed().await.ok();
 
     let deadline = tokio::time::Instant::now() + timeout;
@@ -447,8 +443,8 @@ pub async fn connectors(conn: &Connection) -> Vec<String> {
 
 /// The preferred mode of a connector, and its size.
 ///
-/// Used to put the extra screen at the resolution the receiver actually has,
-/// rather than whatever PipeWire happened to negotiate.
+/// Puts the extra screen at the resolution the receiver actually has, rather
+/// than whatever PipeWire happened to negotiate.
 pub async fn preferred_mode(conn: &Connection, connector: &str) -> Option<(String, i32, i32)> {
     let proxy = DisplayConfigProxy::new(conn).await.ok()?;
     let (_, monitors, ..) = proxy.get_current_state().await.ok()?;

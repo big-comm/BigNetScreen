@@ -10,34 +10,19 @@
 //!     {1920, 1080}, cursorMode);
 //! ```
 //!
-//! That is why a new screen was always 1920x1080 no matter what the person
-//! selected. KWin's own `zkde_screencast_unstable_v1` does take a size, and it
-//! is what the portal calls underneath, so asking the compositor directly costs
-//! nothing and removes the cap. It is the same trade this crate already makes
-//! with Mutter on GNOME.
+//! KWin's own `zkde_screencast_unstable_v1` does take a size, and it is what
+//! the portal calls underneath, so on KWin this crate asks the compositor
+//! directly, as it asks Mutter on GNOME.
 //!
-//! The screen KWin creates always runs at 60 Hz (`OutputModeline(size, 60000)`
-//! in `drm_virtual_output.cpp`), and the stream it hands to PipeWire is capped
-//! at that rate — a higher fps setting cannot be honoured here, whatever the
-//! screen is doing. The protocol below has no refresh-rate argument either, so
-//! there is nothing to ask for.
-//!
-//! In practice it delivers about 49, not 60, and the shortfall is not ours.
-//! KWin's capture is driven by damage, never by a clock
-//! (`OutputScreenCastSource` connects to `OutputLayer::repaintScheduled`), so
-//! the rate we measure is the rate the screen is being painted at: a 24 fps
-//! video gives 24, the same video at double speed gives 48. Measured, all
-//! three.
-//!
-//! What caps a *virtual* screen at 49 is that its vblank is a `QTimer`
-//! (`SoftwareVsyncMonitor`, truncating to whole milliseconds against a
-//! 16.666 ms period) feeding a second `QTimer` in the screencast's own pacing.
-//! A real output gets a hardware vblank instead of the first one, and reaches
-//! 88–113 on this machine's 180 Hz panel with the identical pipeline. 1080p
-//! and 1440p both sit at 49, so it is not the cost of the pixels.
-//!
-//! So a log showing 24 is a 24 fps video, not a fault, and closing the gap
-//! between 49 and 60 means patching KWin.
+//! The screen KWin creates runs at 60 Hz (`OutputModeline(size, 60000)` in
+//! `drm_virtual_output.cpp`) and the protocol has no refresh-rate argument, so
+//! a higher fps setting cannot be honoured here. KWin's capture is driven by
+//! damage, not by a clock (`OutputScreenCastSource` follows
+//! `OutputLayer::repaintScheduled`): the frame rate is the rate the screen is
+//! painted at, so a 24 fps video streams at 24. A virtual screen's vblank is a
+//! `QTimer` (`SoftwareVsyncMonitor`, truncating to whole milliseconds) feeding
+//! a second `QTimer` in the screencast's pacing, which keeps it below 60 even
+//! when the screen repaints constantly; closing that gap means patching KWin.
 
 use std::time::{Duration, Instant};
 
@@ -83,10 +68,8 @@ const MAX_VERSION: u32 = 6;
 /// The buffer pool to insist on, at the top of what KWin offers.
 ///
 /// `screencaststream.cpp` advertises `SPA_POD_CHOICE_RANGE_Int(3, 2, 4)`. Left
-/// to settle on its own the result varied per stream and stayed there, which
-/// is what made one new screen fluid and the next one stutter for no reason
-/// anybody could see — 9 frames a second against 36, with the compositor at 7%
-/// of a core in both.
+/// to settle on its own the count varies per stream and stays for its life,
+/// and a stream that lands low stutters while the compositor sits idle.
 ///
 /// Four and not more: asking beyond what the producer offers fails the
 /// allocation outright rather than being clamped.
@@ -208,21 +191,20 @@ impl KWinBackend {
     }
 }
 
-/// Binds the manager, or says why it could not.
+/// Binds the `zkde_screencast_unstable_v1` global, or says why it could not.
 ///
 /// Also serves as the availability probe: a compositor that is not KWin simply
 /// does not advertise this global.
-fn bind_manager(
+fn bind_screencast(
     connection: &Connection,
 ) -> Result<(Manager, wayland_client::EventQueue<StreamState>)> {
     let (globals, queue) = registry_queue_init::<StreamState>(connection).map_err(cap_err)?;
-    let handle = queue.handle();
-    let manager = globals
-        .bind::<Manager, _, _>(&handle, MIN_VERSION..=MAX_VERSION, ())
+    let screencast = globals
+        .bind::<Manager, _, _>(&queue.handle(), MIN_VERSION..=MAX_VERSION, ())
         .map_err(|err| {
             NdError::Capture(format!("zkde_screencast_unstable_v1 unavailable: {err}"))
         })?;
-    Ok((manager, queue))
+    Ok((screencast, queue))
 }
 
 /// Creates the screen and waits for its PipeWire node.
@@ -231,17 +213,16 @@ fn bind_manager(
 /// session on a `spawn_blocking` thread.
 fn open_virtual_screen(width: u32, height: u32) -> Result<(ActiveStream, u32, Option<u64>)> {
     let connection = Connection::connect_to_env().map_err(cap_err)?;
-    let (manager, mut queue) = bind_manager(&connection)?;
-    let handle = queue.handle();
+    let (screencast, mut queue) = bind_screencast(&connection)?;
 
-    let stream = manager.stream_virtual_output_with_description(
+    let stream = screencast.stream_virtual_output_with_description(
         "BigNetScreen".to_string(),
         "BigNetScreen".to_string(),
         width as i32,
         height as i32,
         1.0,
         POINTER_EMBEDDED,
-        &handle,
+        &queue.handle(),
         (),
     );
 
@@ -276,7 +257,7 @@ impl CaptureBackend for KWinBackend {
         tokio::task::spawn_blocking(|| {
             Connection::connect_to_env()
                 .map_err(cap_err)
-                .and_then(|connection| bind_manager(&connection))
+                .and_then(|connection| bind_screencast(&connection))
                 .is_ok()
         })
         .await
