@@ -10,6 +10,7 @@
 //! starts, one place that knows whether a stream is running, and a page cannot
 //! contradict another by holding a stale copy of the answer.
 
+mod device_row;
 pub mod devices;
 pub mod home;
 pub mod media;

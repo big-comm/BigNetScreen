@@ -17,7 +17,7 @@ use relm4::prelude::*;
 use nd_core::settings;
 use nd_core::sink::SinkState;
 
-use super::home::{DeviceRow, DeviceRowOutput};
+use super::device_row::{DeviceRow, DeviceRowOutput, sync_rows};
 use super::{DeviceEntry, latency_hint, state_label};
 use crate::tr;
 
@@ -517,7 +517,7 @@ impl DevicesPage {
             .filter(|entry| self.filter.matches(entry))
             .cloned()
             .collect();
-        super::home::sync_rows(&mut self.devices, visible);
+        sync_rows(&mut self.devices, visible);
     }
 
     fn field<F: Fn(&DeviceEntry) -> String>(&self, f: F) -> String {
