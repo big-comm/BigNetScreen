@@ -75,49 +75,6 @@ const LAG_TIGHTEN_AFTER: u32 = 10;
 /// Generous on purpose: scraping the same point again only produces more
 /// stalls, and every stall is a visible stutter.
 const LAG_STALL_MARGIN: f64 = 0.4;
-/// What to prioritise when the two cannot both be had.
-///
-/// The choice genuinely belongs to the user and depends on what they are
-/// doing: watching a video, the delay is irrelevant and any stutter grates;
-/// presenting or using the computer on the big screen, the opposite holds.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum LatencyPreference {
-    /// No draining: uses the receiver's natural buffer (~2.6 s), smooth.
-    Smooth,
-    /// Drains the buffer for a quick response, accepting some stutter.
-    #[default]
-    Responsive,
-}
-
-static PREFERENCE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
-
-/// Sets the preference (process-wide). The interface calls this.
-pub fn set_latency_preference(pref: LatencyPreference) {
-    PREFERENCE.store(
-        match pref {
-            LatencyPreference::Responsive => 0,
-            LatencyPreference::Smooth => 1,
-        },
-        std::sync::atomic::Ordering::Relaxed,
-    );
-    tracing::info!(?pref, "latency preference");
-}
-
-/// The current preference.
-pub fn latency_preference() -> LatencyPreference {
-    // The film profile decides this too. There is one choice to make — quick
-    // response or smooth playback — and it should not have to be made once per
-    // protocol; on this path "smooth" simply means leaving the receiver's own
-    // buffer alone instead of draining it.
-    if nd_core::latency::is_film() {
-        return LatencyPreference::Smooth;
-    }
-    match PREFERENCE.load(std::sync::atomic::Ordering::Relaxed) {
-        1 => LatencyPreference::Smooth,
-        _ => LatencyPreference::Responsive,
-    }
-}
-
 /// How many stalls are tolerated before the target is **frozen**.
 ///
 /// After that, this device's floor — with this content and this network — is
@@ -166,8 +123,11 @@ impl DrainController {
         Self {
             target: get("BIGNETSCREEN_CC_LAG_TARGET", LAG_TARGET_START),
             rate: get("BIGNETSCREEN_CC_DRAIN_RATE", DRAIN_RATE),
+            // The film profile answers "quick response or smooth playback"
+            // for every protocol; on this path smooth means leaving the
+            // receiver's own buffer alone.
             enabled: std::env::var("BIGNETSCREEN_CC_NO_DRAIN").is_err()
-                && latency_preference() == LatencyPreference::Responsive,
+                && !nd_core::latency::is_film(),
             stable: 0,
             floor: LAG_TARGET_MIN,
             stalls: 0,
@@ -1025,27 +985,12 @@ mod tests {
     }
 
     #[test]
-    fn smooth_preference_disables_draining() {
-        // The film profile answers this question on its own (see
-        // `latency_preference`), so it has to be pinned here too. Reading the
-        // settings file sets that profile process-wide the first time anything
-        // asks for a preference, so on a machine with film mode switched on
-        // this test used to assert against the developer's own configuration
-        // rather than against the code, and failed with nothing wrong.
+    fn the_film_profile_disables_draining() {
         let restore = nd_core::latency::current();
+        nd_core::latency::set(nd_core::latency::Profile::Film);
+        assert!(!DrainController::new().enabled);
         nd_core::latency::set(nd_core::latency::Profile::Responsive);
-
-        set_latency_preference(LatencyPreference::Smooth);
-        let drain = DrainController::new();
-        assert!(
-            !drain.enabled,
-            "with smoothness prioritised there is no draining"
-        );
-
-        set_latency_preference(LatencyPreference::Responsive);
-        let drain = DrainController::new();
-        assert!(drain.enabled);
-
+        assert!(DrainController::new().enabled);
         nd_core::latency::set(restore);
     }
 
