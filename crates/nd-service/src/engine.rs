@@ -14,21 +14,23 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::StreamExt;
 use tokio::sync::{mpsc, oneshot, watch};
 
-use nd_chromecast::MdnsProvider;
 use nd_chromecast::file_server::MediaFile;
 use nd_chromecast::media::{MediaItem, MediaSession};
 use nd_core::capture::SourceType;
 use nd_core::media::MediaCommand;
-use nd_core::meta::MetaProvider;
-use nd_core::provider::{DiscoveryEvent, Provider};
-use nd_core::settings::{self, Protocol, Settings};
-use nd_core::sink::{Sink, SinkKind, SinkState};
-use nd_wfd::WfdP2pProvider;
+use nd_core::provider::DiscoveryEvent;
+use nd_core::settings::{self, Settings};
+use nd_core::sink::{Sink, SinkState};
 
-use crate::wire::{self, Issue, Media, Receiver, Session, Status};
+use crate::wire::{self, Issue, Receiver, Status};
+
+mod discovery;
+mod session;
+mod snapshot;
+
+pub use snapshot::{MediaOwner, Snapshot};
 
 /// After this long with no receiver, the service stops saying "searching".
 const EMPTY_HINT_AFTER: Duration = Duration::from_secs(12);
@@ -39,57 +41,6 @@ const STATE_POLL: Duration = Duration::from_millis(400);
 /// Long enough to be unnoticeable to the receiver, short enough that the
 /// reading reflects a Wi-Fi that has just got worse.
 const LINK_PROBE_INTERVAL: Duration = Duration::from_secs(3);
-
-/// Everything a client needs to draw, in one value.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Snapshot {
-    pub receivers: Vec<Receiver>,
-    pub session: Session,
-    pub link_probe: String,
-    pub status: Status,
-    pub issues: Vec<Issue>,
-    pub media: Media,
-    pub media_owner: Option<MediaOwner>,
-    pub media_volume: Option<f64>,
-    pub media_muted: Option<bool>,
-    pub virtual_available: bool,
-    pub settings: Settings,
-    pub last_client_activity: Option<tokio::time::Instant>,
-}
-
-impl Snapshot {
-    /// The state before anything has happened. Takes the preferences rather
-    /// than inventing them: `Settings` is read from disk, and a default here
-    /// would publish "discovery is on" to a client whose file says otherwise.
-    pub fn initial(settings: Settings) -> Self {
-        Self {
-            receivers: Vec::new(),
-            session: Session::idle(),
-            link_probe: "pending".into(),
-            status: Status::of(if settings.auto_discovery {
-                "searching"
-            } else {
-                "discovery-off"
-            }),
-            issues: Vec::new(),
-            media: Media::idle(),
-            media_owner: None,
-            media_volume: None,
-            media_muted: None,
-            virtual_available: false,
-            settings,
-            last_client_activity: None,
-        }
-    }
-}
-
-/// The D-Bus connection and session that may issue player controls.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MediaOwner {
-    pub id: String,
-    pub sender: String,
-    pub receiver: String,
-}
 
 /// What a client asks the service to do.
 #[derive(Debug)]
@@ -149,8 +100,8 @@ enum Event {
 /// A handle on the running engine.
 #[derive(Clone)]
 pub struct Handle {
-    commands: mpsc::Sender<Command>,
-    snapshots: watch::Receiver<Snapshot>,
+    pub(crate) commands: mpsc::Sender<Command>,
+    pub(crate) snapshots: watch::Receiver<Snapshot>,
 }
 
 impl Handle {
@@ -559,50 +510,6 @@ impl Engine {
         }
     }
 
-    fn discovery_event(&mut self, event: DiscoveryEvent) {
-        match event {
-            DiscoveryEvent::Added(sink) | DiscoveryEvent::Updated(sink) => {
-                let id = sink.info().id;
-                if !self.registry.contains_key(&id)
-                    && self.registry.len() >= nd_core::provider::MAX_RECEIVERS
-                {
-                    return;
-                }
-                if !self.order.contains(&id) {
-                    self.order.push(id.clone());
-                }
-                // An existing receiver is updated, never replaced: swapping the
-                // `Arc` mid-session would lose the connection running on it.
-                if self.active_cast.as_ref() != Some(&id) {
-                    self.registry.insert(id, sink);
-                }
-                self.searching = false;
-                self.refresh_status();
-            }
-            DiscoveryEvent::Removed(id) => {
-                // Never remove the receiver that is streaming: a momentary mDNS
-                // dropout would take the running session's row away.
-                if self.active_cast.as_deref() == Some(id.as_str()) {
-                    return;
-                }
-                self.registry.remove(&id);
-                self.order.retain(|listed| listed != &id);
-                self.refresh_status();
-            }
-            DiscoveryEvent::ProviderUnavailable { provider, reason } => {
-                let issue = Issue {
-                    provider: provider.to_string(),
-                    reason,
-                };
-                self.issues.retain(|old| old.provider != issue.provider);
-                self.issues.push(issue);
-            }
-            DiscoveryEvent::ProviderReady { provider } => {
-                self.issues.retain(|issue| issue.provider != provider);
-            }
-        }
-    }
-
     fn refresh_status(&mut self) {
         if matches!(
             self.status.kind.as_str(),
@@ -639,235 +546,6 @@ impl Engine {
             (0, false) => Status::of("empty"),
             (count, _) => Status::found(count),
         };
-    }
-
-    fn publish(&mut self) {
-        let receivers = self
-            .order
-            .iter()
-            .filter_map(|id| {
-                let sink = if self.active_cast.as_ref() == Some(id) {
-                    self.active_sink.as_ref()
-                } else {
-                    self.registry.get(id)
-                }?;
-                let mut receiver = Receiver::of(sink.as_ref());
-                if let Some((refused, why)) = &self.refused
-                    && refused == id
-                {
-                    receiver.state = wire::state_name(SinkState::Error).to_string();
-                    receiver.detail = why.clone();
-                }
-                Some(receiver)
-            })
-            .collect();
-        let session = match &self.active_sink {
-            Some(sink) => wire::session_of(
-                sink.as_ref(),
-                source_name(self.cast_source),
-                self.measured
-                    .flatten()
-                    .map(|rtt| rtt.as_millis() as u64)
-                    .unwrap_or(0),
-            ),
-            None => Session::idle(),
-        };
-        let media_status = self.media_session.as_ref().map(|s| s.status());
-        let media_volume = media_status
-            .as_ref()
-            .and_then(|status| status.playback.volume);
-        let media_muted = media_status
-            .as_ref()
-            .and_then(|status| status.playback.muted);
-        let media = match media_status {
-            Some(status) => Media {
-                active: true,
-                title: status.title,
-                queue: status
-                    .queue
-                    .iter()
-                    .map(|path| path.display().to_string())
-                    .collect(),
-                index: status.position as u32,
-                total: status.total as u32,
-                position_ms: (status.playback.seconds * 1000.0) as u64,
-                duration_ms: status
-                    .playback
-                    .duration
-                    .map(|d| (d * 1000.0) as u64)
-                    .unwrap_or(0),
-                paused: status.playback.paused,
-                can_pause: status.playback.can_pause,
-                can_seek: status.playback.can_seek,
-                finished: status.finished,
-                detail: status.error.unwrap_or_default(),
-                control_detail: status.control_error.unwrap_or_default(),
-            },
-            None => Media::idle(),
-        };
-        let next = Snapshot {
-            receivers,
-            session,
-            link_probe: match self.measured {
-                None => "pending",
-                Some(None) => "unreachable",
-                Some(Some(_)) => "available",
-            }
-            .into(),
-            status: self.status.clone(),
-            issues: self.issues.clone(),
-            media,
-            media_owner: self.media_owner.clone(),
-            media_volume,
-            media_muted,
-            virtual_available: self.virtual_available,
-            settings: self.settings.clone(),
-            last_client_activity: self.last_client_activity,
-        };
-        // Only when something actually moved. This runs every poll tick, and
-        // `send_replace` would wake every watcher two and a half times a second
-        // to be told nothing changed — including the task that decides the
-        // service has been idle long enough to leave.
-        self.snapshots.send_if_modified(|current| {
-            if *current == next {
-                return false;
-            }
-            *current = next;
-            true
-        });
-    }
-
-    /// A finished queue clears itself: leaving "playing 3 of 3" published after
-    /// the last file ended would be untrue within a second.
-    fn reap_finished_media(&mut self) {
-        let Some(status) = self.media_session.as_ref().map(|s| s.status()) else {
-            return;
-        };
-        if !status.finished {
-            return;
-        }
-        self.media_session = None;
-        self.media_owner = None;
-        let target = self.media_target.take();
-        self.active_cast = None;
-        self.active_sink = None;
-        self.cast_cancel = None;
-        self.measured = None;
-        self.probing = false;
-        match status.error {
-            Some(error) => {
-                if error.ends_with(nd_chromecast::identity::IDENTITY_CHANGED)
-                    && let Some(target) = target
-                {
-                    self.refused = Some((target, error.clone()));
-                }
-                self.status = Status::error(error);
-            }
-            None => {
-                self.status = Status::of("idle");
-                self.refresh_status();
-            }
-        }
-    }
-
-    /// Measures the link, at most one probe at a time.
-    ///
-    /// Only while something is streaming, and only when the protocol has said
-    /// where the receiver is: a Miracast receiver is announced by MAC and has
-    /// no address at all until the Wi-Fi Direct group exists.
-    fn measure_link(&mut self) {
-        if self.probing {
-            return;
-        }
-        let Some(endpoint) = self
-            .active_sink
-            .as_ref()
-            .and_then(|sink| sink.link())
-            .and_then(|link| link.endpoint)
-        else {
-            return;
-        };
-        self.probing = true;
-        let generation = self.operation_generation;
-        let events = self.events.clone();
-        tokio::spawn(async move {
-            // Spaced out rather than run on every poll: the poll keeps the list
-            // fresh, and opening a connection to the receiver two and a half
-            // times a second would be rude to its firmware.
-            tokio::time::sleep(LINK_PROBE_INTERVAL).await;
-            let _ = events
-                .send(Event::LinkMeasured(
-                    generation,
-                    nd_net::probe::round_trip(endpoint).await,
-                ))
-                .await;
-        });
-    }
-
-    fn abort_discovery(&mut self) {
-        if let Some(task) = self.discovery.take() {
-            task.abort();
-        }
-        self.generation += 1;
-    }
-
-    fn apply_discovery_preference(&mut self) {
-        if self.settings.auto_discovery {
-            self.rescan();
-        } else {
-            self.abort_discovery();
-            self.searching = false;
-            self.refresh_status();
-        }
-    }
-
-    fn rescan(&mut self) {
-        if matches!(self.status.kind.as_str(), "error" | "ndi-runtime-missing") {
-            self.status = Status::of("idle");
-        }
-        self.abort_discovery();
-        self.issues.clear();
-        self.searching = true;
-        self.registry
-            .retain(|id, _| self.active_cast.as_ref() == Some(id));
-        self.order
-            .retain(|id| self.active_cast.as_ref() == Some(id));
-        self.refresh_status();
-        self.start_discovery();
-    }
-
-    fn start_discovery(&mut self) {
-        let (handle, registration) = futures::future::AbortHandle::new_pair();
-        let generation = self.generation;
-        let protocol = self.settings.protocol;
-        let events = self.events.clone();
-        tokio::spawn(async move {
-            let _ = futures::future::Abortable::new(
-                run_discovery(events, generation, protocol),
-                registration,
-            )
-            .await;
-        });
-        let events = self.events.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(EMPTY_HINT_AFTER).await;
-            let _ = events.send(Event::SearchTimedOut(generation)).await;
-        });
-        self.discovery = Some(handle);
-    }
-
-    fn probe_virtual_support(&mut self) {
-        let events = self.events.clone();
-        tokio::spawn(async move {
-            // No sink yet: this only asks whether a virtual screen is possible.
-            let backend = nd_capture::select_backend_for(SourceType::Virtual, None).await;
-            let supported = backend.supported_sources().await;
-            let _ = events
-                .send(Event::VirtualSupported(
-                    supported.contains(&SourceType::Virtual),
-                ))
-                .await;
-        });
     }
 
     /// Ends whatever is running: the stream, the file sending, or both.
@@ -921,149 +599,6 @@ impl Engine {
             }
         }
     }
-
-    fn begin_cast(
-        &mut self,
-        id: String,
-        source: SourceType,
-        page_text: Vec<(String, String)>,
-    ) -> Result<(), String> {
-        if self.active_cast.is_some() || self.media_session.is_some() {
-            return Err("a stream is already running".into());
-        }
-        self.refused.take_if(|(refused, _)| *refused == id);
-
-        self.media_owner = None;
-        // From the file, every time. The window writes it and this process
-        // cached its own copy at start-up; a session built from that copy ran
-        // on whatever was configured whenever the service happened to be
-        // activated — resolution, frame rate and latency profile included.
-        self.settings = settings::reload();
-
-        let sink: Arc<dyn Sink> = if id == nd_ndi::ID {
-            if !nd_ndi::available() {
-                return Err("ndi-unavailable".into());
-            }
-            Arc::new(nd_ndi::NdiPublisher::new(self.settings.display_name()))
-        } else if id == nd_webrtc::ID {
-            if !nd_webrtc::available() {
-                return Err("webrtc-unavailable".into());
-            }
-            let name = self.settings.display_name();
-            Arc::new(nd_webrtc::WebRtcPublisher::new(
-                name.clone(),
-                nd_net::detect_gpu_driver(),
-                crate::web_page_text(name, &page_text),
-            ))
-        } else if let Some(sink) = self.registry.get(&id).cloned() {
-            sink
-        } else {
-            return Err("unknown-receiver".into());
-        };
-
-        let info = sink.info();
-        if !info.kind.is_castable() {
-            return Err("not-castable".into());
-        }
-
-        tracing::info!(name = %info.display_name, ?source, "starting the stream");
-        self.status = Status::about("connecting", info.display_name.clone());
-        self.operation_generation += 1;
-        self.probing = false;
-        self.measured = None;
-        self.cast_source = source;
-        self.active_cast = Some(id.clone());
-        self.active_sink = Some(sink.clone());
-        let (cancel, cancelled) = watch::channel(false);
-        self.cast_cancel = Some(cancel);
-
-        let events = self.events.clone();
-        tokio::spawn(async move {
-            let outcome = crate::cast::run(sink, id.clone(), source, cancelled).await;
-            let _ = events
-                .send(Event::CastFinished {
-                    id,
-                    error: outcome.error,
-                    ndi_runtime_unavailable: outcome.ndi_runtime_unavailable,
-                })
-                .await;
-        });
-        Ok(())
-    }
-
-    /// Starts sending files to the receiver a client chose.
-    ///
-    /// The two protocols do genuinely different things here: a **Chromecast**
-    /// is given a URL and plays the file itself, so this computer only serves
-    /// bytes; a **Miracast** receiver is a screen and nothing else, so the file
-    /// is decoded here and streamed as the picture.
-    fn send_media(
-        &mut self,
-        target: String,
-        files: Vec<MediaItem>,
-        start: Option<nd_core::media::PlaybackStart>,
-    ) -> Result<(), String> {
-        self.settings = settings::reload();
-        let Some(sink) = self.registry.get(&target).cloned() else {
-            return Err("unknown-receiver".into());
-        };
-        // Sending files and mirroring the screen are two things the receiver
-        // cannot do at once.
-        if self.active_cast.is_some() || self.media_session.is_some() {
-            return Err("a stream is already running".into());
-        }
-        self.refused.take_if(|(refused, _)| *refused == target);
-
-        let info = sink.info();
-        if start.is_some() && !matches!(info.kind, SinkKind::Chromecast | SinkKind::Dlna) {
-            return Err("player controls require a Chromecast or DLNA receiver".into());
-        }
-        tracing::info!(name = %info.display_name, count = files.len(), "sending files");
-        self.media_owner = None;
-
-        // A Chromecast fetches its own formats directly; anything else is
-        // decoded here and streamed, the way DLNA always is.
-        let fetchable = files.iter().all(|item| match item {
-            MediaItem::File(file) => file.plays_natively(),
-            MediaItem::Url { .. } => true,
-        });
-        if info.kind == SinkKind::Chromecast && fetchable {
-            let endpoint = sink.control_endpoint().ok_or("unknown-receiver")?;
-            let session = MediaSession::start(
-                endpoint,
-                info.id.clone(),
-                files,
-                self.settings.port,
-                self.settings.display_name(),
-                start,
-            )
-            .map_err(|err| err.to_string())?;
-            self.media_session = Some(session);
-            self.media_target = Some(target);
-            self.status = Status::of("sending");
-            self.refresh_status();
-            return Ok(());
-        }
-
-        self.operation_generation += 1;
-        self.probing = false;
-        self.measured = None;
-        // A DLNA television is asked first whether it plays the files itself.
-        let session = match sink.upnp_renderer() {
-            Some(renderer) => {
-                MediaSession::start_upnp(sink.clone(), renderer, files, self.settings.port, start)
-            }
-            None => MediaSession::start_mirroring(sink.clone(), files, start),
-        }
-        .map_err(|err| err.to_string())?;
-        self.media_target = Some(target.clone());
-        self.active_cast = Some(target);
-        self.active_sink = Some(sink);
-        self.media_session = Some(session);
-        self.status = Status::of("sending");
-        self.refresh_status();
-        Ok(())
-    }
 }
 
 /// The receivers that can be sent a file, for a client to choose from.
@@ -1093,61 +628,10 @@ pub fn source_from_name(name: &str) -> Option<SourceType> {
     }
 }
 
-/// Runs discovery across the chosen providers and reports to the engine.
-async fn run_discovery(events: mpsc::Sender<Event>, generation: u64, protocol: Protocol) {
-    let mut providers: Vec<Arc<dyn Provider>> = Vec::new();
-
-    // A preference for one protocol is honoured by **not starting** the other.
-    // Filtering the list afterwards would leave the radio scanning for Wi-Fi
-    // Direct peers during a Cast session, which is the contention the
-    // preference exists to avoid.
-    if matches!(protocol, Protocol::Auto | Protocol::Cast) {
-        // A single mDNS daemon serves both Chromecast and AirPlay.
-        match MdnsProvider::all_media_receivers() {
-            Ok(provider) => providers.push(Arc::new(provider)),
-            Err(err) => {
-                let _ = events
-                    .send(Event::Discovery(
-                        DiscoveryEvent::ProviderUnavailable {
-                            provider: "mdns",
-                            reason: err.to_string(),
-                        },
-                        generation,
-                    ))
-                    .await;
-            }
-        }
-    }
-    if matches!(protocol, Protocol::Auto | Protocol::Cast) {
-        // SSDP, not mDNS: the two discovery protocols share nothing, so a
-        // DLNA television is invisible to the browse above and this one is
-        // invisible to a Chromecast. Both have to run.
-        providers.push(Arc::new(nd_dlna::DlnaProvider));
-    }
-    if matches!(protocol, Protocol::Auto | Protocol::Miracast) {
-        providers.push(Arc::new(WfdP2pProvider));
-    }
-    if std::env::var_os("NETWORK_DISPLAYS_DUMMY").is_some() {
-        providers.push(Arc::new(nd_core::dummy::DummyProvider));
-    }
-
-    let meta = MetaProvider::new(providers);
-    let mut stream = meta.discover().await;
-    while let Some(event) = stream.next().await {
-        if events
-            .send(Event::Discovery(event, generation))
-            .await
-            .is_err()
-        {
-            break;
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nd_core::sink::{SinkInfo, SinkState};
+    use nd_core::sink::{SinkInfo, SinkKind, SinkState};
 
     /// The smallest thing that satisfies `Sink`. `nd_core::dummy` keeps its own
     /// private, and the tests here ask it its name and what it is doing.
@@ -1174,41 +658,17 @@ mod tests {
         }
     }
 
-    fn sink(id: &str) -> Arc<dyn Sink> {
+    pub(super) fn sink(id: &str) -> Arc<dyn Sink> {
         Arc::new(TestSink(id.to_string(), SinkState::Disconnected))
     }
 
-    fn streaming_sink(id: &str) -> Arc<dyn Sink> {
+    pub(super) fn streaming_sink(id: &str) -> Arc<dyn Sink> {
         Arc::new(TestSink(id.to_string(), SinkState::Streaming))
     }
 
-    fn engine() -> Engine {
+    pub(super) fn engine() -> Engine {
         let (tx, _rx) = watch::channel(Snapshot::initial(Settings::default()));
         Engine::new(tx)
-    }
-
-    #[test]
-    fn a_receiver_refused_while_sending_files_says_so_on_its_row() {
-        let (tx, snapshots) = watch::channel(Snapshot::initial(Settings::default()));
-        let mut engine = Engine::new(tx);
-        engine.registry.insert("a".into(), sink("a"));
-        engine.registry.insert("b".into(), sink("b"));
-        engine.order = vec!["a".into(), "b".into()];
-        let why = format!(
-            "protocol: changed: {}",
-            nd_chromecast::identity::IDENTITY_CHANGED
-        );
-        engine.refused = Some(("a".into(), why.clone()));
-        engine.publish();
-        let receivers = snapshots.borrow().receivers.clone();
-        assert_eq!(
-            (receivers[0].state.as_str(), receivers[0].detail.as_str()),
-            ("error", why.as_str())
-        );
-        assert_eq!(
-            receivers[1].state, "disconnected",
-            "only the refused receiver"
-        );
     }
 
     #[test]
@@ -1280,91 +740,11 @@ mod tests {
     }
 
     #[test]
-    fn the_streaming_receiver_survives_a_discovery_dropout() {
-        let mut engine = engine();
-        engine.order.push("a".into());
-        engine.registry.insert("a".into(), sink("a"));
-        engine.active_cast = Some("a".into());
-        engine.active_sink = Some(sink("a"));
-        engine.discovery_event(DiscoveryEvent::Removed("a".into()));
-        assert!(engine.order.contains(&"a".to_string()));
-    }
-
-    #[test]
     fn source_names_survive_a_round_trip() {
         for source in [SourceType::Monitor, SourceType::Window, SourceType::Virtual] {
             assert_eq!(source_from_name(source_name(source)), Some(source));
         }
         assert_eq!(source_from_name("nonsense"), None);
-    }
-
-    #[test]
-    fn discovery_bounds_new_receivers_and_replaces_provider_diagnostics() {
-        let mut engine = engine();
-        for index in 0..nd_core::provider::MAX_RECEIVERS + 10 {
-            engine.discovery_event(DiscoveryEvent::Added(sink(&index.to_string())));
-            engine.discovery_event(DiscoveryEvent::ProviderUnavailable {
-                provider: "test",
-                reason: index.to_string(),
-            });
-        }
-        assert_eq!(engine.registry.len(), nd_core::provider::MAX_RECEIVERS);
-        assert_eq!(engine.order.len(), nd_core::provider::MAX_RECEIVERS);
-        assert_eq!(engine.issues.len(), 1);
-        engine.discovery_event(DiscoveryEvent::Removed("0".into()));
-        engine.discovery_event(DiscoveryEvent::Added(sink("new")));
-        assert!(engine.registry.contains_key("new"));
-    }
-
-    #[tokio::test]
-    async fn cancelling_file_playback_retains_the_session_until_cleanup_finishes() {
-        let mut engine = engine();
-        let file = MediaFile {
-            path: "/nonexistent/cancellation-test.png".into(),
-            kind: nd_core::media::MediaKind::Photo,
-            content_type: "image/png",
-            size: 0,
-        };
-        engine.media_session = Some(
-            MediaSession::start(
-                "127.0.0.1:9".parse().unwrap(),
-                "test".into(),
-                vec![MediaItem::File(file)],
-                0,
-                "test".into(),
-                None,
-            )
-            .unwrap(),
-        );
-        engine.media_owner = Some(MediaOwner {
-            id: "current-session".into(),
-            sender: ":1.10".into(),
-            receiver: "test".into(),
-        });
-        for (sender, id) in [(":1.11", "current-session"), (":1.10", "previous-session")] {
-            assert!(engine.control_player(sender, id, None).is_err());
-            assert!(
-                engine
-                    .control_player(sender, id, Some(MediaCommand::SetPaused(true)))
-                    .is_err()
-            );
-        }
-        assert_ne!(engine.status.kind, "stopping");
-        engine
-            .control_player(":1.10", "current-session", None)
-            .unwrap();
-        engine.refresh_status();
-        assert!(engine.media_session.is_some());
-        assert_eq!(engine.status.kind, "stopping");
-        tokio::time::timeout(Duration::from_secs(2), async {
-            while engine.media_session.is_some() {
-                tokio::task::yield_now().await;
-                engine.reap_finished_media();
-            }
-        })
-        .await
-        .expect("cancelled file session must finish cleanup");
-        assert_ne!(engine.status.kind, "stopping");
     }
 
     #[tokio::test(start_paused = true)]
@@ -1401,131 +781,6 @@ mod tests {
                     .unwrap();
             }
         );
-    }
-
-    #[tokio::test]
-    #[ignore = "requires BNS_TEST_PRIVATE_BUS=1 and a private dbus-run-session"]
-    async fn player_dbus_methods_use_the_actual_calling_connection() {
-        assert_eq!(std::env::var("BNS_TEST_PRIVATE_BUS").as_deref(), Ok("1"));
-        let path = std::env::temp_dir().join(format!("bns-player-api-{}.mp3", std::process::id()));
-        std::fs::write(&path, []).unwrap();
-        let (commands, mut incoming) = mpsc::channel(32);
-        let (_snapshots, receiver) = watch::channel(Snapshot::initial(Settings::default()));
-        let service = crate::dbus::serve(Handle {
-            commands,
-            snapshots: receiver,
-        })
-        .await
-        .unwrap();
-        let client = zbus::Connection::session().await.unwrap();
-        let proxy = crate::dbus::ServiceProxy::new(&client).await.unwrap();
-        let expected_sender = client.unique_name().unwrap().to_string();
-        let engine = tokio::spawn(async move {
-            match incoming.recv().await.unwrap() {
-                Command::StartPlayer {
-                    sender,
-                    target,
-                    files,
-                    start,
-                    reply,
-                } => {
-                    assert_eq!(sender, expected_sender);
-                    assert_eq!(target, "living-room");
-                    assert_eq!(files.len(), 1);
-                    assert_eq!(
-                        start,
-                        nd_core::media::PlaybackStart {
-                            seconds: 1.0,
-                            paused: true,
-                            volume: 0.25,
-                            muted: true,
-                            height: 720,
-                        }
-                    );
-                    reply.send(Ok("session-a".into())).unwrap();
-                }
-                other => panic!("unexpected {other:?}"),
-            }
-            match incoming.recv().await.unwrap() {
-                Command::ControlPlayer {
-                    sender,
-                    id,
-                    command,
-                    reply,
-                } => {
-                    assert_eq!(sender, expected_sender);
-                    assert_eq!(id, "session-a");
-                    assert_eq!(command, Some(MediaCommand::SetVolume(0.37)));
-                    reply.send(Ok(())).unwrap();
-                }
-                other => panic!("unexpected {other:?}"),
-            }
-            match incoming.recv().await.unwrap() {
-                Command::StartPlayer {
-                    sender,
-                    target,
-                    files,
-                    start,
-                    reply,
-                } => {
-                    assert_eq!(sender, expected_sender);
-                    assert_eq!(target, "living-room");
-                    assert_eq!(start.seconds, 0.0);
-                    assert!(matches!(
-                        &files[..],
-                        [MediaItem::Url {
-                            kind: nd_core::media::MediaKind::Music,
-                            ..
-                        }]
-                    ));
-                    reply.send(Ok("session-url".into())).unwrap();
-                }
-                other => panic!("unexpected {other:?}"),
-            }
-            match incoming.recv().await.unwrap() {
-                Command::PlayerGone(sender) => assert_eq!(sender, expected_sender),
-                other => panic!("unexpected {other:?}"),
-            }
-        });
-        tokio::time::timeout(Duration::from_secs(5), async {
-            assert_eq!(proxy.player_api().await.unwrap(), 2);
-            assert!(proxy.player_session().await.unwrap().id.is_empty());
-            let id = proxy
-                .start_player(
-                    "living-room",
-                    &[path.display().to_string()],
-                    (1.0, true, 0.25, true, 720),
-                )
-                .await
-                .unwrap();
-            assert_eq!(id, "session-a");
-            assert!(
-                proxy
-                    .control_player(&id, "volume", f64::NAN, "")
-                    .await
-                    .is_err()
-            );
-            proxy.control_player(&id, "volume", 0.37, "").await.unwrap();
-            let id = proxy
-                .start_player_url(
-                    "living-room",
-                    "https://example.invalid/radio",
-                    "audio/mpeg",
-                    "Test radio",
-                    true,
-                    (0.0, false, 1.0, false, 0),
-                )
-                .await
-                .unwrap();
-            assert_eq!(id, "session-url");
-            drop(proxy);
-            drop(client);
-            engine.await.unwrap();
-        })
-        .await
-        .unwrap();
-        drop(service);
-        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

@@ -566,7 +566,9 @@ pub async fn watch_status(
 mod tests {
     use super::*;
     use std::time::Duration;
-    use tokio::sync::watch;
+    use tokio::sync::{mpsc, watch};
+
+    use nd_core::settings::Settings;
 
     fn idle_snapshot() -> engine::Snapshot {
         engine::Snapshot::initial(nd_core::settings::Settings::default())
@@ -625,5 +627,130 @@ mod tests {
         }
         tokio::time::advance(Duration::from_secs(11)).await;
         waiting.await.unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires BNS_TEST_PRIVATE_BUS=1 and a private dbus-run-session"]
+    async fn player_dbus_methods_use_the_actual_calling_connection() {
+        assert_eq!(std::env::var("BNS_TEST_PRIVATE_BUS").as_deref(), Ok("1"));
+        let path = std::env::temp_dir().join(format!("bns-player-api-{}.mp3", std::process::id()));
+        std::fs::write(&path, []).unwrap();
+        let (commands, mut incoming) = mpsc::channel(32);
+        let (_snapshots, receiver) = watch::channel(engine::Snapshot::initial(Settings::default()));
+        let service = serve(engine::Handle {
+            commands,
+            snapshots: receiver,
+        })
+        .await
+        .unwrap();
+        let client = zbus::Connection::session().await.unwrap();
+        let proxy = ServiceProxy::new(&client).await.unwrap();
+        let expected_sender = client.unique_name().unwrap().to_string();
+        let engine = tokio::spawn(async move {
+            match incoming.recv().await.unwrap() {
+                Command::StartPlayer {
+                    sender,
+                    target,
+                    files,
+                    start,
+                    reply,
+                } => {
+                    assert_eq!(sender, expected_sender);
+                    assert_eq!(target, "living-room");
+                    assert_eq!(files.len(), 1);
+                    assert_eq!(
+                        start,
+                        nd_core::media::PlaybackStart {
+                            seconds: 1.0,
+                            paused: true,
+                            volume: 0.25,
+                            muted: true,
+                            height: 720,
+                        }
+                    );
+                    reply.send(Ok("session-a".into())).unwrap();
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+            match incoming.recv().await.unwrap() {
+                Command::ControlPlayer {
+                    sender,
+                    id,
+                    command,
+                    reply,
+                } => {
+                    assert_eq!(sender, expected_sender);
+                    assert_eq!(id, "session-a");
+                    assert_eq!(command, Some(MediaCommand::SetVolume(0.37)));
+                    reply.send(Ok(())).unwrap();
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+            match incoming.recv().await.unwrap() {
+                Command::StartPlayer {
+                    sender,
+                    target,
+                    files,
+                    start,
+                    reply,
+                } => {
+                    assert_eq!(sender, expected_sender);
+                    assert_eq!(target, "living-room");
+                    assert_eq!(start.seconds, 0.0);
+                    assert!(matches!(
+                        &files[..],
+                        [MediaItem::Url {
+                            kind: nd_core::media::MediaKind::Music,
+                            ..
+                        }]
+                    ));
+                    reply.send(Ok("session-url".into())).unwrap();
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+            match incoming.recv().await.unwrap() {
+                Command::PlayerGone(sender) => assert_eq!(sender, expected_sender),
+                other => panic!("unexpected {other:?}"),
+            }
+        });
+        tokio::time::timeout(Duration::from_secs(5), async {
+            assert_eq!(proxy.player_api().await.unwrap(), 2);
+            assert!(proxy.player_session().await.unwrap().id.is_empty());
+            let id = proxy
+                .start_player(
+                    "living-room",
+                    &[path.display().to_string()],
+                    (1.0, true, 0.25, true, 720),
+                )
+                .await
+                .unwrap();
+            assert_eq!(id, "session-a");
+            assert!(
+                proxy
+                    .control_player(&id, "volume", f64::NAN, "")
+                    .await
+                    .is_err()
+            );
+            proxy.control_player(&id, "volume", 0.37, "").await.unwrap();
+            let id = proxy
+                .start_player_url(
+                    "living-room",
+                    "https://example.invalid/radio",
+                    "audio/mpeg",
+                    "Test radio",
+                    true,
+                    (0.0, false, 1.0, false, 0),
+                )
+                .await
+                .unwrap();
+            assert_eq!(id, "session-url");
+            drop(proxy);
+            drop(client);
+            engine.await.unwrap();
+        })
+        .await
+        .unwrap();
+        drop(service);
+        std::fs::remove_file(path).unwrap();
     }
 }
