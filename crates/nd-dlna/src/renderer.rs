@@ -51,15 +51,13 @@ impl Renderer {
         let volume = upnp::soap(control, RENDERING_CONTROL, "GetVolume", arguments)
             .await
             .ok()?;
-        let level = upnp::tag_text(&volume, "CurrentVolume")?
-            .parse::<f64>()
-            .ok()?;
+        let level = volume_level(upnp::tag_text(&volume, "CurrentVolume")?)?;
         let mute = upnp::soap(control, RENDERING_CONTROL, "GetMute", arguments)
             .await
             .ok()
             .and_then(|mute| upnp::tag_text(&mute, "CurrentMute").map(|m| m == "1"))
             .unwrap_or(false);
-        Some(((level / 100.0).clamp(0.0, 1.0), mute))
+        Some((level, mute))
     }
 
     pub async fn set_volume(&self, level: f64) -> Result<()> {
@@ -99,6 +97,17 @@ pub fn accepts(accepted: &[String], content_type: &str) -> bool {
     })
 }
 
+/// `CurrentVolume` (0 to 100) as 0 to 1. Rust's float parser also takes
+/// `NaN` and `inf`, which a clamp would pass on or pin to full volume.
+fn volume_level(text: &str) -> Option<f64> {
+    let level = text
+        .trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|level| level.is_finite())?;
+    Some((level / 100.0).clamp(0.0, 1.0))
+}
+
 /// The third field of each `protocolInfo` in a `Sink` list.
 fn parse_sink_types(sink: &str) -> Vec<String> {
     let mut types: Vec<String> = sink
@@ -115,6 +124,15 @@ fn parse_sink_types(sink: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_reported_volume_is_a_fraction_or_nothing() {
+        assert_eq!(volume_level("37"), Some(0.37));
+        assert_eq!(volume_level("150"), Some(1.0));
+        for text in ["NaN", "inf", "-inf", "loud", ""] {
+            assert_eq!(volume_level(text), None, "{text}");
+        }
+    }
 
     #[test]
     fn a_sink_list_yields_its_content_types() {
