@@ -86,7 +86,6 @@ async fn stream(
         DLNA_MEDIA
     };
     let server = StreamServer::bind(receiver, media).await?;
-    let url = server.url();
 
     // Portal dimensions use compositor coordinates, not necessarily pixels.
     // Let the scaler negotiate from the actual capture up to the preference.
@@ -147,10 +146,6 @@ async fn stream(
         }
     }
 
-    let sink = gst_pipeline
-        .by_name(TS_HTTP_SINK_NAME)
-        .ok_or_else(|| NdError::Gst(format!("element {TS_HTTP_SINK_NAME} not found")))?;
-
     status.set(SinkState::WaitSocket);
     if *cancel.borrow() {
         return Ok(());
@@ -159,13 +154,11 @@ async fn stream(
     tracing::info!(%receiver, "handing the renderer the stream URL");
     let outcome = serve_until_over(
         &server,
-        sink,
         &gst_pipeline,
         &mut events,
         &mut cancel,
         control,
         status,
-        &url,
         cfg,
     )
     .await;
@@ -190,18 +183,19 @@ async fn stream(
 /// the handshake first and serving afterwards means nobody accepts that
 /// connection: the television waits, the SOAP call times out, and the session
 /// dies with a network error that names the wrong culprit.
-#[allow(clippy::too_many_arguments)]
 async fn serve_until_over(
     server: &StreamServer,
-    sink: gst::Element,
     gst_pipeline: &gst::Pipeline,
     events: &mut pipeline::PipelineEvents,
     cancel: &mut tokio::sync::watch::Receiver<bool>,
     control: &Endpoint,
     status: &SinkStatus,
-    url: &str,
     mut cfg: StreamConfig,
 ) -> Result<()> {
+    let sink = gst_pipeline
+        .by_name(TS_HTTP_SINK_NAME)
+        .ok_or_else(|| NdError::Gst(format!("element {TS_HTTP_SINK_NAME} not found")))?;
+    let url = &server.url();
     let started = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let serve = {
         let pipeline_for_play = gst_pipeline.clone();
