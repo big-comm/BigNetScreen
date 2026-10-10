@@ -314,11 +314,7 @@ async fn serve_until_over(
                 {
                     continue;
                 }
-                // The state being moved to, not the one reached: the renderer
-                // should hear about a pause as soon as it is asked for.
-                let (_, current, pending) = gst_pipeline.state(gst::ClockTime::ZERO);
-                let paused = if pending == gst::State::VoidPending { current } else { pending }
-                    == gst::State::Paused;
+                let paused = heading_for_pause(gst_pipeline);
                 if paused == paused_here.load(std::sync::atomic::Ordering::SeqCst) {
                     continue;
                 }
@@ -330,29 +326,7 @@ async fn serve_until_over(
                 if !started.load(std::sync::atomic::Ordering::SeqCst) {
                     continue;
                 }
-                let Some((width, height)) = pipeline::negotiated_video_size(
-                    gst_pipeline, std::time::Instant::now(),
-                ) else {
-                    continue;
-                };
-                measured = true;
-                (cfg.width, cfg.height) = (width, height);
-                let kbps = cfg.scaled_bitrate_kbps();
-                if pipeline::set_encoder_bitrate(gst_pipeline, cfg.encoder, kbps)
-                    && let Some(mux) = gst_pipeline.by_name("mux") {
-                        mux.set_property("bitrate", u64::from(kbps) * 1_000);
-                    }
-                status.set_link(StreamLink {
-                    width, height, fps: cfg.fps,
-                    endpoint: Some(control.addr), receivers: None,
-                });
-                let delivered = pipeline::delivered_capture_size(gst_pipeline);
-                tracing::info!(
-                    delivered = ?delivered.map(|(w, h)| format!("{w}x{h}")),
-                    encoding = format!("{width}x{height}"),
-                    rescaled = delivered.is_some_and(|d| d != (width, height)),
-                    "capture negotiated"
-                );
+                measured = adopt_negotiated_size(gst_pipeline, &mut cfg, control, status);
             }
 
             event = futures::StreamExt::next(events) => match event {
@@ -368,6 +342,55 @@ async fn serve_until_over(
     }
 }
 
+/// Whether the pipeline is paused or on its way there: the renderer should
+/// hear about a pause as soon as it is asked for, not once it is reached.
+fn heading_for_pause(pipeline: &gst::Pipeline) -> bool {
+    let (_, current, pending) = pipeline.state(gst::ClockTime::ZERO);
+    let target = if pending == gst::State::VoidPending {
+        current
+    } else {
+        pending
+    };
+    target == gst::State::Paused
+}
+
+/// Once caps are negotiated, rates the encoder and multiplex for the real
+/// picture size and publishes it. `false` while there is nothing to measure.
+fn adopt_negotiated_size(
+    gst_pipeline: &gst::Pipeline,
+    cfg: &mut StreamConfig,
+    control: &Endpoint,
+    status: &SinkStatus,
+) -> bool {
+    let Some((width, height)) =
+        pipeline::negotiated_video_size(gst_pipeline, std::time::Instant::now())
+    else {
+        return false;
+    };
+    (cfg.width, cfg.height) = (width, height);
+    let kbps = cfg.scaled_bitrate_kbps();
+    if pipeline::set_encoder_bitrate(gst_pipeline, cfg.encoder, kbps)
+        && let Some(mux) = gst_pipeline.by_name("mux")
+    {
+        mux.set_property("bitrate", u64::from(kbps) * 1_000);
+    }
+    status.set_link(StreamLink {
+        width,
+        height,
+        fps: cfg.fps,
+        endpoint: Some(control.addr),
+        receivers: None,
+    });
+    let delivered = pipeline::delivered_capture_size(gst_pipeline);
+    tracing::info!(
+        delivered = ?delivered.map(|(w, h)| format!("{w}x{h}")),
+        encoding = format!("{width}x{height}"),
+        rescaled = delivered.is_some_and(|d| d != (width, height)),
+        "capture negotiated"
+    );
+    true
+}
+
 /// Passes the file pipeline's pause or resume on to the renderer.
 async fn follow_pause(control: &Endpoint, url: &str, paused: bool, media: MediaType) -> Result<()> {
     if paused {
@@ -379,7 +402,7 @@ async fn follow_pause(control: &Endpoint, url: &str, paused: bool, media: MediaT
     // A renderer can give up on a stream that stayed silent through a long
     // pause: gmediarender's HTTP source times out after 15 s, retries with a
     // Range this live stream cannot honour, then refuses Play. Handed the URL
-    // again, it fetches afresh from where the file is now.
+    // again, it fetches afresh from the file's current position.
     avtransport::set_uri(control, url, ITEM_TITLE, None, media).await?;
     avtransport::play(control).await
 }
