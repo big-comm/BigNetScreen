@@ -81,6 +81,9 @@ pub(super) async fn play_queue(
                 _ = poll.tick() => item.request(json!({"type": "GET_STATUS"})).await?,
                 event = channel.next_event() => {
                     let event = event.ok_or_else(|| NdError::Protocol("media channel closed".into()))?;
+                    // Another sender took the receiver over: the queue ends
+                    // here, as the mirroring and HTTP sessions do.
+                    if event.closes(app) { return Ok(()); }
                     if event.namespace != NS_MEDIA { continue; }
                     event.payload
                 }
