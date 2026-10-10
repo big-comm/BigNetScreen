@@ -1,27 +1,22 @@
-//! Moving the encoder's bitrate with what the link is actually carrying.
+//! Moving the mirroring encoder's bitrate with what the link carries.
 //!
-//! Until now the bitrate was chosen once, from a table of resolution and frame
-//! rate, and held for the whole session. A Wi-Fi link is not a constant, and
-//! the picture degrading while nothing adjusted is what every report of a bad
-//! session this week had in common.
+//! The mode's bitrate comes from a table of resolution and frame rate; a
+//! Wi-Fi link is not constant, so the sender thread in
+//! [`crate::mirror_session`] feeds each window of sending to [`RateControl`].
 //!
 //! Shaped after Chrome's mirroring sender, which updates every 500 ms, keeps a
-//! floor of 300 kbit, raises by a tenth at a time, and — the part worth
-//! copying most — only lowers the rate when the sender is *actually* dropping
-//! frames, rather than on any dip in an estimate.
+//! floor of 300 kbit, raises by a tenth at a time, and lowers the rate only
+//! when the sender is actually dropping frames, not on any dip in an estimate.
 //!
 //! Two deliberate differences:
 //!
-//! - **It starts at the mode's own bitrate, not at Chrome's conservative
-//!   5 Mbit.** Chrome starts low because it knows nothing about the link.
-//!   Neither do we, but starting low costs about seven seconds of visibly
-//!   worse picture at the top of every session on a link that was going to
-//!   carry it, and every link reported here has. Optimistic start, quick
+//! - It starts at the mode's own bitrate, not Chrome's conservative 5 Mbit.
+//!   Starting low costs seconds of visibly worse picture at the top of every
+//!   session on a link that could carry the mode. Optimistic start, quick
 //!   retreat, slow return.
-//! - **The congestion signal is loss and our own dropped frames, not a
-//!   bandwidth estimate.** We have no estimate: Chrome's comes from its
-//!   streaming library. Calling what we have an estimate would be inventing a
-//!   number. Retransmissions and frames the flow control skipped are measured.
+//! - The congestion signal is loss and our own dropped frames. There is no
+//!   bandwidth estimate here (Chrome's comes from its streaming library), and
+//!   none is invented: retransmissions and skipped frames are measured.
 
 use std::time::Duration;
 
@@ -59,6 +54,32 @@ impl Window {
         }
         self.packets_sent > 0
             && (self.packets_resent as f64 / self.packets_sent as f64) > LOSS_LIMIT
+    }
+}
+
+/// The running totals at the start of the current window.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct Baseline {
+    packets: u32,
+    resent: u64,
+    dropped: u64,
+}
+
+impl Baseline {
+    /// The window since the previous call. `packets` is the sender report's
+    /// 32-bit counter, which wraps in a long session.
+    pub(crate) fn advance(&mut self, packets: u32, resent: u64, dropped: u64) -> Window {
+        let window = Window {
+            packets_sent: u64::from(packets.wrapping_sub(self.packets)),
+            packets_resent: resent - self.resent,
+            frames_dropped: dropped - self.dropped,
+        };
+        *self = Self {
+            packets,
+            resent,
+            dropped,
+        };
+        window
     }
 }
 
@@ -113,6 +134,21 @@ mod tests {
             packets_resent: 0,
             frames_dropped: 0,
         }
+    }
+
+    #[test]
+    fn a_window_spanning_the_packet_counter_wrap_counts_what_was_sent() {
+        let mut baseline = Baseline::default();
+        baseline.advance(u32::MAX - 5, 0, 0);
+        let window = baseline.advance(10, 2, 1);
+        assert_eq!(
+            window,
+            Window {
+                packets_sent: 16,
+                packets_resent: 2,
+                frames_dropped: 1,
+            }
+        );
     }
 
     #[test]

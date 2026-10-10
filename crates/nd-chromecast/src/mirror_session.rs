@@ -1306,7 +1306,7 @@ async fn stream(
                 // lowering it would save less than it costs to explain.
                 let mut rate = is_video.then(|| rate::RateControl::new(ceiling_kbps));
                 let mut last_rate = std::time::Instant::now();
-                let mut rate_baseline = (0u64, 0u64, 0u64);
+                let mut rate_baseline = rate::Baseline::default();
                 let mut last_key_request: Option<std::time::Instant> = None;
                 let started_at = std::time::Instant::now();
                 // State of the receiver's sign of life.
@@ -1412,13 +1412,11 @@ async fn stream(
                         && last_rate.elapsed() >= rate::UPDATE_INTERVAL
                     {
                         last_rate = std::time::Instant::now();
-                        let sent = u64::from(sender.stats.packets);
-                        let seen = rate::Window {
-                            packets_sent: sent.wrapping_sub(rate_baseline.0),
-                            packets_resent: packets_resent - rate_baseline.1,
-                            frames_dropped: sender.frames_dropped - rate_baseline.2,
-                        };
-                        rate_baseline = (sent, packets_resent, sender.frames_dropped);
+                        let seen = rate_baseline.advance(
+                            sender.stats.packets,
+                            packets_resent,
+                            sender.frames_dropped,
+                        );
                         if let Some(kbps) = control.observe(seen) {
                             let applied =
                                 pipeline::set_encoder_bitrate(&rate_pipeline, encoder, kbps);
