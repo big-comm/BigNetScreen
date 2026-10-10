@@ -69,10 +69,11 @@ mod tests {
         }
         // A 2.39:1 film keeps its width; a 4:3 one keeps its height; nothing
         // grows past 4K.
-        let around = |(w, h): (u32, u32)| frame_of_height(h.max((w * 9).div_ceil(16)));
-        assert_eq!(around((1920, 802)), (1920, 1080));
-        assert_eq!(around((1440, 1080)), (1920, 1080));
-        assert_eq!(around((4096, 2160)), (3840, 2160));
+        assert_eq!(frame_holding((1920, 802)), (1920, 1080));
+        assert_eq!(frame_holding((1440, 1080)), (1920, 1080));
+        assert_eq!(frame_holding((4096, 2160)), (3840, 2160));
+        // A width read from a hostile header must not overflow the arithmetic.
+        assert_eq!(frame_holding((u32::MAX, 1)), (3840, 2160));
         let start = |height| PlaybackStart {
             seconds: 0.0,
             paused: false,
@@ -166,8 +167,13 @@ pub fn tv_frame(source: &MediaSource, height: u32) -> Option<(u32, u32)> {
     if height > 0 {
         return Some(frame_of_height(height));
     }
-    let (width, height) = picture_size(source)?;
-    Some(frame_of_height(height.max((width * 9).div_ceil(16))))
+    picture_size(source).map(frame_holding)
+}
+
+/// The smallest 16:9 frame that holds a picture of this size.
+fn frame_holding((width, height): (u32, u32)) -> (u32, u32) {
+    let holding = (u64::from(width) * 9).div_ceil(16);
+    frame_of_height(height.max(u32::try_from(holding).unwrap_or(u32::MAX)))
 }
 
 fn frame_of_height(height: u32) -> (u32, u32) {
