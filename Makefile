@@ -45,9 +45,12 @@ install: all
 	install -Dm755 "$(DAEMON)" "$(BINDIR)/bignetscreend"
 	install -Dm755 "$(CTL)" "$(BINDIR)/bignetscreenctl"
 	# What makes the service start on demand: a client calls the name, the
-	# bus starts this, and nothing runs while nothing is being shared.
-	install -Dm644 data/$(APPID).Service.service \
-		"$(DATADIR)/dbus-1/services/$(APPID).Service.service"
+	# bus starts this, and nothing runs while nothing is being shared. Exec
+	# follows PREFIX: a Flatpak runs it from /app/bin.
+	install -d "$(DATADIR)/dbus-1/services"
+	sed 's|^Exec=/usr/bin/|Exec=$(PREFIX)/bin/|' data/$(APPID).Service.service \
+		> "$(DATADIR)/dbus-1/services/$(APPID).Service.service"
+	chmod 644 "$(DATADIR)/dbus-1/services/$(APPID).Service.service"
 	install -Dm644 data/$(APPID).desktop "$(DATADIR)/applications/$(APPID).desktop"
 	install -Dm644 data/$(APPID).metainfo.xml "$(DATADIR)/metainfo/$(APPID).metainfo.xml"
 	install -Dm644 data/icons/$(APPID).svg \
