@@ -1429,7 +1429,7 @@ pub fn best_encoder(driver: GpuDriver, acceleration: Acceleration) -> Result<H26
     chosen.ok_or_else(|| {
         NdError::Unsupported(
             "no H.264 encoder found — install gst-plugins-ugly (x264) \
-             ou gst-plugins-bad (openh264/va)"
+             or gst-plugins-bad (openh264/va)"
                 .into(),
         )
     })
