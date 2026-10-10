@@ -348,6 +348,44 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    /// Waits up to four seconds for both counters to advance by `frames`,
+    /// failing on a pipeline error or a stall.
+    fn wait_for_both_tracks(
+        counts: &[Arc<AtomicUsize>],
+        frames: usize,
+        pipelines: &[&gst::Pipeline],
+        context: impl Fn() -> String,
+    ) {
+        let now = || {
+            counts
+                .iter()
+                .map(|count| count.load(Ordering::Relaxed))
+                .collect::<Vec<_>>()
+        };
+        let before = now();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(4);
+        while now()
+            .iter()
+            .zip(&before)
+            .any(|(count, before)| *count < before + frames)
+        {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "tracks stalled: before={before:?}, after={:?}, {}",
+                now(),
+                context()
+            );
+            for pipeline in pipelines {
+                let error = pipeline
+                    .bus()
+                    .unwrap()
+                    .pop_filtered(&[gst::MessageType::Error]);
+                assert!(error.is_none(), "{error:?}");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+
     /// Counts the buffers reaching the `video` and `audio` fakesinks.
     fn count_handoffs(pipeline: &gst::Pipeline) -> Vec<Arc<AtomicUsize>> {
         ["video", "audio"]
@@ -365,6 +403,50 @@ mod tests {
                 count
             })
             .collect()
+    }
+
+    /// The WFD sender for `source`, with its RTP packets pushed into the
+    /// receiver's `wire` appsrc instead of a UDP socket.
+    fn wfd_sender_into(
+        receiver: &gst::Pipeline,
+        source: &crate::pipeline::VideoSource,
+        cfg: &crate::pipeline::StreamConfig,
+    ) -> gst::Pipeline {
+        use crate::pipeline::{self, WfdTransport};
+        let transport = WfdTransport::new("127.0.0.1".parse().unwrap(), 19000);
+        let description = pipeline::wfd_pipeline_description(cfg, source, &transport)
+            .replace(
+                &format!(
+                    "udpsink host=127.0.0.1 port=19000 bind-port={} sync=true async=false",
+                    transport.local_rtp_port
+                ),
+                "fakesink name=wire-out sync=true async=false signal-handoffs=true",
+            )
+            .replace(
+                &format!(
+                    "udpsink host=127.0.0.1 port=19001 bind-port={} sync=false async=false",
+                    transport.local_rtp_port + 1
+                ),
+                "fakesink sync=false async=false",
+            );
+        assert!(!description.contains("udpsink"));
+        let (sender, _) = pipeline::build_pipeline(&description, cfg.latency_ms()).unwrap();
+        let appsrc = receiver.by_name("wire").unwrap();
+        // Only packet bytes cross the bridge, as with UDP; no seek/flush events.
+        sender
+            .by_name("wire-out")
+            .unwrap()
+            .connect("handoff", false, move |values| {
+                let mut packet = values[1].get::<gst::Buffer>().unwrap().copy();
+                let packet_data = packet.make_mut();
+                packet_data.set_pts(None);
+                packet_data.set_dts(None);
+                packet_data.set_duration(None);
+                packet_data.unset_flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC);
+                let _ = appsrc.emit_by_name::<gst::FlowReturn>("push-buffer", &[&packet]);
+                None
+            });
+        sender
     }
 
     /// A receiver for the WFD RTP stream, fed through the `wire` appsrc and
@@ -504,9 +586,8 @@ mod tests {
     #[test]
     fn mirrored_transport_keeps_decoding_after_pause_and_seeks() {
         use crate::pipeline::{
-            self, AudioSource, H264Encoder, PipelineGuard, StreamConfig, VideoSource, WfdTransport,
+            self, AudioSource, H264Encoder, PipelineGuard, StreamConfig, VideoSource,
         };
-        use std::time::{Duration, Instant};
         // The sender's latency follows the global profile.
         let _lock = crate::latency::exclusive();
         pipeline::init().unwrap();
@@ -533,40 +614,8 @@ mod tests {
             audio: AudioSource::MediaFile,
             ..Default::default()
         };
-        let transport = WfdTransport::new("127.0.0.1".parse().unwrap(), 19000);
-        let description = pipeline::wfd_pipeline_description(&cfg, &source, &transport)
-            .replace(
-                &format!(
-                    "udpsink host=127.0.0.1 port=19000 bind-port={} sync=true async=false",
-                    transport.local_rtp_port
-                ),
-                "fakesink name=wire-out sync=true async=false signal-handoffs=true",
-            )
-            .replace(
-                &format!(
-                    "udpsink host=127.0.0.1 port=19001 bind-port={} sync=false async=false",
-                    transport.local_rtp_port + 1
-                ),
-                "fakesink sync=false async=false",
-            );
-        assert!(!description.contains("udpsink"));
-        let (sender, _) = pipeline::build_pipeline(&description, cfg.latency_ms()).unwrap();
+        let sender = wfd_sender_into(&receiver, &source, &cfg);
         let guard = PipelineGuard::new(sender.clone());
-        let appsrc = receiver.by_name("wire").unwrap();
-        // Only packet bytes cross the bridge, as with UDP; no seek/flush events.
-        sender
-            .by_name("wire-out")
-            .unwrap()
-            .connect("handoff", false, move |values| {
-                let mut packet = values[1].get::<gst::Buffer>().unwrap().copy();
-                let packet_data = packet.make_mut();
-                packet_data.set_pts(None);
-                packet_data.set_dts(None);
-                packet_data.set_duration(None);
-                packet_data.unset_flags(gst::BufferFlags::DISCONT | gst::BufferFlags::RESYNC);
-                let _ = appsrc.emit_by_name::<gst::FlowReturn>("push-buffer", &[&packet]);
-                None
-            });
         sender.set_state(gst::State::Playing).unwrap();
         sender.state(gst::ClockTime::from_seconds(3)).0.unwrap();
         let encoded = Arc::new(AtomicUsize::new(0));
@@ -583,37 +632,13 @@ mod tests {
         let control = FilePlaybackControl::default();
         control.attach(&sender);
         let flowing = || {
-            let before: Vec<_> = counts
-                .iter()
-                .map(|count| count.load(Ordering::Relaxed))
-                .collect();
-            let deadline = Instant::now() + Duration::from_secs(4);
-            while counts
-                .iter()
-                .zip(&before)
-                .any(|(count, before)| count.load(Ordering::Relaxed) < before + 4)
-            {
-                assert!(
-                    Instant::now() < deadline,
-                    "receiver stalled: before={before:?}, encoded={}, playback={:?}, after={:?}",
+            wait_for_both_tracks(&counts, 4, &[&sender, &receiver], || {
+                format!(
+                    "encoded={}, playback={:?}",
                     encoded.load(Ordering::Relaxed),
-                    control.state(),
-                    counts
-                        .iter()
-                        .map(|count| count.load(Ordering::Relaxed))
-                        .collect::<Vec<_>>()
-                );
-                for pipeline in [&sender, &receiver] {
-                    assert!(
-                        pipeline
-                            .bus()
-                            .unwrap()
-                            .pop_filtered(&[gst::MessageType::Error])
-                            .is_none()
-                    );
-                }
-                std::thread::sleep(Duration::from_millis(50));
-            }
+                    control.state()
+                )
+            })
         };
         flowing();
         control.command(&MediaCommand::TogglePause).unwrap();
@@ -675,24 +700,9 @@ mod tests {
         assert!(control.state().paused, "absolute seek must preserve pause");
         control.command(&MediaCommand::TogglePause).unwrap();
         pipeline.state(gst::ClockTime::from_seconds(2)).0.unwrap();
-        let before_counts: Vec<_> = counts.iter().map(|c| c.load(Ordering::Relaxed)).collect();
-        let deadline = std::time::Instant::now() + Duration::from_secs(4);
-        while counts
-            .iter()
-            .zip(&before_counts)
-            .any(|(count, before)| count.load(Ordering::Relaxed) <= *before)
-        {
-            assert!(
-                std::time::Instant::now() < deadline,
-                "both tracks must resume: before={before_counts:?}, after={:?}, playback={:?}",
-                counts
-                    .iter()
-                    .map(|c| c.load(Ordering::Relaxed))
-                    .collect::<Vec<_>>(),
-                control.state(),
-            );
-            std::thread::sleep(Duration::from_millis(50));
-        }
+        wait_for_both_tracks(&counts, 1, &[&pipeline], || {
+            format!("playback={:?}", control.state())
+        });
         assert!(control.state().seconds >= 3.0, "{:?}", control.state());
         control.command(&MediaCommand::SeekRelative(-10.0)).unwrap();
         std::thread::sleep(Duration::from_millis(300));
