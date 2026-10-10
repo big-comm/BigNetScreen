@@ -6,7 +6,7 @@ A review can produce a release candidate; only maintainers approve and publish a
 
 Record immutable HEAD/tree, Rust/native dependency versions, source checksum, exact gate commands and results. All [automated gates](testing.md) must pass in a complete environment. Track skipped hardware/display tests and dependency/advisory checks separately. Test the assembled native package and Flatpak if those formats will be advertised.
 
-Confirm the Cargo and UI versions agree, POT extraction is repeatable, translations compile, local documentation links resolve, no private paths or secrets are shipped, and the source archive contains every tracked runtime/build file including vendor/gst-plugin-ndi. A full source archive must not contain target, Cargo caches, toolchains or local .cargo source overrides. The package's own `pkgver` is a build date, so record the commit separately.
+Confirm `bignetscreen --version` prints the package's build date, the newest AppStream release entry names the Cargo workspace version, POT extraction is repeatable, translations compile, local documentation links resolve, no private paths or secrets are shipped, and the source archive contains every tracked runtime/build file including vendor/gst-plugin-ndi. A full source archive must not contain target, Cargo caches, toolchains or local .cargo source overrides. The package's own `pkgver` is a build date, so record the commit separately.
 
 Inspect changes in small commits. Produce an incremental patch against the stated baseline, an independent Git bundle and source archive. Extract elsewhere, verify manifest/HEAD/tree, run git fsck and targeted tests. Confirm no owned build/test process remains alive before handing off.
 

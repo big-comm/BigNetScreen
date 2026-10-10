@@ -14,6 +14,4 @@ For changes, start with [architecture](../ARCHITECTURE.md), [contributing](../CO
 - [Release checklist](releasing.md)
 - [Official references](references.md)
 
-Older `*-validation.md` and implementation reports describe prior experiments only. They are retained for traceability and do not certify the current source tree. [Historical architecture](history/architecture-before-stable-review.md) preserves the original narrative without mixing it into the current design.
-
-Earlier validation notes live under [history](history/README.md), separate from maintained instructions.
+Dated validation notes, implementation reports and the earlier architecture narrative live under [history](history/README.md). They describe the tree they were written against and do not certify the current one.

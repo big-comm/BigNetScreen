@@ -8,7 +8,7 @@
 
 A portal can announce compositor coordinates instead of physical pixels. A 2560×1440 desktop at fractional scaling announced 2327×1309: using that announcement as the encoding size reduced the transmitted image to 2326×1308.
 
-The DLNA path now negotiates `VideoTarget::UpTo` against the actual video caps. The preference is a ceiling: a smaller source stays smaller, and a larger one is scaled within that ceiling. The conservative default is 1080p; an explicit higher preference is allowed. This is sender policy, not a mode negotiated with the television. The frame-rate setting is likewise an encoding target, not confirmation of the TV's displayed frame rate.
+The DLNA path negotiates `VideoTarget::UpTo` against the actual video caps. The preference is a ceiling: a smaller source stays smaller, and a larger one is scaled within that ceiling. The conservative default is 1080p; an explicit higher preference is allowed. This is sender policy, not a mode negotiated with the television. The frame-rate setting is likewise an encoding target, not confirmation of the TV's displayed frame rate.
 
 Capture starts on the receiver's first valid GET so its first keyframe is retained. Before then, the actual resolution is unknown. The optional DIDL-Lite `res@resolution` attribute is omitted rather than populated with logical coordinates or a guessed ceiling. The bitstream carries the encoded dimensions. Once caps arrive, the session publishes them and updates the encoder/multiplex rate where the encoder supports live changes. A slow handshake must not miss this update or put a streaming session back into “preparing”.
 
@@ -26,11 +26,11 @@ AVTransport:1 has no portable playback-buffer control. AVTransport:3's optional 
 | --- | --- |
 | H.264/AAC in 188-byte MPEG-TS over continuous HTTP | Retained. It starts without a completed file or media segment; packet and codec headers are repeated. Current field reception and local tests cover this path. |
 | Constant multiplex rate using null TS packets | Retained. It prevents nearly static screens from producing too few bytes to fill a byte-counted receiver buffer. The [muxer documents this padding](https://gstreamer.freedesktop.org/documentation/mpegtsmux/GstBaseTsMux.html). Padding spends bandwidth and is not a congestion controller. |
-| 192-byte timestamped MPEG-TS / AC-3 | Earlier project notes report playback with no latency improvement on one Panasonic. Not rerun in this revision; not evidence for every receiver or a reason to change the default. |
+| 192-byte timestamped MPEG-TS / AC-3 | Earlier project notes report playback with no latency improvement on one Panasonic. Not rerun since; not evidence for every receiver or a reason to change the default. |
 | Fragmented MP4 or HLS | Possible only where the receiver supports the complete live format, not merely ordinary MP4 files. Fragment/segment accumulation can add delay; no measured improvement justifies changing the default. |
 | Advertised DLNA profile names | Do not claim a specific profile unless codec, audio, dimensions, level and transport all conform. Reading one model's profile list cannot establish limits for thousands of other receivers. |
 
-Earlier field notes reported roughly 6 seconds with a 0.32 Mbit/s unpadded stream, 2 seconds at 8 Mbit/s and 1.5 seconds at 20 Mbit/s on a Panasonic 75GX880. Those are historical observations, not measurements repeated by this revision or a protocol-wide latency floor. New format or padding changes require same-content, same-receiver before/after measurements.
+Earlier field notes reported roughly 6 seconds with a 0.32 Mbit/s unpadded stream, 2 seconds at 8 Mbit/s and 1.5 seconds at 20 Mbit/s on a Panasonic 75GX880. Those are historical observations, not repeated measurements or a protocol-wide latency floor. New format or padding changes require same-content, same-receiver before/after measurements.
 
 ## Sender queue limits
 
