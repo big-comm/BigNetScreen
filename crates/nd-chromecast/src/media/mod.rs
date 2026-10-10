@@ -3,7 +3,7 @@
 //! decoded here and streamed through any sink.
 //!
 //! [`MediaSession`] owns the queue and the commands; which device plays the
-//! items, and how, is [`cast_queue`], [`upnp_queue`] or [`decoded_queue`].
+//! items, and how, is `cast_queue`, `upnp_queue` or `decoded_queue`.
 
 mod cast_queue;
 mod decoded_queue;

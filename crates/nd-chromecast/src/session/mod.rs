@@ -20,7 +20,7 @@
 //! 4. the receiver opens the `GET`, the socket goes to the sink, and only then
 //!    does the pipeline go to `Playing`.
 //!
-//! The receiver buffers seconds of a stream it treats as a file; [`drain`]
+//! The receiver buffers seconds of a stream it treats as a file; `drain`
 //! plays it slightly fast to bring the picture back toward real time.
 
 mod drain;

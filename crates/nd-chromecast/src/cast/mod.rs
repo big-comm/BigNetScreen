@@ -1,7 +1,7 @@
 //! The Google Cast (CASTV2) control channel over TLS (port 8009).
 //!
 //! Every message is a protobuf `CastMessage` behind a 4-byte length
-//! ([`wire`]); `payload_utf8` carries JSON organised by namespace:
+//! (`wire`); `payload_utf8` carries JSON organised by namespace:
 //! `connection` (CONNECT/CLOSE), `heartbeat` (PING/PONG), `receiver`
 //! (LAUNCH/STOP/GET_STATUS) and `media` (LOAD/PLAY).
 //!

@@ -20,8 +20,8 @@
 //! and without it one lost datagram freezes the picture while the receiver
 //! keeps sending healthy-looking feedback.
 //!
-//! [`sender`] puts one track on the wire, [`worker`] drives it on its own
-//! thread, [`feedback`] routes what the receiver sends back, and [`pacing`]
+//! `sender` puts one track on the wire, `worker` drives it on its own
+//! thread, `feedback` routes what the receiver sends back, and `pacing`
 //! bounds the bursts every send goes through.
 
 mod feedback;
