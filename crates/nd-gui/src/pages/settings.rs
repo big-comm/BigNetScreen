@@ -27,13 +27,13 @@ use crate::tr;
 /// In memory the change is immediate, only the disk waits.
 const SAVE_DELAY: std::time::Duration = std::time::Duration::from_millis(400);
 
+/// The frame rates the chooser offers, in its order.
+const FRAME_RATES: [u32; 5] = [24, 25, 30, 50, 60];
+
 pub struct SettingsPage {
     settings: Settings,
     /// The write scheduled for when the controls settle, if any.
     pending_write: std::rc::Rc<std::cell::Cell<Option<gtk::glib::SourceId>>>,
-    /// Set while the widgets are being brought in line with the model, so that
-    /// setting a control's value does not read back as the person changing it.
-    loading: bool,
 }
 
 #[derive(Debug)]
@@ -49,6 +49,8 @@ pub enum SettingsMsg {
     SetVirtualAudio(bool),
     SetMicVolume(f64),
     SetAutoDiscovery(bool),
+    /// The same preference, changed on another page: the switch follows.
+    SyncAutoDiscovery(bool),
     SetLatency(Profile),
     SetDeviceName(String),
     SetPort(u16),
@@ -341,7 +343,7 @@ impl Component for SettingsPage {
                             set_model: Some(&string_list(&[tr!("24 FPS"), tr!("25 FPS"), tr!("30 FPS"), tr!("50 FPS"), tr!("60 FPS")])),
                             connect_selected_notify[sender] => move |row| {
                                 sender.input(SettingsMsg::SetFps(
-                                    [24, 25, 30, 50, 60].get(row.selected() as usize).copied().unwrap_or(30),
+                                    FRAME_RATES.get(row.selected() as usize).copied().unwrap_or(30),
                                 ));
                             } @fps_handler,
                         },
@@ -418,10 +420,8 @@ impl Component for SettingsPage {
         let model = SettingsPage {
             settings: settings::current(),
             pending_write: Default::default(),
-            loading: true,
         };
         let widgets = view_output!();
-        let mut model = model;
         model.show(&widgets);
         ComponentParts { model, widgets }
     }
@@ -431,15 +431,8 @@ impl Component for SettingsPage {
         widgets: &mut Self::Widgets,
         message: Self::Input,
         sender: ComponentSender<Self>,
-        _root: &Self::Root,
+        root: &Self::Root,
     ) {
-        // While the widgets are being filled in from the model, their "changed"
-        // signals are echoes of what was just written, not the person choosing
-        // something. Acting on them would save the file on every reload.
-        if self.loading {
-            return;
-        }
-
         match message {
             SettingsMsg::OpenSound => {
                 let command = [
@@ -460,13 +453,15 @@ impl Component for SettingsPage {
                             None,
                             gtk::gio::AppInfoCreateFlags::NONE,
                         )
-                        .and_then(|app| app.launch(&[], None::<&gtk::gio::AppLaunchContext>))
+                        // The display's context carries the activation token
+                        // that lets the compositor raise the opened window.
+                        .and_then(|app| app.launch(&[], Some(&root.display().app_launch_context())))
                         .map_err(|err| err.to_string())
                     });
                 if let Err(reason) = result {
                     let dialog = adw::AlertDialog::new(Some(&tr!("Sound settings")), Some(&reason));
                     dialog.add_response("close", &tr!("Close"));
-                    dialog.present(Some(_root));
+                    dialog.present(Some(root));
                 }
                 return;
             }
@@ -485,6 +480,16 @@ impl Component for SettingsPage {
             SettingsMsg::SetMicrophone(on) => self.settings.microphone = on,
             SettingsMsg::SetMicVolume(volume) => self.settings.mic_volume = volume as u8,
             SettingsMsg::SetAutoDiscovery(on) => self.settings.auto_discovery = on,
+            SettingsMsg::SyncAutoDiscovery(on) => {
+                self.settings.auto_discovery = on;
+                widgets
+                    .auto_discovery
+                    .block_signal(&widgets.auto_discovery_handler);
+                widgets.auto_discovery.set_active(on);
+                widgets
+                    .auto_discovery
+                    .unblock_signal(&widgets.auto_discovery_handler);
+            }
             SettingsMsg::SetLatency(profile) => self.settings.latency = profile,
             SettingsMsg::SetDeviceName(name) => self.settings.device_name = name,
             SettingsMsg::SetPort(port) => self.settings.port = port,
@@ -533,38 +538,32 @@ impl SettingsPage {
         self.pending_write.set(Some(id));
     }
 
-    /// Writes the model into the controls, without that reading back as a
-    /// change.
-    fn show(&mut self, widgets: &SettingsPageWidgets) {
-        self.loading = true;
-        widgets.protocol.block_signal(&widgets.protocol_handler);
-        widgets.quality.block_signal(&widgets.quality_handler);
-        widgets
-            .custom_width
-            .block_signal(&widgets.custom_width_handler);
-        widgets
-            .custom_height
-            .block_signal(&widgets.custom_height_handler);
-        widgets.fps.block_signal(&widgets.fps_handler);
-        widgets.latency.block_signal(&widgets.latency_handler);
-        widgets
-            .hardware_encoding
-            .block_signal(&widgets.hardware_encoding_handler);
-        widgets
-            .system_audio
-            .block_signal(&widgets.system_audio_handler);
-        widgets
-            .virtual_audio
-            .block_signal(&widgets.virtual_audio_handler);
-        widgets.microphone.block_signal(&widgets.microphone_handler);
-        widgets.mic_volume.block_signal(&widgets.mic_volume_handler);
-        widgets
-            .auto_discovery
-            .block_signal(&widgets.auto_discovery_handler);
-        widgets
-            .device_name
-            .block_signal(&widgets.device_name_handler);
-        widgets.port.block_signal(&widgets.port_handler);
+    /// Writes the model into the controls with their handlers blocked, so the
+    /// values set here do not read back as the person changing them.
+    fn show(&self, widgets: &SettingsPageWidgets) {
+        let w = widgets;
+        let handlers: [(&gtk::glib::Object, &gtk::glib::SignalHandlerId); 14] = [
+            (w.protocol.upcast_ref(), &w.protocol_handler),
+            (w.quality.upcast_ref(), &w.quality_handler),
+            (w.custom_width.upcast_ref(), &w.custom_width_handler),
+            (w.custom_height.upcast_ref(), &w.custom_height_handler),
+            (w.fps.upcast_ref(), &w.fps_handler),
+            (w.latency.upcast_ref(), &w.latency_handler),
+            (
+                w.hardware_encoding.upcast_ref(),
+                &w.hardware_encoding_handler,
+            ),
+            (w.system_audio.upcast_ref(), &w.system_audio_handler),
+            (w.virtual_audio.upcast_ref(), &w.virtual_audio_handler),
+            (w.microphone.upcast_ref(), &w.microphone_handler),
+            (w.mic_volume.upcast_ref(), &w.mic_volume_handler),
+            (w.auto_discovery.upcast_ref(), &w.auto_discovery_handler),
+            (w.device_name.upcast_ref(), &w.device_name_handler),
+            (w.port.upcast_ref(), &w.port_handler),
+        ];
+        for (object, handler) in handlers {
+            object.block_signal(handler);
+        }
 
         widgets.protocol.set_selected(match self.settings.protocol {
             Protocol::Auto => 0,
@@ -585,7 +584,7 @@ impl SettingsPage {
             Quality::Custom => 10,
         });
         widgets.fps.set_selected(
-            [24, 25, 30, 50, 60]
+            FRAME_RATES
                 .iter()
                 .position(|fps| *fps == self.settings.fps)
                 .unwrap_or(2) as u32,
@@ -617,39 +616,10 @@ impl SettingsPage {
         widgets
             .custom_height
             .set_value(self.settings.custom_height as f64);
-        widgets.protocol.unblock_signal(&widgets.protocol_handler);
-        widgets.quality.unblock_signal(&widgets.quality_handler);
-        widgets
-            .custom_width
-            .unblock_signal(&widgets.custom_width_handler);
-        widgets
-            .custom_height
-            .unblock_signal(&widgets.custom_height_handler);
-        widgets.fps.unblock_signal(&widgets.fps_handler);
-        widgets.latency.unblock_signal(&widgets.latency_handler);
-        widgets
-            .hardware_encoding
-            .unblock_signal(&widgets.hardware_encoding_handler);
-        widgets
-            .system_audio
-            .unblock_signal(&widgets.system_audio_handler);
-        widgets
-            .virtual_audio
-            .unblock_signal(&widgets.virtual_audio_handler);
-        widgets
-            .microphone
-            .unblock_signal(&widgets.microphone_handler);
-        widgets
-            .mic_volume
-            .unblock_signal(&widgets.mic_volume_handler);
-        widgets
-            .auto_discovery
-            .unblock_signal(&widgets.auto_discovery_handler);
-        widgets
-            .device_name
-            .unblock_signal(&widgets.device_name_handler);
-        widgets.port.unblock_signal(&widgets.port_handler);
-        self.loading = false;
+
+        for (object, handler) in handlers {
+            object.unblock_signal(handler);
+        }
     }
 }
 

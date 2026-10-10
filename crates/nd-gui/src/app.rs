@@ -639,7 +639,7 @@ impl Component for AppModel {
                 dialog.present(Some(root));
             }
             AppMsg::SetAutoDiscovery(on) => {
-                self.settings_page.emit(SettingsMsg::SetAutoDiscovery(on));
+                self.settings_page.emit(SettingsMsg::SyncAutoDiscovery(on));
             }
             AppMsg::SettingsChanged(new) => {
                 self.settings_changed = true;
