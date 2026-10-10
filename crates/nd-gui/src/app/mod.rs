@@ -1,73 +1,43 @@
 //! The window: a sidebar, a page for each thing the application does, and the
 //! state that outlives any one of them.
 //!
-//! It used to own the session too — discovery, the running cast, the files
-//! being sent — and closing the window ended all of it. That half now lives in
-//! `nd_service` and answers on D-Bus, so this is a **client**: it asks, draws
-//! what comes back, and leaving stops the drawing and nothing else.
+//! The window is a client of the session service ([`service`]): it asks for
+//! actions over D-Bus and draws what the service publishes. Closing it stops
+//! the drawing, never a running session.
 //!
-//! Design points worth knowing:
-//!
-//! - **the service reports shapes, this writes the sentences**. It may be
-//!   started by D-Bus activation with a bare environment and its other clients
-//!   may be under another locale, so nothing translated crosses the bus. Every
-//!   string a person reads is produced here, by [`describe_status`] and the
-//!   page modules;
-//! - **failures are visible**: a protocol that will not start becomes a banner
-//!   saying why, not a `warn` in a log with the window stuck on "Searching…";
-//! - **the pages are told, they do not ask**: each update pushes the current
-//!   list to whichever pages show one, so two parts of the window cannot
-//!   disagree about what is connected;
-//! - all text goes through `tr!()` (gettext).
+//! - The pages are told, they do not ask: each change pushes the current list
+//!   to every page that shows one, so two parts of the window cannot disagree
+//!   about what is connected.
+//! - Failures are visible: a protocol that will not start becomes a banner
+//!   saying why, and a refused action replaces the status line.
 
+mod dialogs;
+mod service;
+mod wording;
+
+use std::cell::Cell;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::time::Duration;
 
-use futures::StreamExt;
 use relm4::adw::{self, prelude::*};
 use relm4::gtk;
 use relm4::prelude::*;
 
 use nd_chromecast::file_server::MediaFile;
-use nd_chromecast::media::MediaStatus;
 use nd_core::capture::SourceType;
-use nd_core::media::PlaybackState;
 use nd_core::settings::{self, Settings};
 use nd_service::dbus::ServiceProxy;
 use nd_service::wire;
 
+use crate::pages::Page;
 use crate::pages::devices::{DevicesMsg, DevicesOutput, DevicesPage};
 use crate::pages::home::{HomeMsg, HomeOutput, HomePage};
 use crate::pages::media::{MediaMsg, MediaOutput, MediaPage};
 use crate::pages::settings::{SettingsMsg, SettingsOutput, SettingsPage};
-use crate::pages::{DeviceEntry, Page, SessionInfo};
-use crate::{tr, tr_n};
-
-/// What the service last told us. Everything drawn comes from here.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ServiceState {
-    receivers: Vec<wire::Receiver>,
-    session: wire::Session,
-    link_probe: String,
-    status: wire::Status,
-    issues: Vec<wire::Issue>,
-    media: wire::Media,
-    virtual_available: bool,
-}
-
-impl Default for ServiceState {
-    fn default() -> Self {
-        Self {
-            receivers: Vec::new(),
-            session: wire::Session::idle(),
-            link_probe: "pending".into(),
-            status: wire::Status::of("searching"),
-            issues: Vec::new(),
-            media: wire::Media::idle(),
-            virtual_available: false,
-        }
-    }
-}
+use crate::tr;
+use service::{Connection, ServiceState, follow_the_service};
+use wording::{audio_summary, describe_refusal, describe_status, friendly_reason, web_page_text};
 
 pub struct AppModel {
     home: Controller<HomePage>,
@@ -89,10 +59,10 @@ pub struct AppModel {
     dismissed: Vec<wire::Issue>,
     /// What will be captured when a receiver is picked.
     source_type: SourceType,
-    settings: Settings,
-    ndi_installing: std::rc::Rc<std::cell::Cell<bool>>,
+    ndi_installing: Rc<Cell<bool>>,
     ndi_install_dialog: Option<adw::AlertDialog>,
-    allow_close: std::rc::Rc<std::cell::Cell<bool>>,
+    /// Lets the next close request through; set once nothing is left to save.
+    allow_close: Rc<Cell<bool>>,
 }
 
 #[derive(Debug)]
@@ -122,19 +92,6 @@ pub enum AppMsg {
     /// Send files to this receiver (from the devices page).
     MediaTarget(String),
     About,
-}
-
-/// A proxy that does not print its entire property cache.
-///
-/// `relm4` logs every command output at `info`, and `ServiceProxy`'s own
-/// `Debug` is the whole cache — one connection filled a bug report with the
-/// value of every property it had just read.
-pub struct Connection(ServiceProxy<'static>);
-
-impl std::fmt::Debug for Connection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Connection")
-    }
 }
 
 #[derive(Debug)]
@@ -177,17 +134,13 @@ impl Component for AppModel {
                 set_show_sidebar: true,
 
                 #[wrap(Some)]
-                // No header bar over the sidebar: an empty one only pushed the
-                // name of the application a title bar's height down the page.
-                // The identity block sits at the very top instead, wrapped in a
-                // `WindowHandle` so that area still drags the window — which is
-                // what the header bar was quietly providing.
+                // The sidebar has no header bar, so its top would not drag the
+                // window; the `WindowHandle` around the identity block does.
                 set_sidebar = &gtk::Box {
                     add_css_class: "bns-sidebar",
                     set_orientation: gtk::Orientation::Vertical,
 
                     gtk::WindowHandle {
-                        // The identity block.
                         gtk::Box {
                             set_spacing: 10,
                             add_css_class: "app-identity",
@@ -408,7 +361,6 @@ impl Component for AppModel {
             status: tr!("Connecting…"),
             dismissed: Vec::new(),
             source_type: SourceType::Monitor,
-            settings: current.clone(),
             ndi_installing: Default::default(),
             ndi_install_dialog: None,
             allow_close: Default::default(),
@@ -574,18 +526,7 @@ impl Component for AppModel {
                     return;
                 }
                 self.ndi_installing.set(true);
-                let dialog = adw::AlertDialog::new(
-                    Some(&tr!("Installing NDI…")),
-                    Some(&tr!(
-                        "Authenticate when prompted. Downloading and building the package may take a few minutes. Keep the app open until installation finishes."
-                    )),
-                );
-                dialog.set_can_close(false);
-                let spinner = gtk::Spinner::new();
-                spinner.start();
-                dialog.set_extra_child(Some(&spinner));
-                dialog.present(Some(root));
-                self.ndi_install_dialog = Some(dialog);
+                self.ndi_install_dialog = Some(dialogs::ndi_installing(root));
                 sender.oneshot_command(async {
                     AppCmd::NdiInstalled(crate::ndi_setup::install().await)
                 });
@@ -608,36 +549,11 @@ impl Component for AppModel {
             }
             AppMsg::DismissIssues => self.dismissed = self.state.issues.clone(),
             AppMsg::ShowIssues => {
-                let details = self
-                    .state
-                    .issues
-                    .iter()
-                    .map(|issue| format!("{}: {}", issue.provider, issue.reason))
-                    .collect::<Vec<_>>()
-                    .join("\n\n");
-                let dialog =
-                    adw::AlertDialog::new(Some(&tr!("Connection details")), Some(&details));
-                dialog.add_response("close", &tr!("Close"));
-                dialog.add_response("dismiss", &tr!("Got it"));
-                let input = sender.input_sender().clone();
-                dialog.connect_response(Some("dismiss"), move |_, _| {
-                    input.emit(AppMsg::DismissIssues)
-                });
-                dialog.present(Some(root));
+                dialogs::issues(root, &self.state.issues, sender.input_sender().clone())
             }
             AppMsg::ShowFailure => {
                 let detail = self.failure.as_deref().unwrap_or(&self.state.status.detail);
-                let dialog = adw::AlertDialog::new(
-                    Some(&tr!("Sharing could not be completed")),
-                    Some(detail),
-                );
-                dialog.add_response("close", &tr!("Close"));
-                dialog.add_response("settings", &tr!("Settings"));
-                let input = sender.input_sender().clone();
-                dialog.connect_response(Some("settings"), move |_, _| {
-                    input.emit(AppMsg::Navigate(Page::Settings))
-                });
-                dialog.present(Some(root));
+                dialogs::failure(root, detail, sender.input_sender().clone());
             }
             AppMsg::SetAutoDiscovery(on) => {
                 self.settings_page.emit(SettingsMsg::SyncAutoDiscovery(on));
@@ -646,9 +562,8 @@ impl Component for AppModel {
                 self.settings_changed = true;
                 self.failure = None;
                 self.home.emit(HomeMsg::AudioSummary(audio_summary(&new)));
-                self.settings = new;
                 self.devices
-                    .emit(DevicesMsg::SyncAutoDiscovery(self.settings.auto_discovery));
+                    .emit(DevicesMsg::SyncAutoDiscovery(new.auto_discovery));
             }
             AppMsg::SettingsSaved(result) => match result {
                 Ok(()) => self.call(
@@ -696,7 +611,7 @@ impl Component for AppModel {
                     service.control_media(name, value, &path).await
                 });
             }
-            AppMsg::About => show_about(root),
+            AppMsg::About => dialogs::about(root),
         }
 
         // The page the model says is current.
@@ -718,11 +633,9 @@ impl Component for AppModel {
         self.update_view(widgets, sender);
     }
 
-    /// Handles a background result **and repaints**.
-    ///
-    /// The repaint is not optional. `update_cmd_with_view` replaces the default
-    /// cycle, so whoever implements it owns the view update — without the call
-    /// at the end, nothing arriving from a command reaches the window.
+    /// Handles a background result and repaints: overriding
+    /// `update_cmd_with_view` replaces relm4's default cycle, so without the
+    /// `update_view` call at the end no command result reaches the window.
     fn update_cmd_with_view(
         &mut self,
         widgets: &mut Self::Widgets,
@@ -730,10 +643,9 @@ impl Component for AppModel {
         sender: ComponentSender<Self>,
         root: &Self::Root,
     ) {
-        // Named on arrival, before anything is done with it. relm4 only
-        // prints its `update_cmd_with_view` span when an event happens inside
-        // it, so a variant that logs nothing leaves no trace at all — which
-        // had this read as "the state never arrives" when it always did.
+        // relm4 prints its `update_cmd_with_view` span only when an event
+        // happens inside it, so a variant that logs nothing would leave no
+        // trace that it arrived.
         tracing::debug!(
             kind = match &message {
                 AppCmd::NdiInstalled(_) => "ndi-installed",
@@ -754,28 +666,18 @@ impl Component for AppModel {
                     self.allow_close.set(true);
                     root.close();
                 }
-                Err(reason) => {
-                    let dialog =
-                        adw::AlertDialog::new(Some(&tr!("Could not save settings")), Some(&reason));
-                    dialog.add_response("back", &tr!("Keep open"));
-                    dialog.add_response("close", &tr!("Close without saving"));
-                    dialog.set_default_response(Some("back"));
-                    dialog.set_close_response("back");
-                    let allow_close = self.allow_close.clone();
-                    let window = root.downgrade();
-                    dialog.connect_response(Some("close"), move |_, _| {
-                        allow_close.set(true);
-                        if let Some(window) = window.upgrade() {
-                            window.close();
-                        }
-                    });
-                    dialog.present(Some(root));
-                }
+                Err(reason) => dialogs::save_failure(root, &reason, self.allow_close.clone()),
             },
-            AppCmd::NdiInstalled(result) => self.ndi_installed(result, root),
+            AppCmd::NdiInstalled(result) => {
+                self.ndi_installing.set(false);
+                if let Some(dialog) = self.ndi_install_dialog.take() {
+                    dialog.force_close();
+                }
+                dialogs::ndi_install_result(root, result);
+            }
             AppCmd::NdiInstallOffer(can_install) => {
                 if self.state.status.kind == "ndi-runtime-missing" {
-                    self.offer_ndi_install(can_install, &sender, root);
+                    dialogs::ndi_install_offer(root, can_install, sender.input_sender().clone());
                 }
             }
             AppCmd::Connected(connection) => {
@@ -834,7 +736,6 @@ impl Component for AppModel {
             }
         }
 
-        // Repaint. Everything above only changed the model.
         self.update_view(widgets, sender);
     }
 }
@@ -902,25 +803,17 @@ impl AppModel {
         });
     }
 
-    /// The receivers, as the pages want them.
-    fn entries(&self) -> Vec<DeviceEntry> {
-        self.state
-            .receivers
-            .iter()
-            .map(DeviceEntry::from_wire)
-            .collect()
-    }
-
     /// Pushes the current list to every page that shows receivers.
     fn push_devices(&mut self) {
-        let entries = self.entries();
+        let entries = self.state.entries();
         self.home.emit(HomeMsg::Devices(entries.clone()));
-        self.home.emit(HomeMsg::Session(self.session_info()));
+        self.home.emit(HomeMsg::Session(self.state.session_info()));
         self.devices.emit(DevicesMsg::Devices(entries));
         self.devices.emit(DevicesMsg::Active(
             (!self.state.session.is_idle()).then(|| self.state.session.id.clone()),
         ));
-        self.media.emit(MediaMsg::Targets(self.media_receivers()));
+        self.media
+            .emit(MediaMsg::Targets(self.state.media_receivers()));
     }
 
     fn push_media_status(&mut self) {
@@ -929,58 +822,7 @@ impl AppModel {
             return;
         }
         self.media
-            .emit(MediaMsg::Status(Some(media_status(&self.state.media))));
-    }
-
-    /// What is streaming right now.
-    fn session_info(&self) -> Option<SessionInfo> {
-        let session = &self.state.session;
-        if session.is_idle() {
-            return None;
-        }
-        let kind = wire::kind_from_name(&session.kind);
-        let round_trip = (self.state.link_probe == "available").then_some(session.round_trip_ms);
-        Some(SessionInfo {
-            id: session.id.clone(),
-            name: session.display_name.clone(),
-            kind,
-            protocol: kind
-                .map(crate::pages::protocol_label)
-                .unwrap_or_else(|| session.kind.clone()),
-            address: session.address.clone(),
-            // The mode the two ends **agreed on**. Empty until then: printing
-            // the preference instead would show "1920 × 1080" for a link that
-            // came out at 1280 × 720.
-            mode: crate::pages::describe_mode(
-                session.width,
-                session.height,
-                session.fps,
-                session.receivers,
-            ),
-            state: wire::state_from_name(&session.state)
-                .unwrap_or(nd_core::sink::SinkState::Disconnected),
-            measurable: session.measurable,
-            probe_failed: self.state.link_probe == "unreachable",
-            round_trip_ms: round_trip,
-            access: (!session.url.is_empty()).then(|| nd_core::sink::SinkAccess {
-                url: session.url.clone(),
-                pin: session.pin.clone(),
-            }),
-        })
-    }
-
-    /// The receivers that can be sent a file, for the person to choose from.
-    ///
-    /// There is deliberately **no** "best guess": casting to a device is
-    /// visible to whoever is standing in front of it, so it takes an explicit
-    /// choice, every time.
-    fn media_receivers(&self) -> Vec<(String, String)> {
-        self.state
-            .receivers
-            .iter()
-            .filter(|receiver| nd_service::engine::can_receive_files(receiver))
-            .map(|receiver| (receiver.id.clone(), receiver.display_name.clone()))
-            .collect()
+            .emit(MediaMsg::Status(Some(self.state.media_status())));
     }
 
     /// The banner text: what is wrong that the person has not already read.
@@ -993,396 +835,6 @@ impl AppModel {
             .collect::<Vec<_>>()
             .join(" · ")
     }
-
-    fn ndi_installed(
-        &mut self,
-        result: std::result::Result<(), String>,
-        root: &adw::ApplicationWindow,
-    ) {
-        self.ndi_installing.set(false);
-        if let Some(dialog) = self.ndi_install_dialog.take() {
-            dialog.force_close();
-        }
-        let dialog = match result {
-            Ok(()) => adw::AlertDialog::new(
-                Some(&tr!("NDI installed")),
-                Some(&tr!("Restart BigNetScreen to use NDI.")),
-            ),
-            Err(error) => {
-                tracing::warn!(%error, "NDI installation failed or was cancelled");
-                let dialog = adw::AlertDialog::new(
-                    Some(&tr!("NDI installation did not finish")),
-                    Some(&tr!(
-                        "Installation failed or authentication was cancelled. You can try again or install the library manually."
-                    )),
-                );
-                let details = gtk::TextView::builder()
-                    .editable(false)
-                    .cursor_visible(false)
-                    .monospace(true)
-                    .wrap_mode(gtk::WrapMode::WordChar)
-                    .build();
-                details.buffer().set_text(&error);
-                let scroll = gtk::ScrolledWindow::builder()
-                    .min_content_height(140)
-                    .max_content_height(200)
-                    .hscrollbar_policy(gtk::PolicyType::Never)
-                    .child(&details)
-                    .build();
-                dialog.set_extra_child(Some(&scroll));
-                dialog
-            }
-        };
-        dialog.add_response("close", &tr!("Close"));
-        dialog.set_close_response("close");
-        dialog.present(Some(root));
-    }
-
-    fn offer_ndi_install(
-        &self,
-        can_install: bool,
-        sender: &ComponentSender<Self>,
-        root: &adw::ApplicationWindow,
-    ) {
-        let body = if can_install {
-            tr!(
-                "NDI needs a proprietary library that is not included with BigNetScreen. Install ndi-sdk from the AUR and the required build tools? Your system will ask for administrator authentication. Other sharing methods work without it."
-            )
-        } else {
-            tr!(
-                "NDI needs a proprietary library that is not included with BigNetScreen. Install the NDI 5 or 6 runtime for your distribution, then restart the app. Other sharing methods work without it."
-            )
-        };
-        let dialog = adw::AlertDialog::new(Some(&tr!("NDI runtime required")), Some(&body));
-        dialog.add_response("close", &tr!("Close"));
-        dialog.set_close_response("close");
-        if can_install {
-            dialog.add_response("install", &tr!("Install"));
-            dialog.set_response_appearance("install", adw::ResponseAppearance::Suggested);
-            let input = sender.input_sender().clone();
-            dialog.connect_response(Some("install"), move |_, _| {
-                input.emit(AppMsg::InstallNdi);
-            });
-        }
-        dialog.set_extra_child(Some(&gtk::LinkButton::with_label(
-            if can_install {
-                crate::ndi_setup::AUR_URL
-            } else {
-                crate::ndi_setup::GUIDE_URL
-            },
-            &if can_install {
-                tr!("View ndi-sdk in the AUR")
-            } else {
-                tr!("NDI setup")
-            },
-        )));
-        dialog.present(Some(root));
-    }
-}
-
-/// Subscribes before reading, then applies only the properties that changed.
-fn follow_the_service(sender: &ComponentSender<AppModel>) {
-    sender.command(|out, shutdown| {
-        shutdown.register(async move {
-            let mut retry = Duration::from_secs(2);
-            loop {
-                // The session only ends in an error: the reason to show.
-                let result: Result<std::convert::Infallible, String> = async {
-                    let connection = zbus::Connection::session().await.map_err(|e| e.to_string())?;
-                    let service = ServiceProxy::builder(&connection)
-                        .cache_properties(zbus::proxy::CacheProperties::No)
-                        .build().await.map_err(|e| e.to_string())?;
-                    let properties = zbus::fdo::PropertiesProxy::builder(&connection)
-                        .destination(nd_service::BUS_NAME).map_err(|e| e.to_string())?
-                        .path(nd_service::OBJECT_PATH).map_err(|e| e.to_string())?
-                        .build().await.map_err(|e| e.to_string())?;
-                    let mut changes = properties.receive_properties_changed().await.map_err(|e| e.to_string())?;
-                    let bus = zbus::fdo::DBusProxy::new(&connection).await.map_err(|e| e.to_string())?;
-                    let mut owners = bus.receive_name_owner_changed_with_args(&[(0, nd_service::BUS_NAME)])
-                        .await.map_err(|e| e.to_string())?;
-                    let mut state = read_state(&properties).await?;
-                    retry = Duration::from_secs(2);
-                    out.send(AppCmd::Connected(Box::new(Connection(service.clone())))).map_err(|_| "window closed")?;
-                    out.send(AppCmd::State(Box::new(state.clone()))).map_err(|_| "window closed")?;
-                    let mut heartbeat = tokio::time::interval(Duration::from_secs(60));
-                    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-                    loop {
-                        tokio::select! {
-                            change = changes.next() => {
-                                let change = change.ok_or("service subscription ended")?;
-                                let args = change.args().map_err(|e| e.to_string())?;
-                                if args.interface_name().as_str() != nd_service::dbus::INTERFACE { continue; }
-                                if args.invalidated_properties().is_empty() {
-                                    for (name, value) in args.changed_properties() {
-                                        state.apply_property(name, value.try_to_owned().map_err(|e| e.to_string())?)?;
-                                    }
-                                } else {
-                                    state = read_state(&properties).await?;
-                                }
-                                out.send(AppCmd::State(Box::new(state.clone()))).map_err(|_| "window closed")?;
-                            }
-                            owner = owners.next() => {
-                                let owner = owner.ok_or("session bus subscription ended")?;
-                                let args = owner.args().map_err(|e| e.to_string())?;
-                                if args.new_owner().is_none() || args.old_owner().is_some() {
-                                    return Err("sharing service disconnected".into());
-                                }
-                            }
-                            _ = heartbeat.tick() => {
-                                tokio::time::timeout(Duration::from_secs(5), service.keep_alive()).await
-                                    .map_err(|_| "sharing service did not answer")?
-                                    .map_err(|e| e.to_string())?;
-                            }
-                        }
-                    }
-                }.await;
-                let Err(reason) = result;
-                if out.send(AppCmd::Unreachable(reason)).is_err() { return; }
-                tokio::time::sleep(retry).await;
-                retry = (retry * 2).min(Duration::from_secs(30));
-            }
-        }).drop_on_shutdown()
-    });
-}
-
-impl ServiceState {
-    fn apply_property(
-        &mut self,
-        name: &str,
-        value: zbus::zvariant::OwnedValue,
-    ) -> Result<(), String> {
-        use zbus::zvariant::Error;
-        match name {
-            "Receivers" => self.receivers = value.try_into().map_err(|e: Error| e.to_string())?,
-            "Session" => self.session = value.try_into().map_err(|e: Error| e.to_string())?,
-            "LinkProbe" => self.link_probe = value.try_into().map_err(|e: Error| e.to_string())?,
-            "Status" => self.status = value.try_into().map_err(|e: Error| e.to_string())?,
-            "Issues" => self.issues = value.try_into().map_err(|e: Error| e.to_string())?,
-            "Media" => self.media = value.try_into().map_err(|e: Error| e.to_string())?,
-            "VirtualAvailable" => {
-                self.virtual_available = value.try_into().map_err(|e: Error| e.to_string())?
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-}
-
-async fn read_state(properties: &zbus::fdo::PropertiesProxy<'_>) -> Result<ServiceState, String> {
-    let values = tokio::time::timeout(
-        Duration::from_secs(5),
-        properties.get_all(
-            nd_service::dbus::INTERFACE
-                .try_into()
-                .map_err(|e: zbus::names::Error| e.to_string())?,
-        ),
-    )
-    .await
-    .map_err(|_| "sharing service did not answer")?
-    .map_err(|e| e.to_string())?;
-    let mut state = ServiceState::default();
-    for required in [
-        "Receivers",
-        "Session",
-        "Status",
-        "Issues",
-        "Media",
-        "VirtualAvailable",
-    ] {
-        if !values.contains_key(required) {
-            return Err(format!("service is missing {required}"));
-        }
-    }
-    for (name, value) in values {
-        state.apply_property(&name, value)?;
-    }
-    Ok(state)
-}
-
-/// The service's shape, in the person's language.
-///
-/// This is the whole reason the service publishes a `kind` instead of a
-/// sentence: it has no locale worth trusting, and an applet next to this window
-/// may be under another one.
-fn describe_status(status: &wire::Status, session: &wire::Session) -> String {
-    match status.kind.as_str() {
-        "searching" => tr!("Searching…"),
-        "found" => tr_n!(
-            "{} receiver found",
-            "{} receivers found",
-            status.count as usize
-        )
-        .replace("{}", &status.count.to_string()),
-        "empty" => tr!("No receivers found"),
-        "discovery-off" => tr!("Automatic discovery is off"),
-        "connecting" => format!("{} · {}", status.display_name, tr!("Connecting…")),
-        "stopping" => tr!("Stopping…"),
-        "sending" => tr!("Sending files…"),
-        "ndi-runtime-missing" => tr!("NDI runtime required"),
-        "error" => describe_refusal(&status.detail),
-        "streaming" => {
-            if session.width > 0 {
-                format!(
-                    "{} · {} × {} · {} Hz",
-                    status.display_name, session.width, session.height, session.fps
-                )
-            } else {
-                format!("{} · {}", status.display_name, tr!("Connected"))
-            }
-        }
-        _ => status.kind.clone(),
-    }
-}
-
-/// A refusal from the service, in the person's language.
-///
-/// The service answers with a tag for the cases it knows and the underlying
-/// message for the rest, so the common refusals read as sentences and nothing
-/// is swallowed.
-fn describe_refusal(reason: &str) -> String {
-    if reason.is_empty() {
-        return String::new();
-    }
-    if reason.contains("virtual sound card") {
-        return tr!(
-            "Could not prepare the BigNetScreen sound output. Check the audio options in Settings and try again."
-        );
-    }
-    if reason.contains("could not save settings") {
-        return tr!("Could not save settings");
-    }
-    let tail = reason.rsplit(": ").next().unwrap_or(reason);
-    match tail {
-        "unknown-receiver" => tr!("That device is no longer available"),
-        "not-castable" => tr!("shows up in discovery only"),
-        "ndi-unavailable" => tr!("NDI unavailable. See the NDI setup guide."),
-        "webrtc-unavailable" => tr!(
-            "Sharing with a web browser needs GStreamer's WebRTC plugins, which this system \
-             does not have."
-        ),
-        "a stream is already running" => tr!("A stream is already running"),
-        nd_chromecast::identity::IDENTITY_CHANGED => tr!(
-            "This receiver did not prove it is the same device used before, so the screen was \
-             not sent. Someone on the network may be impersonating it."
-        ),
-        _ => tr!("Sharing could not be completed. Open Details to see the reason."),
-    }
-}
-
-fn audio_summary(settings: &Settings) -> String {
-    let sound = if !settings.system_audio {
-        tr!("Application sound off")
-    } else if settings.virtual_audio {
-        tr!("Sound routed to BigNetScreen")
-    } else {
-        tr!("All computer sound")
-    };
-    let microphone = if settings.microphone {
-        tr!("Microphone on")
-    } else {
-        tr!("Microphone off")
-    };
-    format!("{sound} · {microphone}")
-}
-
-/// Turns a provider's technical error into something a person can act on.
-///
-/// The service passes the provider's own words through untranslated, because
-/// it has no catalogue and no locale worth trusting. This is where they become
-/// a sentence — and it is the only reason the banner is not raw English.
-fn friendly_reason(provider: &str, reason: &str) -> String {
-    if provider == "wfd-p2p" {
-        if nd_capture::is_sandboxed() {
-            return tr!(
-                "Miracast does not work in the Flatpak build (it needs the system NetworkManager)"
-            );
-        }
-        // Said before the card is blamed: a desktop wired by Ethernet has no
-        // card to blame, and the old wording sent someone hunting for a
-        // setting that could not exist.
-        if reason.contains("no Wi-Fi adapter") {
-            return tr!(
-                "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over \
-                 the network still works."
-            );
-        }
-        if reason.contains("Wi-Fi P2P") || reason.contains("Wi-Fi Direct") {
-            return tr!("Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct");
-        }
-        return tr!(
-            "Miracast is unavailable. Check that Wi-Fi is enabled, or share with a web browser."
-        );
-    }
-    if matches!(provider, "mdns" | "dlna") {
-        return tr!("Local network discovery is unavailable. Check your network connection.");
-    }
-    tr!("Device discovery is unavailable. Open Details to see the reason.")
-}
-
-/// What the web page says, in the application's language.
-fn web_page_text() -> Vec<(String, String)> {
-    [
-        (
-            "prompt",
-            tr!("Enter the PIN shown on the computer that is sharing."),
-        ),
-        ("join", tr!("Watch")),
-        (
-            "wrong_pin",
-            tr!("That PIN is not right. Check the computer's screen."),
-        ),
-        (
-            "locked",
-            tr!("Too many attempts. Wait half a minute and try again."),
-        ),
-        ("connecting", tr!("Connecting…")),
-        (
-            "failed",
-            tr!("Could not connect. Make sure both devices are on the same network."),
-        ),
-        ("ended", tr!("The sharing has ended.")),
-        (
-            "fullscreen_hint",
-            tr!("Tap or click the picture for full screen."),
-        ),
-    ]
-    .into_iter()
-    .map(|(key, value)| (key.to_string(), value))
-    .collect()
-}
-
-/// The media page still speaks `MediaStatus`; the service speaks [`wire::Media`].
-fn media_status(media: &wire::Media) -> MediaStatus {
-    MediaStatus {
-        position: media.index as usize,
-        total: media.total as usize,
-        title: media.title.clone(),
-        queue: media.queue.iter().map(PathBuf::from).collect(),
-        playback: PlaybackState {
-            paused: media.paused,
-            seconds: media.position_ms as f64 / 1000.0,
-            duration: (media.duration_ms > 0).then(|| media.duration_ms as f64 / 1000.0),
-            can_pause: media.can_pause,
-            can_seek: media.can_seek,
-            ..Default::default()
-        },
-        finished: media.finished,
-        error: (!media.detail.is_empty()).then(|| media.detail.clone()),
-        control_error: (!media.control_detail.is_empty()).then(|| media.control_detail.clone()),
-    }
-}
-
-fn show_about(root: &adw::ApplicationWindow) {
-    let about = adw::AboutDialog::builder()
-        .application_name("BigNetScreen")
-        .application_icon("br.com.biglinux.BigNetScreen")
-        .version(crate::APP_VERSION)
-        .developer_name("BigCommunity")
-        .license_type(gtk::License::Gpl30)
-        .website("https://github.com/big-comm/BigNetScreen")
-        .comments(tr!("Share your screen over Miracast, Chromecast and NDI"))
-        .build();
-    about.present(Some(root));
 }
 
 #[cfg(test)]
@@ -1481,74 +933,5 @@ mod tests {
             assert_eq!(finalized.get(), cycle, "navigation panel did not finalize");
         }
         println!("navigation census: new={cycles}, fin={}", finalized.get());
-    }
-
-    fn status(kind: &str) -> wire::Status {
-        wire::Status::of(kind)
-    }
-
-    #[test]
-    fn a_shape_the_client_does_not_know_is_shown_rather_than_swallowed() {
-        // A newer service could publish a kind this build has no sentence for.
-        // Printing the tag beats an empty subtitle that says nothing is wrong.
-        let unknown = describe_status(&status("something-new"), &wire::Session::idle());
-        assert_eq!(unknown, "something-new");
-    }
-
-    #[test]
-    fn the_negotiated_mode_is_shown_only_once_there_is_one() {
-        let mut session = wire::Session::idle();
-        session.id = "x".into();
-        let mut streaming = status("streaming");
-        streaming.display_name = "TV".into();
-        assert!(!describe_status(&streaming, &session).contains('×'));
-
-        session.width = 1280;
-        session.height = 720;
-        session.fps = 60;
-        let described = describe_status(&streaming, &session);
-        assert!(described.contains("1280 × 720"), "{described}");
-    }
-
-    #[test]
-    fn a_refusal_reads_as_a_sentence_even_wrapped_in_a_bus_error() {
-        // zbus prefixes the reason with the error name; the tag is at the end.
-        let wrapped = "org.freedesktop.DBus.Error.Failed: unknown-receiver";
-        assert_eq!(
-            describe_refusal(wrapped),
-            describe_refusal("unknown-receiver")
-        );
-        assert!(!describe_refusal(wrapped).is_empty());
-        assert_eq!(
-            describe_refusal("something odd"),
-            tr!("Sharing could not be completed. Open Details to see the reason.")
-        );
-        assert!(describe_refusal("").is_empty());
-    }
-
-    #[test]
-    fn media_arrives_at_the_page_with_everything_it_draws() {
-        let media = wire::Media {
-            active: true,
-            title: "Song".into(),
-            queue: vec!["/music/a.mp3".into(), "/music/b.mp3".into()],
-            index: 1,
-            total: 2,
-            position_ms: 30_500,
-            duration_ms: 240_000,
-            paused: true,
-            can_pause: true,
-            can_seek: false,
-            finished: false,
-            detail: String::new(),
-            control_detail: "seek refused".into(),
-        };
-        let status = media_status(&media);
-        assert_eq!(status.queue.len(), 2);
-        assert_eq!(status.playback.seconds, 30.5);
-        assert_eq!(status.playback.duration, Some(240.0));
-        assert!(status.playback.can_pause && !status.playback.can_seek);
-        assert_eq!(status.error, None);
-        assert_eq!(status.control_error.as_deref(), Some("seek refused"));
     }
 }
