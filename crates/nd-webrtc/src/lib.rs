@@ -301,63 +301,78 @@ impl Session {
         )?;
         let url = format!("http://{}", door.local_addr());
 
-        let (min, start, max) = bitrates(size, fps);
-        let description = description(video, audio, size, fps);
-        let (pipeline, events) =
-            pipeline::build_configured_pipeline(&description, 0, |pipeline| {
-                let sink = pipeline
-                    .by_name(SINK_NAME)
-                    .ok_or_else(|| NdError::Gst("WebRTC sink missing".into()))?;
-                // Local network only: no STUN round trip, no outside address.
-                sink.set_property("stun-server", None::<String>);
-                sink.set_property("do-retransmission", true);
-                sink.set_property("min-bitrate", min);
-                sink.set_property("start-bitrate", start);
-                sink.set_property("max-bitrate", max);
-                // H.264 first: hardware encoders and every TV decode it. VP8
-                // stays as the fallback for a browser that offers nothing else.
-                sink.set_property(
-                    "video-caps",
-                    gst::Caps::builder_full()
-                        .structure(gst::Structure::new_empty("video/x-h264"))
-                        .structure(gst::Structure::new_empty("video/x-vp8"))
-                        .build(),
-                );
-                let signaller = sink.property::<gst::glib::Object>("signaller");
-                signaller.set_property("host-addr", format!("http://127.0.0.1:{whep_port}"));
-                Ok(())
-            })?;
+        let (pipeline, events) = pipeline::build_configured_pipeline(
+            &description(video, audio, size, fps),
+            0,
+            |pipeline| configure_sink(pipeline, size, fps, whep_port),
+        )?;
         let guard = PipelineGuard::new(pipeline.clone());
         let sink = pipeline
             .by_name(SINK_NAME)
             .ok_or_else(|| NdError::Gst("WebRTC sink missing".into()))?;
-        let connected = Arc::new(AtomicU32::new(0));
-        for (signal, joining) in [("consumer-added", true), ("consumer-removed", false)] {
-            let connected = connected.clone();
-            sink.connect(signal, false, move |_| {
-                if joining {
-                    connected.fetch_add(1, Ordering::Relaxed);
-                } else {
-                    let _ = connected.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
-                        Some(n.saturating_sub(1))
-                    });
-                }
-                None
-            });
-        }
-
-        pipeline
-            .set_state(gst::State::Playing)
-            .map_err(|e| NdError::Gst(format!("WebRTC startup failed: {e}")))?;
-
-        Ok(Self {
+        let session = Self {
             _guard: guard,
             events,
             _door: door,
             access: SinkAccess { url, pin },
-            connected,
-        })
+            connected: count_consumers(&sink),
+        };
+        if let Err(err) = pipeline.set_state(gst::State::Playing) {
+            session.close().await;
+            return Err(NdError::Gst(format!("WebRTC startup failed: {err}")));
+        }
+        Ok(session)
     }
+}
+
+/// Sets the element up for the local network before it starts.
+fn configure_sink(
+    pipeline: &gst::Pipeline,
+    size: (u32, u32),
+    fps: u32,
+    whep_port: u16,
+) -> Result<()> {
+    let sink = pipeline
+        .by_name(SINK_NAME)
+        .ok_or_else(|| NdError::Gst("WebRTC sink missing".into()))?;
+    let (min, start, max) = bitrates(size, fps);
+    // Local network only: no STUN round trip, no outside address.
+    sink.set_property("stun-server", None::<String>);
+    sink.set_property("do-retransmission", true);
+    sink.set_property("min-bitrate", min);
+    sink.set_property("start-bitrate", start);
+    sink.set_property("max-bitrate", max);
+    // H.264 first: hardware encoders and every TV decode it. VP8 stays as the
+    // fallback for a browser that offers nothing else.
+    sink.set_property(
+        "video-caps",
+        gst::Caps::builder_full()
+            .structure(gst::Structure::new_empty("video/x-h264"))
+            .structure(gst::Structure::new_empty("video/x-vp8"))
+            .build(),
+    );
+    let signaller = sink.property::<gst::glib::Object>("signaller");
+    signaller.set_property("host-addr", format!("http://127.0.0.1:{whep_port}"));
+    Ok(())
+}
+
+/// The number of receivers connected to `sink`, kept by its own signals.
+fn count_consumers(sink: &gst::Element) -> Arc<AtomicU32> {
+    let connected = Arc::new(AtomicU32::new(0));
+    for (signal, joining) in [("consumer-added", true), ("consumer-removed", false)] {
+        let connected = connected.clone();
+        sink.connect(signal, false, move |_| {
+            if joining {
+                connected.fetch_add(1, Ordering::Relaxed);
+            } else {
+                let _ = connected.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+                    Some(n.saturating_sub(1))
+                });
+            }
+            None
+        });
+    }
+    connected
 }
 
 #[async_trait]
