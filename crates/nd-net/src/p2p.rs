@@ -1,23 +1,20 @@
-//! Wi-Fi Direct (P2P) discovery and connection through NetworkManager — the
-//! foundation of Miracast/WFD.
+//! Wi-Fi Direct (P2P) discovery through NetworkManager, the radio half of
+//! Miracast; `nd-wfd` drives it and speaks RTSP over the group it forms.
 //!
-//! NetworkManager exposes a dedicated `p2p-dev-wlpXsY` device with the
-//! `org.freedesktop.NetworkManager.Device.WifiP2P` interface
-//! (`StartFind`/`StopFind`, the `Peers` property and the
-//! `PeerAdded`/`PeerRemoved` signals). Every peer with non-empty `WfdIEs` is a
-//! **Miracast sink** (a TV/projector in "Screen Mirroring" mode).
+//! NetworkManager exposes a `p2p-dev-wlpXsY` device with the
+//! `org.freedesktop.NetworkManager.Device.WifiP2P` interface (`StartFind`,
+//! `StopFind`, the `Peers` property and the `PeerAdded`/`PeerRemoved`
+//! signals). A peer with non-empty `WfdIEs` is a Miracast sink: a TV or
+//! projector in "Screen Mirroring" mode.
 //!
-//! ## Two important fixes over the earlier version
+//! - `StartFind` expires after its timeout and NetworkManager then stops
+//!   scanning without a word, so [`P2pDevice::keep_finding`] renews it.
+//! - The peer list follows the signals; re-reading `Peers` would cost one
+//!   proxy, a `GetAll` and a match rule per peer on every read.
+//! - [`group`] forms the group with a chosen sink; [`neighbours`] tells
+//!   whether the sink joined it.
 //!
-//! 1. **`StartFind` expires.** NM's default is 30 s; without renewal, a sink
-//!    switched on after that never showed up. See [`P2pDevice::start_find`]
-//!    and [`FIND_TIMEOUT`].
-//! 2. **Signals instead of polling.** The peer list used to be re-read every
-//!    2 s, creating one D-Bus proxy per peer (with `GetAll` + a match rule) on
-//!    every cycle. Now `PeerAdded`/`PeerRemoved` are used, which removes both
-//!    the traffic and the up-to-2 s detection delay.
-//!
-//! Unavailable under Flatpak (system bus).
+//! Unavailable under Flatpak, which has no system bus.
 
 mod group;
 mod neighbours;
@@ -32,13 +29,13 @@ use zbus::zvariant::{OwnedObjectPath, Value};
 
 use nd_core::{NdError, Result};
 
-pub use crate::network_manager::local_ipv4_addresses;
-use crate::network_manager::{DeviceProxy, NetworkManagerProxy, WifiP2pPeerProxy, WifiP2pProxy};
+pub use crate::networkmanager::local_ipv4_addresses;
+use crate::networkmanager::{DeviceProxy, NetworkManagerProxy, WifiP2pPeerProxy, WifiP2pProxy};
 pub use group::ActiveState;
 pub use neighbours::peers_on_link;
 
 /// The WFD Information Elements advertising this PC as a Wi-Fi Display
-/// **source** with its RTSP server on port 7236.
+/// source with its RTSP server on port 7236.
 ///
 /// Subelement 0 (Device Information), length 6:
 /// `0x0090` = device type source + WSD; `0x1c44` = 7236 (the RTSP port);
@@ -47,7 +44,7 @@ const WFD_SOURCE_IES: &[u8] = &[0x00, 0x00, 0x06, 0x00, 0x90, 0x1c, 0x44, 0x00, 
 
 /// The duration of each scan requested from NetworkManager.
 ///
-/// NM accepts 1–600 s. A short, **renewed** window is used (see
+/// NM accepts 1–600 s. A short, renewed window is used (see
 /// [`P2pDevice::keep_finding`]) rather than one long one: that way the radio
 /// returns to the normal network's channel periodically and the main Wi-Fi
 /// connection suffers less.
@@ -60,9 +57,9 @@ const FIND_RENEW_INTERVAL: Duration = Duration::from_secs(20);
 /// How often a forming group's state is read.
 const GROUP_STATE_POLL: Duration = Duration::from_millis(500);
 
-/// `NM_DEVICE_TYPE_WIFI_P2P`.
-/// NetworkManager's device type for an ordinary Wi-Fi station.
+/// `NM_DEVICE_TYPE_WIFI`: an ordinary Wi-Fi station.
 const DEVICE_TYPE_WIFI: u32 = 2;
+/// `NM_DEVICE_TYPE_WIFI_P2P`.
 const DEVICE_TYPE_WIFI_P2P: u32 = 30;
 
 /// wpa_supplicant's global interface.
@@ -107,6 +104,30 @@ fn err<E: std::fmt::Display>(e: E) -> NdError {
     NdError::Network(e.to_string())
 }
 
+/// Why there is no Wi-Fi P2P device, in terms of what the person can do.
+fn missing_p2p_device(has_wifi: bool) -> NdError {
+    // Without any Wi-Fi the usual advice (card, driver, backend) is wrong,
+    // so that case gets its own message. With Wi-Fi but no P2P device the
+    // three causes cannot be told apart from here and call for different
+    // actions, so all three are named.
+    if !has_wifi {
+        return NdError::Unsupported(
+            "no Wi-Fi adapter on this computer. Miracast is a direct radio link \
+             between the two devices, so it needs one — casting over the network \
+             (Chromecast) works without it"
+                .into(),
+        );
+    }
+
+    NdError::Unsupported(
+        "no Wi-Fi P2P device in NetworkManager. Either this Wi-Fi card does not \
+         support Wi-Fi Direct, or the driver does not expose it, or NetworkManager \
+         is running with the `iwd` backend, which has no P2P support — `nmcli device` \
+         should list a `p2p-dev-*` device alongside the Wi-Fi one"
+            .into(),
+    )
+}
+
 /// Has the D-Bus object ceased to exist?
 ///
 /// Telling "it vanished" from "it failed" is what lets the group-formation
@@ -122,11 +143,9 @@ fn is_gone(e: &zbus::Error) -> bool {
     )
 }
 
-/// Tells "the service does not even exist here" from "the call failed".
-///
-/// Previously every D-Bus error became the same `Deactivated`/`Network`, which
-/// kept the UI from telling the user whether the problem was missing support
-/// (Flatpak, a card without P2P) or a transient failure.
+/// Tells "the service does not even exist here" from "the call failed", so
+/// the interface can say whether support is missing (Flatpak, a card without
+/// P2P) or a call failed and may succeed later.
 fn classify(e: zbus::Error, context: &str) -> NdError {
     let unavailable = matches!(
         &e,
@@ -144,11 +163,8 @@ fn classify(e: zbus::Error, context: &str) -> NdError {
     }
 }
 
-/// A handle to NetworkManager's Wi-Fi P2P device.
-///
-/// The proxies are created **once** and reused; the earlier version rebuilt
-/// the device and NM proxies on every call, plus one proxy per peer on every
-/// polling cycle.
+/// A handle to NetworkManager's Wi-Fi P2P device, holding its proxies for
+/// the whole discovery or session.
 pub struct P2pDevice {
     conn: Connection,
     path: OwnedObjectPath,
@@ -157,7 +173,7 @@ pub struct P2pDevice {
 }
 
 impl P2pDevice {
-    /// Abre o barramento de sistema e localiza o device Wi-Fi P2P.
+    /// Opens the system bus and finds the Wi-Fi P2P device.
     pub async fn open() -> Result<Self> {
         let conn = Connection::system().await.map_err(|e| {
             NdError::Unsupported(format!(
@@ -173,9 +189,8 @@ impl P2pDevice {
             .await
             .map_err(|e| classify(e, "GetAllDevices"))?;
 
-        // Noted while walking the list: telling "no wireless hardware" apart
-        // from "wireless that cannot do Wi-Fi Direct" needs to know whether an
-        // ordinary Wi-Fi device exists at all.
+        // Telling "no wireless hardware" from "wireless that cannot do Wi-Fi
+        // Direct" needs to know whether an ordinary Wi-Fi device exists.
         let mut has_wifi = false;
 
         for dev in devices {
@@ -213,34 +228,10 @@ impl P2pDevice {
             }
         }
 
-        // The three causes are indistinguishable from here, and they call for
-        // very different actions, so all three are named. Reporting only "the
-        // card does not support it" sent people shopping for a Wi-Fi adapter
-        // they did not need.
-        // A machine with no wireless hardware at all is the one case where the
-        // usual advice is actively wrong: there is no card to blame, no driver
-        // to update and no backend to switch. Tested on a desktop wired by
-        // Ethernet, where the message sent the person looking for a Wi-Fi
-        // setting that does not exist.
-        if !has_wifi {
-            return Err(NdError::Unsupported(
-                "no Wi-Fi adapter on this computer. Miracast is a direct radio link \
-                 between the two devices, so it needs one — casting over the network \
-                 (Chromecast) works without it"
-                    .into(),
-            ));
-        }
-
-        Err(NdError::Unsupported(
-            "no Wi-Fi P2P device in NetworkManager. Either this Wi-Fi card does not \
-             support Wi-Fi Direct, or the driver does not expose it, or NetworkManager \
-             is running with the `iwd` backend, which has no P2P support — `nmcli device` \
-             should list a `p2p-dev-*` device alongside the Wi-Fi one"
-                .into(),
-        ))
+        Err(missing_p2p_device(has_wifi))
     }
 
-    /// Advertises this machine as a Wi-Fi Display **source** during discovery.
+    /// Advertises this machine as a Wi-Fi Display source during discovery.
     ///
     /// A sink decides whether to answer with its own WFD Information Elements
     /// based on what the probe request carries. Several receivers — Amazon Fire
@@ -294,7 +285,7 @@ impl P2pDevice {
     /// Starts (or renews) the scan for Wi-Fi Direct peers.
     ///
     /// The `timeout` is explicit: without it NetworkManager uses 30 s and then
-    /// **stops scanning silently**, leaving the peer list frozen.
+    /// stops scanning silently, leaving the peer list frozen.
     pub async fn start_find(&self) -> Result<()> {
         let timeout = FIND_TIMEOUT.as_secs().clamp(1, 600) as i32;
         let mut options: HashMap<&str, Value<'_>> = HashMap::new();
@@ -315,11 +306,10 @@ impl P2pDevice {
 
     /// Keeps the scan alive indefinitely, renewing it before it expires.
     ///
-    /// Runs until cancelled (the future being dropped). It is the piece that
-    /// was missing for a receiver switched on after the app to appear in the
-    /// list.
+    /// Runs until the future is dropped, so a receiver switched on later
+    /// still appears.
     ///
-    /// While a stream is running, scanning **stops** — see [`nd_core::radio`].
+    /// While a stream is running, scanning stops — see [`nd_core::radio`].
     /// Searching and streaming compete for the same antenna, and the scan's
     /// channel hopping turns into choppy audio and delay on the other end.
     pub async fn keep_finding(&self) {
@@ -389,7 +379,7 @@ impl P2pDevice {
         for path in &paths {
             match self.read_peer(path).await {
                 Ok(peer) => peers.push(peer),
-                Err(err) => tracing::debug!(%path, %err, "peer sumiu durante a leitura"),
+                Err(err) => tracing::debug!(%path, %err, "the peer vanished while being read"),
             }
         }
         Ok(peers)
@@ -429,45 +419,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wfd_source_ies_announce_port_7236() {
-        // Subelement 0, len 6; bytes 5-6 = the RTSP port, big-endian.
-        assert_eq!(WFD_SOURCE_IES[0], 0x00, "the Device Information subelement");
-        assert_eq!(
-            u16::from_be_bytes([WFD_SOURCE_IES[1], WFD_SOURCE_IES[2]]),
-            6,
-            "the declared length"
-        );
-        let port = u16::from_be_bytes([WFD_SOURCE_IES[5], WFD_SOURCE_IES[6]]);
-        assert_eq!(port, 7236, "the advertised RTSP port");
-        // Bits 0-1 of the bitmap: 00 = WFD source.
+    fn wfd_source_ies_announce_a_source_on_the_port_the_firewall_opens() {
+        // Subelement 0 (Device Information); bytes 1-2 the length of what
+        // follows, or the sink discards the element without a word.
+        assert_eq!(WFD_SOURCE_IES[0], 0x00);
+        let declared = u16::from_be_bytes([WFD_SOURCE_IES[1], WFD_SOURCE_IES[2]]);
+        assert_eq!(usize::from(declared), WFD_SOURCE_IES.len() - 3);
+        // Bits 0-1 of the device bitmap: 00 = WFD source.
         let bitmap = u16::from_be_bytes([WFD_SOURCE_IES[3], WFD_SOURCE_IES[4]]);
-        assert_eq!(bitmap & 0b11, 0, "the device type must be source");
-    }
-
-    #[test]
-    fn the_same_ies_are_used_for_searching_and_for_connecting() {
-        // These bytes go out in two very different places: the wpa_supplicant
-        // property during discovery, and the `wfd-ies` of the NetworkManager
-        // connection when the group is formed. Announcing one thing while
-        // searching and another while connecting is how a sink answers the
-        // probe and then refuses the session.
-        //
-        // The byte sequence is the one the reference implementation documents;
-        // a receiver that only answers WFD sources compares it field by field.
-        assert_eq!(
-            WFD_SOURCE_IES,
-            &[0x00, 0x00, 0x06, 0x00, 0x90, 0x1c, 0x44, 0x00, 0xc8],
-            "the IEs must stay byte-identical to the Wi-Fi Display spec"
-        );
-
-        // The declared length has to match what actually follows it, or the
-        // sink discards the whole element without a word.
-        let declared = u16::from_be_bytes([WFD_SOURCE_IES[1], WFD_SOURCE_IES[2]]) as usize;
-        assert_eq!(
-            declared,
-            WFD_SOURCE_IES.len() - 3,
-            "the declared length must match the subelement's body"
-        );
+        assert_eq!(bitmap & 0b11, 0);
+        let port = u16::from_be_bytes([WFD_SOURCE_IES[5], WFD_SOURCE_IES[6]]);
+        assert_eq!(port, crate::firewall::RTSP_PORT);
     }
 
     #[test]

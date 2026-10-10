@@ -1,17 +1,18 @@
-//! Integration with the system's network services (over D-Bus, native build).
+//! Integration with the system's network services over D-Bus.
 //!
-//! - **NetworkManager**: creating/discovering Wi-Fi Direct (P2P) groups for
-//!   WFD-P2P ([`p2p`]).
-//! - **firewalld**: opens port 7236/tcp (RTSP) and the RTP ports **on the P2P
-//!   interface only**, and undoes it on exit ([`firewall`]).
-//! - Detection of the GPU's KMS driver, which decides whether hardware
-//!   encoding is used ([`detect_gpu_driver`]).
+//! - NetworkManager: Wi-Fi Direct discovery and groups for Miracast
+//!   ([`p2p`]), and the LAN addresses DLNA discovery binds to.
+//! - firewalld: the WFD ports, opened on the P2P interface's zone for the
+//!   length of a session ([`firewall`]).
+//! - The receiver round trip shown while streaming ([`probe`]).
+//! - The GPU's KMS driver, which decides whether hardware encoding is used
+//!   ([`detect_gpu_driver`]).
 //!
-//! Unavailable under Flatpak (no system bus) — which is why it is isolated in
-//! this crate.
+//! The system bus is unavailable under Flatpak, so the D-Bus parts degrade to
+//! errors or no-ops there.
 
 pub mod firewall;
-mod network_manager;
+mod networkmanager;
 pub mod p2p;
 pub mod probe;
 
@@ -22,10 +23,8 @@ use nd_core::pipeline::GpuDriver;
 /// Detects the primary GPU's KMS driver.
 ///
 /// Reads the target of the `/sys/class/drm/card*/device/driver` symlink, whose
-/// file name is the kernel module (`i915`, `xe`, `amdgpu`, `nvidia`…).
-///
-/// This is **not** cosmetic: while this function returned a hardcoded
-/// `Unknown`, no driver-specific decision could ever fire.
+/// file name is the kernel module (`i915`, `xe`, `amdgpu`, `nvidia`…). The
+/// first card with a known driver wins.
 pub fn detect_gpu_driver() -> GpuDriver {
     detect_gpu_driver_in(Path::new("/sys/class/drm"))
 }

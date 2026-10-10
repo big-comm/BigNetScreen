@@ -10,7 +10,7 @@ use zbus::zvariant::{ObjectPath, OwnedObjectPath, Value};
 use nd_core::{NdError, Result};
 
 use super::{GROUP_STATE_POLL, P2pDevice, WFD_SOURCE_IES, classify, err, is_gone};
-use crate::network_manager::{ActiveConnectionProxy, DeviceProxy, Ip4ConfigProxy};
+use crate::networkmanager::{ActiveConnectionProxy, DeviceProxy, Ip4ConfigProxy};
 
 /// The state of a NetworkManager active connection (`NMActiveConnectionState`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,7 +49,7 @@ fn already_inactive(e: &zbus::Error) -> bool {
 
 impl P2pDevice {
     /// Forms a Wi-Fi Direct group with the peer (a Miracast sink) by
-    /// activating a `wifi-p2p` connection with us in the WFD **source** role.
+    /// activating a `wifi-p2p` connection with us in the WFD source role.
     /// Returns the active connection's path (follow it with
     /// [`active_state`](Self::active_state)).
     pub async fn connect(&self, peer_path: &str) -> Result<OwnedObjectPath> {
@@ -118,9 +118,8 @@ impl P2pDevice {
     /// Reads an active connection's state.
     ///
     /// If the object vanished (the connection dropped — common on the Realtek
-    /// driver), it returns `Deactivated`. **Other** D-Bus errors are
-    /// propagated: masking everything as `Deactivated` made it impossible to
-    /// tell "the group dropped" from "the bus is in trouble".
+    /// driver), it returns `Deactivated`. Other D-Bus errors are propagated,
+    /// so "the group dropped" stays distinct from "the bus is in trouble".
     pub async fn active_state(&self, active: &OwnedObjectPath) -> Result<ActiveState> {
         let proxy = match self.active_proxy(active).await {
             Ok(p) => p,
@@ -158,14 +157,14 @@ impl P2pDevice {
             .build()
             .await
             .map_err(err)?;
-        let data = match ip4_proxy.address_data().await {
-            Ok(data) => data,
+        let address_data = match ip4_proxy.address_data().await {
+            Ok(address_data) => address_data,
             Err(e) if is_gone(&e) => return Ok(Vec::new()),
             Err(e) => return Err(err(e)),
         };
 
         let mut addresses = Vec::new();
-        for entry in &data {
+        for entry in &address_data {
             if let Some(value) = entry.get("address")
                 && let Ok(text) = String::try_from(value.clone())
             {
@@ -212,16 +211,12 @@ impl P2pDevice {
 
     /// How long to let NetworkManager finish removing an activation.
     ///
-    /// Measured against the failure it prevents: the object is gone from the
-    /// bus within a second, and a new activation started before that inherits
-    /// the removal.
+    /// The object leaves the bus within about a second, and a new activation
+    /// started before that inherits the removal.
     const TEARDOWN_SETTLE: Duration = Duration::from_secs(2);
 
-    /// Forms the group and waits until there is a usable local IP.
-    ///
-    /// It gathers in one place the retry that used to be copy-pasted across
-    /// the examples: the Realtek driver frequently drops the group right after
-    /// forming it.
+    /// Forms the group and waits until there is a usable local IP, retrying
+    /// because the Realtek driver often drops the group right after forming it.
     pub async fn connect_and_wait(
         &self,
         peer_path: &str,
@@ -233,6 +228,8 @@ impl P2pDevice {
             .await
     }
 
+    /// [`Self::connect_and_wait`] that gives up, tearing the group down, once
+    /// `cancel` turns true or its sender is dropped.
     pub async fn connect_and_wait_cancelled(
         &self,
         peer_path: &str,
@@ -250,79 +247,26 @@ impl P2pDevice {
             let active = match self.connect(peer_path).await {
                 Ok(a) => a,
                 Err(e) => {
-                    // The reason matters: "the receiver did not answer" and
-                    // "the card refused" call for opposite actions from
-                    // whoever is standing in front of the TV. Storing it
-                    // without logging left the log with nothing but the
-                    // attempt number.
+                    // Logged per attempt: "the receiver did not answer" and
+                    // "the card refused" call for opposite actions.
                     tracing::warn!(attempt, err = %e, "could not start the group");
                     last = e;
                     continue;
                 }
             };
 
-            let deadline = tokio::time::Instant::now() + per_attempt;
-            loop {
-                if tokio::time::Instant::now() >= deadline {
-                    last = NdError::Network("the Wi-Fi Direct group was not ready in time".into());
-                    break;
-                }
-                if cancelled_during(cancel, GROUP_STATE_POLL).await {
-                    if let Err(err) = self.disconnect(&active).await {
-                        tracing::warn!(%err, "could not tear down the Wi-Fi Direct group");
-                    }
-                    return Err(NdError::Cancelled);
-                }
-
-                // A vanished activation is **this attempt failing**, not a
-                // fatal error. NetworkManager removes the object as soon as it
-                // tears an activation down, and asking about it then answers
-                // `UnknownMethod`. Propagating that with `?` abandoned the
-                // remaining attempts over the very condition they exist for.
-                let state = match self.active_state(&active).await {
-                    Ok(state) => state,
-                    Err(err) => {
-                        last = NdError::Network(format!(
-                            "the Wi-Fi Direct group disappeared while it was being formed: {err}"
-                        ));
-                        break;
-                    }
-                };
-
-                match state {
-                    ActiveState::Activated => {
-                        let addresses = match self.addresses(&active).await {
-                            Ok(addresses) => addresses,
-                            Err(err) => {
-                                last = NdError::Network(format!(
-                                    "the Wi-Fi Direct group disappeared before it had an \
-                                     address: {err}"
-                                ));
-                                break;
-                            }
-                        };
-                        if let Some(ip) = addresses.into_iter().next() {
-                            tracing::info!(%ip, "P2P group formed");
-                            return Ok((active, ip));
-                        }
-                        // Activated but no DHCP yet: keep waiting.
-                    }
-                    ActiveState::Deactivated => {
-                        last = NdError::Network(
-                            "the Wi-Fi Direct group dropped right after being formed \
-                             (a known instability on Realtek cards)"
-                                .into(),
-                        );
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-
-            tracing::warn!(attempt, err = %last, "the Wi-Fi Direct group attempt failed");
+            let failure = match self.wait_for_address(&active, per_attempt, cancel).await {
+                Ok(ip) => return Ok((active, ip)),
+                Err(failure) => failure,
+            };
             if let Err(err) = self.disconnect(&active).await {
                 tracing::warn!(%err, "could not tear down the Wi-Fi Direct group");
             }
+            if matches!(failure, NdError::Cancelled) {
+                return Err(failure);
+            }
+            tracing::warn!(attempt, err = %failure, "the Wi-Fi Direct group attempt failed");
+            last = failure;
             // Let the teardown finish. Asking for a new group while the old
             // activation is still being removed is how an attempt ends up
             // watching an object that is on its way out.
@@ -332,6 +276,59 @@ impl P2pDevice {
         }
 
         Err(last)
+    }
+
+    /// Watches one activation until it has a local address, for at most
+    /// `per_attempt`; leaves tearing it down to the caller.
+    async fn wait_for_address(
+        &self,
+        active: &OwnedObjectPath,
+        per_attempt: Duration,
+        cancel: &mut tokio::sync::watch::Receiver<bool>,
+    ) -> Result<IpAddr> {
+        let deadline = tokio::time::Instant::now() + per_attempt;
+        loop {
+            if tokio::time::Instant::now() >= deadline {
+                return Err(NdError::Network(
+                    "the Wi-Fi Direct group was not ready in time".into(),
+                ));
+            }
+            if cancelled_during(cancel, GROUP_STATE_POLL).await {
+                return Err(NdError::Cancelled);
+            }
+
+            // A vanished activation is this attempt failing, not a fatal
+            // error: NetworkManager removes the object as soon as it tears an
+            // activation down, and asking about it then answers
+            // `UnknownMethod`. The caller's retries exist for exactly that.
+            let state = self.active_state(active).await.map_err(|err| {
+                NdError::Network(format!(
+                    "the Wi-Fi Direct group disappeared while it was being formed: {err}"
+                ))
+            })?;
+            match state {
+                ActiveState::Activated => {
+                    let addresses = self.addresses(active).await.map_err(|err| {
+                        NdError::Network(format!(
+                            "the Wi-Fi Direct group disappeared before it had an address: {err}"
+                        ))
+                    })?;
+                    if let Some(ip) = addresses.into_iter().next() {
+                        tracing::info!(%ip, "P2P group formed");
+                        return Ok(ip);
+                    }
+                    // Activated but no DHCP yet: keep waiting.
+                }
+                ActiveState::Deactivated => {
+                    return Err(NdError::Network(
+                        "the Wi-Fi Direct group dropped right after being formed \
+                         (a known instability on Realtek cards)"
+                            .into(),
+                    ));
+                }
+                ActiveState::Unknown | ActiveState::Activating | ActiveState::Deactivating => {}
+            }
+        }
     }
 }
 
@@ -360,9 +357,9 @@ async fn cancelled_during(
 
 /// The current user's name.
 ///
-/// `$USER` does not exist under systemd/services; we fall back to `getpwuid`
-/// through `/etc/passwd` only when necessary. If nothing works, the
-/// connection's permissions are omitted (NM accepts that).
+/// `$USER` may be missing under a service manager, so the uid is looked up in
+/// `/etc/passwd` as a last resort. With no name the connection carries no
+/// permissions, which NetworkManager accepts.
 fn current_username() -> Option<String> {
     if let Ok(user) = std::env::var("USER")
         && !user.is_empty()
@@ -455,11 +452,5 @@ mod tests {
         assert_eq!(ActiveState::from(3), ActiveState::Deactivating);
         assert_eq!(ActiveState::from(4), ActiveState::Deactivated);
         assert_eq!(ActiveState::from(99), ActiveState::Unknown);
-    }
-
-    #[test]
-    fn username_resolution_has_a_fallback() {
-        // It must not panic even without $USER.
-        let _ = current_username();
     }
 }

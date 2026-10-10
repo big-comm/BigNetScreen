@@ -2,8 +2,8 @@
 
 /// Which peers took an address on this link, according to the kernel.
 ///
-/// Used to tell two very different failures apart when the receiver never
-/// opens the RTSP connection:
+/// Tells two very different failures apart when the receiver never opens the
+/// RTSP connection:
 ///
 /// - **nothing here**: the receiver completed the pairing and then never
 ///   joined the group. Re-forming the group is worth a try; telling the person
