@@ -4,9 +4,11 @@
 # not reach, so Miracast is unavailable here and the app says so. Screen
 # capture goes through the ScreenCast portal only, never Mutter or KWin.
 #
-# Generate the Cargo sources before building:
-#   python3 flatpak-cargo-generator.py Cargo.lock -o cargo-sources.json
-# (https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo)
+# Generate the Cargo sources before building, from this directory
+# (https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo):
+#   python3 flatpak-cargo-generator.py ../../Cargo.lock -o cargo-sources.json
+#   python3 flatpak-cargo-generator.py <gst-plugins-rs 0.15.4+fixup>/Cargo.lock \
+#     -o gst-plugins-rs-sources.json
 
 app-id: br.com.biglinux.BigNetScreen
 runtime: org.gnome.Platform
@@ -43,6 +45,25 @@ cleanup:
   - '*.la'
 
 modules:
+  # whepserversink, for sharing with web browsers. The runtime has webrtcbin,
+  # libnice and DTLS but not this plugin from gst-plugins-rs.
+  - name: gst-plugin-webrtc
+    buildsystem: simple
+    build-options:
+      env:
+        CARGO_HOME: /run/build/gst-plugin-webrtc/cargo
+        CARGO_NET_OFFLINE: 'true'
+    build-commands:
+      - cargo build --release --offline --locked -p gst-plugin-webrtc --lib --no-default-features --features whep,rustls-ring
+      - install -Dm755 target/release/libgstrswebrtc.so -t /app/lib/gstreamer-1.0/
+    sources:
+      - type: git
+        url: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git
+        # 0.15.4 with a Cargo.lock that resolves gstreamer-rs from crates.io.
+        tag: 0.15.4+fixup
+        commit: c164a6696fcb0408f72a108e5f35ec25eb047464
+      - gst-plugins-rs-sources.json
+
   - name: bignetscreen
     buildsystem: simple
     build-options:
@@ -54,4 +75,9 @@ modules:
     sources:
       - type: dir
         path: ../..
+        # Build output from the host would be copied into every build.
+        skip:
+          - target
+          - build
+          - .flatpak-builder
       - cargo-sources.json

@@ -30,7 +30,7 @@
 # Flatpak build
 .flatpak-builder/
 /repo/
-/build-aux/flatpak/cargo-sources.json
+/build-aux/flatpak/*-sources.json
 
 # Verification and source-package output
 .gate-state/
