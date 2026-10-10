@@ -1,9 +1,11 @@
 //! The session, with nobody watching.
 //!
-//! Everything the window used to own that outlives a window: the receivers
-//! discovery has found, the running stream, the files being sent, and the
-//! preferences the next session will obey. Lifted out of `nd_gui::app` so that
-//! closing the window stops drawing and nothing else.
+//! Everything that outlives a window: the receivers discovery has found, the
+//! running stream, the files being sent, and the preferences the next session
+//! will obey. Closing the window stops drawing and nothing else.
+//!
+//! [`discovery`] finds receivers, [`session`] starts and reaps casts and file
+//! sessions, [`snapshot`] builds what clients see; `crate::dbus` exports it.
 //!
 //! It runs as one task that owns its state outright. Callers send a
 //! [`Command`]; the state is published as a [`Snapshot`] on a `watch` channel.
@@ -330,46 +332,10 @@ impl Engine {
             Command::Rescan => self.rescan(),
             Command::KeepAlive => self.last_client_activity = Some(tokio::time::Instant::now()),
             Command::SetAutoDiscovery(on, reply) => {
-                self.settings.auto_discovery = on;
-                settings::set_in_memory(&self.settings);
-                let result = tokio::task::spawn_blocking(settings::persist)
-                    .await
-                    .map_err(|err| err.to_string())
-                    .and_then(|result| result.map_err(|err| err.to_string()));
-                self.apply_discovery_preference();
-                let _ = reply.send(result);
+                let _ = reply.send(self.set_auto_discovery(on).await);
             }
             Command::ApplySettings(new, reply) => {
-                let protocol_changed = new.protocol != self.settings.protocol;
-                let discovery_changed = new.auto_discovery != self.settings.auto_discovery;
-                let card_changed = (new.virtual_audio && new.system_audio)
-                    != (self.settings.virtual_audio && self.settings.system_audio);
-                self.settings = *new;
-                settings::set_in_memory(&self.settings);
-                let retry_audio = self.status.kind == "error"
-                    && self
-                        .status
-                        .detail
-                        .starts_with("could not change the virtual sound card:");
-                self.audio_pending |= card_changed || retry_audio;
-                // Which protocols to look for is the one preference that cannot
-                // wait for the next session: the list a client is showing is
-                // the result of the old choice.
-                if discovery_changed {
-                    self.apply_discovery_preference();
-                } else if protocol_changed && self.settings.auto_discovery {
-                    self.rescan();
-                } else if protocol_changed {
-                    self.abort_discovery();
-                }
-                let result = self.reconcile_audio().await;
-                if let Err(err) = &result {
-                    self.status = Status::error(err.clone());
-                } else if retry_audio && !self.audio_pending {
-                    self.status = Status::of("idle");
-                    self.refresh_status();
-                }
-                let _ = reply.send(result);
+                let _ = reply.send(self.apply_settings(*new).await);
             }
             Command::SendMedia {
                 target,
@@ -396,18 +362,7 @@ impl Engine {
                 start,
                 reply,
             } => {
-                let result = nd_core::stream_server::random_token()
-                    .map_err(|err| err.to_string())
-                    .and_then(|id| {
-                        self.send_media(target.clone(), files, Some(start))?;
-                        self.media_owner = Some(MediaOwner {
-                            id: id.clone(),
-                            sender,
-                            receiver: target,
-                        });
-                        Ok(id)
-                    });
-                let _ = reply.send(result);
+                let _ = reply.send(self.start_player(sender, target, files, start));
             }
             Command::ControlPlayer {
                 sender,
@@ -429,6 +384,70 @@ impl Engine {
             }
             Command::Shutdown => {}
         }
+    }
+
+    async fn set_auto_discovery(&mut self, on: bool) -> Result<(), String> {
+        self.settings.auto_discovery = on;
+        settings::set_in_memory(&self.settings);
+        let persisted = tokio::task::spawn_blocking(settings::persist)
+            .await
+            .map_err(|err| err.to_string())
+            .and_then(|result| result.map_err(|err| err.to_string()));
+        self.apply_discovery_preference();
+        persisted
+    }
+
+    /// Takes preferences a client has just saved, acting at once on the ones
+    /// that cannot wait for the next session.
+    async fn apply_settings(&mut self, new: Settings) -> Result<(), String> {
+        let protocol_changed = new.protocol != self.settings.protocol;
+        let discovery_changed = new.auto_discovery != self.settings.auto_discovery;
+        let card_changed = (new.virtual_audio && new.system_audio)
+            != (self.settings.virtual_audio && self.settings.system_audio);
+        self.settings = new;
+        settings::set_in_memory(&self.settings);
+        let retry_audio = self.status.kind == "error"
+            && self
+                .status
+                .detail
+                .starts_with("could not change the virtual sound card:");
+        self.audio_pending |= card_changed || retry_audio;
+        // The receiver list a client is showing is the result of the old
+        // protocol choice, so discovery restarts now.
+        if discovery_changed {
+            self.apply_discovery_preference();
+        } else if protocol_changed && self.settings.auto_discovery {
+            self.rescan();
+        } else if protocol_changed {
+            self.abort_discovery();
+        }
+        let result = self.reconcile_audio().await;
+        if let Err(err) = &result {
+            self.status = Status::error(err.clone());
+        } else if retry_audio && !self.audio_pending {
+            self.status = Status::of("idle");
+            self.refresh_status();
+        }
+        result
+    }
+
+    /// Starts files for an external player and makes `sender` their owner.
+    /// The returned id is what [`Command::ControlPlayer`] must quote.
+    fn start_player(
+        &mut self,
+        sender: String,
+        target: String,
+        files: Vec<MediaItem>,
+        start: nd_core::media::PlaybackStart,
+    ) -> Result<String, String> {
+        let id = nd_core::stream_server::random_token().map_err(|err| err.to_string())?;
+        self.send_media(target.clone(), files, Some(start))?;
+        self.media_owner = Some(MediaOwner {
+            id: id.clone(),
+            sender,
+            receiver: target,
+        });
+        Ok(id)
     }
 
     async fn reconcile_audio(&mut self) -> Result<(), String> {
@@ -468,8 +487,8 @@ impl Engine {
                     return;
                 }
                 self.probing = false;
-                // The session may have ended while the probe was in flight: a
-                // reading for a link that no longer exists is not published.
+                // The session may have ended while the probe was in flight, and
+                // a reading for a link that has gone is not published.
                 if self.active_sink.is_some() {
                     self.measured = Some(round_trip);
                 }
@@ -478,34 +497,35 @@ impl Engine {
                 id,
                 error,
                 ndi_runtime_unavailable,
-            } => {
-                // The only thing that clears the session, so its absence is
-                // the difference between a receiver that stopped and a window
-                // that knows it did.
-                tracing::info!(%id, failed = error.is_some(), "the cast task returned");
-                if self.active_cast.as_deref() != Some(id.as_str()) {
-                    tracing::warn!(%id, active = ?self.active_cast, "for a session that is not the current one");
-                    return;
-                }
-                self.active_cast = None;
-                self.active_sink = None;
-                self.cast_cancel = None;
-                self.measured = None;
-                self.probing = false;
-                match error {
-                    Some(err) => {
-                        tracing::warn!(%id, %err, "cast session ended with an error");
-                        self.status = Status::error(err);
-                    }
-                    None if ndi_runtime_unavailable => {
-                        self.status = Status::of("ndi-runtime-missing");
-                    }
-                    None => {
-                        tracing::info!(%id, "cast session ended");
-                        self.status = Status::of("idle");
-                        self.refresh_status();
-                    }
-                }
+            } => self.cast_finished(&id, error, ndi_runtime_unavailable),
+        }
+    }
+
+    /// The only thing that clears a cast, so a client sees a session end only
+    /// once the cast task has finished its teardown.
+    fn cast_finished(&mut self, id: &str, error: Option<String>, ndi_runtime_unavailable: bool) {
+        tracing::info!(%id, failed = error.is_some(), "the cast task returned");
+        if self.active_cast.as_deref() != Some(id) {
+            tracing::warn!(%id, active = ?self.active_cast, "for a session that is not the current one");
+            return;
+        }
+        self.active_cast = None;
+        self.active_sink = None;
+        self.cast_cancel = None;
+        self.measured = None;
+        self.probing = false;
+        match error {
+            Some(err) => {
+                tracing::warn!(%id, %err, "cast session ended with an error");
+                self.status = Status::error(err);
+            }
+            None if ndi_runtime_unavailable => {
+                self.status = Status::of("ndi-runtime-missing");
+            }
+            None => {
+                tracing::info!(%id, "cast session ended");
+                self.status = Status::of("idle");
+                self.refresh_status();
             }
         }
     }
@@ -566,10 +586,10 @@ impl Engine {
         // then the socket — and it reports back with `CastFinished`, which is
         // what clears the session here.
         //
-        // This used to also call `stop_stream` itself, concurrently with the
-        // task already doing it. Whichever closed the writer first could leave
-        // the other's STOP unsent, and a receiver that never got a STOP keeps
-        // the session and refuses the next connection.
+        // Calling `stop_stream` here as well would race the task: whichever
+        // closed the writer first could leave the other's STOP unsent, and a
+        // receiver that never got a STOP keeps the session and refuses the
+        // next connection.
         tracing::info!(id = ?self.active_cast, "stopping: cancelling the capture");
         self.status = Status::of("stopping");
     }

@@ -20,7 +20,7 @@
 //! translated. Without it the page stays in the source language — see
 //! [`web_page_text`].
 
-pub mod cast;
+mod cast;
 pub mod dbus;
 pub mod engine;
 pub mod wire;

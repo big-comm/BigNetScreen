@@ -52,13 +52,13 @@ impl Engine {
             return Err("unknown-receiver".into());
         };
 
-        let info = sink.info();
-        if !info.kind.is_castable() {
+        let sink_info = sink.info();
+        if !sink_info.kind.is_castable() {
             return Err("not-castable".into());
         }
 
-        tracing::info!(name = %info.display_name, ?source, "starting the stream");
-        self.status = Status::about("connecting", info.display_name.clone());
+        tracing::info!(name = %sink_info.display_name, ?source, "starting the stream");
+        self.status = Status::about("connecting", sink_info.display_name.clone());
         self.operation_generation += 1;
         self.probing = false;
         self.measured = None;
@@ -105,11 +105,11 @@ impl Engine {
         }
         self.refused.take_if(|(refused, _)| *refused == target);
 
-        let info = sink.info();
-        if start.is_some() && !matches!(info.kind, SinkKind::Chromecast | SinkKind::Dlna) {
+        let sink_info = sink.info();
+        if start.is_some() && !matches!(sink_info.kind, SinkKind::Chromecast | SinkKind::Dlna) {
             return Err("player controls require a Chromecast or DLNA receiver".into());
         }
-        tracing::info!(name = %info.display_name, count = files.len(), "sending files");
+        tracing::info!(name = %sink_info.display_name, count = files.len(), "sending files");
         self.media_owner = None;
 
         // A Chromecast fetches its own formats directly; anything else is
@@ -118,11 +118,11 @@ impl Engine {
             MediaItem::File(file) => file.plays_natively(),
             MediaItem::Url { .. } => true,
         });
-        if info.kind == SinkKind::Chromecast && fetchable {
+        if sink_info.kind == SinkKind::Chromecast && fetchable {
             let endpoint = sink.control_endpoint().ok_or("unknown-receiver")?;
             let session = MediaSession::start(
                 endpoint,
-                info.id.clone(),
+                sink_info.id.clone(),
                 files,
                 self.settings.port,
                 self.settings.display_name(),

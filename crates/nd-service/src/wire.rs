@@ -48,14 +48,14 @@ pub struct Receiver {
 
 impl Receiver {
     pub fn of(sink: &dyn Sink) -> Self {
-        let info = sink.info();
+        let sink_info = sink.info();
         let link = sink.link();
         Self {
-            id: info.id,
-            display_name: info.display_name,
-            kind: kind_name(info.kind).to_string(),
-            address: info.address.unwrap_or_default(),
-            castable: info.kind.is_castable(),
+            id: sink_info.id,
+            display_name: sink_info.display_name,
+            kind: kind_name(sink_info.kind).to_string(),
+            address: sink_info.address.unwrap_or_default(),
+            castable: sink_info.kind.is_castable(),
             state: state_name(sink.state()).to_string(),
             detail: sink.error_message().unwrap_or_default(),
             width: link.map(|l| l.width).unwrap_or(0),
@@ -292,14 +292,14 @@ pub fn state_from_name(name: &str) -> Option<SinkState> {
 
 /// Fills in the half of [`Session`] that comes from the sink itself.
 pub fn session_of(sink: &dyn Sink, source: &str, round_trip_ms: u64) -> Session {
-    let info = sink.info();
+    let sink_info = sink.info();
     let link: Option<StreamLink> = sink.link();
     let access: Option<SinkAccess> = sink.access();
     Session {
-        id: info.id,
-        display_name: info.display_name,
-        kind: kind_name(info.kind).to_string(),
-        address: info.address.unwrap_or_default(),
+        id: sink_info.id,
+        display_name: sink_info.display_name,
+        kind: kind_name(sink_info.kind).to_string(),
+        address: sink_info.address.unwrap_or_default(),
         state: state_name(sink.state()).to_string(),
         source: source.to_string(),
         width: link.map(|l| l.width).unwrap_or(0),

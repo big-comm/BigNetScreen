@@ -1,5 +1,6 @@
 //! The published state: one value a client can draw from.
 
+use nd_chromecast::media::MediaStatus;
 use nd_core::settings::Settings;
 use nd_core::sink::SinkState;
 
@@ -96,32 +97,7 @@ impl Engine {
         let media_muted = media_status
             .as_ref()
             .and_then(|status| status.playback.muted);
-        let media = match media_status {
-            Some(status) => Media {
-                active: true,
-                title: status.title,
-                queue: status
-                    .queue
-                    .iter()
-                    .map(|path| path.display().to_string())
-                    .collect(),
-                index: status.position as u32,
-                total: status.total as u32,
-                position_ms: (status.playback.seconds * 1000.0) as u64,
-                duration_ms: status
-                    .playback
-                    .duration
-                    .map(|d| (d * 1000.0) as u64)
-                    .unwrap_or(0),
-                paused: status.playback.paused,
-                can_pause: status.playback.can_pause,
-                can_seek: status.playback.can_seek,
-                finished: status.finished,
-                detail: status.error.unwrap_or_default(),
-                control_detail: status.control_error.unwrap_or_default(),
-            },
-            None => Media::idle(),
-        };
+        let media = media_status.map_or_else(Media::idle, published_media);
         let next = Snapshot {
             receivers,
             session,
@@ -152,6 +128,33 @@ impl Engine {
             *current = next;
             true
         });
+    }
+}
+
+/// The file session as [`Media`] carries it over D-Bus.
+fn published_media(status: MediaStatus) -> Media {
+    Media {
+        active: true,
+        title: status.title,
+        queue: status
+            .queue
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect(),
+        index: status.position as u32,
+        total: status.total as u32,
+        position_ms: (status.playback.seconds * 1000.0) as u64,
+        duration_ms: status
+            .playback
+            .duration
+            .map(|d| (d * 1000.0) as u64)
+            .unwrap_or(0),
+        paused: status.playback.paused,
+        can_pause: status.playback.can_pause,
+        can_seek: status.playback.can_seek,
+        finished: status.finished,
+        detail: status.error.unwrap_or_default(),
+        control_detail: status.control_error.unwrap_or_default(),
     }
 }
 

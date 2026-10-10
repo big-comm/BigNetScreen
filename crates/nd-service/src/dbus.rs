@@ -38,9 +38,10 @@ async fn inspect_with(
     inspect: fn(&std::path::Path) -> Result<MediaFile, String>,
 ) -> zbus::fdo::Result<Vec<MediaFile>> {
     if paths.is_empty() || paths.len() > nd_core::media::MAX_FILES {
-        return Err(zbus::fdo::Error::InvalidArgs(
-            "select between 1 and 1000 files".into(),
-        ));
+        return Err(zbus::fdo::Error::InvalidArgs(format!(
+            "select between 1 and {} files",
+            nd_core::media::MAX_FILES
+        )));
     }
     let files = tokio::task::spawn_blocking(move || {
         let mut files = Vec::with_capacity(paths.len());
@@ -253,8 +254,10 @@ impl Service {
             .await
     }
 
-    // zbus injects the header and connection in addition to the public arguments.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "zbus injects the header and connection after the D-Bus arguments"
+    )]
     async fn start_player_url(
         &self,
         target: &str,
@@ -430,14 +433,28 @@ pub trait Service {
 /// Claiming the name is what makes D-Bus activation work: a client calls the
 /// name, the bus starts this, and the call lands on the object below.
 pub async fn serve(engine: engine::Handle) -> zbus::Result<zbus::Connection> {
-    let owner_engine = engine.clone();
     let connection = zbus::connection::Builder::session()?
         .name(BUS_NAME)?
-        .serve_at(OBJECT_PATH, Service { engine })?
+        .serve_at(
+            OBJECT_PATH,
+            Service {
+                engine: engine.clone(),
+            },
+        )?
         .build()
         .await?;
+    forward_disconnects(&connection, engine).await?;
+    emit_property_changes(&connection).await?;
+    Ok(connection)
+}
 
-    let bus = zbus::fdo::DBusProxy::new(&connection).await?;
+/// Tells the engine about every client connection that leaves the bus, so a
+/// player's session ends with its owner.
+async fn forward_disconnects(
+    connection: &zbus::Connection,
+    engine: engine::Handle,
+) -> zbus::Result<()> {
+    let bus = zbus::fdo::DBusProxy::new(connection).await?;
     let mut owners = bus.receive_name_owner_changed().await?;
     tokio::spawn(async move {
         while let Some(change) = owners.next().await {
@@ -446,7 +463,7 @@ pub async fn serve(engine: engine::Handle) -> zbus::Result<zbus::Connection> {
             };
             if args.new_owner().is_none()
                 && args.name().as_str().starts_with(':')
-                && owner_engine
+                && engine
                     .send(Command::PlayerGone(args.name().to_string()))
                     .await
                     .is_err()
@@ -455,10 +472,13 @@ pub async fn serve(engine: engine::Handle) -> zbus::Result<zbus::Connection> {
             }
         }
     });
+    Ok(())
+}
 
-    // A property is only useful to an applet if it says when it changed.
-    // Everything published comes from one snapshot, so one task watching it
-    // emits every notification there is.
+/// A property is only useful to an applet if it says when it changed.
+/// Everything published comes from one snapshot, so one task watching it
+/// emits every notification there is.
+async fn emit_property_changes(connection: &zbus::Connection) -> zbus::Result<()> {
     let emitter = connection
         .object_server()
         .interface::<_, Service>(OBJECT_PATH)
@@ -500,7 +520,7 @@ pub async fn serve(engine: engine::Handle) -> zbus::Result<zbus::Connection> {
             previous = current;
         }
     });
-    Ok(connection)
+    Ok(())
 }
 
 /// Returns once the service has had nothing to do for `grace`.
@@ -548,20 +568,6 @@ pub async fn idle_after(
     }
 }
 
-/// Follows the service's state, for a client that wants to react rather than poll.
-pub async fn watch_status(
-    proxy: &ServiceProxy<'_>,
-    mut on_change: impl FnMut(Status),
-) -> zbus::Result<()> {
-    let mut changes = proxy.receive_status_changed().await;
-    while let Some(change) = changes.next().await {
-        if let Ok(status) = change.get().await {
-            on_change(status);
-        }
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -576,10 +582,8 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn an_idle_service_leaves_even_while_receivers_come_and_go() {
-        // The bug this exists for: the deadline used to restart on every
-        // change, and receivers appear and vanish the whole time a machine is
-        // idle. The service never left, which is the entire cost this design
-        // was meant to avoid.
+        // Receivers appear and vanish the whole time a machine is idle; a
+        // deadline restarted by every change would never expire.
         let (tx, rx) = watch::channel(idle_snapshot());
         let churn = tokio::spawn(async move {
             for n in 0..50u32 {
@@ -629,24 +633,13 @@ mod tests {
         waiting.await.unwrap();
     }
 
-    #[tokio::test]
-    #[ignore = "requires BNS_TEST_PRIVATE_BUS=1 and a private dbus-run-session"]
-    async fn player_dbus_methods_use_the_actual_calling_connection() {
-        assert_eq!(std::env::var("BNS_TEST_PRIVATE_BUS").as_deref(), Ok("1"));
-        let path = std::env::temp_dir().join(format!("bns-player-api-{}.mp3", std::process::id()));
-        std::fs::write(&path, []).unwrap();
-        let (commands, mut incoming) = mpsc::channel(32);
-        let (_snapshots, receiver) = watch::channel(engine::Snapshot::initial(Settings::default()));
-        let service = serve(engine::Handle {
-            commands,
-            snapshots: receiver,
-        })
-        .await
-        .unwrap();
-        let client = zbus::Connection::session().await.unwrap();
-        let proxy = ServiceProxy::new(&client).await.unwrap();
-        let expected_sender = client.unique_name().unwrap().to_string();
-        let engine = tokio::spawn(async move {
+    /// Stands in for the engine: checks the commands the interface forwards
+    /// for one start, one control, one URL start and the client leaving.
+    fn answer_player_calls(
+        mut incoming: mpsc::Receiver<Command>,
+        expected_sender: String,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
             match incoming.recv().await.unwrap() {
                 Command::StartPlayer {
                     sender,
@@ -712,7 +705,27 @@ mod tests {
                 Command::PlayerGone(sender) => assert_eq!(sender, expected_sender),
                 other => panic!("unexpected {other:?}"),
             }
-        });
+        })
+    }
+
+    #[tokio::test]
+    #[ignore = "requires BNS_TEST_PRIVATE_BUS=1 and a private dbus-run-session"]
+    async fn player_dbus_methods_use_the_actual_calling_connection() {
+        assert_eq!(std::env::var("BNS_TEST_PRIVATE_BUS").as_deref(), Ok("1"));
+        let path = std::env::temp_dir().join(format!("bns-player-api-{}.mp3", std::process::id()));
+        std::fs::write(&path, []).unwrap();
+        let (commands, incoming) = mpsc::channel(32);
+        let (_snapshots, receiver) = watch::channel(engine::Snapshot::initial(Settings::default()));
+        let service = serve(engine::Handle {
+            commands,
+            snapshots: receiver,
+        })
+        .await
+        .unwrap();
+        let client = zbus::Connection::session().await.unwrap();
+        let proxy = ServiceProxy::new(&client).await.unwrap();
+        let expected_sender = client.unique_name().unwrap().to_string();
+        let engine = answer_player_calls(incoming, expected_sender);
         tokio::time::timeout(Duration::from_secs(5), async {
             assert_eq!(proxy.player_api().await.unwrap(), 2);
             assert!(proxy.player_session().await.unwrap().id.is_empty());
