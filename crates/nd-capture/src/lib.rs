@@ -3,20 +3,23 @@
 //! - [`PortalBackend`] — `ashpd` / xdg-desktop-portal `ScreenCast`. The only
 //!   viable path under Flatpak, and it works on any desktop.
 //! - [`MutterBackend`] — `org.gnome.Mutter.ScreenCast` over D-Bus. Used for
-//!   the **virtual monitor** on native GNOME, where the portal is weak.
+//!   the virtual monitor on native GNOME, which the portal cannot size.
 //! - [`KWinBackend`] — `zkde_screencast_unstable_v1` over Wayland. The same
 //!   trade on KDE: the portal there creates every virtual screen at a
 //!   hard-coded 1920x1080.
 //!
-//! [`select_backend`] chooses at runtime.
+//! [`select_backend_for`] chooses at runtime; `nd-service` starts and stops
+//! the backend around each cast.
 //!
-//! ## The restore token (a big win in perceived latency)
+//! Every backend hands over the PipeWire stream as a [`CaptureSource`]. The
+//! portal's FD and its `pipewire-serial` travel together, and the serial, when
+//! present, is the only target: a malformed one fails the capture rather than
+//! falling back to a node id that PipeWire may have reused.
 //!
-//! The earlier version used `PersistMode::DoNot`, so the portal dialog came up
-//! **every single time** the user started a cast. Now we ask for
-//! `ExplicitlyRevoked` and keep the returned token; on later sessions capture
-//! starts with no dialog at all. The token lives in
-//! `$XDG_DATA_HOME/bignetscreen/restore-token` (mode 0600).
+//! A monitor capture asks the portal to persist its authorization and keeps
+//! the returned restore token, so later casts start with no dialog. The
+//! token lives in `$XDG_DATA_HOME/bignetscreen/restore-token-<kind>`, private
+//! to the user.
 
 pub mod display_config;
 pub mod kwin;
@@ -42,7 +45,6 @@ fn cap_err<E: std::fmt::Display>(e: E) -> NdError {
     NdError::Capture(e.to_string())
 }
 
-/// Path of the portal session's restore token.
 /// Does a selection of this kind keep its authorisation between casts?
 ///
 /// Sharing "the whole screen" means the same screen every time, so asking again
@@ -104,6 +106,33 @@ fn clear_restore_token(source_type: SourceType) {
     }
 }
 
+/// What `SelectSources` asks for: one source of `source_type`, persisted only
+/// when [`restores_selection`] says so, restoring `token` when there is one.
+fn selection_options(
+    source_type: SourceType,
+    cursor_mode: CursorMode,
+    token: Option<&str>,
+) -> SelectSourcesOptions {
+    let portal_type = match source_type {
+        SourceType::Monitor => PortalSourceType::Monitor,
+        SourceType::Window => PortalSourceType::Window,
+        SourceType::Virtual => PortalSourceType::Virtual,
+    };
+    let options = SelectSourcesOptions::default()
+        .set_cursor_mode(cursor_mode)
+        .set_sources(enumflags2::BitFlags::from(portal_type))
+        .set_multiple(false)
+        .set_persist_mode(if restores_selection(source_type) {
+            PersistMode::ExplicitlyRevoked
+        } else {
+            PersistMode::DoNot
+        });
+    match token {
+        Some(token) => options.set_restore_token(token),
+        None => options,
+    }
+}
+
 /// Capture backend through xdg-desktop-portal (`ashpd`).
 pub struct PortalBackend {
     session: Mutex<Option<std::sync::Arc<Session<Screencast>>>>,
@@ -114,6 +143,79 @@ impl PortalBackend {
         Self {
             session: Mutex::new(None),
         }
+    }
+
+    /// Opens a session and its stream. The session is recorded before
+    /// anything can fail, so [`CaptureBackend::stop`] closes it.
+    async fn open(&self, proxy: &Screencast, source_type: SourceType) -> Result<CaptureSource> {
+        let session = proxy
+            .create_session(Default::default())
+            .await
+            .map_err(cap_err)?;
+        let session = std::sync::Arc::new(session);
+        *self.session.lock().await = Some(session.clone());
+
+        // The cursor has to come embedded in the video; if the portal does
+        // not support that, carry on without it rather than failing the whole
+        // session.
+        let cursor_mode = match proxy.available_cursor_modes().await {
+            Ok(modes) if modes.contains(CursorMode::Embedded) => CursorMode::Embedded,
+            _ => CursorMode::Hidden,
+        };
+
+        let restorable = restores_selection(source_type);
+        let stored_token = restorable
+            .then(|| load_restore_token(source_type))
+            .flatten();
+        let options = selection_options(source_type, cursor_mode, stored_token.as_deref());
+        proxy
+            .select_sources(&session, options)
+            .await
+            .map_err(cap_err)?
+            .response()
+            .map_err(cap_err)?;
+
+        // ashpd 0.13 drops unknown stream properties during deserialization.
+        // Read Start's documented dictionary so pipewire-serial survives.
+        let streams = portal_start::start(proxy, &session)
+            .await
+            .inspect_err(|_| {
+                // An expired or revoked token fails every later attempt too:
+                // discarding it makes the next one ask for permission again.
+                if stored_token.is_some() {
+                    tracing::info!("restore token rejected; discarding it");
+                    clear_restore_token(source_type);
+                }
+            })?;
+        if restorable && let Some(token) = streams.restore_token.as_deref() {
+            store_restore_token(source_type, token);
+        }
+
+        let pipewire_fd = proxy
+            .open_pipe_wire_remote(&session, Default::default())
+            .await
+            .map_err(cap_err)?;
+
+        tracing::info!(
+            node_id = streams.node_id,
+            pipewire_serial = ?streams.serial,
+            size = ?streams.size,
+            ?cursor_mode,
+            "portal capture started"
+        );
+        Ok(CaptureSource {
+            pipewire_fd: Some(pipewire_fd),
+            node_id: streams.node_id,
+            pipewire_serial: streams.serial,
+            source_type,
+            size: streams.size,
+            // The portal fronts whatever compositor is there, and their
+            // advertised buffer ranges are not all in front of us. The element
+            // default stands; asking for more than a producer offers fails the
+            // allocation rather than being clamped.
+            min_buffers: None,
+            media: None,
+        })
     }
 }
 
@@ -168,122 +270,13 @@ impl CaptureBackend for PortalBackend {
             )));
         }
 
-        let portal_type = match source_type {
-            SourceType::Monitor => PortalSourceType::Monitor,
-            SourceType::Window => PortalSourceType::Window,
-            SourceType::Virtual => PortalSourceType::Virtual,
-        };
-
-        // Close any previous session before opening another: overwriting the
-        // field left the old session hanging in the compositor until the app
-        // died.
+        // A session left open stays in the compositor until the app exits.
         self.stop().await?;
-
-        let session = proxy
-            .create_session(Default::default())
-            .await
-            .map_err(cap_err)?;
-
-        let session = std::sync::Arc::new(session);
-        *self.session.lock().await = Some(session.clone());
-
-        // The cursor has to come embedded in the video; if the portal does
-        // not support that, carry on without it rather than failing the whole
-        // session.
-        let cursor_mode = match proxy.available_cursor_modes().await {
-            Ok(modes) if modes.contains(CursorMode::Embedded) => CursorMode::Embedded,
-            _ => CursorMode::Hidden,
-        };
-
-        // Restoring is right for a screen and wrong for a window.
-        //
-        // Whoever shares "the whole screen" means the same screen every time,
-        // and being asked again on each cast is noise. Whoever picks "a window"
-        // is making a choice, and that choice is usually a different one — the
-        // restored session skipped the picker entirely and silently cast the
-        // window from last time, which is not what "choose a window" means.
-        let restorable = restores_selection(source_type);
-        let stored_token = restorable
-            .then(|| load_restore_token(source_type))
-            .flatten();
-
-        let mut options = SelectSourcesOptions::default()
-            .set_cursor_mode(cursor_mode)
-            .set_sources(enumflags2::BitFlags::from(portal_type))
-            .set_multiple(false)
-            .set_persist_mode(if restorable {
-                // Authorise once, reuse afterwards: this removes the dialog
-                // that used to come up on every cast.
-                PersistMode::ExplicitlyRevoked
-            } else {
-                PersistMode::DoNot
-            });
-        if let Some(token) = stored_token.as_deref() {
-            options = options.set_restore_token(token);
+        let started = self.open(&proxy, source_type).await;
+        if started.is_err() {
+            let _ = self.stop().await;
         }
-
-        proxy
-            .select_sources(&session, options)
-            .await
-            .map_err(cap_err)?
-            .response()
-            .map_err(cap_err)?;
-
-        // ashpd 0.13 drops unknown stream properties during deserialization.
-        // Read Start's documented dictionary so pipewire-serial survives.
-        let streams = match portal_start::start(&proxy, &session).await {
-            Ok(streams) => streams,
-            Err(err) => {
-                let _ = session.close().await;
-                // Expired/revoked token: clear it so the next attempt asks for
-                // permission again instead of failing forever.
-                if stored_token.is_some() {
-                    tracing::info!("restore token rejected; discarding it");
-                    clear_restore_token(source_type);
-                }
-                return Err(cap_err(err));
-            }
-        };
-
-        // Only keep a token for sources worth restoring. A window token would
-        // be handed back on the next cast and skip the picker.
-        if restorable && let Some(token) = streams.restore_token.as_deref() {
-            store_restore_token(source_type, token);
-        }
-
-        let node_id = streams.node_id;
-        let pipewire_serial = streams.serial;
-        let size = streams.size;
-
-        let pipewire_fd = proxy
-            .open_pipe_wire_remote(&session, Default::default())
-            .await
-            .map_err(cap_err)?;
-
-        // The session has to outlive the capture; kept for stop().
-        *self.session.lock().await = Some(session);
-
-        tracing::info!(
-            node_id,
-            ?pipewire_serial,
-            ?size,
-            ?cursor_mode,
-            "portal capture started"
-        );
-        Ok(CaptureSource {
-            pipewire_fd: Some(pipewire_fd),
-            node_id,
-            pipewire_serial,
-            source_type,
-            size,
-            // The portal fronts whatever compositor is there, and their
-            // advertised buffer ranges are not all in front of us. The element
-            // default stands; asking for more than a producer offers fails the
-            // allocation rather than being clamped.
-            min_buffers: None,
-            // A real capture, not a file being played.
-            media: None,
-        })
+        started
     }
 
     async fn stop(&self) -> Result<()> {
@@ -353,7 +346,6 @@ impl CaptureBackend for MutterWithPortalFallback {
             match self.mutter.start(source_type).await {
                 Ok(source) => return Ok(source),
                 Err(err) => {
-                    let _ = self.mutter.stop().await;
                     tracing::warn!(
                         %err,
                         "Mutter capture failed; falling back to the portal \
