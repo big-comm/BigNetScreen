@@ -59,7 +59,7 @@ msgstr "תקרה: מסך קטן יותר נשלח כפי שהוא. מעל 1080p 
 msgid "A new screen"
 msgstr "מסך חדש"
 
-#: crates/nd-gui/src/app/mod.rs:753 crates/nd-gui/src/app/wording.rs:71
+#: crates/nd-gui/src/app/mod.rs:778 crates/nd-gui/src/app/wording.rs:71
 msgid "A stream is already running"
 msgstr "שידור כבר פעיל"
 
@@ -67,7 +67,7 @@ msgstr "שידור כבר פעיל"
 msgid "A window"
 msgstr "חלון"
 
-#: crates/nd-gui/src/app/mod.rs:229
+#: crates/nd-gui/src/app/mod.rs:237
 msgid "About BigNetScreen"
 msgstr "אודות BigNetScreen"
 
@@ -120,7 +120,7 @@ msgstr "יחס הגובה-רוחב נשמר. Miracast משתמש במצב נתמ
 msgid "Audio"
 msgstr "שמע"
 
-#: crates/nd-gui/src/app/dialogs.rs:74
+#: crates/nd-gui/src/app/dialogs.rs:105
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
@@ -168,7 +168,7 @@ msgstr ""
 "מאגר את התמונה כך שהווידאו ינוגן בצורה חלקה, במחיר של עיכוב. ב‑Miracast זה "
 "מוחל כאן; ב‑Chromecast זו בקשה שהמקלט עשוי להתעלם ממנה."
 
-#: crates/nd-gui/src/pages/devices.rs:455
+#: crates/nd-gui/src/app/dialogs.rs:57 crates/nd-gui/src/pages/devices.rs:455
 msgid "Cancel"
 msgstr ""
 
@@ -223,13 +223,13 @@ msgstr "Chromecast"
 msgid "Clear queue"
 msgstr "נקה את רשימת ההשמעה"
 
-#: crates/nd-gui/src/app/dialogs.rs:28 crates/nd-gui/src/app/dialogs.rs:39
-#: crates/nd-gui/src/app/dialogs.rs:118 crates/nd-gui/src/app/dialogs.rs:140
+#: crates/nd-gui/src/app/dialogs.rs:28 crates/nd-gui/src/app/dialogs.rs:70
+#: crates/nd-gui/src/app/dialogs.rs:149 crates/nd-gui/src/app/dialogs.rs:171
 #: crates/nd-gui/src/pages/settings.rs:460
 msgid "Close"
 msgstr "סגירה"
 
-#: crates/nd-gui/src/app/dialogs.rs:56
+#: crates/nd-gui/src/app/dialogs.rs:87
 msgid "Close without saving"
 msgstr ""
 
@@ -237,11 +237,11 @@ msgstr ""
 msgid "Connected"
 msgstr "מחובר"
 
-#: crates/nd-gui/src/app/mod.rs:198
+#: crates/nd-gui/src/app/mod.rs:206
 msgid "Connected to"
 msgstr "מחובר אל"
 
-#: crates/nd-gui/src/app/mod.rs:361 crates/nd-gui/src/app/mod.rs:760
+#: crates/nd-gui/src/app/mod.rs:369 crates/nd-gui/src/app/mod.rs:803
 #: crates/nd-gui/src/app/wording.rs:26 crates/nd-gui/src/app/wording.rs:142
 #: crates/nd-gui/src/pages/mod.rs:204
 msgid "Connecting…"
@@ -275,7 +275,7 @@ msgid ""
 "Settings and try again."
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:54 crates/nd-gui/src/app/mod.rs:569
+#: crates/nd-gui/src/app/dialogs.rs:85 crates/nd-gui/src/app/mod.rs:582
 #: crates/nd-gui/src/app/wording.rs:60
 msgid "Could not save settings"
 msgstr ""
@@ -288,7 +288,7 @@ msgstr "רזולוציה מותאמת אישית"
 msgid "Delay"
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:279 crates/nd-gui/src/app/mod.rs:288
+#: crates/nd-gui/src/app/mod.rs:287 crates/nd-gui/src/app/mod.rs:296
 msgid "Details"
 msgstr ""
 
@@ -432,22 +432,22 @@ msgstr "כלול שמע מערכת"
 msgid "Include the microphone"
 msgstr "כלול מיקרופון"
 
-#: crates/nd-gui/src/app/dialogs.rs:143
+#: crates/nd-gui/src/app/dialogs.rs:174
 msgid "Install"
 msgstr "התקנה"
 
-#: crates/nd-gui/src/app/dialogs.rs:97
+#: crates/nd-gui/src/app/dialogs.rs:128
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
 msgstr ""
 "ההתקנה נכשלה או שהאימות בוטל. אפשר לנסות שוב או להתקין את הספרייה באופן ידני."
 
-#: crates/nd-gui/src/app/dialogs.rs:73
+#: crates/nd-gui/src/app/dialogs.rs:104
 msgid "Installing NDI…"
 msgstr "מתקין NDI…"
 
-#: crates/nd-gui/src/app/dialogs.rs:55
+#: crates/nd-gui/src/app/dialogs.rs:86
 msgid "Keep open"
 msgstr ""
 
@@ -550,19 +550,24 @@ msgstr "שיקוף מסך"
 msgid "Mix your voice into what is sent"
 msgstr "ערבב את קולך עם מה שנשלח"
 
+#: crates/nd-gui/src/app/dialogs.rs:45
+msgid ""
+"More than one screen is connected. The receiver shows the one you choose."
+msgstr ""
+
 #: crates/nd-gui/src/pages/media/mod.rs:400
 msgid "Music"
 msgstr "מוזיקה"
 
-#: crates/nd-gui/src/app/dialogs.rs:96
+#: crates/nd-gui/src/app/dialogs.rs:127
 msgid "NDI installation did not finish"
 msgstr "התקנת NDI לא הסתיימה"
 
-#: crates/nd-gui/src/app/dialogs.rs:90
+#: crates/nd-gui/src/app/dialogs.rs:121
 msgid "NDI installed"
 msgstr "NDI הותקן"
 
-#: crates/nd-gui/src/app/dialogs.rs:131
+#: crates/nd-gui/src/app/dialogs.rs:162
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
@@ -572,7 +577,7 @@ msgstr ""
 "ואת כלי הבנייה הנדרשים? המערכת תבקש אימות מנהל מערכת. שיטות שיתוף אחרות "
 "פועלות גם ללא הספרייה הזאת."
 
-#: crates/nd-gui/src/app/dialogs.rs:135
+#: crates/nd-gui/src/app/dialogs.rs:166
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
@@ -582,15 +587,15 @@ msgstr ""
 "הריצה של NDI 5 או 6 עבור ההפצה שלכם, ואז הפעילו מחדש את היישום. שיטות שיתוף "
 "אחרות פועלות גם ללא הספרייה הזאת."
 
-#: crates/nd-gui/src/app/dialogs.rs:139 crates/nd-gui/src/app/wording.rs:29
+#: crates/nd-gui/src/app/dialogs.rs:170 crates/nd-gui/src/app/wording.rs:29
 msgid "NDI runtime required"
 msgstr "נדרשת סביבת הריצה של NDI"
 
-#: crates/nd-gui/src/app/dialogs.rs:150
+#: crates/nd-gui/src/app/dialogs.rs:181
 msgid "NDI setup"
 msgstr "הגדרת NDI"
 
-#: crates/nd-gui/src/app/mod.rs:501 crates/nd-gui/src/app/wording.rs:66
+#: crates/nd-gui/src/app/mod.rs:509 crates/nd-gui/src/app/wording.rs:66
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI אינו זמין. עיינו במדריך ההגדרה של NDI."
 
@@ -725,7 +730,7 @@ msgstr "הסר מרשימת ההשמעה"
 msgid "Resolution limit"
 msgstr "מגבלת רזולוציה"
 
-#: crates/nd-gui/src/app/dialogs.rs:91
+#: crates/nd-gui/src/app/dialogs.rs:122
 msgid "Restart BigNetScreen to use NDI."
 msgstr "הפעילו מחדש את BigNetScreen כדי להשתמש ב‑NDI."
 
@@ -746,7 +751,7 @@ msgstr "סריקה שוב"
 msgid "Screen"
 msgstr "מסך"
 
-#: crates/nd-gui/src/app/mod.rs:541 crates/nd-gui/src/app/wording.rs:17
+#: crates/nd-gui/src/app/mod.rs:554 crates/nd-gui/src/app/wording.rs:17
 msgid "Searching…"
 msgstr "מחפש…"
 
@@ -775,7 +780,7 @@ msgstr "שליחה למכשיר"
 msgid "Sending files…"
 msgstr "שולח קבצים…"
 
-#: crates/nd-gui/src/app/dialogs.rs:40 crates/nd-gui/src/pages/mod.rs:52
+#: crates/nd-gui/src/app/dialogs.rs:71 crates/nd-gui/src/pages/mod.rs:52
 #: crates/nd-gui/src/pages/settings.rs:93
 msgid "Settings"
 msgstr "הגדרות"
@@ -788,11 +793,11 @@ msgstr "שיתוף מדיה"
 msgid "Share with a web browser"
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:163
+#: crates/nd-gui/src/app/mod.rs:171
 msgid "Share your screen wirelessly"
 msgstr "שתף את המסך שלך באופן אלחוטי"
 
-#: crates/nd-gui/src/app/dialogs.rs:164
+#: crates/nd-gui/src/app/dialogs.rs:195
 #, fuzzy
 msgid "Share your screen with TVs, projectors and web browsers"
 msgstr "שתף את המסך שלך עם טלוויזיה, מקרן או Chromecast."
@@ -804,7 +809,7 @@ msgid ""
 msgstr ""
 "שיתוף חלון פותח את הבורר של שולחן העבודה. רק חלונות גלויים ניתנים לשיתוף."
 
-#: crates/nd-gui/src/app/dialogs.rs:38
+#: crates/nd-gui/src/app/dialogs.rs:69
 msgid "Sharing could not be completed"
 msgstr ""
 
@@ -812,13 +817,13 @@ msgstr ""
 msgid "Sharing could not be completed. Open Details to see the reason."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:509 crates/nd-gui/src/app/wording.rs:67
+#: crates/nd-gui/src/app/mod.rs:517 crates/nd-gui/src/app/wording.rs:67
 msgid ""
 "Sharing with a web browser needs GStreamer's WebRTC plugins, which this "
 "system does not have."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:249
+#: crates/nd-gui/src/app/mod.rs:257
 msgid "Show navigation"
 msgstr ""
 
@@ -836,7 +841,7 @@ msgstr "הגדרות"
 msgid "Status"
 msgstr "מצב"
 
-#: crates/nd-gui/src/app/mod.rs:262
+#: crates/nd-gui/src/app/mod.rs:270
 msgid "Stop"
 msgstr "עצור"
 
@@ -844,7 +849,7 @@ msgstr "עצור"
 msgid "Stop sending"
 msgstr "הפסק שליחה"
 
-#: crates/nd-gui/src/app/mod.rs:535 crates/nd-gui/src/app/wording.rs:27
+#: crates/nd-gui/src/app/mod.rs:548 crates/nd-gui/src/app/wording.rs:27
 msgid "Stopping…"
 msgstr "מפסיק…"
 
@@ -893,7 +898,7 @@ msgstr "המקלט אינו מגיב"
 msgid "The sharing has ended."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:690
+#: crates/nd-gui/src/app/mod.rs:704
 msgid "The sharing service is not responding. Try again."
 msgstr ""
 
@@ -948,7 +953,7 @@ msgstr "גבוה מאוד (1440p)"
 msgid "Videos"
 msgstr "סרטונים"
 
-#: crates/nd-gui/src/app/dialogs.rs:148
+#: crates/nd-gui/src/app/dialogs.rs:179
 msgid "View ndi-sdk in the AUR"
 msgstr "הצגת ndi-sdk ב‑AUR"
 
@@ -976,6 +981,11 @@ msgstr "מה תרצה לשתף?"
 #: crates/nd-gui/src/pages/settings.rs:316
 msgid "Which kind of receiver to look for"
 msgstr "איזה סוג מקלט לחפש"
+
+#: crates/nd-gui/src/app/dialogs.rs:44
+#, fuzzy
+msgid "Which screen do you want to share?"
+msgstr "מה תרצה לשתף?"
 
 #: crates/nd-gui/src/pages/home.rs:498
 msgid "Whole screen"

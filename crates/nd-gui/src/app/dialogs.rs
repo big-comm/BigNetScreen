@@ -33,6 +33,41 @@ pub(super) fn issues(
     dialog.present(Some(root));
 }
 
+/// Which of several screens to share with the receiver `id`.
+pub(super) fn choose_screen(
+    root: &adw::ApplicationWindow,
+    id: String,
+    screens: &[(String, String)],
+    input: relm4::Sender<AppMsg>,
+) {
+    let dialog = adw::AlertDialog::new(
+        Some(&tr!("Which screen do you want to share?")),
+        Some(&tr!(
+            "More than one screen is connected. The receiver shows the one you choose."
+        )),
+    );
+    for (name, description) in screens {
+        // big-compositor ends the description with the connector; others
+        // leave it out, and two identical monitors differ only by it.
+        let label = if description.contains(name.as_str()) {
+            description.clone()
+        } else if description.is_empty() {
+            name.clone()
+        } else {
+            format!("{description} ({name})")
+        };
+        dialog.add_response(name, &label);
+    }
+    dialog.add_response("cancel", &tr!("Cancel"));
+    dialog.set_close_response("cancel");
+    dialog.connect_response(None, move |_, response| {
+        if response != "cancel" {
+            input.emit(AppMsg::CastOnScreen(id.clone(), response.to_string()));
+        }
+    });
+    dialog.present(Some(root));
+}
+
 /// Why sharing failed, with a way to the settings that can fix it.
 pub(super) fn failure(root: &adw::ApplicationWindow, detail: &str, input: relm4::Sender<AppMsg>) {
     let dialog = adw::AlertDialog::new(Some(&tr!("Sharing could not be completed")), Some(detail));

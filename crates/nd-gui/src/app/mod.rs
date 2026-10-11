@@ -77,6 +77,8 @@ pub enum AppMsg {
     InstallNdi,
     /// Start streaming this to this receiver, in one step.
     CastWith(String, SourceType),
+    /// Stream the screen with this connector to this receiver.
+    CastOnScreen(String, String),
     Stop,
     Rescan,
     DismissIssues,
@@ -104,6 +106,12 @@ pub enum AppCmd {
     Unreachable(String),
     /// A fresh reading of everything the service publishes.
     State(Box<ServiceState>),
+    /// The screens the service streams directly, (connector, description),
+    /// for a screen cast to this receiver; empty where the portal asks.
+    Screens {
+        id: String,
+        screens: Vec<(String, String)>,
+    },
     /// A call the service refused.
     Refused(String),
     Done,
@@ -530,6 +538,11 @@ impl Component for AppModel {
                 tracing::info!(?source, "capture source chosen");
                 self.begin_cast(id, &sender);
             }
+            AppMsg::CastOnScreen(id, screen) => {
+                tracing::info!(%screen, "screen chosen");
+                let monitor = nd_service::engine::source_name(SourceType::Monitor);
+                self.cast(id, format!("{monitor}:{screen}"), &sender);
+            }
             AppMsg::Stop | AppMsg::CancelMedia => {
                 self.failure = None;
                 self.status = tr!("Stopping…");
@@ -647,6 +660,7 @@ impl Component for AppModel {
                 AppCmd::Connected(_) => "connected",
                 AppCmd::Unreachable(_) => "unreachable",
                 AppCmd::State(_) => "state",
+                AppCmd::Screens { .. } => "screens",
                 AppCmd::Refused(_) => "refused",
                 AppCmd::Done => "done",
                 AppCmd::PreferencesFlushed(_) => "preferences-flushed",
@@ -688,6 +702,17 @@ impl Component for AppModel {
                 self.push_devices();
                 self.push_media_status();
                 self.status = tr!("The sharing service is not responding. Try again.");
+            }
+            AppCmd::Screens { id, mut screens } => {
+                let monitor = nd_service::engine::source_name(SourceType::Monitor);
+                match screens.len() {
+                    0 => self.cast(id, monitor.to_string(), &sender),
+                    1 => {
+                        let (name, _) = screens.remove(0);
+                        self.cast(id, format!("{monitor}:{name}"), &sender);
+                    }
+                    _ => dialogs::choose_screen(root, id, &screens, sender.input_sender().clone()),
+                }
             }
             AppCmd::Refused(reason) => {
                 self.status = describe_refusal(&reason);
@@ -753,7 +778,25 @@ impl AppModel {
             self.status = tr!("A stream is already running");
             return;
         }
+        // Which screen, when the compositor streams them directly, is asked
+        // here; where it does not, the portal asks once the cast starts.
+        if self.source_type == SourceType::Monitor
+            && let Some(service) = self.service.clone()
+        {
+            sender.oneshot_command(async move {
+                match service.screens().await {
+                    Ok(screens) => AppCmd::Screens { id, screens },
+                    Err(err) => AppCmd::Refused(err.to_string()),
+                }
+            });
+            return;
+        }
         let source = nd_service::engine::source_name(self.source_type).to_string();
+        self.cast(id, source, sender);
+    }
+
+    /// Asks the service to stream `source` to the receiver `id`.
+    fn cast(&mut self, id: String, source: String, sender: &ComponentSender<Self>) {
         // The page a browser is shown is for a stranger on the network, not for
         // a client, so the service cannot write it: it has no locale. This does.
         let page_text = web_page_text();

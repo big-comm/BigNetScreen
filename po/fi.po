@@ -64,7 +64,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "Uusi näyttö"
 
-#: crates/nd-gui/src/app/mod.rs:753 crates/nd-gui/src/app/wording.rs:71
+#: crates/nd-gui/src/app/mod.rs:778 crates/nd-gui/src/app/wording.rs:71
 msgid "A stream is already running"
 msgstr "Suoratoisto on jo käynnissä"
 
@@ -72,7 +72,7 @@ msgstr "Suoratoisto on jo käynnissä"
 msgid "A window"
 msgstr "Ikkuna"
 
-#: crates/nd-gui/src/app/mod.rs:229
+#: crates/nd-gui/src/app/mod.rs:237
 msgid "About BigNetScreen"
 msgstr "Tietoja BigNetScreenistä"
 
@@ -127,7 +127,7 @@ msgstr ""
 msgid "Audio"
 msgstr "Ääni"
 
-#: crates/nd-gui/src/app/dialogs.rs:74
+#: crates/nd-gui/src/app/dialogs.rs:105
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
@@ -176,7 +176,7 @@ msgstr ""
 "Miracastissa tätä sovelletaan täällä; Chromecastissa tämä on pyyntö, jonka "
 "vastaanotin voi ohittaa."
 
-#: crates/nd-gui/src/pages/devices.rs:455
+#: crates/nd-gui/src/app/dialogs.rs:57 crates/nd-gui/src/pages/devices.rs:455
 msgid "Cancel"
 msgstr ""
 
@@ -231,13 +231,13 @@ msgstr "Chromecast"
 msgid "Clear queue"
 msgstr "Tyhjennä jono"
 
-#: crates/nd-gui/src/app/dialogs.rs:28 crates/nd-gui/src/app/dialogs.rs:39
-#: crates/nd-gui/src/app/dialogs.rs:118 crates/nd-gui/src/app/dialogs.rs:140
+#: crates/nd-gui/src/app/dialogs.rs:28 crates/nd-gui/src/app/dialogs.rs:70
+#: crates/nd-gui/src/app/dialogs.rs:149 crates/nd-gui/src/app/dialogs.rs:171
 #: crates/nd-gui/src/pages/settings.rs:460
 msgid "Close"
 msgstr "Sulje"
 
-#: crates/nd-gui/src/app/dialogs.rs:56
+#: crates/nd-gui/src/app/dialogs.rs:87
 msgid "Close without saving"
 msgstr ""
 
@@ -245,11 +245,11 @@ msgstr ""
 msgid "Connected"
 msgstr "Yhdistetty"
 
-#: crates/nd-gui/src/app/mod.rs:198
+#: crates/nd-gui/src/app/mod.rs:206
 msgid "Connected to"
 msgstr "Yhdistetty laitteeseen"
 
-#: crates/nd-gui/src/app/mod.rs:361 crates/nd-gui/src/app/mod.rs:760
+#: crates/nd-gui/src/app/mod.rs:369 crates/nd-gui/src/app/mod.rs:803
 #: crates/nd-gui/src/app/wording.rs:26 crates/nd-gui/src/app/wording.rs:142
 #: crates/nd-gui/src/pages/mod.rs:204
 msgid "Connecting…"
@@ -283,7 +283,7 @@ msgid ""
 "Settings and try again."
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:54 crates/nd-gui/src/app/mod.rs:569
+#: crates/nd-gui/src/app/dialogs.rs:85 crates/nd-gui/src/app/mod.rs:582
 #: crates/nd-gui/src/app/wording.rs:60
 msgid "Could not save settings"
 msgstr ""
@@ -296,7 +296,7 @@ msgstr "Mukautettu resoluutio"
 msgid "Delay"
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:279 crates/nd-gui/src/app/mod.rs:288
+#: crates/nd-gui/src/app/mod.rs:287 crates/nd-gui/src/app/mod.rs:296
 msgid "Details"
 msgstr ""
 
@@ -442,11 +442,11 @@ msgstr "Sisällytä järjestelmän ääni"
 msgid "Include the microphone"
 msgstr "Sisällytä mikrofoni"
 
-#: crates/nd-gui/src/app/dialogs.rs:143
+#: crates/nd-gui/src/app/dialogs.rs:174
 msgid "Install"
 msgstr "Asenna"
 
-#: crates/nd-gui/src/app/dialogs.rs:97
+#: crates/nd-gui/src/app/dialogs.rs:128
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
@@ -454,11 +454,11 @@ msgstr ""
 "Asennus epäonnistui tai tunnistautuminen peruttiin. Voit yrittää uudelleen "
 "tai asentaa kirjaston manuaalisesti."
 
-#: crates/nd-gui/src/app/dialogs.rs:73
+#: crates/nd-gui/src/app/dialogs.rs:104
 msgid "Installing NDI…"
 msgstr "Asennetaan NDI…"
 
-#: crates/nd-gui/src/app/dialogs.rs:55
+#: crates/nd-gui/src/app/dialogs.rs:86
 msgid "Keep open"
 msgstr ""
 
@@ -562,19 +562,24 @@ msgstr "Peilaa näyttö"
 msgid "Mix your voice into what is sent"
 msgstr "Sekoita äänesi lähetettävään sisältöön"
 
+#: crates/nd-gui/src/app/dialogs.rs:45
+msgid ""
+"More than one screen is connected. The receiver shows the one you choose."
+msgstr ""
+
 #: crates/nd-gui/src/pages/media/mod.rs:400
 msgid "Music"
 msgstr "Musiikki"
 
-#: crates/nd-gui/src/app/dialogs.rs:96
+#: crates/nd-gui/src/app/dialogs.rs:127
 msgid "NDI installation did not finish"
 msgstr "NDI-asennus ei valmistunut"
 
-#: crates/nd-gui/src/app/dialogs.rs:90
+#: crates/nd-gui/src/app/dialogs.rs:121
 msgid "NDI installed"
 msgstr "NDI asennettu"
 
-#: crates/nd-gui/src/app/dialogs.rs:131
+#: crates/nd-gui/src/app/dialogs.rs:162
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
@@ -585,7 +590,7 @@ msgstr ""
 "Järjestelmä pyytää järjestelmänvalvojan tunnistautumista. Muut jakamistavat "
 "toimivat ilman tätä kirjastoa."
 
-#: crates/nd-gui/src/app/dialogs.rs:135
+#: crates/nd-gui/src/app/dialogs.rs:166
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
@@ -595,15 +600,15 @@ msgstr ""
 "jakeluusi sopiva NDI-ajoympäristö, versio 5 tai 6, ja käynnistä sovellus "
 "sitten uudelleen. Muut jakamistavat toimivat ilman tätä kirjastoa."
 
-#: crates/nd-gui/src/app/dialogs.rs:139 crates/nd-gui/src/app/wording.rs:29
+#: crates/nd-gui/src/app/dialogs.rs:170 crates/nd-gui/src/app/wording.rs:29
 msgid "NDI runtime required"
 msgstr "NDI-ajoympäristö vaaditaan"
 
-#: crates/nd-gui/src/app/dialogs.rs:150
+#: crates/nd-gui/src/app/dialogs.rs:181
 msgid "NDI setup"
 msgstr "NDI-määritys"
 
-#: crates/nd-gui/src/app/mod.rs:501 crates/nd-gui/src/app/wording.rs:66
+#: crates/nd-gui/src/app/mod.rs:509 crates/nd-gui/src/app/wording.rs:66
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI ei ole käytettävissä. Katso NDI:n määritysohjetta."
 
@@ -740,7 +745,7 @@ msgstr "Poista jonosta"
 msgid "Resolution limit"
 msgstr "Enimmäisresoluutio"
 
-#: crates/nd-gui/src/app/dialogs.rs:91
+#: crates/nd-gui/src/app/dialogs.rs:122
 msgid "Restart BigNetScreen to use NDI."
 msgstr "Käynnistä BigNetScreen uudelleen, jotta voit käyttää NDI:tä."
 
@@ -761,7 +766,7 @@ msgstr "Etsi uudelleen"
 msgid "Screen"
 msgstr "Näyttö"
 
-#: crates/nd-gui/src/app/mod.rs:541 crates/nd-gui/src/app/wording.rs:17
+#: crates/nd-gui/src/app/mod.rs:554 crates/nd-gui/src/app/wording.rs:17
 msgid "Searching…"
 msgstr "Haetaan…"
 
@@ -790,7 +795,7 @@ msgstr "Lähetä laitteeseen"
 msgid "Sending files…"
 msgstr "Lähetetään tiedostoja…"
 
-#: crates/nd-gui/src/app/dialogs.rs:40 crates/nd-gui/src/pages/mod.rs:52
+#: crates/nd-gui/src/app/dialogs.rs:71 crates/nd-gui/src/pages/mod.rs:52
 #: crates/nd-gui/src/pages/settings.rs:93
 msgid "Settings"
 msgstr "Asetukset"
@@ -803,11 +808,11 @@ msgstr "Jaa media"
 msgid "Share with a web browser"
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:163
+#: crates/nd-gui/src/app/mod.rs:171
 msgid "Share your screen wirelessly"
 msgstr "Jaa näyttösi langattomasti"
 
-#: crates/nd-gui/src/app/dialogs.rs:164
+#: crates/nd-gui/src/app/dialogs.rs:195
 #, fuzzy
 msgid "Share your screen with TVs, projectors and web browsers"
 msgstr "Jaa näyttösi televisioon, projektoriin tai Chromecastiin."
@@ -820,7 +825,7 @@ msgstr ""
 "Ikkunan jakaminen avaa työpöydän oman valitsimen. Vain näkyvissä olevia "
 "ikkunoita voi jakaa."
 
-#: crates/nd-gui/src/app/dialogs.rs:38
+#: crates/nd-gui/src/app/dialogs.rs:69
 msgid "Sharing could not be completed"
 msgstr ""
 
@@ -828,13 +833,13 @@ msgstr ""
 msgid "Sharing could not be completed. Open Details to see the reason."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:509 crates/nd-gui/src/app/wording.rs:67
+#: crates/nd-gui/src/app/mod.rs:517 crates/nd-gui/src/app/wording.rs:67
 msgid ""
 "Sharing with a web browser needs GStreamer's WebRTC plugins, which this "
 "system does not have."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:249
+#: crates/nd-gui/src/app/mod.rs:257
 msgid "Show navigation"
 msgstr ""
 
@@ -852,7 +857,7 @@ msgstr "Asetukset"
 msgid "Status"
 msgstr "Tila"
 
-#: crates/nd-gui/src/app/mod.rs:262
+#: crates/nd-gui/src/app/mod.rs:270
 msgid "Stop"
 msgstr "Lopeta"
 
@@ -860,7 +865,7 @@ msgstr "Lopeta"
 msgid "Stop sending"
 msgstr "Lopeta lähetys"
 
-#: crates/nd-gui/src/app/mod.rs:535 crates/nd-gui/src/app/wording.rs:27
+#: crates/nd-gui/src/app/mod.rs:548 crates/nd-gui/src/app/wording.rs:27
 msgid "Stopping…"
 msgstr "Pysäytetään…"
 
@@ -909,7 +914,7 @@ msgstr "Vastaanotin ei vastaa"
 msgid "The sharing has ended."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:690
+#: crates/nd-gui/src/app/mod.rs:704
 msgid "The sharing service is not responding. Try again."
 msgstr ""
 
@@ -963,7 +968,7 @@ msgstr "Erittäin korkea (1440p)"
 msgid "Videos"
 msgstr "Videot"
 
-#: crates/nd-gui/src/app/dialogs.rs:148
+#: crates/nd-gui/src/app/dialogs.rs:179
 msgid "View ndi-sdk in the AUR"
 msgstr "Näytä ndi-sdk AURissa"
 
@@ -991,6 +996,11 @@ msgstr "Mitä haluat jakaa?"
 #: crates/nd-gui/src/pages/settings.rs:316
 msgid "Which kind of receiver to look for"
 msgstr "Minkä tyyppistä vastaanotinta etsitään"
+
+#: crates/nd-gui/src/app/dialogs.rs:44
+#, fuzzy
+msgid "Which screen do you want to share?"
+msgstr "Mitä haluat jakaa?"
 
 #: crates/nd-gui/src/pages/home.rs:498
 msgid "Whole screen"

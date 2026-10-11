@@ -59,7 +59,7 @@ msgstr "限制：较小的屏幕会按原样发送。高于1080p时，并非所�
 msgid "A new screen"
 msgstr "新屏幕"
 
-#: crates/nd-gui/src/app/mod.rs:753 crates/nd-gui/src/app/wording.rs:71
+#: crates/nd-gui/src/app/mod.rs:778 crates/nd-gui/src/app/wording.rs:71
 msgid "A stream is already running"
 msgstr "已有一个流正在运行"
 
@@ -67,7 +67,7 @@ msgstr "已有一个流正在运行"
 msgid "A window"
 msgstr "一个窗口"
 
-#: crates/nd-gui/src/app/mod.rs:229
+#: crates/nd-gui/src/app/mod.rs:237
 msgid "About BigNetScreen"
 msgstr "关于 BigNetScreen"
 
@@ -120,7 +120,7 @@ msgstr "宽高比保持不变。Miracast 会在此限制范围内使用受支持
 msgid "Audio"
 msgstr "音频"
 
-#: crates/nd-gui/src/app/dialogs.rs:74
+#: crates/nd-gui/src/app/dialogs.rs:105
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
@@ -168,7 +168,7 @@ msgstr ""
 "缓冲画面以使视频流畅播放，但会带来延迟。在Miracast上，缓冲在此应用；在"
 "Chromecast上，这只是一个接收器可能忽略的请求。"
 
-#: crates/nd-gui/src/pages/devices.rs:455
+#: crates/nd-gui/src/app/dialogs.rs:57 crates/nd-gui/src/pages/devices.rs:455
 msgid "Cancel"
 msgstr ""
 
@@ -222,13 +222,13 @@ msgstr "Chromecast"
 msgid "Clear queue"
 msgstr "清空播放队列"
 
-#: crates/nd-gui/src/app/dialogs.rs:28 crates/nd-gui/src/app/dialogs.rs:39
-#: crates/nd-gui/src/app/dialogs.rs:118 crates/nd-gui/src/app/dialogs.rs:140
+#: crates/nd-gui/src/app/dialogs.rs:28 crates/nd-gui/src/app/dialogs.rs:70
+#: crates/nd-gui/src/app/dialogs.rs:149 crates/nd-gui/src/app/dialogs.rs:171
 #: crates/nd-gui/src/pages/settings.rs:460
 msgid "Close"
 msgstr "关闭"
 
-#: crates/nd-gui/src/app/dialogs.rs:56
+#: crates/nd-gui/src/app/dialogs.rs:87
 msgid "Close without saving"
 msgstr ""
 
@@ -236,11 +236,11 @@ msgstr ""
 msgid "Connected"
 msgstr "已连接"
 
-#: crates/nd-gui/src/app/mod.rs:198
+#: crates/nd-gui/src/app/mod.rs:206
 msgid "Connected to"
 msgstr "已连接到"
 
-#: crates/nd-gui/src/app/mod.rs:361 crates/nd-gui/src/app/mod.rs:760
+#: crates/nd-gui/src/app/mod.rs:369 crates/nd-gui/src/app/mod.rs:803
 #: crates/nd-gui/src/app/wording.rs:26 crates/nd-gui/src/app/wording.rs:142
 #: crates/nd-gui/src/pages/mod.rs:204
 msgid "Connecting…"
@@ -274,7 +274,7 @@ msgid ""
 "Settings and try again."
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:54 crates/nd-gui/src/app/mod.rs:569
+#: crates/nd-gui/src/app/dialogs.rs:85 crates/nd-gui/src/app/mod.rs:582
 #: crates/nd-gui/src/app/wording.rs:60
 msgid "Could not save settings"
 msgstr ""
@@ -287,7 +287,7 @@ msgstr "自定义分辨率"
 msgid "Delay"
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:279 crates/nd-gui/src/app/mod.rs:288
+#: crates/nd-gui/src/app/mod.rs:287 crates/nd-gui/src/app/mod.rs:296
 msgid "Details"
 msgstr ""
 
@@ -431,21 +431,21 @@ msgstr "包含系统音频"
 msgid "Include the microphone"
 msgstr "包含麦克风"
 
-#: crates/nd-gui/src/app/dialogs.rs:143
+#: crates/nd-gui/src/app/dialogs.rs:174
 msgid "Install"
 msgstr "安装"
 
-#: crates/nd-gui/src/app/dialogs.rs:97
+#: crates/nd-gui/src/app/dialogs.rs:128
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
 msgstr "安装失败或身份验证已取消。你可以重试，也可以手动安装该库。"
 
-#: crates/nd-gui/src/app/dialogs.rs:73
+#: crates/nd-gui/src/app/dialogs.rs:104
 msgid "Installing NDI…"
 msgstr "正在安装 NDI…"
 
-#: crates/nd-gui/src/app/dialogs.rs:55
+#: crates/nd-gui/src/app/dialogs.rs:86
 msgid "Keep open"
 msgstr ""
 
@@ -546,19 +546,24 @@ msgstr "镜像屏幕"
 msgid "Mix your voice into what is sent"
 msgstr "将您的声音混入发送内容"
 
+#: crates/nd-gui/src/app/dialogs.rs:45
+msgid ""
+"More than one screen is connected. The receiver shows the one you choose."
+msgstr ""
+
 #: crates/nd-gui/src/pages/media/mod.rs:400
 msgid "Music"
 msgstr "音乐"
 
-#: crates/nd-gui/src/app/dialogs.rs:96
+#: crates/nd-gui/src/app/dialogs.rs:127
 msgid "NDI installation did not finish"
 msgstr "NDI 安装未完成"
 
-#: crates/nd-gui/src/app/dialogs.rs:90
+#: crates/nd-gui/src/app/dialogs.rs:121
 msgid "NDI installed"
 msgstr "NDI 已安装"
 
-#: crates/nd-gui/src/app/dialogs.rs:131
+#: crates/nd-gui/src/app/dialogs.rs:162
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
@@ -567,7 +572,7 @@ msgstr ""
 "NDI 需要一个专有库，而 BigNetScreen 未附带该库。是否要从 AUR 安装 ndi-sdk 和"
 "所需的构建工具？系统会要求进行管理员身份验证。其他共享方式无需此库也能使用。"
 
-#: crates/nd-gui/src/app/dialogs.rs:135
+#: crates/nd-gui/src/app/dialogs.rs:166
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
@@ -576,15 +581,15 @@ msgstr ""
 "NDI 需要一个专有库，而 BigNetScreen 未附带该库。请为你的发行版安装 NDI 5 或 "
 "6 运行时，然后重启应用。其他共享方式无需此库也能使用。"
 
-#: crates/nd-gui/src/app/dialogs.rs:139 crates/nd-gui/src/app/wording.rs:29
+#: crates/nd-gui/src/app/dialogs.rs:170 crates/nd-gui/src/app/wording.rs:29
 msgid "NDI runtime required"
 msgstr "需要 NDI 运行时"
 
-#: crates/nd-gui/src/app/dialogs.rs:150
+#: crates/nd-gui/src/app/dialogs.rs:181
 msgid "NDI setup"
 msgstr "NDI 设置"
 
-#: crates/nd-gui/src/app/mod.rs:501 crates/nd-gui/src/app/wording.rs:66
+#: crates/nd-gui/src/app/mod.rs:509 crates/nd-gui/src/app/wording.rs:66
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI 不可用。请参阅 NDI 设置指南。"
 
@@ -719,7 +724,7 @@ msgstr "从播放队列中移除"
 msgid "Resolution limit"
 msgstr "分辨率上限"
 
-#: crates/nd-gui/src/app/dialogs.rs:91
+#: crates/nd-gui/src/app/dialogs.rs:122
 msgid "Restart BigNetScreen to use NDI."
 msgstr "重启 BigNetScreen 以使用 NDI。"
 
@@ -740,7 +745,7 @@ msgstr "重新扫描"
 msgid "Screen"
 msgstr "屏幕"
 
-#: crates/nd-gui/src/app/mod.rs:541 crates/nd-gui/src/app/wording.rs:17
+#: crates/nd-gui/src/app/mod.rs:554 crates/nd-gui/src/app/wording.rs:17
 msgid "Searching…"
 msgstr "正在搜索…"
 
@@ -769,7 +774,7 @@ msgstr "发送到设备"
 msgid "Sending files…"
 msgstr "正在发送文件…"
 
-#: crates/nd-gui/src/app/dialogs.rs:40 crates/nd-gui/src/pages/mod.rs:52
+#: crates/nd-gui/src/app/dialogs.rs:71 crates/nd-gui/src/pages/mod.rs:52
 #: crates/nd-gui/src/pages/settings.rs:93
 msgid "Settings"
 msgstr "设置"
@@ -782,11 +787,11 @@ msgstr "共享媒体"
 msgid "Share with a web browser"
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:163
+#: crates/nd-gui/src/app/mod.rs:171
 msgid "Share your screen wirelessly"
 msgstr "无线共享屏幕"
 
-#: crates/nd-gui/src/app/dialogs.rs:164
+#: crates/nd-gui/src/app/dialogs.rs:195
 #, fuzzy
 msgid "Share your screen with TVs, projectors and web browsers"
 msgstr "将你的屏幕共享到电视、投影仪或Chromecast。"
@@ -797,7 +802,7 @@ msgid ""
 "be shared."
 msgstr "共享窗口会打开您桌面的选择器。只有可见的窗口才能被共享。"
 
-#: crates/nd-gui/src/app/dialogs.rs:38
+#: crates/nd-gui/src/app/dialogs.rs:69
 msgid "Sharing could not be completed"
 msgstr ""
 
@@ -805,13 +810,13 @@ msgstr ""
 msgid "Sharing could not be completed. Open Details to see the reason."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:509 crates/nd-gui/src/app/wording.rs:67
+#: crates/nd-gui/src/app/mod.rs:517 crates/nd-gui/src/app/wording.rs:67
 msgid ""
 "Sharing with a web browser needs GStreamer's WebRTC plugins, which this "
 "system does not have."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:249
+#: crates/nd-gui/src/app/mod.rs:257
 msgid "Show navigation"
 msgstr ""
 
@@ -829,7 +834,7 @@ msgstr "设置"
 msgid "Status"
 msgstr "状态"
 
-#: crates/nd-gui/src/app/mod.rs:262
+#: crates/nd-gui/src/app/mod.rs:270
 msgid "Stop"
 msgstr "停止"
 
@@ -837,7 +842,7 @@ msgstr "停止"
 msgid "Stop sending"
 msgstr "停止发送"
 
-#: crates/nd-gui/src/app/mod.rs:535 crates/nd-gui/src/app/wording.rs:27
+#: crates/nd-gui/src/app/mod.rs:548 crates/nd-gui/src/app/wording.rs:27
 msgid "Stopping…"
 msgstr "正在停止…"
 
@@ -886,7 +891,7 @@ msgstr "接收设备无响应"
 msgid "The sharing has ended."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:690
+#: crates/nd-gui/src/app/mod.rs:704
 msgid "The sharing service is not responding. Try again."
 msgstr ""
 
@@ -940,7 +945,7 @@ msgstr "非常高（1440p）"
 msgid "Videos"
 msgstr "视频"
 
-#: crates/nd-gui/src/app/dialogs.rs:148
+#: crates/nd-gui/src/app/dialogs.rs:179
 msgid "View ndi-sdk in the AUR"
 msgstr "在 AUR 中查看 ndi-sdk"
 
@@ -968,6 +973,11 @@ msgstr "您想要共享什么？"
 #: crates/nd-gui/src/pages/settings.rs:316
 msgid "Which kind of receiver to look for"
 msgstr "要查找哪种类型的接收器"
+
+#: crates/nd-gui/src/app/dialogs.rs:44
+#, fuzzy
+msgid "Which screen do you want to share?"
+msgstr "您想要共享什么？"
 
 #: crates/nd-gui/src/pages/home.rs:498
 msgid "Whole screen"

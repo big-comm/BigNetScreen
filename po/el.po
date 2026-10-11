@@ -63,7 +63,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "Μια νέα οθόνη"
 
-#: crates/nd-gui/src/app/mod.rs:753 crates/nd-gui/src/app/wording.rs:71
+#: crates/nd-gui/src/app/mod.rs:778 crates/nd-gui/src/app/wording.rs:71
 msgid "A stream is already running"
 msgstr "Μια ροή εκτελείται ήδη"
 
@@ -71,7 +71,7 @@ msgstr "Μια ροή εκτελείται ήδη"
 msgid "A window"
 msgstr "Ένα παράθυρο"
 
-#: crates/nd-gui/src/app/mod.rs:229
+#: crates/nd-gui/src/app/mod.rs:237
 msgid "About BigNetScreen"
 msgstr "Σχετικά με το BigNetScreen"
 
@@ -126,7 +126,7 @@ msgstr ""
 msgid "Audio"
 msgstr "Ήχος"
 
-#: crates/nd-gui/src/app/dialogs.rs:74
+#: crates/nd-gui/src/app/dialogs.rs:105
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
@@ -176,7 +176,7 @@ msgstr ""
 "καθυστέρηση. Στο Miracast εφαρμόζεται εδώ· στο Chromecast είναι αίτημα που ο "
 "δέκτης μπορεί να αγνοήσει."
 
-#: crates/nd-gui/src/pages/devices.rs:455
+#: crates/nd-gui/src/app/dialogs.rs:57 crates/nd-gui/src/pages/devices.rs:455
 msgid "Cancel"
 msgstr ""
 
@@ -231,13 +231,13 @@ msgstr "Chromecast"
 msgid "Clear queue"
 msgstr "Εκκαθάριση ουράς"
 
-#: crates/nd-gui/src/app/dialogs.rs:28 crates/nd-gui/src/app/dialogs.rs:39
-#: crates/nd-gui/src/app/dialogs.rs:118 crates/nd-gui/src/app/dialogs.rs:140
+#: crates/nd-gui/src/app/dialogs.rs:28 crates/nd-gui/src/app/dialogs.rs:70
+#: crates/nd-gui/src/app/dialogs.rs:149 crates/nd-gui/src/app/dialogs.rs:171
 #: crates/nd-gui/src/pages/settings.rs:460
 msgid "Close"
 msgstr "Κλείσιμο"
 
-#: crates/nd-gui/src/app/dialogs.rs:56
+#: crates/nd-gui/src/app/dialogs.rs:87
 msgid "Close without saving"
 msgstr ""
 
@@ -245,11 +245,11 @@ msgstr ""
 msgid "Connected"
 msgstr "Συνδεδεμένο"
 
-#: crates/nd-gui/src/app/mod.rs:198
+#: crates/nd-gui/src/app/mod.rs:206
 msgid "Connected to"
 msgstr "Συνδεδεμένο με"
 
-#: crates/nd-gui/src/app/mod.rs:361 crates/nd-gui/src/app/mod.rs:760
+#: crates/nd-gui/src/app/mod.rs:369 crates/nd-gui/src/app/mod.rs:803
 #: crates/nd-gui/src/app/wording.rs:26 crates/nd-gui/src/app/wording.rs:142
 #: crates/nd-gui/src/pages/mod.rs:204
 msgid "Connecting…"
@@ -284,7 +284,7 @@ msgid ""
 "Settings and try again."
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:54 crates/nd-gui/src/app/mod.rs:569
+#: crates/nd-gui/src/app/dialogs.rs:85 crates/nd-gui/src/app/mod.rs:582
 #: crates/nd-gui/src/app/wording.rs:60
 msgid "Could not save settings"
 msgstr ""
@@ -297,7 +297,7 @@ msgstr "Προσαρμοσμένη ανάλυση"
 msgid "Delay"
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:279 crates/nd-gui/src/app/mod.rs:288
+#: crates/nd-gui/src/app/mod.rs:287 crates/nd-gui/src/app/mod.rs:296
 msgid "Details"
 msgstr ""
 
@@ -444,11 +444,11 @@ msgstr "Συμπερίληψη ήχου συστήματος"
 msgid "Include the microphone"
 msgstr "Συμπερίληψη μικροφώνου"
 
-#: crates/nd-gui/src/app/dialogs.rs:143
+#: crates/nd-gui/src/app/dialogs.rs:174
 msgid "Install"
 msgstr "Εγκατάσταση"
 
-#: crates/nd-gui/src/app/dialogs.rs:97
+#: crates/nd-gui/src/app/dialogs.rs:128
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
@@ -456,11 +456,11 @@ msgstr ""
 "Η εγκατάσταση απέτυχε ή ακυρώθηκε ο έλεγχος ταυτότητας. Μπορείτε να "
 "δοκιμάσετε ξανά ή να εγκαταστήσετε τη βιβλιοθήκη χειροκίνητα."
 
-#: crates/nd-gui/src/app/dialogs.rs:73
+#: crates/nd-gui/src/app/dialogs.rs:104
 msgid "Installing NDI…"
 msgstr "Εγκατάσταση του NDI…"
 
-#: crates/nd-gui/src/app/dialogs.rs:55
+#: crates/nd-gui/src/app/dialogs.rs:86
 msgid "Keep open"
 msgstr ""
 
@@ -567,19 +567,24 @@ msgstr "Κατοπτρισμός οθόνης"
 msgid "Mix your voice into what is sent"
 msgstr "Ανάμειξη της φωνής σας σε ό,τι αποστέλλεται"
 
+#: crates/nd-gui/src/app/dialogs.rs:45
+msgid ""
+"More than one screen is connected. The receiver shows the one you choose."
+msgstr ""
+
 #: crates/nd-gui/src/pages/media/mod.rs:400
 msgid "Music"
 msgstr "Μουσική"
 
-#: crates/nd-gui/src/app/dialogs.rs:96
+#: crates/nd-gui/src/app/dialogs.rs:127
 msgid "NDI installation did not finish"
 msgstr "Η εγκατάσταση του NDI δεν ολοκληρώθηκε"
 
-#: crates/nd-gui/src/app/dialogs.rs:90
+#: crates/nd-gui/src/app/dialogs.rs:121
 msgid "NDI installed"
 msgstr "Το NDI εγκαταστάθηκε"
 
-#: crates/nd-gui/src/app/dialogs.rs:131
+#: crates/nd-gui/src/app/dialogs.rs:162
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
@@ -591,7 +596,7 @@ msgstr ""
 "διαχειριστή. Οι άλλοι τρόποι κοινής χρήσης λειτουργούν και χωρίς αυτή τη "
 "βιβλιοθήκη."
 
-#: crates/nd-gui/src/app/dialogs.rs:135
+#: crates/nd-gui/src/app/dialogs.rs:166
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
@@ -602,15 +607,15 @@ msgstr ""
 "σας και έπειτα επανεκκινήστε την εφαρμογή. Οι άλλοι τρόποι κοινής χρήσης "
 "λειτουργούν και χωρίς αυτή τη βιβλιοθήκη."
 
-#: crates/nd-gui/src/app/dialogs.rs:139 crates/nd-gui/src/app/wording.rs:29
+#: crates/nd-gui/src/app/dialogs.rs:170 crates/nd-gui/src/app/wording.rs:29
 msgid "NDI runtime required"
 msgstr "Απαιτείται το περιβάλλον εκτέλεσης NDI"
 
-#: crates/nd-gui/src/app/dialogs.rs:150
+#: crates/nd-gui/src/app/dialogs.rs:181
 msgid "NDI setup"
 msgstr "Ρύθμιση NDI"
 
-#: crates/nd-gui/src/app/mod.rs:501 crates/nd-gui/src/app/wording.rs:66
+#: crates/nd-gui/src/app/mod.rs:509 crates/nd-gui/src/app/wording.rs:66
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "Το NDI δεν είναι διαθέσιμο. Δείτε τον οδηγό ρύθμισης του NDI."
 
@@ -751,7 +756,7 @@ msgstr "Αφαίρεση από την ουρά"
 msgid "Resolution limit"
 msgstr "Όριο ανάλυσης"
 
-#: crates/nd-gui/src/app/dialogs.rs:91
+#: crates/nd-gui/src/app/dialogs.rs:122
 msgid "Restart BigNetScreen to use NDI."
 msgstr "Επανεκκινήστε το BigNetScreen για να χρησιμοποιήσετε το NDI."
 
@@ -772,7 +777,7 @@ msgstr "Νέα σάρωση"
 msgid "Screen"
 msgstr "Οθόνη"
 
-#: crates/nd-gui/src/app/mod.rs:541 crates/nd-gui/src/app/wording.rs:17
+#: crates/nd-gui/src/app/mod.rs:554 crates/nd-gui/src/app/wording.rs:17
 msgid "Searching…"
 msgstr "Αναζήτηση…"
 
@@ -801,7 +806,7 @@ msgstr "Αποστολή στη συσκευή"
 msgid "Sending files…"
 msgstr "Αποστολή αρχείων…"
 
-#: crates/nd-gui/src/app/dialogs.rs:40 crates/nd-gui/src/pages/mod.rs:52
+#: crates/nd-gui/src/app/dialogs.rs:71 crates/nd-gui/src/pages/mod.rs:52
 #: crates/nd-gui/src/pages/settings.rs:93
 msgid "Settings"
 msgstr "Ρυθμίσεις"
@@ -814,11 +819,11 @@ msgstr "Κοινή χρήση πολυμέσων"
 msgid "Share with a web browser"
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:163
+#: crates/nd-gui/src/app/mod.rs:171
 msgid "Share your screen wirelessly"
 msgstr "Μοιραστείτε την οθόνη σας ασύρματα"
 
-#: crates/nd-gui/src/app/dialogs.rs:164
+#: crates/nd-gui/src/app/dialogs.rs:195
 #, fuzzy
 msgid "Share your screen with TVs, projectors and web browsers"
 msgstr "Μοιραστείτε την οθόνη σας με μια τηλεόραση, προβολέα ή Chromecast."
@@ -831,7 +836,7 @@ msgstr ""
 "Η κοινή χρήση ενός παραθύρου ανοίγει τον δικό σας επιλογέα της επιφάνειας "
 "εργασίας. Μόνο ορατά παράθυρα μπορούν να μοιραστούν."
 
-#: crates/nd-gui/src/app/dialogs.rs:38
+#: crates/nd-gui/src/app/dialogs.rs:69
 msgid "Sharing could not be completed"
 msgstr ""
 
@@ -839,13 +844,13 @@ msgstr ""
 msgid "Sharing could not be completed. Open Details to see the reason."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:509 crates/nd-gui/src/app/wording.rs:67
+#: crates/nd-gui/src/app/mod.rs:517 crates/nd-gui/src/app/wording.rs:67
 msgid ""
 "Sharing with a web browser needs GStreamer's WebRTC plugins, which this "
 "system does not have."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:249
+#: crates/nd-gui/src/app/mod.rs:257
 msgid "Show navigation"
 msgstr ""
 
@@ -863,7 +868,7 @@ msgstr "Ρυθμίσεις"
 msgid "Status"
 msgstr "Κατάσταση"
 
-#: crates/nd-gui/src/app/mod.rs:262
+#: crates/nd-gui/src/app/mod.rs:270
 msgid "Stop"
 msgstr "Διακοπή"
 
@@ -871,7 +876,7 @@ msgstr "Διακοπή"
 msgid "Stop sending"
 msgstr "Διακοπή αποστολής"
 
-#: crates/nd-gui/src/app/mod.rs:535 crates/nd-gui/src/app/wording.rs:27
+#: crates/nd-gui/src/app/mod.rs:548 crates/nd-gui/src/app/wording.rs:27
 msgid "Stopping…"
 msgstr "Διακοπή…"
 
@@ -920,7 +925,7 @@ msgstr "Ο δέκτης δεν αποκρίνεται"
 msgid "The sharing has ended."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:690
+#: crates/nd-gui/src/app/mod.rs:704
 msgid "The sharing service is not responding. Try again."
 msgstr ""
 
@@ -976,7 +981,7 @@ msgstr "Πολύ υψηλή (1440p)"
 msgid "Videos"
 msgstr "Βίντεο"
 
-#: crates/nd-gui/src/app/dialogs.rs:148
+#: crates/nd-gui/src/app/dialogs.rs:179
 msgid "View ndi-sdk in the AUR"
 msgstr "Προβολή του ndi-sdk στο AUR"
 
@@ -1004,6 +1009,11 @@ msgstr "Τι θέλετε να μοιραστείτε;"
 #: crates/nd-gui/src/pages/settings.rs:316
 msgid "Which kind of receiver to look for"
 msgstr "Ποιο είδος δέκτη να αναζητηθεί"
+
+#: crates/nd-gui/src/app/dialogs.rs:44
+#, fuzzy
+msgid "Which screen do you want to share?"
+msgstr "Τι θέλετε να μοιραστείτε;"
 
 #: crates/nd-gui/src/pages/home.rs:498
 msgid "Whole screen"
