@@ -507,10 +507,26 @@ impl StreamServer {
 fn watch_clients(sink: &gst::Element) -> tokio::sync::watch::Receiver<bool> {
     let (slow_client, slow_client_rx) = tokio::sync::watch::channel(false);
     sink.connect("client-removed", false, move |values| {
-        if gst::glib::EnumValue::from_value(&values[2])
-            .is_some_and(|(_, status)| status.nick() == "slow")
-        {
+        let status = gst::glib::EnumValue::from_value(&values[2]).map(|(_, status)| status.nick());
+        if status == Some("slow") {
             slow_client.send_replace(true);
+        }
+        // Still answerable here, before the client is gone: whether a receiver
+        // that left got any of the stream tells a refused stream from a starved one.
+        if let (Ok(sink), Ok(socket)) = (
+            values[0].get::<gst::Element>(),
+            values[1].get::<gio::Socket>(),
+        ) {
+            let stats = sink.emit_by_name::<gst::Structure>("get-stats", &[&socket]);
+            tracing::info!(
+                bytes_sent = stats.get::<u64>("bytes-sent").ok(),
+                connected_ms = stats
+                    .get::<u64>("connect-duration")
+                    .ok()
+                    .map(|ns| ns / 1_000_000),
+                status,
+                "a receiver left the stream"
+            );
         }
         None
     });
