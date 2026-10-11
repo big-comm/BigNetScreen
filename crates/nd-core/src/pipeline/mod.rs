@@ -16,6 +16,7 @@
 //!   Cast mirroring access units, and MPEG-TS over HTTP for Cast and DLNA.
 //! - `diagnostics`: probes that count and time buffers in a running pipeline.
 
+mod decode_buffer;
 mod diagnostics;
 mod encoder;
 mod encoder_selection;
@@ -182,6 +183,7 @@ pub fn build_configured_pipeline(
         .downcast::<gst::Pipeline>()
         .map_err(|_| NdError::Gst("the description did not produce a Pipeline".into()))?;
     configure(&pipeline)?;
+    decode_buffer::declare_decode_buffer(&pipeline);
 
     // Below the minimum the pipeline reports, sinks drop every buffer as late
     // and the receiver shows black; above it is only delay. A fixed value is
