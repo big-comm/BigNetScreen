@@ -4,8 +4,8 @@
 //!   viable path under Flatpak, and it works on any desktop.
 //! - [`MutterBackend`] — `org.gnome.Mutter.ScreenCast` over D-Bus. Used for
 //!   the virtual monitor on native GNOME, which the portal cannot size.
-//! - [`KWinBackend`] — `zkde_screencast_unstable_v1` over Wayland. The same
-//!   trade on KDE: the portal there creates every virtual screen at a
+//! - [`KWinBackend`] — `zkde_screencast_unstable_v1` over Wayland, on KWin and
+//!   big-compositor. The same trade on KDE: the portal there creates every virtual screen at a
 //!   hard-coded 1920x1080.
 //!
 //! [`select_backend_for`] chooses at runtime; `nd-service` starts and stops
@@ -416,7 +416,7 @@ pub async fn select_backend_for(
             tracing::info!(
                 width = size.0,
                 height = size.1,
-                "virtual monitor: asking KWin directly (the portal caps it at 1920x1080)"
+                "virtual monitor: asking the compositor over zkde_screencast"
             );
             return Box::new(kwin);
         }

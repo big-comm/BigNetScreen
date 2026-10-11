@@ -1,4 +1,5 @@
-//! Virtual screens on KWin, at the size the user actually chose.
+//! Virtual screens on KWin, at the size the user actually chose. big-compositor
+//! serves the same `zkde_screencast_unstable_v1`, so this backend covers it too.
 //!
 //! The ScreenCast portal has no way to say how big a virtual screen should be,
 //! so `xdg-desktop-portal-kde` picks for everyone — with a literal:
@@ -141,19 +142,19 @@ fn object_serial(high: u32, low: u32) -> u64 {
     (u64::from(high) << 32) | u64::from(low)
 }
 
-/// The PipeWire node and serial KWin announced, or why there is none.
+/// The PipeWire node and serial the compositor announced, or why there is none.
 fn announced_target(state: StreamState) -> Result<(u32, Option<u64>)> {
     if let Some(error) = state.failed {
         return Err(NdError::Capture(format!(
-            "KWin refused the screen: {error}"
+            "the compositor refused the screen: {error}"
         )));
     }
     let node = state
         .node
-        .ok_or_else(|| NdError::Capture("KWin announced no PipeWire node".into()))?;
+        .ok_or_else(|| NdError::Capture("the compositor announced no PipeWire node".into()))?;
     if !crate::is_valid_pipewire_target(node, state.serial) {
         return Err(NdError::Capture(
-            "KWin announced an invalid PipeWire target".into(),
+            "the compositor announced an invalid PipeWire target".into(),
         ));
     }
     Ok((node, state.serial))
@@ -231,7 +232,7 @@ fn open_virtual_screen(width: u32, height: u32) -> Result<(ActiveStream, u32, Op
     while state.node.is_none() && state.failed.is_none() {
         if Instant::now() >= deadline {
             return Err(NdError::Capture(
-                "KWin did not open the virtual screen in time".into(),
+                "the compositor did not open the virtual screen in time".into(),
             ));
         }
         queue.roundtrip(&mut state).map_err(cap_err)?;
@@ -277,7 +278,7 @@ impl CaptureBackend for KWinBackend {
     async fn start(&self, source_type: SourceType) -> Result<CaptureSource> {
         if source_type != SourceType::Virtual {
             return Err(NdError::Capture(
-                "the KWin backend only creates virtual screens".into(),
+                "the zkde_screencast backend only creates virtual screens".into(),
             ));
         }
         self.stop().await?;
@@ -292,7 +293,7 @@ impl CaptureBackend for KWinBackend {
             width,
             height,
             node_id,
-            "KWin opened the virtual screen at the requested size"
+            "the compositor opened the virtual screen at the requested size"
         );
         *self.active.lock().await = Some(active);
 
