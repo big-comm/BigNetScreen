@@ -22,6 +22,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::time::Duration;
 
 use gio::prelude::*;
+use gst::prelude::*;
 use gstreamer as gst;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -454,6 +455,11 @@ impl StreamServer {
             if !served_any {
                 served_any = true;
                 on_first_client()?;
+            } else {
+                // A receiver joins mid-GOP and cannot decode until the next
+                // key frame; a television that sees no picture within its
+                // start-up window gives up on the stream.
+                request_key_frame(&sink);
             }
         }
     }
@@ -498,6 +504,20 @@ impl StreamServer {
             return None;
         }
         Some(stream)
+    }
+}
+
+/// Asks the encoder feeding `sink` for an IDR with its parameter sets.
+fn request_key_frame(sink: &gst::Element) {
+    let encoder = sink
+        .parent()
+        .and_then(|parent| parent.downcast::<gst::Bin>().ok())
+        .and_then(|bin| bin.by_name(crate::pipeline::ENCODER_NAME));
+    match encoder {
+        Some(encoder) => {
+            encoder.send_event(crate::pipeline::force_key_unit());
+        }
+        None => tracing::debug!("no encoder to ask for a key frame"),
     }
 }
 
@@ -878,5 +898,127 @@ mod tests {
         assert!(result.unwrap_err().to_string().contains("queue limit"));
         assert!(u64::from(sink.property::<u32>("buffers-queued")) * 1316 < 8_100_000);
         client.close().unwrap();
+    }
+
+    /// The video elementary stream inside a transport stream: the payloads of
+    /// the PID whose PES carries stream id 0xE0, concatenated.
+    fn video_payload(ts: &[u8]) -> Vec<u8> {
+        let mut pid = None;
+        let mut out = Vec::new();
+        for packet in ts.as_chunks::<188>().0.iter().filter(|p| p[0] == 0x47) {
+            let this = (u16::from(packet[1] & 0x1f) << 8) | u16::from(packet[2]);
+            let start = match (packet[3] >> 4) & 0x3 {
+                1 => 4,
+                3 => 5 + usize::from(packet[4]),
+                _ => continue,
+            };
+            let Some(payload) = packet.get(start..) else {
+                continue;
+            };
+            if packet[1] & 0x40 != 0 && payload.starts_with(&[0, 0, 1, 0xe0]) {
+                pid = Some(this);
+            }
+            if pid == Some(this) {
+                out.extend_from_slice(payload);
+            }
+        }
+        out
+    }
+
+    #[tokio::test]
+    async fn a_receiver_joining_a_running_stream_starts_at_a_key_frame() {
+        use crate::pipeline::{self, PipelineGuard, StreamConfig, VideoSource, VideoTarget};
+        use gst::prelude::*;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        // No scheduled key frames: only a request makes one.
+        let cfg = StreamConfig {
+            width: 320,
+            height: 240,
+            gop_seconds: 0,
+            ..Default::default()
+        };
+        let description = pipeline::ts_http_pipeline_description(
+            &cfg,
+            &VideoSource::Test,
+            VideoTarget::Exact((320, 240)),
+            Some(2_000_000),
+        );
+        let (built, _events) = pipeline::build_pipeline(&description, cfg.latency_ms()).unwrap();
+        let guard = PipelineGuard::new(built);
+        let pipeline = guard.pipeline().clone();
+        let sink = pipeline.by_name(pipeline::TS_HTTP_SINK_NAME).unwrap();
+        let server = StreamServer {
+            listener: TcpListener::bind("127.0.0.1:0").await.unwrap(),
+            path: "/test".into(),
+            allowed: IpAddr::V4(Ipv4Addr::LOCALHOST),
+            local_addr: "127.0.0.1:0".parse().unwrap(),
+            media: DLNA_MEDIA,
+        };
+        let address = server.listener.local_addr().unwrap();
+        let (cancel, cancelled) = tokio::sync::watch::channel(false);
+        let serving = tokio::spawn(async move {
+            server
+                .serve(
+                    sink,
+                    || {
+                        pipeline
+                            .set_state(gst::State::Playing)
+                            .map(|_| ())
+                            .map_err(|err| NdError::Gst(err.to_string()))
+                    },
+                    cancelled,
+                )
+                .await
+        });
+        let join = || async {
+            let mut client = tokio::net::TcpStream::connect(address).await.unwrap();
+            client
+                .write_all(b"GET /test HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                .await
+                .unwrap();
+            client
+        };
+
+        // The first receiver starts the pipeline and keeps it running.
+        let mut first = join().await;
+        let draining = tokio::spawn(async move {
+            let mut buffer = vec![0; 65536];
+            while matches!(first.read(&mut buffer).await, Ok(n) if n > 0) {}
+        });
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+
+        let mut second = join().await;
+        let mut received = Vec::new();
+        let _ = tokio::time::timeout(Duration::from_millis(1000), async {
+            let mut buffer = vec![0; 65536];
+            while let Ok(n) = second.read(&mut buffer).await {
+                if n == 0 {
+                    break;
+                }
+                received.extend_from_slice(&buffer[..n]);
+            }
+        })
+        .await;
+        let body = received
+            .split_at(received.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4)
+            .1;
+        // Realign on the first sync byte that starts a run of packets.
+        let start = (0..188)
+            .find(|&i| body.get(i) == Some(&0x47) && body.get(i + 188) == Some(&0x47))
+            .unwrap();
+        let video = video_payload(&body[start..]);
+        let has_idr = video
+            .windows(4)
+            .any(|w| w[..3] == [0, 0, 1] && w[3] & 0x1f == 5);
+        assert!(
+            has_idr,
+            "a receiver that joins late waits for a key frame nobody asked for"
+        );
+
+        cancel.send_replace(true);
+        let _ = serving.await;
+        draining.abort();
+        drop(guard);
     }
 }

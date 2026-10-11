@@ -39,7 +39,7 @@ pub use diagnostics::{
 };
 pub use encoder::{
     ENCODER_NAME, H264Encoder, H264Profile, OPENH264_PIPELINE_LATENCY_MS, PIPELINE_LATENCY_AUTO,
-    set_encoder_bitrate, software_encode_threads,
+    force_key_unit, set_encoder_bitrate, software_encode_threads,
 };
 pub use encoder_selection::{
     Acceleration, GpuDriver, MonitoredPipeline, best_encoder, build_monitored, encoder_candidates,

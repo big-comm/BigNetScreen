@@ -283,6 +283,18 @@ pub fn software_encode_threads() -> u32 {
 /// The name given to the encoder element in every description.
 pub const ENCODER_NAME: &str = "enc";
 
+/// The upstream event that makes the encoder's next frame an IDR, with SPS
+/// and PPS in front of it, so a receiver can start decoding there.
+pub fn force_key_unit() -> gst::Event {
+    gst::event::CustomUpstream::new(
+        gst::Structure::builder("GstForceKeyUnit")
+            .field("all-headers", true)
+            .field("running-time", gst::ClockTime::NONE)
+            .field("count", 0u32)
+            .build(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

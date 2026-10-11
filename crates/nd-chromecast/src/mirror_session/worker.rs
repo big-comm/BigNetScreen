@@ -136,14 +136,7 @@ impl VideoControl {
         self.last_key_frame = Some(Instant::now());
         if let Some(element) = &self.element {
             tracing::info!(resync, "forcing a key frame");
-            let event = gst::event::CustomUpstream::new(
-                gst::Structure::builder("GstForceKeyUnit")
-                    .field("all-headers", true)
-                    .field("running-time", gst::ClockTime::NONE)
-                    .field("count", 0u32)
-                    .build(),
-            );
-            let _ = element.send_event(event);
+            let _ = element.send_event(pipeline::force_key_unit());
         }
     }
 
