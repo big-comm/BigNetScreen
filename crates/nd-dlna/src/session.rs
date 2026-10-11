@@ -45,6 +45,25 @@ const STATE_POLL_INTERVAL: Duration = Duration::from_secs(3);
 /// playing on some firmware, and ending the session there would make it
 /// impossible to ever start one.
 const IDLE_POLLS_BEFORE_ENDING: u32 = 2;
+/// A connection held this long means the renderer got past its start.
+///
+/// A Panasonic starts in steps: two short probes, a connection of about four
+/// seconds, then the one it plays from, for as long as the picture is on. It
+/// can give up two seconds into either of the last two and not come back, so
+/// only a connection that outlasts the four-second step shows the start held.
+const SETTLED_CONNECTION: Duration = Duration::from_secs(6);
+/// How long the stream must have gone unread, with nothing ever settled,
+/// before the renderer is taken to have given up on its start.
+///
+/// Its transport state is no help: the Panasonic keeps reporting the stream
+/// it abandoned for half a minute or more.
+const ABANDONED_START: Duration = Duration::from_secs(2);
+/// How long after a hand-over the renderer is left to its probing before
+/// that is judged.
+const START_GRACE: Duration = Duration::from_secs(5);
+/// How many times a renderer that gives up during its start is handed the
+/// stream, the first included.
+const START_ATTEMPTS: u32 = 3;
 const SIZE_POLL_INTERVAL: Duration = Duration::from_millis(100);
 /// How often a file transmission's pause is checked to pass it on.
 const PAUSE_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -252,18 +271,13 @@ async fn serve_until_over(
     );
     tokio::pin!(renderer_done);
 
-    let handshake = async {
-        // A renderer already showing something may refuse a new URI, and one
-        // request settles it. Failing here is not fatal: most often there was
-        // simply nothing to stop.
-        if let Err(err) = avtransport::stop(control).await {
-            tracing::debug!(%err, "the renderer had nothing to stop, or would not");
-        }
-        avtransport::set_uri(control, url, ITEM_TITLE, None, server.media()).await?;
-        avtransport::play(control).await
-    };
+    let handshake = hand_over(control, url, server.media());
     tokio::pin!(handshake);
     let mut handed_over = false;
+    let mut handed_at = tokio::time::Instant::now();
+    let mut attempts = 1;
+    let mut start_watch = tokio::time::interval(Duration::from_millis(500));
+    start_watch.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     loop {
         tokio::select! {
@@ -275,6 +289,7 @@ async fn serve_until_over(
             result = &mut handshake, if !handed_over => {
                 result?;
                 handed_over = true;
+                handed_at = tokio::time::Instant::now();
                 if !started.load(std::sync::atomic::Ordering::SeqCst) {
                     status.set(SinkState::WaitStreaming);
                 }
@@ -285,6 +300,24 @@ async fn serve_until_over(
             // A normal end, not an error. Not watched before the handshake
             // finishes: until then the renderer has nothing of ours to play.
             () = &mut renderer_done, if handed_over => return Ok(()),
+
+            // The renderer gave up before the picture started, which the same
+            // stream, handed over again, usually survives.
+            _ = start_watch.tick(), if handed_over && attempts < START_ATTEMPTS => {
+                let given_up = handed_at.elapsed() >= START_GRACE
+                    && server.longest_receiver() < SETTLED_CONNECTION
+                    && server.abandoned_for().is_some_and(|gap| gap >= ABANDONED_START);
+                if !given_up {
+                    continue;
+                }
+                attempts += 1;
+                tracing::warn!(
+                    attempt = attempts,
+                    "the renderer gave up before the picture started; handing the stream over again"
+                );
+                handed_over = false;
+                handshake.set(hand_over(control, url, server.media()));
+            }
 
             // The check lives inside the branch, not in a `select!` guard: a
             // guard is only re-evaluated when `select!` is re-entered, and
@@ -340,6 +373,18 @@ async fn serve_until_over(
             },
         }
     }
+}
+
+/// Tells the renderer to play `url`.
+async fn hand_over(control: &Endpoint, url: &str, media: MediaType) -> Result<()> {
+    // A renderer already showing something may refuse a new URI, and one
+    // request settles it. Failing here is not fatal: most often there was
+    // simply nothing to stop.
+    if let Err(err) = avtransport::stop(control).await {
+        tracing::debug!(%err, "the renderer had nothing to stop, or would not");
+    }
+    avtransport::set_uri(control, url, ITEM_TITLE, None, media).await?;
+    avtransport::play(control).await
 }
 
 /// Whether the pipeline is paused or on its way there: the renderer should
@@ -496,6 +541,192 @@ mod tests {
     use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
     use tokio::net::{TcpListener, TcpStream};
 
+    /// A 320x240 VP8 and Vorbis film of `seconds`, written for this test.
+    fn test_film(name: &str, seconds: u32) -> std::path::PathBuf {
+        pipeline::init().unwrap();
+        let path =
+            std::env::temp_dir().join(format!("bns-dlna-{name}-{}.webm", std::process::id()));
+        let fixture = gst::parse::launch(&format!(
+            "webmmux name=mux ! filesink location=\"{}\" \
+             videotestsrc num-buffers={} ! video/x-raw,width=320,height=240,framerate=30/1 \
+             ! vp8enc deadline=1 ! mux. \
+             audiotestsrc num-buffers={} ! audio/x-raw,rate=48000 ! vorbisenc ! mux.",
+            path.display(),
+            seconds * 30,
+            // audiotestsrc sends 1024 samples per buffer.
+            seconds * 48_000 / 1024 + 1,
+        ))
+        .unwrap()
+        .downcast::<gst::Pipeline>()
+        .unwrap();
+        let guard = PipelineGuard::new(fixture.clone());
+        fixture.set_state(gst::State::Playing).unwrap();
+        let message = fixture
+            .bus()
+            .unwrap()
+            .timed_pop_filtered(
+                gst::ClockTime::from_seconds(20),
+                &[gst::MessageType::Eos, gst::MessageType::Error],
+            )
+            .unwrap();
+        assert_eq!(message.type_(), gst::MessageType::Eos, "{message:?}");
+        drop(guard);
+        path
+    }
+
+    /// One HTTP request from a client of the renderer's control URL: its
+    /// headers and body.
+    async fn read_request(socket: &mut BufReader<TcpStream>) -> (String, String) {
+        let mut headers = String::new();
+        let mut length = 0;
+        loop {
+            let mut line = String::new();
+            assert!(socket.read_line(&mut line).await.unwrap() > 0);
+            if line == "\r\n" {
+                break;
+            }
+            if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                length = value.trim().parse::<usize>().unwrap();
+            }
+            headers.push_str(&line);
+        }
+        let mut body = vec![0; length];
+        socket.read_exact(&mut body).await.unwrap();
+        (headers, String::from_utf8(body).unwrap())
+    }
+
+    /// Opens the stream at `url` and returns it past the response headers.
+    async fn fetch(url: &str) -> BufReader<TcpStream> {
+        let endpoint = Endpoint::parse(url).unwrap();
+        let mut client = TcpStream::connect(endpoint.addr).await.unwrap();
+        client
+            .write_all(
+                format!(
+                    "GET {} HTTP/1.1\r\nHost: {}\r\n\r\n",
+                    endpoint.path, endpoint.authority
+                )
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let mut client = BufReader::new(client);
+        loop {
+            let mut line = String::new();
+            assert!(client.read_line(&mut line).await.unwrap() > 0);
+            if line == "\r\n" {
+                break client;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn a_renderer_that_gives_up_while_starting_is_handed_the_stream_again() {
+        let path = test_film("restart", 40);
+        let source = CaptureSource::media_file(
+            nd_core::capture::MediaPlayback {
+                control: None,
+                start: None,
+                source: nd_core::media::MediaSource::File(path.clone()),
+                kind: nd_core::media::MediaKind::Video,
+                title: "DLNA restart test".into(),
+            },
+            (426, 240),
+        );
+        let previous = nd_core::settings::current();
+        nd_core::settings::set_in_memory(&nd_core::settings::Settings {
+            port: 0,
+            system_audio: false,
+            microphone: false,
+            hardware_encoding: false,
+            ..Default::default()
+        });
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let control = Endpoint::parse(&format!(
+            "http://{}/control",
+            listener.local_addr().unwrap()
+        ))
+        .unwrap();
+        let status = SinkStatus::new();
+        let (_cancel, cancelled) = tokio::sync::watch::channel(false);
+        let uris = std::sync::atomic::AtomicU32::new(0);
+        let renderer = async {
+            let mut watching = None;
+            let mut held_since = None;
+            loop {
+                let (socket, _) = listener.accept().await.unwrap();
+                let mut socket = BufReader::new(socket);
+                let (headers, body) = read_request(&mut socket).await;
+                let mut reply = String::new();
+                if headers.contains("#SetAVTransportURI") {
+                    let handed = uris.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                    let mut client =
+                        fetch(crate::upnp::tag_text(&body, "CurrentURI").unwrap()).await;
+                    let mut packet = [0; 188];
+                    client.read_exact(&mut packet).await.unwrap();
+                    assert_eq!(packet[0], 0x47);
+                    if handed == 2 {
+                        // This time the picture starts: the connection is held
+                        // and read, as by a television playing it.
+                        held_since = Some(tokio::time::Instant::now());
+                        watching = Some(tokio::spawn(async move {
+                            let mut buffer = vec![0; 65536];
+                            while matches!(client.read(&mut buffer).await, Ok(n) if n > 0) {}
+                        }));
+                    }
+                    // The first time it is dropped at once: the start failed.
+                } else if headers.contains("#GetTransportInfo") {
+                    // Still "playing" the stream it gave up on, as the
+                    // Panasonic reports for half a minute; stopped from the
+                    // remote a few seconds into the second hand-over.
+                    let playing =
+                        held_since.is_none_or(|since| since.elapsed() < Duration::from_secs(4));
+                    let state = if playing { "PLAYING" } else { "STOPPED" };
+                    reply = format!(
+                        "<s:Envelope><s:Body><u:GetTransportInfoResponse>\
+                         <CurrentTransportState>{state}</CurrentTransportState>\
+                         </u:GetTransportInfoResponse></s:Body></s:Envelope>"
+                    );
+                }
+                socket
+                    .write_all(
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{reply}",
+                            reply.len()
+                        )
+                        .as_bytes(),
+                    )
+                    .await
+                    .unwrap();
+                if headers.contains("#Stop")
+                    && held_since.is_some_and(|since| since.elapsed() >= Duration::from_secs(4))
+                {
+                    break;
+                }
+            }
+            if let Some(watching) = watching {
+                watching.abort();
+            }
+        };
+        let result = tokio::time::timeout(Duration::from_secs(40), async {
+            tokio::join!(
+                stream(control.addr.ip(), &control, &source, &status, cancelled),
+                renderer
+            )
+        })
+        .await;
+        nd_core::settings::set_in_memory(&previous);
+        std::fs::remove_file(path).unwrap();
+        result
+            .expect("the session must end once the renderer stops")
+            .0
+            .unwrap();
+        assert_eq!(
+            uris.load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "handed over once more after the failed start, and not after the real stop"
+        );
+    }
+
     #[tokio::test]
     async fn a_pause_from_the_remote_holds_the_file_until_the_renderer_plays() {
         use std::sync::atomic::{AtomicBool, Ordering};
@@ -583,23 +814,7 @@ mod tests {
 
     #[tokio::test]
     async fn delayed_renderer_get_reports_actual_pixels_and_stays_streaming() {
-        pipeline::init().unwrap();
-        let path = std::env::temp_dir().join(format!("bns-dlna-media-{}.webm", std::process::id()));
-        let fixture = gst::parse::launch(&format!(
-            "webmmux name=mux ! filesink location=\"{}\" videotestsrc num-buffers=360 ! video/x-raw,width=320,height=240,framerate=30/1 ! vp8enc deadline=1 ! mux. audiotestsrc num-buffers=563 ! audio/x-raw,rate=48000 ! vorbisenc ! mux.", path.display()
-        )).unwrap().downcast::<gst::Pipeline>().unwrap();
-        let guard = PipelineGuard::new(fixture.clone());
-        fixture.set_state(gst::State::Playing).unwrap();
-        let message = fixture
-            .bus()
-            .unwrap()
-            .timed_pop_filtered(
-                gst::ClockTime::from_seconds(10),
-                &[gst::MessageType::Eos, gst::MessageType::Error],
-            )
-            .unwrap();
-        assert_eq!(message.type_(), gst::MessageType::Eos, "{message:?}");
-        drop(guard);
+        let path = test_film("delayed", 12);
         let playback = nd_core::media::FilePlaybackControl::default();
         let source = CaptureSource::media_file(
             nd_core::capture::MediaPlayback {

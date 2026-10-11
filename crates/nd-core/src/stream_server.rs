@@ -17,9 +17,12 @@
 //! was opened with, and a listener bound only to the interface that reaches
 //! that receiver.
 
+use std::collections::HashMap;
 use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::time::Duration;
+use std::os::fd::{AsRawFd, RawFd};
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 use gio::prelude::*;
 use gst::prelude::*;
@@ -338,6 +341,24 @@ pub struct StreamServer {
     allowed: IpAddr,
     local_addr: SocketAddr,
     media: MediaType,
+    attendance: Arc<Mutex<Attendance>>,
+}
+
+/// How long receivers stayed: the longest finished connection, when each
+/// open one began, by socket descriptor, and when the last one left.
+#[derive(Default)]
+struct Attendance {
+    longest: Duration,
+    open: HashMap<RawFd, Instant>,
+    last_left: Option<Instant>,
+}
+
+/// The attendance, whatever a panicking holder left behind: it is only
+/// timestamps.
+fn lock(attendance: &Mutex<Attendance>) -> MutexGuard<'_, Attendance> {
+    attendance
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner())
 }
 
 impl StreamServer {
@@ -360,7 +381,33 @@ impl StreamServer {
             allowed: receiver,
             local_addr,
             media,
+            attendance: Arc::default(),
         })
+    }
+
+    /// The longest any receiver has stayed connected, counting open ones.
+    ///
+    /// A television that probes and gives up never holds a connection for
+    /// more than a couple of seconds; one that shows the picture does.
+    pub fn longest_receiver(&self) -> Duration {
+        let attendance = lock(&self.attendance);
+        let now = Instant::now();
+        attendance
+            .open
+            .values()
+            .map(|since| now - *since)
+            .fold(attendance.longest, Duration::max)
+    }
+
+    /// How long the stream has gone without a receiver since the last one
+    /// left; `None` while one is connected or before any came.
+    pub fn abandoned_for(&self) -> Option<Duration> {
+        let attendance = lock(&self.attendance);
+        if attendance.open.is_empty() {
+            attendance.last_left.map(|left| left.elapsed())
+        } else {
+            None
+        }
     }
 
     /// How the responses describe the stream.
@@ -400,7 +447,7 @@ impl StreamServer {
     where
         F: FnMut() -> Result<()> + Send,
     {
-        let mut slow_client = watch_clients(&sink);
+        let mut slow_client = watch_clients(&sink, self.attendance.clone());
         let mut cancel = cancel;
         let mut served_any = false;
 
@@ -444,8 +491,12 @@ impl StreamServer {
                 return Ok(());
             }
 
+            let fd = stream.as_raw_fd();
             match hand_socket_to_sink(stream, &sink) {
-                Ok(()) => tracing::info!(%peer, "receiver connected to the stream"),
+                Ok(()) => {
+                    lock(&self.attendance).open.insert(fd, Instant::now());
+                    tracing::info!(%peer, "receiver connected to the stream");
+                }
                 Err(err) => {
                     tracing::error!(%peer, %err, "could not hand the socket to the pipeline");
                     continue;
@@ -524,7 +575,10 @@ fn request_key_frame(sink: &gst::Element) {
 /// Wires the sink's client signals: a removed client's socket is closed, and
 /// the returned receiver changes when a client is dropped for reading too
 /// slowly.
-fn watch_clients(sink: &gst::Element) -> tokio::sync::watch::Receiver<bool> {
+fn watch_clients(
+    sink: &gst::Element,
+    attendance: Arc<Mutex<Attendance>>,
+) -> tokio::sync::watch::Receiver<bool> {
     let (slow_client, slow_client_rx) = tokio::sync::watch::channel(false);
     sink.connect("client-removed", false, move |values| {
         let status = gst::glib::EnumValue::from_value(&values[2]).map(|(_, status)| status.nick());
@@ -537,6 +591,12 @@ fn watch_clients(sink: &gst::Element) -> tokio::sync::watch::Receiver<bool> {
             values[0].get::<gst::Element>(),
             values[1].get::<gio::Socket>(),
         ) {
+            let mut attendance = lock(&attendance);
+            if let Some(since) = attendance.open.remove(&socket.as_raw_fd()) {
+                attendance.longest = attendance.longest.max(since.elapsed());
+            }
+            attendance.last_left = Some(Instant::now());
+            drop(attendance);
             let stats = sink.emit_by_name::<gst::Structure>("get-stats", &[&socket]);
             tracing::info!(
                 bytes_sent = stats.get::<u64>("bytes-sent").ok(),
@@ -855,6 +915,7 @@ mod tests {
             allowed: IpAddr::V4(Ipv4Addr::LOCALHOST),
             local_addr: "127.0.0.1:0".parse().unwrap(),
             media: DLNA_MEDIA,
+            attendance: Arc::default(),
         };
         let client = gio::Socket::new(
             gio::SocketFamily::Ipv4,
@@ -954,6 +1015,7 @@ mod tests {
             allowed: IpAddr::V4(Ipv4Addr::LOCALHOST),
             local_addr: "127.0.0.1:0".parse().unwrap(),
             media: DLNA_MEDIA,
+            attendance: Arc::default(),
         };
         let address = server.listener.local_addr().unwrap();
         let (cancel, cancelled) = tokio::sync::watch::channel(false);
