@@ -93,6 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     nd_capture::select_backend_for(
                         source_type,
                         Some(nd_wfd::rtsp::MAX_SOURCE_SIZE),
+                        None,
                     )
                     .await,
                 );

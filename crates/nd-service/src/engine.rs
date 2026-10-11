@@ -50,6 +50,9 @@ pub enum Command {
     Cast {
         id: String,
         source: SourceType,
+        /// The connector of the screen to stream, when the compositor streams
+        /// one directly and more than one is connected.
+        screen: Option<String>,
         /// Text for the page a web browser sees, already in the client's
         /// language. Empty leaves the source-language wording: see
         /// [`crate::web_page_text`].
@@ -127,12 +130,14 @@ impl Handle {
         &self,
         id: String,
         source: SourceType,
+        screen: Option<String>,
         page_text: Vec<(String, String)>,
     ) -> Result<(), String> {
         let (reply, answer) = oneshot::channel();
         self.send(Command::Cast {
             id,
             source,
+            screen,
             page_text,
             reply,
         })
@@ -320,10 +325,11 @@ impl Engine {
             Command::Cast {
                 id,
                 source,
+                screen,
                 page_text,
                 reply,
             } => {
-                let _ = reply.send(self.begin_cast(id, source, page_text));
+                let _ = reply.send(self.begin_cast(id, source, screen, page_text));
             }
             Command::Stop => self.stop_everything(),
             Command::Rescan => self.rescan(),
@@ -636,6 +642,19 @@ pub fn source_name(source: SourceType) -> &'static str {
     }
 }
 
+/// A cast's source as clients spell it: a [`source_name`], and for a screen
+/// optionally the connector of the one to stream, `monitor:DP-1`.
+pub fn source_from_arg(arg: &str) -> Option<(SourceType, Option<String>)> {
+    match arg.split_once(':') {
+        Some((name, screen)) if !screen.is_empty() => match source_from_name(name)? {
+            SourceType::Monitor => Some((SourceType::Monitor, Some(screen.to_string()))),
+            _ => None,
+        },
+        Some(_) => None,
+        None => Some((source_from_name(arg)?, None)),
+    }
+}
+
 pub fn source_from_name(name: &str) -> Option<SourceType> {
     match name {
         "monitor" | "screen" => Some(SourceType::Monitor),
@@ -762,6 +781,25 @@ mod tests {
             assert_eq!(source_from_name(source_name(source)), Some(source));
         }
         assert_eq!(source_from_name("nonsense"), None);
+    }
+
+    #[test]
+    fn a_screen_is_named_after_its_source() {
+        assert_eq!(
+            source_from_arg("monitor"),
+            Some((SourceType::Monitor, None))
+        );
+        assert_eq!(
+            source_from_arg("screen:DP-1"),
+            Some((SourceType::Monitor, Some("DP-1".into())))
+        );
+        assert_eq!(
+            source_from_arg("virtual"),
+            Some((SourceType::Virtual, None))
+        );
+        // Only a screen takes a name, and the name is not optional after `:`.
+        assert_eq!(source_from_arg("window:DP-1"), None);
+        assert_eq!(source_from_arg("monitor:"), None);
     }
 
     #[tokio::test(start_paused = true)]

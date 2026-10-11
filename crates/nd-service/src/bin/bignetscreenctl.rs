@@ -21,8 +21,10 @@ bignetscreenctl — share a screen from the command line
   status                   what the service is doing
   watch                    follow the status until interrupted
   rescan                   look for receivers again
+  screens                  screens a cast can name, when the compositor
+                           streams them directly (connector, description)
   cast <id> [source]       start sharing; source is screen (default),
-                           window or virtual
+                           screen:<connector>, window or virtual
   stop                     end whatever is running
   send <id> <file>...      send files to a receiver
   media <command> [value]  toggle-pause, next, seek <seconds>
@@ -78,6 +80,11 @@ async fn run(args: &[String]) -> Result<(), String> {
                     receiver.state,
                     receiver.address
                 );
+            }
+        }
+        "screens" => {
+            for (name, description) in service.screens().await.map_err(bus)? {
+                println!("{name}\t{description}");
             }
         }
         "status" => println!("{}", describe(&service).await?),

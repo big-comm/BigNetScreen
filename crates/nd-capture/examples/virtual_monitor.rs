@@ -59,7 +59,7 @@ async fn main() -> nd_core::Result<()> {
     chosen.custom_height = mode_h;
     nd_core::settings::set_in_memory(&chosen);
 
-    let backend = nd_capture::select_backend_for(SourceType::Virtual, None).await;
+    let backend = nd_capture::select_backend_for(SourceType::Virtual, None, None).await;
     eprintln!("backend: {}", backend.id());
     if (mode_w, mode_h) != (width, height) {
         eprintln!("monitor mode requested: {mode_w}x{mode_h} (pipeline asks {width}x{height})");

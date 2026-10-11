@@ -35,6 +35,7 @@ pub async fn run(
     sink: Arc<dyn Sink>,
     id: String,
     source_type: SourceType,
+    screen: Option<String>,
     mut cancel: watch::Receiver<bool>,
 ) -> Outcome {
     if id == nd_ndi::ID {
@@ -69,7 +70,7 @@ pub async fn run(
     }
 
     let backend = tokio::select! {
-        backend = nd_capture::select_backend_for(source_type, sink.max_source_size()) => backend,
+        backend = nd_capture::select_backend_for(source_type, sink.max_source_size(), screen) => backend,
         _ = cancel.changed() => return Outcome::ok(),
     };
     let result = async {

@@ -5,8 +5,9 @@
 //! - [`MutterBackend`] — `org.gnome.Mutter.ScreenCast` over D-Bus. Used for
 //!   the virtual monitor on native GNOME, which the portal cannot size.
 //! - [`KWinBackend`] — `zkde_screencast_unstable_v1` over Wayland, on KWin and
-//!   big-compositor. The same trade on KDE: the portal there creates every virtual screen at a
-//!   hard-coded 1920x1080.
+//!   big-compositor: existing screens without a portal dialog, and virtual
+//!   screens at the chosen size, where the KDE portal makes every one
+//!   1920x1080.
 //!
 //! [`select_backend_for`] chooses at runtime; `nd-service` starts and stops
 //! the backend around each cast.
@@ -38,7 +39,7 @@ use tokio::sync::Mutex;
 use nd_core::capture::{CaptureBackend, CaptureSource, SourceType};
 use nd_core::{NdError, Result};
 
-pub use kwin::KWinBackend;
+pub use kwin::{KWinBackend, Screen};
 pub use mutter::MutterBackend;
 
 fn cap_err<E: std::fmt::Display>(e: E) -> NdError {
@@ -369,14 +370,16 @@ impl CaptureBackend for MutterWithPortalFallback {
 /// Selects the capture backend that suits the environment and source type.
 ///
 /// The portal is the default: it works on every desktop, it is mandatory under
-/// Flatpak, and on GNOME it uses Mutter underneath anyway. Talking to the
-/// compositor directly is reserved for the virtual monitor, the one case the
-/// portal cannot size (Mutter on GNOME, KWin on KDE), and for whoever asks
-/// with `BIGNETSCREEN_CAPTURE=mutter`. Elsewhere the portal handles all three
-/// source types.
+/// Flatpak, and on GNOME it uses Mutter underneath anyway. A compositor that
+/// grants `zkde_screencast` (big-compositor, KWin) streams an existing
+/// screen directly, `screen` naming its connector, and the person is asked
+/// nothing. A virtual monitor goes to the compositor whenever it can, since
+/// no portal can size one. `BIGNETSCREEN_CAPTURE=portal` or `=mutter` forces
+/// a path. Window capture is always the portal's.
 pub async fn select_backend_for(
     source_type: SourceType,
     virtual_limit: Option<(u32, u32)>,
+    screen: Option<String>,
 ) -> Box<dyn CaptureBackend> {
     let forced = std::env::var("BIGNETSCREEN_CAPTURE").ok();
     match forced.as_deref() {
@@ -422,7 +425,29 @@ pub async fn select_backend_for(
         }
     }
 
+    if source_type == SourceType::Monitor {
+        let kwin = KWinBackend::new();
+        if kwin.is_available().await {
+            tracing::info!(?screen, "screen: streaming it over zkde_screencast");
+            kwin.set_screen(screen).await;
+            return Box::new(kwin);
+        }
+    }
+
     Box::new(PortalBackend::new())
+}
+
+/// The screens a capture can name, when the compositor streams them directly;
+/// empty where the portal asks the person instead.
+pub async fn screens() -> Vec<Screen> {
+    if is_sandboxed() {
+        return Vec::new();
+    }
+    tokio::task::spawn_blocking(kwin::screens)
+        .await
+        .ok()
+        .and_then(|result| result.ok())
+        .unwrap_or_default()
 }
 
 /// How big to make a virtual screen.
@@ -450,7 +475,7 @@ fn virtual_size(limit: Option<(u32, u32)>) -> (u32, u32) {
 
 /// A shortcut for the common case (monitor capture).
 pub async fn select_backend() -> Box<dyn CaptureBackend> {
-    select_backend_for(SourceType::Monitor, None).await
+    select_backend_for(SourceType::Monitor, None, None).await
 }
 
 /// Are we running inside a Flatpak sandbox?

@@ -117,7 +117,7 @@ impl Engine {
         let events = self.events.clone();
         tokio::spawn(async move {
             // No sink yet: this only asks whether a virtual screen is possible.
-            let backend = nd_capture::select_backend_for(SourceType::Virtual, None).await;
+            let backend = nd_capture::select_backend_for(SourceType::Virtual, None, None).await;
             let supported = backend.supported_sources().await;
             let _ = events
                 .send(Event::VirtualSupported(

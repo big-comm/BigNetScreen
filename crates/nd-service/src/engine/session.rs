@@ -17,6 +17,7 @@ impl Engine {
         &mut self,
         id: String,
         source: SourceType,
+        screen: Option<String>,
         page_text: Vec<(String, String)>,
     ) -> Result<(), String> {
         if self.active_cast.is_some() || self.media_session.is_some() {
@@ -56,7 +57,7 @@ impl Engine {
             return Err("not-castable".into());
         }
 
-        tracing::info!(name = %sink_info.display_name, ?source, "starting the stream");
+        tracing::info!(name = %sink_info.display_name, ?source, ?screen, "starting the stream");
         self.status = Status::about("connecting", sink_info.display_name.clone());
         self.operation_generation += 1;
         self.probing = false;
@@ -69,7 +70,7 @@ impl Engine {
 
         let events = self.events.clone();
         tokio::spawn(async move {
-            let outcome = crate::cast::run(sink, id.clone(), source, cancelled).await;
+            let outcome = crate::cast::run(sink, id.clone(), source, screen, cancelled).await;
             let _ = events
                 .send(Event::CastFinished {
                     id,

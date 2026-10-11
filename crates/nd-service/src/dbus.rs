@@ -151,21 +151,33 @@ impl Service {
     }
     /// Starts sharing to a receiver.
     ///
-    /// `source` is `monitor`, `window` or `virtual`. `page_text` is for the
-    /// browser page of a web share and may be empty; see
-    /// [`crate::web_page_text`].
+    /// `source` is `monitor`, `window` or `virtual`; `monitor:DP-1` names
+    /// one of [`Self::screens`]. `page_text` is for the browser page of a web
+    /// share and may be empty; see [`crate::web_page_text`].
     async fn cast(
         &self,
         id: &str,
         source: &str,
         page_text: Vec<(String, String)>,
     ) -> zbus::fdo::Result<()> {
-        let source = engine::source_from_name(source)
+        let (source, screen) = engine::source_from_arg(source)
             .ok_or_else(|| zbus::fdo::Error::InvalidArgs(format!("unknown source `{source}`")))?;
         self.engine
-            .cast(id.to_string(), source, page_text)
+            .cast(id.to_string(), source, screen, page_text)
             .await
             .map_err(zbus::fdo::Error::Failed)
+    }
+
+    /// The screens a `monitor` cast can name, as (connector, description).
+    ///
+    /// Empty where the compositor does not stream screens directly: there
+    /// the portal asks the person which one.
+    async fn screens(&self) -> Vec<(String, String)> {
+        nd_capture::screens()
+            .await
+            .into_iter()
+            .map(|screen| (screen.name, screen.description))
+            .collect()
     }
 
     /// Ends whatever is running: the stream, the file sending, or both.
@@ -379,6 +391,7 @@ impl Service {
 pub trait Service {
     fn keep_alive(&self) -> zbus::Result<()>;
     fn cast(&self, id: &str, source: &str, page_text: &[(String, String)]) -> zbus::Result<()>;
+    fn screens(&self) -> zbus::Result<Vec<(String, String)>>;
     fn stop(&self) -> zbus::Result<()>;
     fn rescan(&self) -> zbus::Result<()>;
     fn set_auto_discovery(&self, on: bool) -> zbus::Result<()>;
