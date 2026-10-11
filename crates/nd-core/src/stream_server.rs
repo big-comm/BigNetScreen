@@ -987,7 +987,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_receiver_joining_a_running_stream_starts_at_a_key_frame() {
+    async fn late_receiver_starts_at_key_frame() {
         use crate::pipeline::{self, PipelineGuard, StreamConfig, VideoSource, VideoTarget};
         use gst::prelude::*;
         use tokio::io::{AsyncReadExt, AsyncWriteExt};

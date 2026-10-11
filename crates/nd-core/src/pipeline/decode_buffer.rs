@@ -3,10 +3,10 @@
 //! An H.264 SPS may carry `bitstream_restriction` in its VUI, with
 //! `max_dec_frame_buffering` and `max_num_reorder_frames`. Without them a
 //! decoder has to assume the most its level allows: at 2560x1440 level 5.1
-//! that is 12 pictures, about 66 MB. NVENC leaves the restriction out. A
-//! Panasonic 75GX880 started x264 streams that declared one picture 8 times in
-//! 8, and 2 in 6 when they declared twelve; NVENC went from 3 starts in 5 to 4
-//! in 5 once its SPS stated three pictures and no reordering.
+//! that is 12 pictures, about 66 MB. NVENC leaves the restriction out, and a
+//! television that cannot reserve that much starts the stream only some of
+//! the time; told the real need, it starts it as reliably as x264's streams,
+//! which always declare it.
 //!
 //! Every encoder here runs without B-frames, so pictures leave in decoding
 //! order and `max_num_reorder_frames` is 0, and the buffer is the reference
@@ -455,7 +455,7 @@ mod tests {
     }
 
     #[test]
-    fn an_nvenc_sps_declares_its_three_pictures_and_no_reordering() {
+    fn nvenc_sps_declares_decode_buffer() {
         let original = sps(NVENC_IDR);
         assert_eq!(
             declared(&original),
@@ -469,13 +469,13 @@ mod tests {
     }
 
     #[test]
-    fn an_sps_that_already_declares_it_is_left_alone() {
+    fn declared_sps_is_left_alone() {
         let rewritten = with_decode_buffer(&sps(NVENC_IDR)).unwrap();
         assert_eq!(with_decode_buffer(&rewritten), None);
     }
 
     #[test]
-    fn an_sps_without_a_vui_gets_one_holding_only_the_restriction() {
+    fn missing_vui_gets_restriction() {
         // The NVENC SPS cut at its VUI flag, which then reads 0.
         let original = sps(NVENC_IDR);
         let rbsp = unescape(&original[1..]);
@@ -501,7 +501,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_sps_of_an_access_unit_changes() {
+    fn only_the_sps_changes() {
         let rewritten = rewrite_access_unit(NVENC_IDR, with_decode_buffer).unwrap();
         let (before, after) = (start_codes(NVENC_IDR), start_codes(&rewritten));
         assert_eq!(before.len(), after.len());

@@ -723,7 +723,7 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires BNS_TEST_PRIVATE_BUS=1 and a private dbus-run-session"]
-    async fn player_dbus_methods_use_the_actual_calling_connection() {
+    async fn player_calls_use_caller_connection() {
         assert_eq!(std::env::var("BNS_TEST_PRIVATE_BUS").as_deref(), Ok("1"));
         let path = std::env::temp_dir().join(format!("bns-player-api-{}.mp3", std::process::id()));
         std::fs::write(&path, []).unwrap();

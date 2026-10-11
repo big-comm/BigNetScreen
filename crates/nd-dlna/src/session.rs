@@ -620,7 +620,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_renderer_that_gives_up_while_starting_is_handed_the_stream_again() {
+    async fn abandoned_start_is_handed_over_again() {
         let path = test_film("restart", 40);
         let source = CaptureSource::media_file(
             nd_core::capture::MediaPlayback {

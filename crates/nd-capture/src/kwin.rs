@@ -510,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn a_stream_is_captured_only_by_a_valid_target() {
+    fn only_valid_targets_are_captured() {
         let serial = u64::from(u32::MAX) + 7;
         assert_eq!(
             announced(Some(42), Some(serial)).unwrap(),

@@ -47,7 +47,7 @@ pub struct AppModel {
 
     page: Page,
     /// The session service, once it has answered. `None` while connecting, or
-    /// after it could not be reached — which is a banner, not a silent window.
+    /// after it could not be reached, which shows as a banner.
     service: Option<ServiceProxy<'static>>,
     state: ServiceState,
     /// The sentence under the window title, in the person's language.
@@ -624,7 +624,7 @@ impl Component for AppModel {
         // The page the model says is current.
         widgets.stack.set_visible_child_name(self.page.id());
 
-        // A page can also be reached without touching the sidebar — "Media" on
+        // A page can also be reached without touching the sidebar: "Media" on
         // the home page, or "Send media" on a device. The highlight has to
         // follow, or it points at the page the person just left.
         let index = Page::all()

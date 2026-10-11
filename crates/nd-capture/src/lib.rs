@@ -1,10 +1,10 @@
 //! Screen capture backends.
 //!
-//! - [`PortalBackend`] — `ashpd` / xdg-desktop-portal `ScreenCast`. The only
+//! - [`PortalBackend`]: `ashpd` / xdg-desktop-portal `ScreenCast`. The only
 //!   viable path under Flatpak, and it works on any desktop.
-//! - [`MutterBackend`] — `org.gnome.Mutter.ScreenCast` over D-Bus. Used for
+//! - [`MutterBackend`]: `org.gnome.Mutter.ScreenCast` over D-Bus. Used for
 //!   the virtual monitor on native GNOME, which the portal cannot size.
-//! - [`KWinBackend`] — `zkde_screencast_unstable_v1` over Wayland, on KWin and
+//! - [`KWinBackend`]: `zkde_screencast_unstable_v1` over Wayland, on KWin and
 //!   big-compositor: existing screens without a portal dialog, and virtual
 //!   screens at the chosen size, where the KDE portal makes every one
 //!   1920x1080.

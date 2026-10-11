@@ -626,7 +626,7 @@ impl Engine {
 
 /// The receivers that can be sent a file, for a client to choose from.
 ///
-/// There is deliberately no "best guess" anywhere above this: casting to a
+/// There is no "best guess" anywhere above this: casting to a
 /// device is visible to whoever is standing in front of it, so it takes an
 /// explicit choice every time.
 pub fn can_receive_files(receiver: &Receiver) -> bool {
@@ -784,7 +784,7 @@ mod tests {
     }
 
     #[test]
-    fn a_screen_is_named_after_its_source() {
+    fn screen_source_names_connector() {
         assert_eq!(
             source_from_arg("monitor"),
             Some((SourceType::Monitor, None))

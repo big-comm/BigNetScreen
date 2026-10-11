@@ -581,7 +581,7 @@ mod tests {
     }
 
     #[test]
-    fn each_lockout_lasts_twice_the_last_up_to_a_ceiling() {
+    fn lockout_doubles_up_to_ceiling() {
         let mut now = Instant::now();
         let mut guard = PinGuard::default();
         let lock = |guard: &mut PinGuard, now: Instant| {
