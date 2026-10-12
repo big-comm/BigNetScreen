@@ -43,37 +43,49 @@ pub struct MediaFile {
     pub content_type: &'static str,
     /// Size in bytes, `0` when it could not be read.
     pub size: u64,
+    /// Whether a Chromecast can fetch this file as it is; otherwise it is
+    /// decoded here and streamed. See [`Self::check_streams`].
+    pub native: bool,
 }
 
 impl MediaFile {
-    /// Describes a file, or explains why this receiver cannot play it.
+    /// Describes a file a receiver plays, or explains why none can.
     ///
-    /// The check is by extension, which has a limit: the container
-    /// says nothing about the codecs inside, and a Chromecast rejects `.mp4`
-    /// carrying HEVC as it rejects `.mkv`. It catches a file type the Default
-    /// Media Receiver never plays, so the interface can say so instead of the
-    /// receiver going black.
+    /// The extension decides only whether the file is media at all: formats
+    /// the Default Media Receiver fetches are marked native, and the rest
+    /// (`.mkv`, `.avi`…) go through the decoding path DLNA and screen
+    /// mirroring use. [`Self::check_streams`] reads the codecs.
     pub fn inspect(path: &Path) -> std::result::Result<Self, String> {
         let extension = extension(path);
-        let format = native_format(&extension).ok_or_else(|| unplayable(&extension))?;
-        Self::describe(path, format)
+        let (format, native) = match native_format(&extension) {
+            Some(format) => (format, true),
+            None => (
+                decodable_format(&extension).ok_or_else(|| unplayable(&extension))?,
+                false,
+            ),
+        };
+        Self::describe(path, format, native)
     }
 
-    /// Describes a file that a receiver cannot fetch as it is but that the
-    /// decoding path (the one DLNA and screen mirroring use) can play: a
-    /// player hands over whatever it is showing, and `.mkv` or HEVC is common.
-    /// Formats the receiver plays natively are described as by [`Self::inspect`].
-    pub fn inspect_decodable(path: &Path) -> std::result::Result<Self, String> {
-        let extension = extension(path);
-        let format = native_format(&extension)
-            .or_else(|| decodable_format(&extension))
-            .ok_or_else(|| unplayable(&extension))?;
-        Self::describe(path, format)
+    /// Marks the file for decoding when a stream inside is one a Chromecast
+    /// does not play, such as AV1 in a `.webm`. Blocking: it reads the
+    /// file's headers, for up to five seconds.
+    pub fn check_streams(mut self) -> Self {
+        if self.native
+            && self.kind != MediaKind::Photo
+            && nd_core::media::cast_plays_streams(&nd_core::media::MediaSource::File(
+                self.path.clone(),
+            )) == Some(false)
+        {
+            self.native = false;
+        }
+        self
     }
 
     fn describe(
         path: &Path,
         (kind, content_type): (MediaKind, &'static str),
+        native: bool,
     ) -> std::result::Result<Self, String> {
         let metadata = std::fs::metadata(path).map_err(|e| e.to_string())?;
         if !metadata.is_file() {
@@ -84,12 +96,13 @@ impl MediaFile {
             kind,
             content_type,
             size: metadata.len(),
+            native,
         })
     }
 
     /// Whether a Chromecast can fetch this file as it is.
     pub fn plays_natively(&self) -> bool {
-        native_format(&extension(&self.path)).is_some()
+        self.native
     }
 
     /// The name to show on the receiver.
@@ -511,30 +524,6 @@ mod tests {
     }
 
     #[test]
-    fn decoder_only_files_are_handed_over() {
-        let dir = std::env::temp_dir().join(format!("nd-decodable-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let film = dir.join("film.mkv");
-        let clip = dir.join("clip.mp4");
-        let notes = dir.join("notes.txt");
-        for path in [&film, &clip, &notes] {
-            std::fs::write(path, []).unwrap();
-        }
-        assert!(MediaFile::inspect(&film).is_err());
-        let decodable = MediaFile::inspect_decodable(&film).unwrap();
-        assert_eq!(decodable.kind, MediaKind::Video);
-        assert!(!decodable.plays_natively());
-        assert!(
-            MediaFile::inspect_decodable(&clip)
-                .unwrap()
-                .plays_natively()
-        );
-        assert!(MediaFile::inspect_decodable(&notes).is_err());
-        assert!(MediaFile::inspect_decodable(&dir).is_err());
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
     fn wrong_token_gets_no_file() {
         assert_eq!(parse_target("/abc123/2", "abc123"), Some(2));
         assert_eq!(parse_target("/wrong/2", "abc123"), None);
@@ -599,9 +588,16 @@ mod tests {
             inspect_fixture(Path::new("/tmp/song.flac")).unwrap().kind,
             MediaKind::Music
         );
-        // Refused here so the interface can say why, instead of the receiver
-        // going black with no explanation.
-        assert!(inspect_fixture(Path::new("/tmp/film.mkv")).is_err());
+        assert!(
+            inspect_fixture(Path::new("/tmp/film.mp4"))
+                .unwrap()
+                .plays_natively()
+        );
+        // Only the decoding path plays it.
+        let decoded = inspect_fixture(Path::new("/tmp/film.mkv")).unwrap();
+        assert_eq!(decoded.kind, MediaKind::Video);
+        assert!(!decoded.plays_natively());
+        assert!(inspect_fixture(Path::new("/tmp/notes.txt")).is_err());
         assert!(inspect_fixture(Path::new("/tmp/notes")).is_err());
     }
 

@@ -24,19 +24,8 @@ use crate::{BUS_NAME, OBJECT_PATH};
 /// be served at once while clients catch up.
 pub const INTERFACE: &str = "br.com.biglinux.BigNetScreen1";
 
+/// Reads the files to send, codecs included, off the bus's thread.
 async fn inspect_media(paths: Vec<String>) -> zbus::fdo::Result<Vec<MediaFile>> {
-    inspect_with(paths, MediaFile::inspect).await
-}
-
-/// A player session may also take files that only the decoding path plays.
-async fn inspect_media_for_player(paths: Vec<String>) -> zbus::fdo::Result<Vec<MediaFile>> {
-    inspect_with(paths, MediaFile::inspect_decodable).await
-}
-
-async fn inspect_with(
-    paths: Vec<String>,
-    inspect: fn(&std::path::Path) -> Result<MediaFile, String>,
-) -> zbus::fdo::Result<Vec<MediaFile>> {
     if paths.is_empty() || paths.len() > nd_core::media::MAX_FILES {
         return Err(zbus::fdo::Error::InvalidArgs(format!(
             "select between 1 and {} files",
@@ -46,9 +35,9 @@ async fn inspect_with(
     let files = tokio::task::spawn_blocking(move || {
         let mut files = Vec::with_capacity(paths.len());
         for path in paths {
-            let file = inspect(std::path::Path::new(&path))
+            let file = MediaFile::inspect(std::path::Path::new(&path))
                 .map_err(|err| zbus::fdo::Error::InvalidArgs(format!("{path}: {err}")))?;
-            files.push(file);
+            files.push(file.check_streams());
         }
         Ok::<_, zbus::fdo::Error>(files)
     })
@@ -257,7 +246,7 @@ impl Service {
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> zbus::fdo::Result<String> {
-        let files = inspect_media_for_player(paths)
+        let files = inspect_media(paths)
             .await?
             .into_iter()
             .map(MediaItem::File)

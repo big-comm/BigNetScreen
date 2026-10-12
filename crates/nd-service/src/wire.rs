@@ -546,6 +546,7 @@ mod tests {
         assert!(can_receive_files(&receiver("chromecast", "192.168.1.2")));
         // A Chromecast announced without a usable address has nothing to send to.
         assert!(!can_receive_files(&receiver("chromecast", "")));
+        assert!(can_receive_files(&receiver("dlna", "192.168.1.3")));
         assert!(can_receive_files(&receiver("wfd-p2p", "")));
         assert!(!can_receive_files(&receiver("airplay", "192.168.1.2")));
         assert!(!can_receive_files(&receiver("ndi", "")));

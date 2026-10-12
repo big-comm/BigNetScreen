@@ -580,6 +580,7 @@ mod tests {
             path: name.into(),
             kind: MediaKind::Video,
             content_type: "video/mp4",
+            native: true,
             size: 1,
         })
     }

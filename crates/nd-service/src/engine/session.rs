@@ -242,6 +242,7 @@ mod tests {
             path: "/nonexistent/cancellation-test.png".into(),
             kind: nd_core::media::MediaKind::Photo,
             content_type: "image/png",
+            native: true,
             size: 0,
         };
         engine.media_session = Some(

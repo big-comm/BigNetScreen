@@ -781,6 +781,7 @@ mod tests {
             path: PathBuf::from(name),
             kind: MediaKind::Video,
             content_type: "video/mp4",
+            native: true,
             size: 1024,
         };
         let first = file("/tmp/Video & friends.mp4");

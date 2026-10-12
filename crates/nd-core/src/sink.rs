@@ -32,10 +32,11 @@ pub enum SinkKind {
 }
 
 impl SinkKind {
-    /// Direct Cast playback needs an IP; Miracast creates its link on demand.
+    /// Cast and DLNA fetch from this computer, so they need an IP; Miracast
+    /// creates its link on demand.
     pub fn can_receive_files(self, address: &str) -> bool {
         match self {
-            Self::Chromecast => address.parse::<std::net::IpAddr>().is_ok(),
+            Self::Chromecast | Self::Dlna => address.parse::<std::net::IpAddr>().is_ok(),
             Self::WfdP2p | Self::WfdMice => true,
             _ => false,
         }

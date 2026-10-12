@@ -138,6 +138,36 @@ pub fn duration(source: &MediaSource) -> Option<f64> {
         .filter(|seconds| *seconds > 0.0)
 }
 
+/// Whether a Cast receiver plays every stream of the file as it is: H.264,
+/// VP8 or VP9 pictures and AAC, MP3, Opus, Vorbis, FLAC or PCM sound. The
+/// container is no guide: a `.webm` may carry AV1, which leaves the picture
+/// black while the sound plays. `None` when the file could not be read.
+/// Blocking.
+pub fn cast_plays_streams(source: &MediaSource) -> Option<bool> {
+    use gstreamer_pbutils::prelude::DiscovererStreamInfoExt;
+    let discovered = discover(source)?;
+    let video = discovered.video_streams().into_iter().map(|s| s.caps());
+    let audio = discovered.audio_streams().into_iter().map(|s| s.caps());
+    Some(video.chain(audio).all(|caps| {
+        caps.and_then(|caps| caps.structure(0).map(cast_plays_stream))
+            .unwrap_or(false)
+    }))
+}
+
+fn cast_plays_stream(stream: &gst::StructureRef) -> bool {
+    match stream.name().as_str() {
+        "video/x-h264" | "video/x-vp8" | "video/x-vp9" => true,
+        "audio/x-opus" | "audio/x-vorbis" | "audio/x-flac" | "audio/x-raw" => true,
+        // MPEG-1 layer 3 (MP3), or AAC; layer 2 is not played.
+        "audio/mpeg" => match stream.get::<i32>("mpegversion") {
+            Ok(1) => stream.get::<i32>("layer").map_or(true, |layer| layer == 3),
+            Ok(2 | 4) => true,
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
 /// What GStreamer can tell of a file without playing it; up to five seconds.
 fn discover(source: &MediaSource) -> Option<gstreamer_pbutils::DiscovererInfo> {
     crate::pipeline::init().ok()?;
@@ -491,6 +521,37 @@ mod tests {
                 pad.link(&sink).unwrap();
             });
         receiver
+    }
+
+    #[test]
+    fn cast_plays_only_its_codecs() {
+        crate::pipeline::init().unwrap();
+        let dir = std::env::temp_dir();
+        let played = dir.join(format!("bns-codecs-vp8-{}.webm", std::process::id()));
+        let unplayed = dir.join(format!("bns-codecs-theora-{}.mkv", std::process::id()));
+        for (path, mux, video) in [
+            (&played, "webmmux", "vp8enc deadline=1"),
+            (&unplayed, "matroskamux", "theoraenc"),
+        ] {
+            crate::pipeline::write_test_media(&format!(
+                "{mux} name=mux ! filesink location=\"{}\" videotestsrc num-buffers=10 ! video/x-raw,width=64,height=48,framerate=10/1 ! {video} ! mux. audiotestsrc num-buffers=10 ! vorbisenc ! mux.",
+                path.display()
+            ));
+        }
+        assert_eq!(
+            cast_plays_streams(&MediaSource::File(played.clone())),
+            Some(true)
+        );
+        assert_eq!(
+            cast_plays_streams(&MediaSource::File(unplayed.clone())),
+            Some(false)
+        );
+        assert_eq!(
+            cast_plays_streams(&MediaSource::File(dir.join("bns-missing.webm"))),
+            None
+        );
+        std::fs::remove_file(played).unwrap();
+        std::fs::remove_file(unplayed).unwrap();
     }
 
     #[test]
