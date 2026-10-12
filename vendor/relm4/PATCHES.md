@@ -1,7 +1,9 @@
 # Local Relm4 patch
 
-This is Relm4 0.11.0 from crates.io, with its original MIT and Apache licenses.
-The workspace patches that same version to this directory; it is tracked source.
+This is Relm4 0.11.0 from crates.io (upstream commit `813423036c28`), with its
+original MIT and Apache licenses. The workspace patches that same version to
+this directory; it is tracked source. Only the library is kept: the examples,
+benchmarks, integration tests and their manifest entries are left out.
 
 `RuntimeSenders::new` removes closed shutdown channels before registering the
 next component. Upstream keeps every sender until application shutdown, retaining

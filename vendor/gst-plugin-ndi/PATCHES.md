@@ -22,9 +22,9 @@ that distinction, and the error the user is shown should.
 
 ## Upstream submission
 
-The same change against gst-plugins-rs `main` is in `upstream/`, with the
-merge request text. Once it is merged and released, point `nd-ndi` back at
-crates.io and delete this directory.
+The same change against gst-plugins-rs `main` is
+`upstream/0001-ndi-receiver-count-and-runtime-info.patch`. Once it is merged
+and released, point `nd-ndi` back at crates.io and delete this directory.
 
 ## Changed files
 
