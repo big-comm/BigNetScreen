@@ -18,6 +18,7 @@ depends=(
   'gst-plugins-ugly'     # x264enc
   'gst-libav'            # avenc_aac
   'gst-plugin-pipewire'  # pipewiresrc
+  'gst-plugin-dav1d'     # dav1ddec: libaom decodes 4K AV1 slower than real time
   'pipewire'
   'libnice'             # nicesink/nicesrc for WebRTC ICE
   'gst-plugin-rswebrtc' # whepserversink: sharing with web browsers
@@ -27,7 +28,6 @@ depends=(
 )
 optdepends=(
   'libndi: optional proprietary NDI runtime (ndi-sdk in the AUR)'
-  'gst-plugin-dav1d: AV1 videos sent without stutter (the libaom decoder is slower than real time at 4K)'
   'networkmanager: Miracast discovery and connection (Wi-Fi Direct)'
   'firewalld: automatically opens RTSP port 7236 on the P2P link'
   'intel-media-driver: VA-API hardware encoding on Intel GPUs'
