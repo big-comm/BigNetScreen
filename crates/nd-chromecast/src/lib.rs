@@ -32,6 +32,8 @@ use nd_core::{NdError, Result};
 
 const CHROMECAST_SERVICE: &str = "_googlecast._tcp.local.";
 const AIRPLAY_SERVICE: &str = "_airplay._tcp.local.";
+/// How often the mDNS daemon looks for changed network interfaces.
+const IP_CHECK_SECS: u32 = 30;
 
 /// An mDNS service type to browse and the protocol it stands for.
 #[derive(Clone, Copy, Debug)]
@@ -67,6 +69,12 @@ impl MdnsProvider {
         services: Vec<ServiceKind>,
     ) -> Result<Self> {
         let daemon = ServiceDaemon::new().map_err(NdError::network)?;
+        // The daemon re-lists every interface over netlink on this interval
+        // (5 s by default) to follow network changes; a rescan builds a new
+        // daemon anyway, so a slower check only delays a changed network.
+        daemon
+            .set_ip_check_interval(IP_CHECK_SECS)
+            .map_err(NdError::network)?;
         Ok(Self {
             daemon,
             id,

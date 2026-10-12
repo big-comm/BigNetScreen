@@ -239,7 +239,7 @@ impl StreamSender {
             .ok_or_else(|| NdError::Gst("encoded Cast sample has no buffer".into()))?;
         let pts = sample_running_time(&sample)?;
 
-        {
+        let has_room = {
             let window = self
                 .checkpoint
                 .lock()
@@ -250,7 +250,8 @@ impl StreamSender {
                     self.label
                 )));
             }
-        }
+            window.can_send()
+        };
 
         // A key frame depends on nothing; the rest reference the previous
         // one. That is how the receiver knows where it can start decoding.
@@ -260,7 +261,7 @@ impl StreamSender {
         // for costs the same CPU and network as one it can use. "No room" is
         // the eight-bit frame window alone; a tighter age or media-time budget
         // drops audio whenever an ACK is slow to cross a wireless network.
-        if self.skip_while_receiver_catches_up(is_key) {
+        if self.skip_while_receiver_catches_up(is_key, has_room) {
             return Ok(true);
         }
 
@@ -290,10 +291,16 @@ impl StreamSender {
             payload: &encrypted,
         });
 
-        self.checkpoint
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .sent(self.frame_id);
+        // The acknowledgement read here prunes the history below; one read
+        // earlier than the send only keeps a little more for repairs.
+        let acknowledged = {
+            let mut window = self
+                .checkpoint
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            window.sent(self.frame_id);
+            window.checkpoint()
+        };
         // Open Screen sends the initial clock mapping before the first RTP
         // packet, but never before a valid encoded frame establishes a track.
         self.has_media = true;
@@ -308,11 +315,6 @@ impl StreamSender {
         // Keep it for a possible retransmission before moving on.
         let now = Instant::now();
         self.history.push_back((self.frame_id, now, packets));
-        let acknowledged = self
-            .checkpoint
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .checkpoint();
         prune_history(&mut self.history, now, acknowledged);
 
         self.flow
@@ -342,12 +344,7 @@ impl StreamSender {
     /// a low audio bitrate does not exempt it. After video drops a frame only
     /// an IDR restarts the dependency chain, so it is requested once there is
     /// room to send it, and every frame until it arrives is dropped too.
-    fn skip_while_receiver_catches_up(&mut self, is_key: bool) -> bool {
-        let has_room = self
-            .checkpoint
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .can_send();
+    fn skip_while_receiver_catches_up(&mut self, is_key: bool, has_room: bool) -> bool {
         if !has_room {
             self.dropped_window += 1;
             if self.is_video() {

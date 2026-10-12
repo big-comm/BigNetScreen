@@ -113,12 +113,15 @@ pub(crate) trait Ip4Config {
 
 /// One IPv4 source per active LAN connection, including non-default routes.
 ///
-/// Read again on each SSDP sweep to follow Wi-Fi/Ethernet changes, over one
-/// system-bus connection kept for as long as this value lives: a connection
-/// per sweep costs a bus handshake and a unique name every time.
+/// Checked on each SSDP sweep to follow Wi-Fi/Ethernet changes, over one
+/// system-bus connection kept for as long as this value lives. The addresses
+/// are read again only when the set of active connections changes: each one
+/// costs several round trips, and a desktop with containers has many.
 #[derive(Default)]
 pub struct LanAddresses {
     nm: Option<NetworkManagerProxy<'static>>,
+    read_for: Vec<OwnedObjectPath>,
+    addresses: Vec<std::net::Ipv4Addr>,
 }
 
 impl LanAddresses {
@@ -138,14 +141,19 @@ impl LanAddresses {
                 self.nm.insert(nm).clone()
             }
         };
-        addresses(&nm).await
+        let mut active = nm.active_connections().await?;
+        active.truncate(64);
+        if active != self.read_for || self.addresses.is_empty() {
+            self.addresses = addresses(nm.inner().connection(), &active).await;
+            self.read_for = active;
+        }
+        Ok(self.addresses.clone())
     }
 }
 
-async fn addresses(nm: &NetworkManagerProxy<'_>) -> zbus::Result<Vec<std::net::Ipv4Addr>> {
-    let conn = nm.inner().connection();
+async fn addresses(conn: &Connection, active: &[OwnedObjectPath]) -> Vec<std::net::Ipv4Addr> {
     let mut addresses = Vec::new();
-    for path in nm.active_connections().await?.into_iter().take(64) {
+    for path in active.iter().cloned() {
         let read = async {
             let active = ActiveConnectionProxy::builder(conn)
                 .path(path)?
@@ -182,5 +190,5 @@ async fn addresses(nm: &NetworkManagerProxy<'_>) -> zbus::Result<Vec<std::net::I
             addresses.push(address);
         }
     }
-    Ok(addresses)
+    addresses
 }
