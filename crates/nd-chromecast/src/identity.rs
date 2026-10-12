@@ -95,10 +95,31 @@ fn read_store(path: &Path) -> Result<String> {
 }
 
 fn check_in(path: &Path, receiver: &str, device_key: Option<&[u8]>) -> Result<()> {
+    // Only remembering a new key writes. The store is replaced atomically, so
+    // a check reads it without waiting behind another receiver's write and
+    // its fsync; a write takes the lock and decides again on a fresh read.
+    if remembered(&read_store(path)?, receiver, device_key)?.is_none() {
+        return Ok(());
+    }
     let _held = STORE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let text = read_store(path)?;
+    let Some(contents) = remembered(&read_store(path)?, receiver, device_key)? else {
+        return Ok(());
+    };
+    nd_core::persistence::write_private(path, contents.as_bytes()).map_err(|err| {
+        NdError::Protocol(format!(
+            "the receiver's identity could not be remembered: {err}"
+        ))
+    })?;
+    tracing::info!("remembered the receiver's identity key");
+    Ok(())
+}
+
+/// The verdict on `receiver` against the store's `text`: an error when the
+/// device proves another key or none after proving one, the new store
+/// contents when its key is to be remembered, and `None` when nothing changes.
+fn remembered(text: &str, receiver: &str, device_key: Option<&[u8]>) -> Result<Option<String>> {
     let name = hex(receiver.as_bytes());
     let mut entries: Vec<(&str, &str)> = text.lines().filter_map(|l| l.split_once(' ')).collect();
     let known = entries
@@ -107,7 +128,7 @@ fn check_in(path: &Path, receiver: &str, device_key: Option<&[u8]>) -> Result<()
         .map(|(_, key)| *key);
 
     match (known, device_key) {
-        (Some(known), Some(key)) if known == hex(key) => Ok(()),
+        (Some(known), Some(key)) if known == hex(key) => Ok(None),
         (Some(_), Some(_)) => Err(NdError::Protocol(format!(
             "the device answering for this receiver proved a different identity key \
              than the first time: {IDENTITY_CHANGED}"
@@ -120,7 +141,7 @@ fn check_in(path: &Path, receiver: &str, device_key: Option<&[u8]>) -> Result<()
         ))),
         (None, None) => {
             tracing::warn!("the receiver did not prove its identity; nothing to remember");
-            Ok(())
+            Ok(None)
         }
         (None, Some(key)) => {
             let key = hex(key);
@@ -133,13 +154,7 @@ fn check_in(path: &Path, receiver: &str, device_key: Option<&[u8]>) -> Result<()
                 contents.push_str(k);
                 contents.push('\n');
             }
-            nd_core::persistence::write_private(path, contents.as_bytes()).map_err(|err| {
-                NdError::Protocol(format!(
-                    "the receiver's identity could not be remembered: {err}"
-                ))
-            })?;
-            tracing::info!("remembered the receiver's identity key");
-            Ok(())
+            Ok(Some(contents))
         }
     }
 }
@@ -157,6 +172,25 @@ mod tests {
             std::env::temp_dir().join(format!("nd-cast-identity-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir.join("cast-receivers")
+    }
+
+    #[test]
+    fn check_waits_only_to_write() {
+        let path = store("no-wait");
+        check_in(&path, "tv", Some(b"key")).unwrap();
+        // Another receiver is mid-write.
+        let _held = STORE.lock().unwrap();
+        let (done, checked) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = done.send((
+                check_in(&path, "tv", Some(b"key")).is_ok(),
+                check_in(&path, "other", None).is_ok(),
+            ));
+        });
+        assert_eq!(
+            checked.recv_timeout(std::time::Duration::from_secs(5)),
+            Ok((true, true))
+        );
     }
 
     #[test]

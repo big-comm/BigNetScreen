@@ -10,10 +10,8 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 
-/// Waits for the next control message. The limit only stops a hung test; a
-/// loaded machine can take seconds to answer one.
 async fn receive<R: AsyncRead + Unpin>(reader: &mut R) -> CastMessage {
-    tokio::time::timeout(Duration::from_secs(15), async {
+    tokio::time::timeout(Duration::from_secs(5), async {
         let length = reader.read_u32().await.unwrap() as usize;
         assert!(length <= MAX_MESSAGE_BYTES);
         let mut bytes = vec![0; length];
