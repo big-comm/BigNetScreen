@@ -131,7 +131,7 @@ msgstr ""
 msgid "Audio"
 msgstr "Áudio"
 
-#: crates/nd-gui/src/app/dialogs.rs:189
+#: crates/nd-gui/src/app/dialogs.rs:182
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
@@ -241,12 +241,12 @@ msgstr "Chromecast"
 msgid "Clear queue"
 msgstr "Limpar fila"
 
-#: crates/nd-gui/src/app/dialogs.rs:61 crates/nd-gui/src/app/dialogs.rs:231
-#: crates/nd-gui/src/app/dialogs.rs:253 crates/nd-gui/src/pages/settings.rs:441
+#: crates/nd-gui/src/app/dialogs.rs:61 crates/nd-gui/src/app/dialogs.rs:224
+#: crates/nd-gui/src/app/dialogs.rs:246 crates/nd-gui/src/pages/settings.rs:441
 msgid "Close"
 msgstr "Fechar"
 
-#: crates/nd-gui/src/app/dialogs.rs:171
+#: crates/nd-gui/src/app/dialogs.rs:164
 msgid "Close without saving"
 msgstr "Fechar sem salvar"
 
@@ -254,9 +254,9 @@ msgstr "Fechar sem salvar"
 msgid "Connected"
 msgstr "Conectado"
 
-#: crates/nd-gui/src/app/mod.rs:390 crates/nd-gui/src/app/session.rs:116
-#: crates/nd-gui/src/app/wording.rs:26 crates/nd-gui/src/app/wording.rs:161
-#: crates/nd-gui/src/pages/mod.rs:207
+#: crates/nd-gui/src/app/mod.rs:390 crates/nd-gui/src/app/session.rs:33
+#: crates/nd-gui/src/app/session.rs:113 crates/nd-gui/src/app/wording.rs:26
+#: crates/nd-gui/src/app/wording.rs:161 crates/nd-gui/src/pages/mod.rs:207
 msgid "Connecting…"
 msgstr "Conectando…"
 
@@ -290,7 +290,7 @@ msgstr ""
 "Não foi possível preparar a saída de som BigNetScreen. Confira as opções de "
 "áudio nas Configurações e tente novamente."
 
-#: crates/nd-gui/src/app/dialogs.rs:131 crates/nd-gui/src/app/dialogs.rs:169
+#: crates/nd-gui/src/app/dialogs.rs:131 crates/nd-gui/src/app/dialogs.rs:162
 #: crates/nd-gui/src/app/mod.rs:643 crates/nd-gui/src/app/wording.rs:69
 msgid "Could not save settings"
 msgstr "Não foi possível salvar as configurações"
@@ -464,11 +464,11 @@ msgstr "Incluir áudio do sistema"
 msgid "Include the microphone"
 msgstr "Incluir o microfone"
 
-#: crates/nd-gui/src/app/dialogs.rs:256
+#: crates/nd-gui/src/app/dialogs.rs:249
 msgid "Install"
 msgstr "Instalar"
 
-#: crates/nd-gui/src/app/dialogs.rs:210
+#: crates/nd-gui/src/app/dialogs.rs:203
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
@@ -476,7 +476,7 @@ msgstr ""
 "A instalação falhou ou a autenticação foi cancelada. Você pode tentar "
 "novamente ou instalar a biblioteca manualmente."
 
-#: crates/nd-gui/src/app/dialogs.rs:188
+#: crates/nd-gui/src/app/dialogs.rs:181
 msgid "Installing NDI…"
 msgstr "Instalando NDI…"
 
@@ -484,11 +484,11 @@ msgstr "Instalando NDI…"
 msgid "Item {position} of {total}"
 msgstr "Item {position} de {total}"
 
-#: crates/nd-gui/src/app/dialogs.rs:153
+#: crates/nd-gui/src/app/dialogs.rs:146
 msgid "Keep Sharing"
 msgstr "Continuar compartilhando"
 
-#: crates/nd-gui/src/app/dialogs.rs:170
+#: crates/nd-gui/src/app/dialogs.rs:163
 msgid "Keep open"
 msgstr "Manter aberto"
 
@@ -606,15 +606,15 @@ msgstr "Há mais de uma tela conectada. O receptor mostra a que você escolher."
 msgid "Music"
 msgstr "Música"
 
-#: crates/nd-gui/src/app/dialogs.rs:209
+#: crates/nd-gui/src/app/dialogs.rs:202
 msgid "NDI installation did not finish"
 msgstr "A instalação do NDI não foi concluída"
 
-#: crates/nd-gui/src/app/dialogs.rs:203
+#: crates/nd-gui/src/app/dialogs.rs:196
 msgid "NDI installed"
 msgstr "NDI instalado"
 
-#: crates/nd-gui/src/app/dialogs.rs:244
+#: crates/nd-gui/src/app/dialogs.rs:237
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
@@ -625,7 +625,7 @@ msgstr ""
 "compilação necessárias? O sistema solicitará autenticação de administrador. "
 "Outros métodos de compartilhamento funcionam sem essa biblioteca."
 
-#: crates/nd-gui/src/app/dialogs.rs:248
+#: crates/nd-gui/src/app/dialogs.rs:241
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
@@ -636,11 +636,11 @@ msgstr ""
 "reinicie o aplicativo. Outros métodos de compartilhamento funcionam sem essa "
 "biblioteca."
 
-#: crates/nd-gui/src/app/dialogs.rs:252 crates/nd-gui/src/app/wording.rs:29
+#: crates/nd-gui/src/app/dialogs.rs:245 crates/nd-gui/src/app/wording.rs:29
 msgid "NDI runtime required"
 msgstr "Runtime do NDI necessário"
 
-#: crates/nd-gui/src/app/dialogs.rs:263
+#: crates/nd-gui/src/app/dialogs.rs:256
 msgid "NDI setup"
 msgstr "Configuração do NDI"
 
@@ -787,7 +787,7 @@ msgstr "Remover da fila"
 msgid "Resolution limit"
 msgstr "Limite de resolução"
 
-#: crates/nd-gui/src/app/dialogs.rs:204
+#: crates/nd-gui/src/app/dialogs.rs:197
 msgid "Restart BigNetScreen to use NDI."
 msgstr "Reinicie o BigNetScreen para usar o NDI."
 
@@ -864,7 +864,7 @@ msgstr "Compartilhar com um navegador"
 msgid "Share your screen wirelessly"
 msgstr "Compartilhe sua tela sem fio"
 
-#: crates/nd-gui/src/app/dialogs.rs:277
+#: crates/nd-gui/src/app/dialogs.rs:270
 msgid "Share your screen with TVs, projectors and web browsers"
 msgstr "Compartilhe sua tela com TVs, projetores e navegadores"
 
@@ -918,7 +918,7 @@ msgstr "Configurações de som"
 msgid "Status"
 msgstr "Status"
 
-#: crates/nd-gui/src/app/dialogs.rs:154
+#: crates/nd-gui/src/app/dialogs.rs:147
 msgid "Stop and Switch"
 msgstr "Parar e trocar"
 
@@ -935,7 +935,7 @@ msgstr "Parar envio"
 msgid "Stop sharing"
 msgstr "Parar compartilhamento"
 
-#: crates/nd-gui/src/app/dialogs.rs:147
+#: crates/nd-gui/src/app/dialogs.rs:143
 msgid "Stop the current sharing?"
 msgstr "Parar o compartilhamento atual?"
 
@@ -991,6 +991,10 @@ msgstr ""
 "As alterações valem até o BigNetScreen ser fechado. Verifique se a sua pasta "
 "de configuração permite gravação."
 
+#: crates/nd-gui/src/app/dialogs.rs:144
+msgid "The current sharing stops before the new one starts."
+msgstr "O compartilhamento atual para antes de o novo começar."
+
 #: crates/nd-gui/src/app/mod.rs:622
 msgid "The details below say what went wrong."
 msgstr "Os detalhes abaixo dizem o que deu errado."
@@ -1013,10 +1017,6 @@ msgstr ""
 #: crates/nd-gui/src/pages/mod.rs:255
 msgid "The receiver did not answer the connection check"
 msgstr "O aparelho não respondeu à verificação de conexão"
-
-#: crates/nd-gui/src/app/session.rs:79
-msgid "The receiver of your files"
-msgstr "O receptor dos seus arquivos"
 
 #: crates/nd-gui/src/app/wording.rs:166
 msgid "The sharing has ended."
@@ -1087,7 +1087,7 @@ msgstr "Muito alto (1440p)"
 msgid "Videos"
 msgstr "Vídeos"
 
-#: crates/nd-gui/src/app/dialogs.rs:261
+#: crates/nd-gui/src/app/dialogs.rs:254
 msgid "View ndi-sdk in the AUR"
 msgstr "Ver ndi-sdk no AUR"
 
@@ -1160,12 +1160,6 @@ msgid_plural "{} files selected"
 msgstr[0] "{} arquivo selecionado"
 msgstr[1] "{} arquivos selecionados"
 
-#: crates/nd-gui/src/app/dialogs.rs:149
-msgid "{} is receiving your screen. It stops before the new sharing starts."
-msgstr ""
-"{} está recebendo a sua tela. Ele para antes de o novo compartilhamento "
-"começar."
-
 #: crates/nd-gui/src/pages/mod.rs:173
 msgid "{} receiver"
 msgid_plural "{} receivers"
@@ -1183,6 +1177,9 @@ msgid "{} receiver is hidden by the filter."
 msgid_plural "{} receivers are hidden by the filter."
 msgstr[0] "{} receptor está oculto pelo filtro."
 msgstr[1] "{} receptores estão ocultos pelo filtro."
+
+#~ msgid "The receiver of your files"
+#~ msgstr "O receptor dos seus arquivos"
 
 #~ msgid "Sharing could not be completed. Open Details to see the reason."
 #~ msgstr ""

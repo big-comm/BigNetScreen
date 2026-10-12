@@ -19,7 +19,7 @@ impl AppModel {
     }
 
     pub(super) fn is_streaming(&self) -> bool {
-        self.session_state() == SinkState::Streaming
+        self.session_state() == SinkState::Streaming && !self.state.status.is(StatusKind::Stopping)
     }
 
     /// What the sidebar card says the session is doing.
@@ -29,6 +29,8 @@ impl AppModel {
         }
         match self.session_state() {
             SinkState::Streaming => tr!("Sharing with"),
+            // A session the receiver has not started on yet.
+            SinkState::Disconnected => tr!("Connecting…"),
             state => crate::pages::state_label(state),
         }
     }
@@ -75,11 +77,6 @@ impl AppModel {
     pub(super) fn begin_cast(&mut self, id: String, sender: &ComponentSender<Self>) {
         self.failure = None;
         if self.is_busy() {
-            let current = if self.state.session.is_idle() {
-                tr!("The receiver of your files")
-            } else {
-                self.state.session.display_name.clone()
-            };
             self.switch_to = Some(id);
             if let Some(root) = self
                 .home
@@ -87,7 +84,7 @@ impl AppModel {
                 .root()
                 .and_downcast::<adw::ApplicationWindow>()
             {
-                dialogs::switch_stream(&root, &current, sender.input_sender().clone());
+                dialogs::switch_stream(&root, sender.input_sender().clone());
             }
             return;
         }
@@ -149,11 +146,16 @@ impl AppModel {
             window.announce(&self.status, gtk::AccessibleAnnouncementPriority::Medium);
         }
         if searching_changed {
-            self.push_discovery(match self.state.status.kind() {
-                Some(StatusKind::Searching) => Discovery::Searching,
-                Some(StatusKind::DiscoveryOff) => Discovery::Off,
-                _ => Discovery::Finished,
-            });
+            // A session's own kinds say nothing about discovery.
+            let discovery = match self.state.status.kind() {
+                Some(StatusKind::Searching) => Some(Discovery::Searching),
+                Some(StatusKind::DiscoveryOff) => Some(Discovery::Off),
+                Some(StatusKind::Found | StatusKind::Empty) => Some(Discovery::Finished),
+                _ => None,
+            };
+            if let Some(discovery) = discovery {
+                self.push_discovery(discovery);
+            }
         }
         if receivers_changed || session_changed {
             self.push_devices();

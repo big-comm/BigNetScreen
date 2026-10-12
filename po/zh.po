@@ -119,7 +119,7 @@ msgstr "宽高比保持不变。Miracast 会在此限制范围内使用受支持
 msgid "Audio"
 msgstr "音频"
 
-#: crates/nd-gui/src/app/dialogs.rs:189
+#: crates/nd-gui/src/app/dialogs.rs:182
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
@@ -228,12 +228,12 @@ msgstr "Chromecast"
 msgid "Clear queue"
 msgstr "清空播放队列"
 
-#: crates/nd-gui/src/app/dialogs.rs:61 crates/nd-gui/src/app/dialogs.rs:231
-#: crates/nd-gui/src/app/dialogs.rs:253 crates/nd-gui/src/pages/settings.rs:441
+#: crates/nd-gui/src/app/dialogs.rs:61 crates/nd-gui/src/app/dialogs.rs:224
+#: crates/nd-gui/src/app/dialogs.rs:246 crates/nd-gui/src/pages/settings.rs:441
 msgid "Close"
 msgstr "关闭"
 
-#: crates/nd-gui/src/app/dialogs.rs:171
+#: crates/nd-gui/src/app/dialogs.rs:164
 msgid "Close without saving"
 msgstr ""
 
@@ -241,9 +241,9 @@ msgstr ""
 msgid "Connected"
 msgstr "已连接"
 
-#: crates/nd-gui/src/app/mod.rs:390 crates/nd-gui/src/app/session.rs:116
-#: crates/nd-gui/src/app/wording.rs:26 crates/nd-gui/src/app/wording.rs:161
-#: crates/nd-gui/src/pages/mod.rs:207
+#: crates/nd-gui/src/app/mod.rs:390 crates/nd-gui/src/app/session.rs:33
+#: crates/nd-gui/src/app/session.rs:113 crates/nd-gui/src/app/wording.rs:26
+#: crates/nd-gui/src/app/wording.rs:161 crates/nd-gui/src/pages/mod.rs:207
 msgid "Connecting…"
 msgstr "正在连接…"
 
@@ -275,7 +275,7 @@ msgid ""
 "Settings and try again."
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:131 crates/nd-gui/src/app/dialogs.rs:169
+#: crates/nd-gui/src/app/dialogs.rs:131 crates/nd-gui/src/app/dialogs.rs:162
 #: crates/nd-gui/src/app/mod.rs:643 crates/nd-gui/src/app/wording.rs:69
 msgid "Could not save settings"
 msgstr ""
@@ -438,17 +438,17 @@ msgstr "包含系统音频"
 msgid "Include the microphone"
 msgstr "包含麦克风"
 
-#: crates/nd-gui/src/app/dialogs.rs:256
+#: crates/nd-gui/src/app/dialogs.rs:249
 msgid "Install"
 msgstr "安装"
 
-#: crates/nd-gui/src/app/dialogs.rs:210
+#: crates/nd-gui/src/app/dialogs.rs:203
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
 msgstr "安装失败或身份验证已取消。你可以重试，也可以手动安装该库。"
 
-#: crates/nd-gui/src/app/dialogs.rs:188
+#: crates/nd-gui/src/app/dialogs.rs:181
 msgid "Installing NDI…"
 msgstr "正在安装 NDI…"
 
@@ -456,11 +456,11 @@ msgstr "正在安装 NDI…"
 msgid "Item {position} of {total}"
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:153
+#: crates/nd-gui/src/app/dialogs.rs:146
 msgid "Keep Sharing"
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:170
+#: crates/nd-gui/src/app/dialogs.rs:163
 msgid "Keep open"
 msgstr ""
 
@@ -576,15 +576,15 @@ msgstr ""
 msgid "Music"
 msgstr "音乐"
 
-#: crates/nd-gui/src/app/dialogs.rs:209
+#: crates/nd-gui/src/app/dialogs.rs:202
 msgid "NDI installation did not finish"
 msgstr "NDI 安装未完成"
 
-#: crates/nd-gui/src/app/dialogs.rs:203
+#: crates/nd-gui/src/app/dialogs.rs:196
 msgid "NDI installed"
 msgstr "NDI 已安装"
 
-#: crates/nd-gui/src/app/dialogs.rs:244
+#: crates/nd-gui/src/app/dialogs.rs:237
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
@@ -593,7 +593,7 @@ msgstr ""
 "NDI 需要一个专有库，而 BigNetScreen 未附带该库。是否要从 AUR 安装 ndi-sdk 和"
 "所需的构建工具？系统会要求进行管理员身份验证。其他共享方式无需此库也能使用。"
 
-#: crates/nd-gui/src/app/dialogs.rs:248
+#: crates/nd-gui/src/app/dialogs.rs:241
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
@@ -602,11 +602,11 @@ msgstr ""
 "NDI 需要一个专有库，而 BigNetScreen 未附带该库。请为你的发行版安装 NDI 5 或 "
 "6 运行时，然后重启应用。其他共享方式无需此库也能使用。"
 
-#: crates/nd-gui/src/app/dialogs.rs:252 crates/nd-gui/src/app/wording.rs:29
+#: crates/nd-gui/src/app/dialogs.rs:245 crates/nd-gui/src/app/wording.rs:29
 msgid "NDI runtime required"
 msgstr "需要 NDI 运行时"
 
-#: crates/nd-gui/src/app/dialogs.rs:263
+#: crates/nd-gui/src/app/dialogs.rs:256
 msgid "NDI setup"
 msgstr "NDI 设置"
 
@@ -751,7 +751,7 @@ msgstr "从播放队列中移除"
 msgid "Resolution limit"
 msgstr "分辨率上限"
 
-#: crates/nd-gui/src/app/dialogs.rs:204
+#: crates/nd-gui/src/app/dialogs.rs:197
 msgid "Restart BigNetScreen to use NDI."
 msgstr "重启 BigNetScreen 以使用 NDI。"
 
@@ -831,7 +831,7 @@ msgstr ""
 msgid "Share your screen wirelessly"
 msgstr "无线共享屏幕"
 
-#: crates/nd-gui/src/app/dialogs.rs:277
+#: crates/nd-gui/src/app/dialogs.rs:270
 #, fuzzy
 msgid "Share your screen with TVs, projectors and web browsers"
 msgstr "将你的屏幕共享到电视、投影仪或Chromecast。"
@@ -882,7 +882,7 @@ msgstr "设置"
 msgid "Status"
 msgstr "状态"
 
-#: crates/nd-gui/src/app/dialogs.rs:154
+#: crates/nd-gui/src/app/dialogs.rs:147
 msgid "Stop and Switch"
 msgstr ""
 
@@ -901,7 +901,7 @@ msgstr "停止发送"
 msgid "Stop sharing"
 msgstr "停止发送"
 
-#: crates/nd-gui/src/app/dialogs.rs:147
+#: crates/nd-gui/src/app/dialogs.rs:143
 msgid "Stop the current sharing?"
 msgstr ""
 
@@ -953,6 +953,10 @@ msgid ""
 "folder can be written."
 msgstr ""
 
+#: crates/nd-gui/src/app/dialogs.rs:144
+msgid "The current sharing stops before the new one starts."
+msgstr ""
+
 #: crates/nd-gui/src/app/mod.rs:622
 msgid "The details below say what went wrong."
 msgstr ""
@@ -973,11 +977,6 @@ msgstr ""
 #, fuzzy
 msgid "The receiver did not answer the connection check"
 msgstr "接收设备无响应"
-
-#: crates/nd-gui/src/app/session.rs:79
-#, fuzzy
-msgid "The receiver of your files"
-msgstr "找到 {} 个接收端"
 
 #: crates/nd-gui/src/app/wording.rs:166
 msgid "The sharing has ended."
@@ -1039,7 +1038,7 @@ msgstr "非常高（1440p）"
 msgid "Videos"
 msgstr "视频"
 
-#: crates/nd-gui/src/app/dialogs.rs:261
+#: crates/nd-gui/src/app/dialogs.rs:254
 msgid "View ndi-sdk in the AUR"
 msgstr "在 AUR 中查看 ndi-sdk"
 
@@ -1112,10 +1111,6 @@ msgid "{} file selected"
 msgid_plural "{} files selected"
 msgstr[0] "已选择 {} 个文件"
 
-#: crates/nd-gui/src/app/dialogs.rs:149
-msgid "{} is receiving your screen. It stops before the new sharing starts."
-msgstr ""
-
 #: crates/nd-gui/src/pages/mod.rs:173
 #, fuzzy
 msgid "{} receiver"
@@ -1131,6 +1126,10 @@ msgstr[0] "找到 {} 个接收端"
 msgid "{} receiver is hidden by the filter."
 msgid_plural "{} receivers are hidden by the filter."
 msgstr[0] ""
+
+#, fuzzy
+#~ msgid "The receiver of your files"
+#~ msgstr "找到 {} 个接收端"
 
 #~ msgid "A new screen"
 #~ msgstr "新屏幕"

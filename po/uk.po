@@ -127,7 +127,7 @@ msgstr ""
 msgid "Audio"
 msgstr "Аудіо"
 
-#: crates/nd-gui/src/app/dialogs.rs:189
+#: crates/nd-gui/src/app/dialogs.rs:182
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
@@ -239,12 +239,12 @@ msgstr "Chromecast"
 msgid "Clear queue"
 msgstr "Очистити чергу"
 
-#: crates/nd-gui/src/app/dialogs.rs:61 crates/nd-gui/src/app/dialogs.rs:231
-#: crates/nd-gui/src/app/dialogs.rs:253 crates/nd-gui/src/pages/settings.rs:441
+#: crates/nd-gui/src/app/dialogs.rs:61 crates/nd-gui/src/app/dialogs.rs:224
+#: crates/nd-gui/src/app/dialogs.rs:246 crates/nd-gui/src/pages/settings.rs:441
 msgid "Close"
 msgstr "Закрити"
 
-#: crates/nd-gui/src/app/dialogs.rs:171
+#: crates/nd-gui/src/app/dialogs.rs:164
 msgid "Close without saving"
 msgstr ""
 
@@ -252,9 +252,9 @@ msgstr ""
 msgid "Connected"
 msgstr "Підключено"
 
-#: crates/nd-gui/src/app/mod.rs:390 crates/nd-gui/src/app/session.rs:116
-#: crates/nd-gui/src/app/wording.rs:26 crates/nd-gui/src/app/wording.rs:161
-#: crates/nd-gui/src/pages/mod.rs:207
+#: crates/nd-gui/src/app/mod.rs:390 crates/nd-gui/src/app/session.rs:33
+#: crates/nd-gui/src/app/session.rs:113 crates/nd-gui/src/app/wording.rs:26
+#: crates/nd-gui/src/app/wording.rs:161 crates/nd-gui/src/pages/mod.rs:207
 msgid "Connecting…"
 msgstr "Підключення…"
 
@@ -286,7 +286,7 @@ msgid ""
 "Settings and try again."
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:131 crates/nd-gui/src/app/dialogs.rs:169
+#: crates/nd-gui/src/app/dialogs.rs:131 crates/nd-gui/src/app/dialogs.rs:162
 #: crates/nd-gui/src/app/mod.rs:643 crates/nd-gui/src/app/wording.rs:69
 msgid "Could not save settings"
 msgstr ""
@@ -450,11 +450,11 @@ msgstr "Включати системний звук"
 msgid "Include the microphone"
 msgstr "Включати мікрофон"
 
-#: crates/nd-gui/src/app/dialogs.rs:256
+#: crates/nd-gui/src/app/dialogs.rs:249
 msgid "Install"
 msgstr "Установити"
 
-#: crates/nd-gui/src/app/dialogs.rs:210
+#: crates/nd-gui/src/app/dialogs.rs:203
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
@@ -462,7 +462,7 @@ msgstr ""
 "Не вдалося встановити програму або автентифікацію було скасовано. Можна "
 "спробувати ще раз або встановити бібліотеку вручну."
 
-#: crates/nd-gui/src/app/dialogs.rs:188
+#: crates/nd-gui/src/app/dialogs.rs:181
 msgid "Installing NDI…"
 msgstr "Встановлення NDI…"
 
@@ -470,11 +470,11 @@ msgstr "Встановлення NDI…"
 msgid "Item {position} of {total}"
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:153
+#: crates/nd-gui/src/app/dialogs.rs:146
 msgid "Keep Sharing"
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:170
+#: crates/nd-gui/src/app/dialogs.rs:163
 msgid "Keep open"
 msgstr ""
 
@@ -593,15 +593,15 @@ msgstr ""
 msgid "Music"
 msgstr "Музика"
 
-#: crates/nd-gui/src/app/dialogs.rs:209
+#: crates/nd-gui/src/app/dialogs.rs:202
 msgid "NDI installation did not finish"
 msgstr "Встановлення NDI не завершилося"
 
-#: crates/nd-gui/src/app/dialogs.rs:203
+#: crates/nd-gui/src/app/dialogs.rs:196
 msgid "NDI installed"
 msgstr "NDI встановлено"
 
-#: crates/nd-gui/src/app/dialogs.rs:244
+#: crates/nd-gui/src/app/dialogs.rs:237
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
@@ -612,7 +612,7 @@ msgstr ""
 "автентифікацію адміністратора. Інші способи спільного доступу працюють і без "
 "цієї бібліотеки."
 
-#: crates/nd-gui/src/app/dialogs.rs:248
+#: crates/nd-gui/src/app/dialogs.rs:241
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
@@ -623,11 +623,11 @@ msgstr ""
 "перезапустіть програму. Інші способи спільного доступу працюють і без цієї "
 "бібліотеки."
 
-#: crates/nd-gui/src/app/dialogs.rs:252 crates/nd-gui/src/app/wording.rs:29
+#: crates/nd-gui/src/app/dialogs.rs:245 crates/nd-gui/src/app/wording.rs:29
 msgid "NDI runtime required"
 msgstr "Потрібне середовище виконання NDI"
 
-#: crates/nd-gui/src/app/dialogs.rs:263
+#: crates/nd-gui/src/app/dialogs.rs:256
 msgid "NDI setup"
 msgstr "Налаштування NDI"
 
@@ -772,7 +772,7 @@ msgstr "Видалити з черги"
 msgid "Resolution limit"
 msgstr "Максимальна роздільна здатність"
 
-#: crates/nd-gui/src/app/dialogs.rs:204
+#: crates/nd-gui/src/app/dialogs.rs:197
 msgid "Restart BigNetScreen to use NDI."
 msgstr "Перезапустіть BigNetScreen, щоб користуватися NDI."
 
@@ -854,7 +854,7 @@ msgstr ""
 msgid "Share your screen wirelessly"
 msgstr "Діліться екраном бездротово"
 
-#: crates/nd-gui/src/app/dialogs.rs:277
+#: crates/nd-gui/src/app/dialogs.rs:270
 #, fuzzy
 msgid "Share your screen with TVs, projectors and web browsers"
 msgstr "Діліться екраном із телевізором, проєктором або Chromecast."
@@ -907,7 +907,7 @@ msgstr "Параметри"
 msgid "Status"
 msgstr "Статус"
 
-#: crates/nd-gui/src/app/dialogs.rs:154
+#: crates/nd-gui/src/app/dialogs.rs:147
 msgid "Stop and Switch"
 msgstr ""
 
@@ -926,7 +926,7 @@ msgstr "Зупинити надсилання"
 msgid "Stop sharing"
 msgstr "Зупинити надсилання"
 
-#: crates/nd-gui/src/app/dialogs.rs:147
+#: crates/nd-gui/src/app/dialogs.rs:143
 msgid "Stop the current sharing?"
 msgstr ""
 
@@ -978,6 +978,10 @@ msgid ""
 "folder can be written."
 msgstr ""
 
+#: crates/nd-gui/src/app/dialogs.rs:144
+msgid "The current sharing stops before the new one starts."
+msgstr ""
+
 #: crates/nd-gui/src/app/mod.rs:622
 msgid "The details below say what went wrong."
 msgstr ""
@@ -998,11 +1002,6 @@ msgstr ""
 #, fuzzy
 msgid "The receiver did not answer the connection check"
 msgstr "Приймач не відповідає"
-
-#: crates/nd-gui/src/app/session.rs:79
-#, fuzzy
-msgid "The receiver of your files"
-msgstr "Знайдено {} приймач"
 
 #: crates/nd-gui/src/app/wording.rs:166
 msgid "The sharing has ended."
@@ -1066,7 +1065,7 @@ msgstr "Дуже висока (1440p)"
 msgid "Videos"
 msgstr "Відео"
 
-#: crates/nd-gui/src/app/dialogs.rs:261
+#: crates/nd-gui/src/app/dialogs.rs:254
 msgid "View ndi-sdk in the AUR"
 msgstr "Переглянути ndi-sdk в AUR"
 
@@ -1143,10 +1142,6 @@ msgstr[0] "Вибрано {} файл"
 msgstr[1] "Вибрано {} файли"
 msgstr[2] "Вибрано {} файлів"
 
-#: crates/nd-gui/src/app/dialogs.rs:149
-msgid "{} is receiving your screen. It stops before the new sharing starts."
-msgstr ""
-
 #: crates/nd-gui/src/pages/mod.rs:173
 #, fuzzy
 msgid "{} receiver"
@@ -1168,6 +1163,10 @@ msgid_plural "{} receivers are hidden by the filter."
 msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
+
+#, fuzzy
+#~ msgid "The receiver of your files"
+#~ msgstr "Знайдено {} приймач"
 
 #~ msgid "A new screen"
 #~ msgstr "Новий екран"

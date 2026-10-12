@@ -138,17 +138,10 @@ pub(super) fn settings_failure(root: &adw::ApplicationWindow, detail: &str) {
 }
 
 /// Another transmission is running: stop it and start the new one, or keep it.
-pub(super) fn switch_stream(
-    root: &adw::ApplicationWindow,
-    current: &str,
-    input: relm4::Sender<AppMsg>,
-) {
+pub(super) fn switch_stream(root: &adw::ApplicationWindow, input: relm4::Sender<AppMsg>) {
     let dialog = adw::AlertDialog::new(
         Some(&tr!("Stop the current sharing?")),
-        Some(
-            &tr!("{} is receiving your screen. It stops before the new sharing starts.")
-                .replace("{}", current),
-        ),
+        Some(&tr!("The current sharing stops before the new one starts.")),
     );
     dialog.add_response("keep", &tr!("Keep Sharing"));
     dialog.add_response("switch", &tr!("Stop and Switch"));

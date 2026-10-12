@@ -126,7 +126,7 @@ msgstr ""
 msgid "Audio"
 msgstr "Zvuk"
 
-#: crates/nd-gui/src/app/dialogs.rs:189
+#: crates/nd-gui/src/app/dialogs.rs:182
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
@@ -238,12 +238,12 @@ msgstr "Chromecast"
 msgid "Clear queue"
 msgstr "Isprazni red čekanja"
 
-#: crates/nd-gui/src/app/dialogs.rs:61 crates/nd-gui/src/app/dialogs.rs:231
-#: crates/nd-gui/src/app/dialogs.rs:253 crates/nd-gui/src/pages/settings.rs:441
+#: crates/nd-gui/src/app/dialogs.rs:61 crates/nd-gui/src/app/dialogs.rs:224
+#: crates/nd-gui/src/app/dialogs.rs:246 crates/nd-gui/src/pages/settings.rs:441
 msgid "Close"
 msgstr "Zatvori"
 
-#: crates/nd-gui/src/app/dialogs.rs:171
+#: crates/nd-gui/src/app/dialogs.rs:164
 msgid "Close without saving"
 msgstr ""
 
@@ -251,9 +251,9 @@ msgstr ""
 msgid "Connected"
 msgstr "Povezano"
 
-#: crates/nd-gui/src/app/mod.rs:390 crates/nd-gui/src/app/session.rs:116
-#: crates/nd-gui/src/app/wording.rs:26 crates/nd-gui/src/app/wording.rs:161
-#: crates/nd-gui/src/pages/mod.rs:207
+#: crates/nd-gui/src/app/mod.rs:390 crates/nd-gui/src/app/session.rs:33
+#: crates/nd-gui/src/app/session.rs:113 crates/nd-gui/src/app/wording.rs:26
+#: crates/nd-gui/src/app/wording.rs:161 crates/nd-gui/src/pages/mod.rs:207
 msgid "Connecting…"
 msgstr "Povezivanje…"
 
@@ -285,7 +285,7 @@ msgid ""
 "Settings and try again."
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:131 crates/nd-gui/src/app/dialogs.rs:169
+#: crates/nd-gui/src/app/dialogs.rs:131 crates/nd-gui/src/app/dialogs.rs:162
 #: crates/nd-gui/src/app/mod.rs:643 crates/nd-gui/src/app/wording.rs:69
 msgid "Could not save settings"
 msgstr ""
@@ -449,11 +449,11 @@ msgstr "Uključi sistemski zvuk"
 msgid "Include the microphone"
 msgstr "Uključi mikrofon"
 
-#: crates/nd-gui/src/app/dialogs.rs:256
+#: crates/nd-gui/src/app/dialogs.rs:249
 msgid "Install"
 msgstr "Instaliraj"
 
-#: crates/nd-gui/src/app/dialogs.rs:210
+#: crates/nd-gui/src/app/dialogs.rs:203
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
@@ -461,7 +461,7 @@ msgstr ""
 "Instalacija nije uspjela ili je autentifikacija otkazana. Možete pokušati "
 "ponovno ili ručno instalirati biblioteku."
 
-#: crates/nd-gui/src/app/dialogs.rs:188
+#: crates/nd-gui/src/app/dialogs.rs:181
 msgid "Installing NDI…"
 msgstr "Instalacija NDI-ja…"
 
@@ -469,11 +469,11 @@ msgstr "Instalacija NDI-ja…"
 msgid "Item {position} of {total}"
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:153
+#: crates/nd-gui/src/app/dialogs.rs:146
 msgid "Keep Sharing"
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:170
+#: crates/nd-gui/src/app/dialogs.rs:163
 msgid "Keep open"
 msgstr ""
 
@@ -592,15 +592,15 @@ msgstr ""
 msgid "Music"
 msgstr "Glazba"
 
-#: crates/nd-gui/src/app/dialogs.rs:209
+#: crates/nd-gui/src/app/dialogs.rs:202
 msgid "NDI installation did not finish"
 msgstr "Instalacija NDI-ja nije dovršena"
 
-#: crates/nd-gui/src/app/dialogs.rs:203
+#: crates/nd-gui/src/app/dialogs.rs:196
 msgid "NDI installed"
 msgstr "NDI je instaliran"
 
-#: crates/nd-gui/src/app/dialogs.rs:244
+#: crates/nd-gui/src/app/dialogs.rs:237
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
@@ -611,7 +611,7 @@ msgstr ""
 "će zatražiti administratorsku autentifikaciju. Ostali načini dijeljenja rade "
 "i bez te biblioteke."
 
-#: crates/nd-gui/src/app/dialogs.rs:248
+#: crates/nd-gui/src/app/dialogs.rs:241
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
@@ -621,11 +621,11 @@ msgstr ""
 "Instalirajte runtime NDI 5 ili 6 za svoju distribuciju, a zatim ponovno "
 "pokrenite aplikaciju. Ostali načini dijeljenja rade i bez te biblioteke."
 
-#: crates/nd-gui/src/app/dialogs.rs:252 crates/nd-gui/src/app/wording.rs:29
+#: crates/nd-gui/src/app/dialogs.rs:245 crates/nd-gui/src/app/wording.rs:29
 msgid "NDI runtime required"
 msgstr "Potrebno je NDI izvršno okruženje"
 
-#: crates/nd-gui/src/app/dialogs.rs:263
+#: crates/nd-gui/src/app/dialogs.rs:256
 msgid "NDI setup"
 msgstr "Postavljanje NDI-ja"
 
@@ -770,7 +770,7 @@ msgstr "Ukloni iz reda čekanja"
 msgid "Resolution limit"
 msgstr "Maksimalna razlučivost"
 
-#: crates/nd-gui/src/app/dialogs.rs:204
+#: crates/nd-gui/src/app/dialogs.rs:197
 msgid "Restart BigNetScreen to use NDI."
 msgstr "Ponovno pokrenite BigNetScreen da biste koristili NDI."
 
@@ -852,7 +852,7 @@ msgstr ""
 msgid "Share your screen wirelessly"
 msgstr "Dijelite svoj zaslon bežično"
 
-#: crates/nd-gui/src/app/dialogs.rs:277
+#: crates/nd-gui/src/app/dialogs.rs:270
 #, fuzzy
 msgid "Share your screen with TVs, projectors and web browsers"
 msgstr "Dijelite svoj zaslon s TV-om, projektorom ili Chromecastom."
@@ -905,7 +905,7 @@ msgstr "Postavke"
 msgid "Status"
 msgstr "Status"
 
-#: crates/nd-gui/src/app/dialogs.rs:154
+#: crates/nd-gui/src/app/dialogs.rs:147
 msgid "Stop and Switch"
 msgstr ""
 
@@ -924,7 +924,7 @@ msgstr "Zaustavi slanje"
 msgid "Stop sharing"
 msgstr "Zaustavi slanje"
 
-#: crates/nd-gui/src/app/dialogs.rs:147
+#: crates/nd-gui/src/app/dialogs.rs:143
 msgid "Stop the current sharing?"
 msgstr ""
 
@@ -976,6 +976,10 @@ msgid ""
 "folder can be written."
 msgstr ""
 
+#: crates/nd-gui/src/app/dialogs.rs:144
+msgid "The current sharing stops before the new one starts."
+msgstr ""
+
 #: crates/nd-gui/src/app/mod.rs:622
 msgid "The details below say what went wrong."
 msgstr ""
@@ -996,11 +1000,6 @@ msgstr ""
 #, fuzzy
 msgid "The receiver did not answer the connection check"
 msgstr "Prijamnik ne odgovara"
-
-#: crates/nd-gui/src/app/session.rs:79
-#, fuzzy
-msgid "The receiver of your files"
-msgstr "Pronađen je {} prijamnik"
 
 #: crates/nd-gui/src/app/wording.rs:166
 msgid "The sharing has ended."
@@ -1064,7 +1063,7 @@ msgstr "Vrlo visoko (1440p)"
 msgid "Videos"
 msgstr "Videozapisi"
 
-#: crates/nd-gui/src/app/dialogs.rs:261
+#: crates/nd-gui/src/app/dialogs.rs:254
 msgid "View ndi-sdk in the AUR"
 msgstr "Prikaži ndi-sdk u AUR-u"
 
@@ -1141,10 +1140,6 @@ msgstr[0] "Odabrana je {} datoteka"
 msgstr[1] "Odabrane su {} datoteke"
 msgstr[2] "Odabrano je {} datoteka"
 
-#: crates/nd-gui/src/app/dialogs.rs:149
-msgid "{} is receiving your screen. It stops before the new sharing starts."
-msgstr ""
-
 #: crates/nd-gui/src/pages/mod.rs:173
 #, fuzzy
 msgid "{} receiver"
@@ -1166,6 +1161,10 @@ msgid_plural "{} receivers are hidden by the filter."
 msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
+
+#, fuzzy
+#~ msgid "The receiver of your files"
+#~ msgstr "Pronađen je {} prijamnik"
 
 #~ msgid "A new screen"
 #~ msgstr "Novi zaslon"

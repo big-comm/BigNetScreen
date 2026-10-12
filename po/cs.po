@@ -125,7 +125,7 @@ msgstr ""
 msgid "Audio"
 msgstr "Zvuk"
 
-#: crates/nd-gui/src/app/dialogs.rs:189
+#: crates/nd-gui/src/app/dialogs.rs:182
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
@@ -236,12 +236,12 @@ msgstr "Chromecast"
 msgid "Clear queue"
 msgstr "Vymazat frontu"
 
-#: crates/nd-gui/src/app/dialogs.rs:61 crates/nd-gui/src/app/dialogs.rs:231
-#: crates/nd-gui/src/app/dialogs.rs:253 crates/nd-gui/src/pages/settings.rs:441
+#: crates/nd-gui/src/app/dialogs.rs:61 crates/nd-gui/src/app/dialogs.rs:224
+#: crates/nd-gui/src/app/dialogs.rs:246 crates/nd-gui/src/pages/settings.rs:441
 msgid "Close"
 msgstr "Zavřít"
 
-#: crates/nd-gui/src/app/dialogs.rs:171
+#: crates/nd-gui/src/app/dialogs.rs:164
 msgid "Close without saving"
 msgstr ""
 
@@ -249,9 +249,9 @@ msgstr ""
 msgid "Connected"
 msgstr "Připojeno"
 
-#: crates/nd-gui/src/app/mod.rs:390 crates/nd-gui/src/app/session.rs:116
-#: crates/nd-gui/src/app/wording.rs:26 crates/nd-gui/src/app/wording.rs:161
-#: crates/nd-gui/src/pages/mod.rs:207
+#: crates/nd-gui/src/app/mod.rs:390 crates/nd-gui/src/app/session.rs:33
+#: crates/nd-gui/src/app/session.rs:113 crates/nd-gui/src/app/wording.rs:26
+#: crates/nd-gui/src/app/wording.rs:161 crates/nd-gui/src/pages/mod.rs:207
 msgid "Connecting…"
 msgstr "Připojování…"
 
@@ -283,7 +283,7 @@ msgid ""
 "Settings and try again."
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:131 crates/nd-gui/src/app/dialogs.rs:169
+#: crates/nd-gui/src/app/dialogs.rs:131 crates/nd-gui/src/app/dialogs.rs:162
 #: crates/nd-gui/src/app/mod.rs:643 crates/nd-gui/src/app/wording.rs:69
 msgid "Could not save settings"
 msgstr ""
@@ -447,11 +447,11 @@ msgstr "Zahrnout systémový zvuk"
 msgid "Include the microphone"
 msgstr "Zahrnout mikrofon"
 
-#: crates/nd-gui/src/app/dialogs.rs:256
+#: crates/nd-gui/src/app/dialogs.rs:249
 msgid "Install"
 msgstr "Instalovat"
 
-#: crates/nd-gui/src/app/dialogs.rs:210
+#: crates/nd-gui/src/app/dialogs.rs:203
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
@@ -459,7 +459,7 @@ msgstr ""
 "Instalace se nezdařila nebo bylo ověření zrušeno. Můžete to zkusit znovu "
 "nebo knihovnu nainstalovat ručně."
 
-#: crates/nd-gui/src/app/dialogs.rs:188
+#: crates/nd-gui/src/app/dialogs.rs:181
 msgid "Installing NDI…"
 msgstr "Instaluje se NDI…"
 
@@ -467,11 +467,11 @@ msgstr "Instaluje se NDI…"
 msgid "Item {position} of {total}"
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:153
+#: crates/nd-gui/src/app/dialogs.rs:146
 msgid "Keep Sharing"
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:170
+#: crates/nd-gui/src/app/dialogs.rs:163
 msgid "Keep open"
 msgstr ""
 
@@ -591,15 +591,15 @@ msgstr ""
 msgid "Music"
 msgstr "Hudba"
 
-#: crates/nd-gui/src/app/dialogs.rs:209
+#: crates/nd-gui/src/app/dialogs.rs:202
 msgid "NDI installation did not finish"
 msgstr "Instalace NDI nebyla dokončena"
 
-#: crates/nd-gui/src/app/dialogs.rs:203
+#: crates/nd-gui/src/app/dialogs.rs:196
 msgid "NDI installed"
 msgstr "NDI je nainstalováno"
 
-#: crates/nd-gui/src/app/dialogs.rs:244
+#: crates/nd-gui/src/app/dialogs.rs:237
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
@@ -610,7 +610,7 @@ msgstr ""
 "požádá o ověření oprávnění správce. Ostatní způsoby sdílení fungují i bez "
 "této knihovny."
 
-#: crates/nd-gui/src/app/dialogs.rs:248
+#: crates/nd-gui/src/app/dialogs.rs:241
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
@@ -620,11 +620,11 @@ msgstr ""
 "Nainstalujte běhové prostředí NDI 5 nebo 6 pro svou distribuci a poté "
 "aplikaci restartujte. Ostatní způsoby sdílení fungují i bez této knihovny."
 
-#: crates/nd-gui/src/app/dialogs.rs:252 crates/nd-gui/src/app/wording.rs:29
+#: crates/nd-gui/src/app/dialogs.rs:245 crates/nd-gui/src/app/wording.rs:29
 msgid "NDI runtime required"
 msgstr "Je vyžadováno běhové prostředí NDI"
 
-#: crates/nd-gui/src/app/dialogs.rs:263
+#: crates/nd-gui/src/app/dialogs.rs:256
 msgid "NDI setup"
 msgstr "Nastavení NDI"
 
@@ -769,7 +769,7 @@ msgstr "Odebrat z fronty"
 msgid "Resolution limit"
 msgstr "Maximální rozlišení"
 
-#: crates/nd-gui/src/app/dialogs.rs:204
+#: crates/nd-gui/src/app/dialogs.rs:197
 msgid "Restart BigNetScreen to use NDI."
 msgstr "Pro použití NDI restartujte BigNetScreen."
 
@@ -851,7 +851,7 @@ msgstr ""
 msgid "Share your screen wirelessly"
 msgstr "Sdílejte obrazovku bezdrátově"
 
-#: crates/nd-gui/src/app/dialogs.rs:277
+#: crates/nd-gui/src/app/dialogs.rs:270
 #, fuzzy
 msgid "Share your screen with TVs, projectors and web browsers"
 msgstr "Sdílejte obrazovku s televizí, projektorem nebo Chromecastem."
@@ -904,7 +904,7 @@ msgstr "Nastavení"
 msgid "Status"
 msgstr "Stav"
 
-#: crates/nd-gui/src/app/dialogs.rs:154
+#: crates/nd-gui/src/app/dialogs.rs:147
 msgid "Stop and Switch"
 msgstr ""
 
@@ -923,7 +923,7 @@ msgstr "Zastavit odesílání"
 msgid "Stop sharing"
 msgstr "Zastavit odesílání"
 
-#: crates/nd-gui/src/app/dialogs.rs:147
+#: crates/nd-gui/src/app/dialogs.rs:143
 msgid "Stop the current sharing?"
 msgstr ""
 
@@ -975,6 +975,10 @@ msgid ""
 "folder can be written."
 msgstr ""
 
+#: crates/nd-gui/src/app/dialogs.rs:144
+msgid "The current sharing stops before the new one starts."
+msgstr ""
+
 #: crates/nd-gui/src/app/mod.rs:622
 msgid "The details below say what went wrong."
 msgstr ""
@@ -995,11 +999,6 @@ msgstr ""
 #, fuzzy
 msgid "The receiver did not answer the connection check"
 msgstr "Přijímač neodpovídá"
-
-#: crates/nd-gui/src/app/session.rs:79
-#, fuzzy
-msgid "The receiver of your files"
-msgstr "Nalezen {} přijímač"
 
 #: crates/nd-gui/src/app/wording.rs:166
 msgid "The sharing has ended."
@@ -1063,7 +1062,7 @@ msgstr "Velmi vysoké (1440p)"
 msgid "Videos"
 msgstr "Videa"
 
-#: crates/nd-gui/src/app/dialogs.rs:261
+#: crates/nd-gui/src/app/dialogs.rs:254
 msgid "View ndi-sdk in the AUR"
 msgstr "Zobrazit ndi-sdk v AUR"
 
@@ -1140,10 +1139,6 @@ msgstr[0] "Vybrán {} soubor"
 msgstr[1] "Vybrány {} soubory"
 msgstr[2] "Vybráno {} souborů"
 
-#: crates/nd-gui/src/app/dialogs.rs:149
-msgid "{} is receiving your screen. It stops before the new sharing starts."
-msgstr ""
-
 #: crates/nd-gui/src/pages/mod.rs:173
 #, fuzzy
 msgid "{} receiver"
@@ -1165,6 +1160,10 @@ msgid_plural "{} receivers are hidden by the filter."
 msgstr[0] ""
 msgstr[1] ""
 msgstr[2] ""
+
+#, fuzzy
+#~ msgid "The receiver of your files"
+#~ msgstr "Nalezen {} přijímač"
 
 #~ msgid "A new screen"
 #~ msgstr "Nová obrazovka"
