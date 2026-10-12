@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # Vendored with patches (vendor/relm4/PATCHES.md); a new release would
+      # bypass the [patch.crates-io] copy.
+      - dependency-name: relm4
+    groups:
+      # The bindings move in lockstep with their -sys crates.
+      gtk-rs:
+        patterns: ["gtk4*", "gdk4*", "gsk4*", "glib*", "gio*", "cairo*", "pango*", "graphene*", "gdk-pixbuf*", "libadwaita*"]
+      gstreamer:
+        patterns: ["gstreamer*", "gst-*"]
+      cargo:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
