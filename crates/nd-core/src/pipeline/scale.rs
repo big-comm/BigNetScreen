@@ -75,24 +75,14 @@ const MAX_DUPLICATION_NS: u64 = 500_000_000;
 ///
 /// The Cast OFFER carries this size, and nothing earlier knows it: the portal
 /// announces a compositor-space size, and a second PipeWire stream cannot
-/// look up the portal's node. Blocks, polling, until `deadline`.
-pub fn negotiated_video_size(
-    pipeline: &gst::Pipeline,
-    deadline: std::time::Instant,
-) -> Option<(u32, u32)> {
-    let pad = pipeline
-        .by_name(SCALE_CAPS)
-        .and_then(|caps| caps.static_pad("src"))?;
-    loop {
-        if let Some(size) = pad.current_caps().as_deref().and_then(caps_size) {
-            return Some(size);
-        }
-        if std::time::Instant::now() >= deadline {
-            tracing::info!("the capture did not negotiate a size in time");
-            return None;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
+/// look up the portal's node. `None` until the caps are negotiated.
+pub fn negotiated_video_size(pipeline: &gst::Pipeline) -> Option<(u32, u32)> {
+    pipeline
+        .by_name(SCALE_CAPS)?
+        .static_pad("src")?
+        .current_caps()
+        .as_deref()
+        .and_then(caps_size)
 }
 
 /// Narrows the mirroring capsfilter to one exact size.

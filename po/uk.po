@@ -65,7 +65,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "Новий екран"
 
-#: crates/nd-gui/src/app/mod.rs:778 crates/nd-gui/src/app/wording.rs:71
+#: crates/nd-gui/src/app/mod.rs:783 crates/nd-gui/src/app/wording.rs:71
 msgid "A stream is already running"
 msgstr "Потік уже запущено"
 
@@ -251,7 +251,7 @@ msgstr "Підключено"
 msgid "Connected to"
 msgstr "Підключено до"
 
-#: crates/nd-gui/src/app/mod.rs:369 crates/nd-gui/src/app/mod.rs:803
+#: crates/nd-gui/src/app/mod.rs:369 crates/nd-gui/src/app/mod.rs:808
 #: crates/nd-gui/src/app/wording.rs:26 crates/nd-gui/src/app/wording.rs:142
 #: crates/nd-gui/src/pages/mod.rs:203
 msgid "Connecting…"
@@ -285,7 +285,7 @@ msgid ""
 "Settings and try again."
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:89 crates/nd-gui/src/app/mod.rs:582
+#: crates/nd-gui/src/app/dialogs.rs:89 crates/nd-gui/src/app/mod.rs:587
 #: crates/nd-gui/src/app/wording.rs:60
 msgid "Could not save settings"
 msgstr ""
@@ -610,7 +610,7 @@ msgstr "Потрібне середовище виконання NDI"
 msgid "NDI setup"
 msgstr "Налаштування NDI"
 
-#: crates/nd-gui/src/app/mod.rs:509 crates/nd-gui/src/app/wording.rs:66
+#: crates/nd-gui/src/app/mod.rs:514 crates/nd-gui/src/app/wording.rs:66
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI недоступний. Див. посібник із налаштування NDI."
 
@@ -767,7 +767,7 @@ msgstr "Сканувати знову"
 msgid "Screen"
 msgstr "Екран"
 
-#: crates/nd-gui/src/app/mod.rs:554 crates/nd-gui/src/app/wording.rs:17
+#: crates/nd-gui/src/app/mod.rs:559 crates/nd-gui/src/app/wording.rs:17
 msgid "Searching…"
 msgstr "Пошук…"
 
@@ -834,7 +834,7 @@ msgstr ""
 msgid "Sharing could not be completed. Open Details to see the reason."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:517 crates/nd-gui/src/app/wording.rs:67
+#: crates/nd-gui/src/app/mod.rs:522 crates/nd-gui/src/app/wording.rs:67
 msgid ""
 "Sharing with a web browser needs GStreamer's WebRTC plugins, which this "
 "system does not have."
@@ -866,7 +866,7 @@ msgstr "Зупинити"
 msgid "Stop sending"
 msgstr "Зупинити надсилання"
 
-#: crates/nd-gui/src/app/mod.rs:548 crates/nd-gui/src/app/wording.rs:27
+#: crates/nd-gui/src/app/mod.rs:553 crates/nd-gui/src/app/wording.rs:27
 msgid "Stopping…"
 msgstr "Зупинка…"
 
@@ -915,7 +915,7 @@ msgstr "Приймач не відповідає"
 msgid "The sharing has ended."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:704
+#: crates/nd-gui/src/app/mod.rs:709
 msgid "The sharing service is not responding. Try again."
 msgstr ""
 

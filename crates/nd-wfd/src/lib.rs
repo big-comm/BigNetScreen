@@ -54,7 +54,8 @@ impl Provider for WfdP2pProvider {
 
 /// Runs discovery until the consumer goes away, reopening the device with
 /// backoff after each failure: a single D-Bus failure would otherwise leave
-/// the list on "Searching…".
+/// the list on "Searching…". A missing adapter, P2P device or NetworkManager
+/// does not come back by retrying, so it ends discovery until the next rescan.
 async fn keep_discovering(tx: tokio::sync::mpsc::Sender<DiscoveryEvent>) {
     static DISCOVERY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     let _serial = tokio::select! {
@@ -66,6 +67,16 @@ async fn keep_discovering(tx: tokio::sync::mpsc::Sender<DiscoveryEvent>) {
 
     // `Ok` means the consumer went away: shut down for good.
     while let Err(err) = discover_once(&tx, &mut known, &mut backoff).await {
+        if matches!(err, NdError::Unsupported(_)) {
+            tracing::info!(%err, "Wi-Fi Direct discovery unavailable");
+            let _ = tx
+                .send(DiscoveryEvent::ProviderUnavailable {
+                    provider: "wfd-p2p",
+                    reason: err.to_string(),
+                })
+                .await;
+            return;
+        }
         tracing::warn!(%err, "P2P discovery failed; retrying");
         let unavailable = DiscoveryEvent::ProviderUnavailable {
             provider: "wfd-p2p",
@@ -126,15 +137,15 @@ async fn run_discovery(
     tx: &tokio::sync::mpsc::Sender<DiscoveryEvent>,
     known: &mut HashSet<String>,
 ) -> Result<()> {
-    use futures::future::FutureExt;
+    use futures::future::{FusedFuture, FutureExt};
 
     // Peers already reported as "seen, but not offering themselves". Kept so
     // the log carries one line per device rather than one per announcement.
     let mut seen_without_wfd: HashSet<String> = HashSet::new();
 
     let mut events = Box::pin(device.peer_events().await?);
-    // NetworkManager's scan expires; renewing it is what makes a receiver
-    // switched on after the app appear in the list.
+    // NetworkManager's scan expires; renewing it for a while is what makes a
+    // receiver switched on after the app appear in the list.
     let mut renew = Box::pin(device.keep_finding().fuse());
 
     loop {
@@ -144,7 +155,7 @@ async fn run_discovery(
         let event = tokio::select! {
             _ = tx.closed() => return Ok(()),
             event = events.next() => event,
-            () = &mut renew => unreachable!("keep_finding runs forever"),
+            () = &mut renew, if !renew.is_terminated() => continue,
         };
 
         let Some(event) = event else {

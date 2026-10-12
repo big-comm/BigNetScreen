@@ -67,7 +67,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "Uma nova tela"
 
-#: crates/nd-gui/src/app/mod.rs:778 crates/nd-gui/src/app/wording.rs:71
+#: crates/nd-gui/src/app/mod.rs:783 crates/nd-gui/src/app/wording.rs:71
 msgid "A stream is already running"
 msgstr "Já existe uma transmissão em andamento"
 
@@ -253,7 +253,7 @@ msgstr "Conectado"
 msgid "Connected to"
 msgstr "Conectado a"
 
-#: crates/nd-gui/src/app/mod.rs:369 crates/nd-gui/src/app/mod.rs:803
+#: crates/nd-gui/src/app/mod.rs:369 crates/nd-gui/src/app/mod.rs:808
 #: crates/nd-gui/src/app/wording.rs:26 crates/nd-gui/src/app/wording.rs:142
 #: crates/nd-gui/src/pages/mod.rs:203
 msgid "Connecting…"
@@ -289,7 +289,7 @@ msgstr ""
 "Não foi possível preparar a saída de som BigNetScreen. Confira as opções de "
 "áudio nas Configurações e tente novamente."
 
-#: crates/nd-gui/src/app/dialogs.rs:89 crates/nd-gui/src/app/mod.rs:582
+#: crates/nd-gui/src/app/dialogs.rs:89 crates/nd-gui/src/app/mod.rs:587
 #: crates/nd-gui/src/app/wording.rs:60
 msgid "Could not save settings"
 msgstr "Não foi possível salvar as configurações"
@@ -623,7 +623,7 @@ msgstr "Runtime do NDI necessário"
 msgid "NDI setup"
 msgstr "Configuração do NDI"
 
-#: crates/nd-gui/src/app/mod.rs:509 crates/nd-gui/src/app/wording.rs:66
+#: crates/nd-gui/src/app/mod.rs:514 crates/nd-gui/src/app/wording.rs:66
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "O NDI não está disponível. Consulte o guia de configuração do NDI."
 
@@ -779,7 +779,7 @@ msgstr "Procurar novamente"
 msgid "Screen"
 msgstr "Tela"
 
-#: crates/nd-gui/src/app/mod.rs:554 crates/nd-gui/src/app/wording.rs:17
+#: crates/nd-gui/src/app/mod.rs:559 crates/nd-gui/src/app/wording.rs:17
 msgid "Searching…"
 msgstr "Procurando…"
 
@@ -847,7 +847,7 @@ msgstr ""
 "Não foi possível concluir o compartilhamento. Abra os Detalhes para ver o "
 "motivo."
 
-#: crates/nd-gui/src/app/mod.rs:517 crates/nd-gui/src/app/wording.rs:67
+#: crates/nd-gui/src/app/mod.rs:522 crates/nd-gui/src/app/wording.rs:67
 msgid ""
 "Sharing with a web browser needs GStreamer's WebRTC plugins, which this "
 "system does not have."
@@ -879,7 +879,7 @@ msgstr "Parar"
 msgid "Stop sending"
 msgstr "Parar envio"
 
-#: crates/nd-gui/src/app/mod.rs:548 crates/nd-gui/src/app/wording.rs:27
+#: crates/nd-gui/src/app/mod.rs:553 crates/nd-gui/src/app/wording.rs:27
 msgid "Stopping…"
 msgstr "Encerrando…"
 
@@ -930,7 +930,7 @@ msgstr "O aparelho não respondeu à verificação de conexão"
 msgid "The sharing has ended."
 msgstr "O compartilhamento terminou."
 
-#: crates/nd-gui/src/app/mod.rs:704
+#: crates/nd-gui/src/app/mod.rs:709
 msgid "The sharing service is not responding. Try again."
 msgstr "O serviço de compartilhamento não está respondendo. Tente de novo."
 

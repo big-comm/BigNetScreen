@@ -249,6 +249,8 @@ async fn serve_until_over(
 
     // A player pauses the file pipeline, which then sends nothing; the
     // renderer has to be told as well, or it gives up on the silent stream.
+    // A screen is never paused.
+    let pausable = server.media() == DLNA_FILE_MEDIA;
     let paused_here = std::sync::atomic::AtomicBool::new(false);
     let mut pause_watch = tokio::time::interval(PAUSE_POLL_INTERVAL);
     pause_watch.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -262,7 +264,7 @@ async fn serve_until_over(
         control,
         &paused_here,
         gst_pipeline,
-        server.media() == DLNA_FILE_MEDIA,
+        pausable,
         STATE_POLL_INTERVAL,
     );
     tokio::pin!(renderer_done);
@@ -272,6 +274,7 @@ async fn serve_until_over(
     let mut handed_over = false;
     let mut handed_at = tokio::time::Instant::now();
     let mut attempts = 1;
+    let mut settled = false;
     let mut start_watch = tokio::time::interval(Duration::from_millis(500));
     start_watch.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
@@ -298,10 +301,14 @@ async fn serve_until_over(
             () = &mut renderer_done, if handed_over => return Ok(()),
 
             // The renderer gave up before the picture started, which the same
-            // stream, handed over again, usually survives.
-            _ = start_watch.tick(), if handed_over && attempts < START_ATTEMPTS => {
+            // stream, handed over again, usually survives. Once a connection
+            // has settled the picture has started, so the watch ends.
+            _ = start_watch.tick(), if handed_over && attempts < START_ATTEMPTS && !settled => {
+                if server.longest_receiver() >= SETTLED_CONNECTION {
+                    settled = true;
+                    continue;
+                }
                 let given_up = handed_at.elapsed() >= START_GRACE
-                    && server.longest_receiver() < SETTLED_CONNECTION
                     && server.abandoned_for().is_some_and(|gap| gap >= ABANDONED_START);
                 if !given_up {
                     continue;
@@ -337,7 +344,7 @@ async fn serve_until_over(
                 }
             }
 
-            _ = pause_watch.tick(), if handed_over => {
+            _ = pause_watch.tick(), if handed_over && pausable => {
                 if !started.load(std::sync::atomic::Ordering::SeqCst)
                     || !futures::future::FusedFuture::is_terminated(&*telling)
                 {
@@ -403,9 +410,7 @@ fn adopt_negotiated_size(
     control: &Endpoint,
     status: &SinkStatus,
 ) -> bool {
-    let Some((width, height)) =
-        pipeline::negotiated_video_size(gst_pipeline, std::time::Instant::now())
-    else {
+    let Some((width, height)) = pipeline::negotiated_video_size(gst_pipeline) else {
         return false;
     };
     (cfg.width, cfg.height) = (width, height);

@@ -141,7 +141,7 @@ impl Provider for MdnsProvider {
                                     );
                                     continue;
                                 }
-                                tracing::info!(
+                                tracing::debug!(
                                     name = %sink.info.display_name,
                                     address = ?sink.info.address,
                                     ?kind,

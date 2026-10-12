@@ -63,7 +63,7 @@ msgstr ""
 msgid "A new screen"
 msgstr "새 화면"
 
-#: crates/nd-gui/src/app/mod.rs:778 crates/nd-gui/src/app/wording.rs:71
+#: crates/nd-gui/src/app/mod.rs:783 crates/nd-gui/src/app/wording.rs:71
 msgid "A stream is already running"
 msgstr "이미 스트리밍이 실행 중입니다"
 
@@ -247,7 +247,7 @@ msgstr "연결됨"
 msgid "Connected to"
 msgstr "연결됨"
 
-#: crates/nd-gui/src/app/mod.rs:369 crates/nd-gui/src/app/mod.rs:803
+#: crates/nd-gui/src/app/mod.rs:369 crates/nd-gui/src/app/mod.rs:808
 #: crates/nd-gui/src/app/wording.rs:26 crates/nd-gui/src/app/wording.rs:142
 #: crates/nd-gui/src/pages/mod.rs:203
 msgid "Connecting…"
@@ -281,7 +281,7 @@ msgid ""
 "Settings and try again."
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:89 crates/nd-gui/src/app/mod.rs:582
+#: crates/nd-gui/src/app/dialogs.rs:89 crates/nd-gui/src/app/mod.rs:587
 #: crates/nd-gui/src/app/wording.rs:60
 msgid "Could not save settings"
 msgstr ""
@@ -604,7 +604,7 @@ msgstr "NDI 런타임이 필요합니다"
 msgid "NDI setup"
 msgstr "NDI 설정"
 
-#: crates/nd-gui/src/app/mod.rs:509 crates/nd-gui/src/app/wording.rs:66
+#: crates/nd-gui/src/app/mod.rs:514 crates/nd-gui/src/app/wording.rs:66
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI를 사용할 수 없습니다. NDI 설정 가이드를 참조하세요."
 
@@ -760,7 +760,7 @@ msgstr "다시 스캔"
 msgid "Screen"
 msgstr "화면"
 
-#: crates/nd-gui/src/app/mod.rs:554 crates/nd-gui/src/app/wording.rs:17
+#: crates/nd-gui/src/app/mod.rs:559 crates/nd-gui/src/app/wording.rs:17
 msgid "Searching…"
 msgstr "검색 중…"
 
@@ -826,7 +826,7 @@ msgstr ""
 msgid "Sharing could not be completed. Open Details to see the reason."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:517 crates/nd-gui/src/app/wording.rs:67
+#: crates/nd-gui/src/app/mod.rs:522 crates/nd-gui/src/app/wording.rs:67
 msgid ""
 "Sharing with a web browser needs GStreamer's WebRTC plugins, which this "
 "system does not have."
@@ -858,7 +858,7 @@ msgstr "중지"
 msgid "Stop sending"
 msgstr "전송 중지"
 
-#: crates/nd-gui/src/app/mod.rs:548 crates/nd-gui/src/app/wording.rs:27
+#: crates/nd-gui/src/app/mod.rs:553 crates/nd-gui/src/app/wording.rs:27
 msgid "Stopping…"
 msgstr "중지 중…"
 
@@ -907,7 +907,7 @@ msgstr "수신 기기가 응답하지 않습니다"
 msgid "The sharing has ended."
 msgstr ""
 
-#: crates/nd-gui/src/app/mod.rs:704
+#: crates/nd-gui/src/app/mod.rs:709
 msgid "The sharing service is not responding. Try again."
 msgstr ""
 

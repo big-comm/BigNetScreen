@@ -202,9 +202,10 @@ pub fn build_configured_pipeline(
     let (tx, rx) = futures::channel::mpsc::channel(32);
     let tx = Mutex::new(tx);
     let weak_pipeline = pipeline.downgrade();
+    let recalculating = Arc::new(AtomicBool::new(false));
     if let Some(bus) = pipeline.bus() {
         bus.set_sync_handler(move |_, message| {
-            forward_bus_message(message, remote_media, &tx, &weak_pipeline);
+            forward_bus_message(message, remote_media, &tx, &weak_pipeline, &recalculating);
             // There is no main loop guaranteed on the protocol threads to pop
             // the bus, so nothing is left queued on it.
             gst::BusSyncReply::Drop
@@ -229,12 +230,16 @@ fn forward_bus_message(
     remote_media: bool,
     events: &Mutex<futures::channel::mpsc::Sender<PipelineEvent>>,
     pipeline: &gst::glib::WeakRef<gst::Pipeline>,
+    recalculating: &Arc<AtomicBool>,
 ) {
     let send = |event| {
-        let _ = events
+        if let Err(err) = events
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .try_send(event);
+            .try_send(event)
+        {
+            tracing::debug!(event = ?err.into_inner(), "pipeline event dropped");
+        }
     };
     match message.view() {
         gst::MessageView::Error(err) => {
@@ -280,11 +285,18 @@ fn forward_bus_message(
             // often learn their delay from the first caps, after PLAYING, and
             // without a recalculation the synchronised sinks drop every frame
             // as late. The query walks the whole graph, so it leaves this
-            // streaming thread.
-            if let Some(pipeline) = pipeline.upgrade() {
-                std::thread::spawn(move || match pipeline.recalculate_latency() {
-                    Ok(()) => tracing::debug!("pipeline latency recalculated"),
-                    Err(err) => tracing::debug!(%err, "latency could not be recalculated"),
+            // streaming thread; a burst of messages shares one thread, and
+            // one arriving mid-query runs it again.
+            if let Some(pipeline) = pipeline.upgrade()
+                && !recalculating.swap(true, Ordering::AcqRel)
+            {
+                let recalculating = recalculating.clone();
+                std::thread::spawn(move || {
+                    recalculating.store(false, Ordering::Release);
+                    match pipeline.recalculate_latency() {
+                        Ok(()) => tracing::debug!("pipeline latency recalculated"),
+                        Err(err) => tracing::debug!(%err, "latency could not be recalculated"),
+                    }
                 });
             }
         }

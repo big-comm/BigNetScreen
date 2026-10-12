@@ -308,7 +308,7 @@ impl Worker {
         }
         let seconds = window.as_secs().max(1);
         let (frames, pts_jumps, worst_jump, worst_send) = self.sender.flow.take();
-        tracing::info!(
+        tracing::debug!(
             stream = self.sender.label(),
             fps = frames / seconds,
             pts_jumps,

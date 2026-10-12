@@ -21,6 +21,7 @@ use tokio::sync::mpsc;
 use nd_core::provider::{DiscoveryEvent, Provider};
 use nd_core::sink::Sink;
 use nd_core::{NdError, Result};
+use nd_net::p2p::LanAddresses;
 
 use crate::DlnaSink;
 use crate::upnp::Endpoint;
@@ -105,18 +106,18 @@ fn describes_itself(announcement: &Announcement, sender: SocketAddr) -> bool {
 /// both, and only renderers answer the narrow one, where `ssdp:all` also
 /// brings in every router, printer and set-top box on the network.
 pub async fn search() -> Result<Vec<Announcement>> {
-    search_announcements(None).await
+    search_announcements(None, &mut LanAddresses::default()).await
 }
 
 async fn search_announcements(
     deliver: Option<mpsc::Sender<Announcement>>,
+    lan: &mut LanAddresses,
 ) -> Result<Vec<Announcement>> {
-    let mut addresses =
-        tokio::time::timeout(Duration::from_secs(2), nd_net::p2p::local_ipv4_addresses())
-            .await
-            .ok()
-            .and_then(std::result::Result::ok)
-            .unwrap_or_default();
+    let mut addresses = tokio::time::timeout(Duration::from_secs(2), lan.read())
+        .await
+        .ok()
+        .and_then(std::result::Result::ok)
+        .unwrap_or_default();
     // NetworkManager is optional for LAN sharing, including under Flatpak.
     if addresses.is_empty() {
         addresses.push(Ipv4Addr::UNSPECIFIED);
@@ -242,7 +243,8 @@ impl Provider for DlnaProvider {
         tokio::spawn(async move {
             let scan = async {
                 let mut known = Known::new();
-                while sweep(&mut known, &events).await {
+                let mut lan = LanAddresses::default();
+                while sweep(&mut known, &mut lan, &events).await {
                     tokio::time::sleep(SWEEP_INTERVAL).await;
                 }
             };
@@ -260,10 +262,14 @@ type Known = HashMap<String, (Arc<DlnaSink>, u32)>;
 
 /// One sweep: search, describe what is new or moved, and report what stayed
 /// silent too long as gone. `false` once nobody is listening.
-async fn sweep(known: &mut Known, events: &mpsc::Sender<DiscoveryEvent>) -> bool {
+async fn sweep(
+    known: &mut Known,
+    lan: &mut LanAddresses,
+    events: &mpsc::Sender<DiscoveryEvent>,
+) -> bool {
     let (deliver, announcements) = mpsc::channel(nd_core::provider::MAX_RECEIVERS);
     let (found, listening) = tokio::join!(
-        search_announcements(Some(deliver)),
+        search_announcements(Some(deliver), lan),
         describe_announced(announcements, known, events)
     );
     if !listening {

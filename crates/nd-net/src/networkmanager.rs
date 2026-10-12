@@ -113,14 +113,42 @@ pub(crate) trait Ip4Config {
 }
 
 /// One IPv4 source per active LAN connection, including non-default routes.
-/// Refreshing this list on each SSDP sweep follows Wi-Fi/Ethernet changes.
-pub async fn local_ipv4_addresses() -> zbus::Result<Vec<std::net::Ipv4Addr>> {
-    let conn = Connection::system().await?;
-    let nm = NetworkManagerProxy::new(&conn).await?;
+///
+/// Read again on each SSDP sweep to follow Wi-Fi/Ethernet changes, over one
+/// system-bus connection kept for as long as this value lives: a connection
+/// per sweep costs a bus handshake and a unique name every time.
+#[derive(Default)]
+pub struct LanAddresses {
+    nm: Option<NetworkManagerProxy<'static>>,
+}
+
+impl LanAddresses {
+    pub async fn read(&mut self) -> zbus::Result<Vec<std::net::Ipv4Addr>> {
+        let nm = match self
+            .nm
+            .as_ref()
+            .filter(|nm| !nm.inner().connection().is_closed())
+        {
+            Some(nm) => nm.clone(),
+            None => {
+                let conn = Connection::system().await?;
+                let nm = NetworkManagerProxy::builder(&conn)
+                    .cache_properties(CacheProperties::No)
+                    .build()
+                    .await?;
+                self.nm.insert(nm).clone()
+            }
+        };
+        addresses(&nm).await
+    }
+}
+
+async fn addresses(nm: &NetworkManagerProxy<'_>) -> zbus::Result<Vec<std::net::Ipv4Addr>> {
+    let conn = nm.inner().connection();
     let mut addresses = Vec::new();
     for path in nm.active_connections().await?.into_iter().take(64) {
         let read = async {
-            let active = ActiveConnectionProxy::builder(&conn)
+            let active = ActiveConnectionProxy::builder(conn)
                 .path(path)?
                 .cache_properties(CacheProperties::No)
                 .build()
@@ -134,7 +162,7 @@ pub async fn local_ipv4_addresses() -> zbus::Result<Vec<std::net::Ipv4Addr>> {
             {
                 return Ok(None);
             }
-            let ip4 = Ip4ConfigProxy::builder(&conn)
+            let ip4 = Ip4ConfigProxy::builder(conn)
                 .path(active.ip4_config().await?)?
                 .cache_properties(CacheProperties::No)
                 .build()

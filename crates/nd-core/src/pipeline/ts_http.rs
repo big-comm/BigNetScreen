@@ -151,10 +151,7 @@ mod tests {
                 "encoder must produce H.264 for {source:?}"
             );
             assert_eq!(
-                negotiated_video_size(
-                    guard.pipeline(),
-                    std::time::Instant::now() + std::time::Duration::from_secs(5)
-                ),
+                negotiated_video_size(guard.pipeline()),
                 Some(expected),
                 "source={source:?}, ceiling={ceiling:?}"
             );

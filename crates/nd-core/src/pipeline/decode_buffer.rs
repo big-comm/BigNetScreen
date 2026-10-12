@@ -38,6 +38,13 @@ pub(super) fn declare_decode_buffer(pipeline: &gst::Pipeline) {
     // The SPS repeats at every IDR; the rewrite of the last one is kept.
     let last: Mutex<LastSps> = Mutex::new(None);
     pad.add_probe(gst::PadProbeType::BUFFER, move |pad, info| {
+        // An SPS travels with a key frame.
+        if info
+            .buffer()
+            .is_some_and(|buffer| buffer.flags().contains(gst::BufferFlags::DELTA_UNIT))
+        {
+            return gst::PadProbeReturn::Ok;
+        }
         let byte_stream = pad.current_caps().is_some_and(|caps| {
             caps.structure(0)
                 .and_then(|s| s.get::<&str>("stream-format").ok())
@@ -107,7 +114,9 @@ fn rewrite_access_unit(
     out
 }
 
-/// Each Annex B start code as (where the code begins, where its NAL begins).
+/// Each Annex B start code as (where the code begins, where its NAL begins),
+/// up to the first coded slice: parameter sets precede it, and the slice
+/// payload is most of the access unit.
 fn start_codes(data: &[u8]) -> Vec<(usize, usize)> {
     let mut found = Vec::new();
     let mut i = 0;
@@ -115,6 +124,12 @@ fn start_codes(data: &[u8]) -> Vec<(usize, usize)> {
         if data[i..i + 3] == [0, 0, 1] {
             let code = if i > 0 && data[i - 1] == 0 { i - 1 } else { i };
             found.push((code, i + 3));
+            if data
+                .get(i + 3)
+                .is_some_and(|header| matches!(header & 0x1f, 1 | 5))
+            {
+                break;
+            }
             i += 3;
         } else {
             i += 1;
@@ -498,6 +513,13 @@ mod tests {
 
         assert_eq!(declared(&nal), None);
         assert_eq!(declared(&with_decode_buffer(&nal).unwrap()), Some((0, 3)));
+    }
+
+    #[test]
+    fn scan_stops_at_first_slice() {
+        // AUD, IDR slice, then a slice payload that resembles a start code.
+        let data = [0, 0, 0, 1, 9, 0x10, 0, 0, 1, 0x65, 0xaa, 0, 0, 1, 0x67];
+        assert_eq!(start_codes(&data), [(0, 4), (6, 9)]);
     }
 
     #[test]

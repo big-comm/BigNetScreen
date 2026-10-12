@@ -127,7 +127,8 @@ async fn mirror(
         return Ok(());
     }
 
-    let (gst_pipeline, events, _capture) = start_capture(&mut cfg, video, size)?;
+    let (gst_pipeline, events, _capture) = start_capture(&cfg, video, size)?;
+    adopt_capture_size(&mut cfg, &gst_pipeline).await;
 
     let Some(session) =
         negotiate_mode(channel, app, receiver_ip, &mut cfg, &gst_pipeline, cancel).await?
@@ -282,12 +283,9 @@ async fn mirror_config(size: (u32, u32)) -> Result<StreamConfig> {
     Ok(cfg)
 }
 
-/// Builds and starts the capture, then takes the size it negotiated into
-/// `cfg`. Until it negotiates, every size in play is the portal's
-/// compositor-space guess (`size_or` documents why that is not pixels), and
-/// the OFFER must not carry a guess.
+/// Builds and starts the capture.
 fn start_capture(
-    cfg: &mut StreamConfig,
+    cfg: &StreamConfig,
     video: &pipeline::VideoSource,
     size: (u32, u32),
 ) -> Result<(gst::Pipeline, pipeline::PipelineEvents, StreamWorkers)> {
@@ -307,15 +305,27 @@ fn start_capture(
         .map_err(|err| NdError::Gst(err.to_string()))?;
     // Frames produced before the senders exist are dropped by the leaky
     // video queue; nothing reaches the network until the ANSWER arrives.
-    let portal = (cfg.width, cfg.height);
-    if let Some(negotiated) = pipeline::negotiated_video_size(
-        &gst_pipeline,
-        std::time::Instant::now() + Duration::from_secs(5),
-    ) {
-        (cfg.width, cfg.height) = negotiated;
-    }
-    log_capture(&gst_pipeline, cfg, portal);
     Ok((gst_pipeline, events, capture))
+}
+
+/// Waits for the capture to negotiate and takes its size into `cfg`. Until
+/// then every size in play is the portal's compositor-space guess (`size_or`
+/// documents why that is not pixels), and the OFFER must not carry a guess.
+async fn adopt_capture_size(cfg: &mut StreamConfig, gst_pipeline: &gst::Pipeline) {
+    let portal = (cfg.width, cfg.height);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        if let Some(negotiated) = pipeline::negotiated_video_size(gst_pipeline) {
+            (cfg.width, cfg.height) = negotiated;
+            break;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            tracing::info!("the capture did not negotiate a size in time");
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    log_capture(gst_pipeline, cfg, portal);
 }
 
 /// One line on what the capture delivered against what is encoded, so the

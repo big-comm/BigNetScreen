@@ -8,7 +8,8 @@
 //! projector in "Screen Mirroring" mode.
 //!
 //! - `StartFind` expires after its timeout and NetworkManager then stops
-//!   scanning without a word, so [`P2pDevice::keep_finding`] renews it.
+//!   scanning without a word, so [`P2pDevice::keep_finding`] renews it for a
+//!   bounded window.
 //! - The peer list follows the signals; re-reading `Peers` would cost one
 //!   proxy, a `GetAll` and a match rule per peer on every read.
 //! - [`group`] forms the group with a chosen sink; [`neighbours`] tells
@@ -29,7 +30,7 @@ use zbus::zvariant::{OwnedObjectPath, Value};
 
 use nd_core::{NdError, Result};
 
-pub use crate::networkmanager::local_ipv4_addresses;
+pub use crate::networkmanager::LanAddresses;
 use crate::networkmanager::{DeviceProxy, NetworkManagerProxy, WifiP2pPeerProxy, WifiP2pProxy};
 pub use group::ActiveState;
 pub use neighbours::peers_on_link;
@@ -53,6 +54,12 @@ const FIND_TIMEOUT: Duration = Duration::from_secs(30);
 /// The scan renewal interval (shorter than [`FIND_TIMEOUT`], so there is no
 /// dead window between one scan and the next).
 const FIND_RENEW_INTERVAL: Duration = Duration::from_secs(20);
+
+/// How long [`P2pDevice::keep_finding`] keeps renewing the scan.
+///
+/// Scanning hops channels and slows the user's own Wi-Fi, so it runs for a
+/// window after discovery starts; a rescan starts a new window.
+const FIND_WINDOW: Duration = Duration::from_secs(120);
 
 /// How often a forming group's state is read.
 const GROUP_STATE_POLL: Duration = Duration::from_millis(500);
@@ -304,15 +311,14 @@ impl P2pDevice {
             .map_err(|e| classify(e, "StopFind"))
     }
 
-    /// Keeps the scan alive indefinitely, renewing it before it expires.
-    ///
-    /// Runs until the future is dropped, so a receiver switched on later
-    /// still appears.
+    /// Keeps the scan alive for [`FIND_WINDOW`], renewing it before it
+    /// expires, so a receiver switched on shortly after still appears.
     ///
     /// While a stream is running, scanning stops (see [`nd_core::radio`]).
     /// Searching and streaming compete for the same antenna, and the scan's
     /// channel hopping turns into choppy audio and delay on the other end.
     pub async fn keep_finding(&self) {
+        let deadline = tokio::time::Instant::now() + FIND_WINDOW;
         let mut ticker = tokio::time::interval(FIND_RENEW_INTERVAL);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
@@ -331,6 +337,10 @@ impl P2pDevice {
                     _ = ticker.tick() => {}
                     _ = nd_core::radio::until_quiet() => continue,
                 }
+            }
+            if tokio::time::Instant::now() >= deadline {
+                tracing::debug!("P2P scan window over");
+                return;
             }
 
             if let Err(err) = self.start_find().await {

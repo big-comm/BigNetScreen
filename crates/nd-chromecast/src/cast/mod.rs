@@ -181,7 +181,13 @@ impl CastChannel {
     pub async fn connect_to(ip: IpAddr, port: u16, receiver: &str) -> Result<Self> {
         let mut stream = open_tls(ip, port).await?;
         let device_key = authenticate_device(&mut stream).await?;
-        crate::identity::check_and_remember(receiver, device_key.as_deref())?;
+        // Remembering a key fsyncs the store, which can stall a worker thread.
+        let receiver = receiver.to_owned();
+        tokio::task::spawn_blocking(move || {
+            crate::identity::check_and_remember(&receiver, device_key.as_deref())
+        })
+        .await
+        .map_err(|err| NdError::Protocol(format!("receiver identity check failed: {err}")))??;
 
         let (read_half, write_half) = tokio::io::split(stream);
         let writer = Arc::new(ControlWriter::new(write_half));

@@ -417,15 +417,20 @@ impl Component for AppModel {
                 "main window mapped"
             );
             if let Some(clock) = window.frame_clock() {
-                let painted = std::cell::Cell::new(false);
-                clock.connect_after_paint(move |_| {
-                    if !painted.replace(true) {
+                let handler = std::rc::Rc::new(std::cell::Cell::new(None));
+                let id = clock.connect_after_paint({
+                    let handler = handler.clone();
+                    move |clock| {
                         tracing::info!(
                             elapsed_ms = crate::STARTED.elapsed().as_millis() as u64,
                             "first window frame rendered"
                         );
+                        if let Some(id) = handler.take() {
+                            clock.disconnect(id);
+                        }
                     }
                 });
+                handler.set(Some(id));
             }
         });
 
