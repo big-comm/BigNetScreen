@@ -235,6 +235,9 @@ impl StreamServer {
         F: FnMut() -> Result<()> + Send,
     {
         let mut slow_client = watch_clients(&sink, self.attendance.clone());
+        if self.media != CAST_MEDIA {
+            mark_join_points(&sink);
+        }
         let mut cancel = cancel;
         let mut served_any = false;
 
@@ -295,10 +298,10 @@ impl StreamServer {
             if !served_any {
                 served_any = true;
                 on_first_client()?;
-            } else {
-                // A receiver joins mid-GOP and cannot decode until the next
-                // key frame; a television that sees no picture within its
-                // start-up window gives up on the stream.
+            } else if self.media == CAST_MEDIA {
+                // A receiver joining a running stream cannot decode until the
+                // next key frame. A DLNA reader starts at the last one
+                // instead (`mark_join_points`).
                 request_key_frame(&sink);
             }
         }
@@ -345,6 +348,155 @@ impl StreamServer {
         }
         Some(stream)
     }
+}
+
+/// Makes every key frame of a DLNA stream a place a reader can start, for
+/// `multisocketsink`'s `sync-method=latest-keyframe`.
+///
+/// A television's first connections last a few tens of milliseconds and are
+/// how it recognises the stream: one that starts mid-picture, or before any
+/// video, makes it give up. The muxer pushes each table or frame as a list of
+/// 188-byte packets; each list becomes one buffer (`multisocketsink` walks a
+/// slow reader's whole queue for every buffer, so tens of thousands of packets
+/// would stall the pipeline). A buffer that opens a key frame gets the PAT
+/// and PMT last seen in front of it and is the only kind without
+/// `DELTA_UNIT`. The muxer's own `HEADER` flags come off: `multisocketsink`
+/// would drop those buffers instead of sending them.
+fn mark_join_points(sink: &gst::Element) {
+    let Some(pad) = sink.static_pad("sink") else {
+        return;
+    };
+    let tables = Mutex::new(Tables::default());
+    pad.add_probe(
+        gst::PadProbeType::BUFFER | gst::PadProbeType::BUFFER_LIST,
+        move |_, info| {
+            let joined = match &info.data {
+                Some(gst::PadProbeData::Buffer(buffer)) => {
+                    join_buffers(std::iter::once(buffer.as_ref()))
+                }
+                Some(gst::PadProbeData::BufferList(list)) => join_buffers(list.iter()),
+                _ => return gst::PadProbeReturn::Ok,
+            };
+            let buffer = lock_tables(&tables).mark(joined);
+            info.data = Some(match &info.data {
+                Some(gst::PadProbeData::BufferList(_)) => {
+                    let mut single = gst::BufferList::new_sized(1);
+                    single
+                        .get_mut()
+                        .expect("a new list is writable")
+                        .add(buffer);
+                    gst::PadProbeData::BufferList(single)
+                }
+                _ => gst::PadProbeData::Buffer(buffer),
+            });
+            gst::PadProbeReturn::Ok
+        },
+    );
+}
+
+/// The packets of `buffers` as one buffer, timed like the first.
+fn join_buffers<'a>(buffers: impl Iterator<Item = &'a gst::BufferRef>) -> gst::Buffer {
+    let mut data = Vec::new();
+    let mut timing = None;
+    for buffer in buffers {
+        timing.get_or_insert((buffer.pts(), buffer.dts()));
+        if let Ok(map) = buffer.map_readable() {
+            data.extend_from_slice(&map);
+        }
+    }
+    let mut joined = gst::Buffer::from_mut_slice(data);
+    if let Some((pts, dts)) = timing {
+        let writable = joined.get_mut().expect("a new buffer is writable");
+        writable.set_pts(pts);
+        writable.set_dts(dts);
+    }
+    joined
+}
+
+/// The last PAT and PMT packets, put in front of each key frame.
+#[derive(Default)]
+struct Tables {
+    pat: Option<Vec<u8>>,
+    pmt: Option<(u16, Vec<u8>)>,
+}
+
+impl Tables {
+    /// Remembers the tables in `buffer`, and makes a buffer that opens a key
+    /// frame a join point: tables of its own, or the last ones put in front.
+    /// Every other buffer becomes `DELTA_UNIT`.
+    fn mark(&mut self, buffer: gst::Buffer) -> gst::Buffer {
+        let mut key_frame = None;
+        if let Ok(map) = buffer.map_readable() {
+            let packets: Vec<&[u8]> = map
+                .as_chunks::<TS_PACKET>()
+                .0
+                .iter()
+                .map(|packet| packet.as_slice())
+                .take_while(|packet| packet[0] == 0x47)
+                .collect();
+            let mut opens_with_tables = false;
+            for (index, packet) in packets.iter().enumerate() {
+                let pid = ts_pid(packet);
+                if pid == 0 {
+                    if let Some(pmt_pid) = pmt_pid(packet) {
+                        self.pmt.take_if(|(pid, _)| *pid != pmt_pid);
+                        self.pmt.get_or_insert((pmt_pid, Vec::new()));
+                    }
+                    self.pat = Some(packet.to_vec());
+                    opens_with_tables |= index == 0;
+                } else if let Some((_, pmt)) =
+                    self.pmt.as_mut().filter(|(pmt_pid, _)| *pmt_pid == pid)
+                {
+                    *pmt = packet.to_vec();
+                } else if random_access(packet) {
+                    key_frame = if opens_with_tables {
+                        Some(map.to_vec())
+                    } else if index == 0
+                        && let (Some(pat), Some((_, pmt))) = (&self.pat, &self.pmt)
+                        && !pmt.is_empty()
+                    {
+                        Some([pat.as_slice(), pmt.as_slice(), &map].concat())
+                    } else {
+                        None
+                    };
+                    break;
+                }
+            }
+        }
+        if let Some(data) = key_frame {
+            let mut joined = gst::Buffer::from_mut_slice(data);
+            let writable = joined.get_mut().expect("a new buffer is writable");
+            writable.set_pts(buffer.pts());
+            writable.set_dts(buffer.dts());
+            return joined;
+        }
+        let mut marked = buffer;
+        marked.make_mut().set_flags(gst::BufferFlags::DELTA_UNIT);
+        marked
+    }
+}
+
+const TS_PACKET: usize = 188;
+
+fn ts_pid(packet: &[u8]) -> u16 {
+    (u16::from(packet[1] & 0x1f) << 8) | u16::from(packet[2])
+}
+
+/// The PMT's PID, from a PAT packet that starts its section.
+fn pmt_pid(pat: &[u8]) -> Option<u16> {
+    let section = 5 + usize::from(*pat.get(4)?);
+    let entry = pat.get(section + 8..section + 12)?;
+    Some((u16::from(entry[2] & 0x1f) << 8) | u16::from(entry[3]))
+}
+
+/// Whether a packet's adaptation field marks a random access point, which
+/// the muxer sets on a video key frame only.
+fn random_access(packet: &[u8]) -> bool {
+    packet[3] & 0x20 != 0 && packet[4] > 0 && packet[5] & 0x40 != 0
+}
+
+fn lock_tables(tables: &Mutex<Tables>) -> MutexGuard<'_, Tables> {
+    tables.lock().unwrap_or_else(|poison| poison.into_inner())
 }
 
 /// Asks the encoder feeding `sink` for an IDR with its parameter sets.
@@ -585,7 +737,9 @@ mod tests {
         .await
         .expect("a stalled receiver must be disconnected");
         assert!(result.unwrap_err().to_string().contains("queue limit"));
-        assert!(u64::from(sink.property::<u32>("buffers-queued")) * 1316 < 8_100_000);
+        // The one reader's backlog: what reached the sink less what it sent.
+        let backlog = sink.property::<u64>("bytes-to-serve") - sink.property::<u64>("bytes-served");
+        assert!(backlog < 8_100_000, "{backlog} bytes queued");
         client.close().unwrap();
     }
 
@@ -620,11 +774,10 @@ mod tests {
         use gst::prelude::*;
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-        // No scheduled key frames: only a request makes one.
+        // A key frame a second, as the DLNA stream has.
         let cfg = StreamConfig {
             width: 320,
             height: 240,
-            gop_seconds: 0,
             ..Default::default()
         };
         let description = pipeline::ts_http_pipeline_description(
@@ -693,17 +846,21 @@ mod tests {
         let body = received
             .split_at(received.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4)
             .1;
-        // Realign on the first sync byte that starts a run of packets.
-        let start = (0..188)
-            .find(|&i| body.get(i) == Some(&0x47) && body.get(i + 188) == Some(&0x47))
-            .unwrap();
-        let video = video_payload(&body[start..]);
-        let has_idr = video
+        // Its first packet is the PAT, and its first picture a key frame.
+        assert_eq!(
+            body.get(..3),
+            Some(&[0x47, 0x40, 0x00][..]),
+            "joined mid-stream"
+        );
+        let video = video_payload(body);
+        let first_slice = video
             .windows(4)
-            .any(|w| w[..3] == [0, 0, 1] && w[3] & 0x1f == 5);
-        assert!(
-            has_idr,
-            "a receiver that joins late waits for a key frame nobody asked for"
+            .find(|w| w[..3] == [0, 0, 1] && matches!(w[3] & 0x1f, 1 | 5))
+            .map(|w| w[3] & 0x1f);
+        assert_eq!(
+            first_slice,
+            Some(5),
+            "a receiver that joins late starts before a key frame"
         );
 
         cancel.send_replace(true);

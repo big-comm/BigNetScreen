@@ -31,6 +31,10 @@ pub const TS_HTTP_SINK_NAME: &str = "cc-sink";
 /// not a capability the renderer declared.
 pub const DLNA_MAX_RESOLUTION: (u32, u32) = (1920, 1080);
 
+/// How much of a DLNA stream the sink keeps for a reader that joins: more
+/// than the one-second key frame interval, so the last key frame is there.
+const JOIN_HISTORY_NS: u64 = 1_500_000_000;
+
 /// How long the transport-stream multiplex waits for a file's first picture.
 const MEDIA_MUX_WAIT_NS: u64 = 1_000_000_000;
 
@@ -52,27 +56,38 @@ pub fn ts_http_pipeline_description(
     target: VideoTarget,
     mux_bitrate_bps: Option<u32>,
 ) -> String {
-    // MPEG-TS buffers carry no H.264 DELTA_UNIT flags, so a keyframe resync
-    // would cut TS packets mid-stream. The DLNA backlog is bounded in bytes
-    // instead: eight seconds at the target rate, within 1-32 MiB, enough for a
-    // renderer that keeps reading for seconds after Pause until the session's
-    // next poll notices. A stalled reader is disconnected (`recover-policy=none`
-    // ends it with status "slow") rather than queued for without bound.
-    let sink_policy = match mux_bitrate_bps {
-        Some(bps) => format!(
-            "sync-method=latest recover-policy=none unit-format=bytes units-max={}",
-            u64::from(bps).clamp(1_048_576, 33_554_432)
+    // A DLNA renderer joins at the last key frame, with its tables in front:
+    // the muxer writes each table and frame on its own (`alignment=0`),
+    // `crate::stream_server` flags the buffers a receiver may start at, and
+    // the queue keeps a key frame interval (`time-min`) to start from. MPEG-TS buffers carry no other H.264 DELTA_UNIT flags, so
+    // a resync would cut TS packets mid-stream: the DLNA backlog is bounded in
+    // bytes instead, eight seconds at the target rate within 1-32 MiB, enough
+    // for a renderer that keeps reading for seconds after Pause until the
+    // session's next poll notices. A stalled reader is disconnected
+    // (`recover-policy=none` ends it with status "slow") rather than queued
+    // for without bound.
+    let (alignment, sink_policy) = match mux_bitrate_bps {
+        Some(bps) => (
+            0,
+            format!(
+                "sync-method=latest-keyframe time-min={JOIN_HISTORY_NS} recover-policy=none \
+                 unit-format=bytes units-max={}",
+                u64::from(bps).clamp(1_048_576, 33_554_432)
+            ),
         ),
-        None => format!(
-            "sync-method={} recover-policy=keyframe",
-            chromecast_sync_method()
+        None => (
+            7,
+            format!(
+                "sync-method={} recover-policy=keyframe",
+                chromecast_sync_method()
+            ),
         ),
     };
     format!(
         "{src} ! {convert} ! {vqueue} ! \
          {enc} ! h264parse config-interval=-1 ! \
          video/x-h264,stream-format=byte-stream,alignment=au ! \
-         mpegtsmux name=mux alignment=7{padding}{wait_for_video} ! \
+         mpegtsmux name=mux alignment={alignment}{padding}{wait_for_video} ! \
          queue max-size-buffers=0 max-size-bytes=0 max-size-time=50000000 silent=true ! \
          multisocketsink name={sink} sync=false async=false blocksize=8192 \
          burst-format=buffers {sink_policy} \

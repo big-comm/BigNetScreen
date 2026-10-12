@@ -85,6 +85,10 @@ pub async fn run(
     result
 }
 
+/// How long a screen may take to deliver its first frame before the
+/// renderer is handed the stream anyway.
+const PICTURE_START_TIMEOUT: Duration = Duration::from_secs(3);
+
 async fn stream(
     receiver: IpAddr,
     control: &Endpoint,
@@ -211,6 +215,25 @@ async fn serve_until_over(
         .by_name(TS_HTTP_SINK_NAME)
         .ok_or_else(|| NdError::Gst(format!("element {TS_HTTP_SINK_NAME} not found")))?;
     let url = &server.url();
+    // A screen's picture is flowing before the renderer is told where it is:
+    // a renderer's first connection lasts a few tens of milliseconds, less
+    // than a capture takes to deliver its first frame (about 160 ms for a new
+    // virtual screen), and a renderer that finds no key frame there gives up.
+    // A file waits for the first read, or its opening would play to nobody.
+    if server.media() == DLNA_MEDIA {
+        gst_pipeline
+            .set_state(gst::State::Playing)
+            .map_err(|e| NdError::Gst(e.to_string()))?;
+        let deadline = tokio::time::Instant::now() + PICTURE_START_TIMEOUT;
+        while pipeline::negotiated_video_size(gst_pipeline).is_none()
+            && tokio::time::Instant::now() < deadline
+        {
+            tokio::select! {
+                () = tokio::time::sleep(Duration::from_millis(10)) => {}
+                _ = cancel.changed() => return Ok(()),
+            }
+        }
+    }
     let started = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let serve = {
         let pipeline_for_play = gst_pipeline.clone();
