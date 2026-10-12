@@ -1,8 +1,9 @@
 //! Sending photos, films and music to a receiver.
 //!
-//! The page shows the newest files of one kind from the standard folder
-//! ([`library`]) as a grid of [`tile`]s, keeps the files chosen as a queue, and
-//! hands the queue to the root component to send.
+//! The newest files of one kind from the standard folder ([`library`]) as a
+//! grid of [`tile`]s, and the files chosen as a queue. It sits under the
+//! receivers on the share page, whose Share buttons send the queue
+//! ([`MediaMsg::SendTo`]).
 
 mod library;
 mod queue;
@@ -33,16 +34,12 @@ pub struct MediaPage {
     chosen: Vec<MediaFile>,
     /// Files that were picked and cannot be played, with the reason.
     refused: Vec<String>,
-    /// The receivers that can play a file: (id, name).
-    targets: Vec<(String, String)>,
-    /// The one chosen to send to. Never filled in automatically: sending to
-    /// the wrong device is visible in someone else's room and cannot be undone
-    /// from here.
-    chosen_target: Option<String>,
     status: Option<MediaStatus>,
     scan_generation: u64,
     inspection_generation: u64,
     queue: QueueList,
+    /// What the root component was last told about [`Self::chosen`].
+    announced_chosen: bool,
     scan_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -56,12 +53,9 @@ pub enum MediaMsg {
     Picked(Vec<PathBuf>),
     PickFiles,
     PickFolder,
-    Send,
+    /// Send the queue to the receiver with this id, which the person picked.
+    SendTo(String),
     Cancel,
-    /// The receivers that can play a file: (id, name).
-    Targets(Vec<(String, String)>),
-    /// A destination was picked in the list, by position.
-    TargetPicked(usize),
     Status(Option<MediaStatus>),
     Scanned(u64, Vec<MediaFile>),
     Inspected(u64, Vec<MediaFile>, Vec<String>),
@@ -74,6 +68,8 @@ pub enum MediaMsg {
 pub enum MediaOutput {
     /// Send these files to the receiver with this id.
     Send(Vec<MediaFile>, String),
+    /// Whether any file is chosen, so a receiver can be offered.
+    Chosen(bool),
     Cancel,
     Control(MediaCommand),
 }
@@ -86,24 +82,18 @@ impl Component for MediaPage {
     type CommandOutput = (PathBuf, Result<Preview, String>);
 
     view! {
-        adw::BreakpointBin {
-            set_width_request: 320,
-            set_height_request: 360,
-        #[wrap(Some)]
-        set_child = &gtk::ScrolledWindow {
-            set_hscrollbar_policy: gtk::PolicyType::Never,
-            gtk::Box {
+        gtk::Box {
             set_orientation: gtk::Orientation::Vertical,
-            set_margin_all: 24,
             set_spacing: 6,
 
-            #[name = "toolbar"]
-            gtk::Box {
+            // Wraps onto a second line in a narrow window.
+            adw::WrapBox {
                 add_css_class: "media-toolbar",
-                set_spacing: 8,
+                set_child_spacing: 8,
+                set_line_spacing: 8,
 
                 #[name = "kind_group"]
-                adw::ToggleGroup {
+                append = &adw::ToggleGroup {
                     connect_active_notify[sender] => move |group| {
                         sender.input(MediaMsg::SetKind(match group.active() {
                             1 => MediaKind::Video,
@@ -113,9 +103,7 @@ impl Component for MediaPage {
                     },
                 },
 
-                gtk::Box { set_hexpand: true },
-
-                gtk::Button {
+                append = &gtk::Button {
                     #[watch]
                     set_sensitive: !model.playing(),
                     connect_clicked => MediaMsg::PickFiles,
@@ -124,7 +112,7 @@ impl Component for MediaPage {
                         set_label: &tr!("Select files"),
                     },
                 },
-                gtk::Button {
+                append = &gtk::Button {
                     #[watch]
                     set_sensitive: !model.playing(),
                     connect_clicked => MediaMsg::PickFolder,
@@ -202,63 +190,10 @@ impl Component for MediaPage {
                 add_css_class: "warning",
             },
 
-            #[name = "send_bar"]
-            gtk::Box {
-                set_spacing: 12,
-                set_margin_top: 12,
-                add_css_class: "action-bar",
-
-                gtk::Label {
-                    #[watch]
-                    set_label: &model.selection_summary(),
-                    set_hexpand: true,
-                    set_xalign: 0.0,
-                },
-                gtk::Label {
-                    #[watch]
-                    set_label: &model.selection_size(),
-                    add_css_class: "dim-label",
-                },
-
-                gtk::Label {
-                    set_label: &tr!("Send to"),
-                    add_css_class: "dim-label",
-                },
-                #[name = "target_chooser"]
-                gtk::DropDown {
-                    set_valign: gtk::Align::Center,
-                    update_property: &[gtk::accessible::Property::Label(&tr!("Send to"))],
-                    // Its contents are filled in from the receivers found, so
-                    // it is built empty here.
-                    connect_selected_notify[sender] => move |chooser| {
-                        sender.input(MediaMsg::TargetPicked(chooser.selected() as usize));
-                    } @target_picked_handler,
-                },
-
-                gtk::Button {
-                    add_css_class: "suggested-action",
-                    add_css_class: "pill",
-                    // Both conditions, and no default for the second: a file
-                    // is only ever sent to a device someone pointed at.
-                    #[watch]
-                    set_sensitive: !model.chosen.is_empty()
-                        && model.chosen_target.is_some() && !model.playing(),
-                    connect_clicked => MediaMsg::Send,
-
-                    adw::ButtonContent {
-                        set_icon_name: "document-send-symbolic",
-                        set_label: &tr!("Send to device"),
-                    },
-                },
-            },
-
             gtk::Label {
                 #[watch]
-                set_label: &model.destination_hint(),
-                #[watch]
-                set_visible: !model.destination_hint().is_empty(),
+                set_label: &model.selection_line(),
                 set_xalign: 0.0,
-                set_margin_top: 6,
                 add_css_class: "dim-label",
             },
 
@@ -324,8 +259,6 @@ impl Component for MediaPage {
                     connect_clicked => MediaMsg::Cancel,
                 },
             },
-            },
-        },
         }
     }
 
@@ -348,29 +281,16 @@ impl Component for MediaPage {
             scanning: false,
             chosen: Vec::new(),
             refused: Vec::new(),
-            targets: Vec::new(),
-            chosen_target: None,
             status: None,
             scan_generation: 0,
             inspection_generation: 0,
             queue: QueueList::new(),
+            announced_chosen: false,
             scan_cancel: Default::default(),
         };
 
         let grid = model.tiles.widget();
         let widgets = view_output!();
-        let compact = crate::pages::compact_breakpoint();
-        compact.add_setter(
-            &widgets.toolbar,
-            "orientation",
-            Some(&gtk::Orientation::Vertical.to_value()),
-        );
-        compact.add_setter(
-            &widgets.send_bar,
-            "orientation",
-            Some(&gtk::Orientation::Vertical.to_value()),
-        );
-        big_gtk_kit::breakpoint::add(&root, compact);
 
         for label in [tr!("Photos"), tr!("Videos"), tr!("Music")] {
             widgets
@@ -474,37 +394,17 @@ impl Component for MediaPage {
             }
             MediaMsg::PickFiles => open_file_dialog(root, sender.input_sender().clone(), false),
             MediaMsg::PickFolder => open_file_dialog(root, sender.input_sender().clone(), true),
-            MediaMsg::Send => {
-                if self.playing() {
+            MediaMsg::SendTo(target) => {
+                if self.playing() || self.chosen.is_empty() {
                     return;
                 }
                 self.inspection_generation += 1;
-                if let Some(target) = self.chosen_target.clone()
-                    && !self.chosen.is_empty()
-                {
-                    sender
-                        .output(MediaOutput::Send(self.chosen.clone(), target))
-                        .ok();
-                }
+                sender
+                    .output(MediaOutput::Send(self.chosen.clone(), target))
+                    .ok();
             }
             MediaMsg::Cancel => {
                 sender.output(MediaOutput::Cancel).ok();
-            }
-            MediaMsg::Targets(targets) => {
-                if targets != self.targets {
-                    self.targets = targets;
-                    // A receiver that has gone off the network cannot stay
-                    // selected: the send button would point at nothing.
-                    if let Some(chosen) = &self.chosen_target
-                        && !self.targets.iter().any(|(id, _)| id == chosen)
-                    {
-                        self.chosen_target = None;
-                    }
-                    self.fill_chooser(widgets);
-                }
-            }
-            MediaMsg::TargetPicked(index) => {
-                self.chosen_target = target_at(&self.targets, index);
             }
             MediaMsg::Remove(path) => {
                 self.chosen.retain(|file| file.path != path);
@@ -549,6 +449,11 @@ impl MediaPage {
     }
 
     fn sync_selection(&mut self, widgets: &MediaPageWidgets, sender: &ComponentSender<Self>) {
+        let chosen = !self.chosen.is_empty();
+        if chosen != self.announced_chosen {
+            self.announced_chosen = chosen;
+            sender.output(MediaOutput::Chosen(chosen)).ok();
+        }
         for (index, file) in self.listed.iter().enumerate() {
             let selected = self.chosen.iter().any(|chosen| chosen.path == file.path);
             if self
@@ -560,47 +465,6 @@ impl MediaPage {
             }
         }
         self.queue.render(&widgets.queue_list, &self.chosen, sender);
-    }
-
-    /// Rebuilds the list of destinations, keeping what was chosen selected.
-    ///
-    /// The first entry is a placeholder rather than a device, so that a page
-    /// which has just opened is not silently pointing at somebody's television.
-    ///
-    /// The selection signal is blocked meanwhile: its message would arrive
-    /// after this returns and read as the person picking a device.
-    fn fill_chooser(&self, widgets: &MediaPageWidgets) {
-        let chooser = &widgets.target_chooser;
-        chooser.block_signal(&widgets.target_picked_handler);
-        let list = gtk::StringList::new(&[]);
-        list.append(&tr!("Choose a device…"));
-        for (_, name) in &self.targets {
-            list.append(name);
-        }
-        chooser.set_model(Some(&list));
-
-        let selected = self
-            .chosen_target
-            .as_ref()
-            .and_then(|chosen| self.targets.iter().position(|(id, _)| id == chosen))
-            .map(|index| index as u32 + 1)
-            .unwrap_or(0);
-        chooser.set_selected(selected);
-        chooser.set_sensitive(!self.targets.is_empty());
-        chooser.unblock_signal(&widgets.target_picked_handler);
-    }
-
-    /// What is missing before anything can be sent.
-    fn destination_hint(&self) -> String {
-        if self.targets.is_empty() {
-            return tr!(
-                "No device that plays files was found. Turn on a Chromecast or a Miracast TV or projector."
-            );
-        }
-        if self.chosen_target.is_none() && !self.chosen.is_empty() {
-            return tr!("Choose which device to send to.");
-        }
-        String::new()
     }
 
     /// Fills the grid with what is in the folder for the current tab.
@@ -638,19 +502,21 @@ impl MediaPage {
         .replace("{}", &folder)
     }
 
-    fn selection_summary(&self) -> String {
-        match self.chosen.len() {
-            0 => tr!("Nothing selected"),
-            n => tr_n!("{} file selected", "{} files selected", n).replace("{}", &n.to_string()),
-        }
-    }
-
-    fn selection_size(&self) -> String {
+    /// What is chosen, and what to do next with it.
+    fn selection_line(&self) -> String {
         let bytes: u64 = self.chosen.iter().map(|f| f.size).sum();
-        if bytes == 0 {
-            return String::new();
+        match self.chosen.len() {
+            0 => tr!("Select files, then choose Share on a device above."),
+            n => {
+                let count =
+                    tr_n!("{} file selected", "{} files selected", n).replace("{}", &n.to_string());
+                if bytes == 0 {
+                    count
+                } else {
+                    format!("{count} · {}", gtk::glib::format_size(bytes))
+                }
+            }
         }
-        gtk::glib::format_size(bytes).to_string()
     }
 
     fn queue_line(&self) -> String {
@@ -679,15 +545,6 @@ impl MediaPage {
             _ => line,
         }
     }
-}
-
-/// The receiver at a chooser position. Position 0 is the "choose a device"
-/// placeholder, so it and any position past the end select nothing.
-fn target_at(targets: &[(String, String)], index: usize) -> Option<String> {
-    index
-        .checked_sub(1)
-        .and_then(|index| targets.get(index))
-        .map(|(id, _)| id.clone())
 }
 
 impl Drop for MediaPage {
@@ -904,25 +761,5 @@ mod tests {
             "finished playback clears selection"
         );
         window.close();
-    }
-
-    #[test]
-    fn selection_starts_empty() {
-        // A file plays on whatever receiver this returns, possibly in another
-        // room: the placeholder must never resolve to a device.
-        let targets = vec![
-            ("id-a".to_string(), "Living room".to_string()),
-            ("id-b".to_string(), "Mum's projector".to_string()),
-        ];
-        assert_eq!(
-            target_at(&targets, 0),
-            None,
-            "the placeholder sends nowhere"
-        );
-        assert_eq!(target_at(&targets, 1).as_deref(), Some("id-a"));
-        assert_eq!(target_at(&targets, 2).as_deref(), Some("id-b"));
-        // A position past the end selects nothing rather than the last device.
-        assert_eq!(target_at(&targets, 3), None);
-        assert_eq!(target_at(&[], 1), None);
     }
 }

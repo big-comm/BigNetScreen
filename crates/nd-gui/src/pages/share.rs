@@ -2,7 +2,8 @@
 //! share that need no receiver of ours (web browsers, NDI).
 //!
 //! What is shared is chosen in the sidebar ([`super::options`]); every Share
-//! button here starts that.
+//! button here starts that. For files, the list keeps the receivers that play
+//! them, and the files to send are picked below it ([`super::media`]).
 
 use relm4::adw::{self, prelude::*};
 use relm4::factory::FactoryVecDeque;
@@ -15,6 +16,12 @@ use crate::tr;
 
 pub struct SharePage {
     devices: FactoryVecDeque<DeviceRow>,
+    /// Every receiver found, before the files filter.
+    all: Vec<DeviceEntry>,
+    /// Files are shared instead of the screen.
+    files: bool,
+    /// Some file is chosen to send.
+    chosen: bool,
     session: Option<SessionInfo>,
     /// Receivers whose remembered identity the person forgot. The service
     /// reports their refusal until the next attempt, which trusts whoever
@@ -28,6 +35,11 @@ pub struct SharePage {
 #[derive(Debug)]
 pub enum ShareMsg {
     Devices(Vec<DeviceEntry>),
+    /// Whether files are shared, and whether any is chosen.
+    Files {
+        files: bool,
+        chosen: bool,
+    },
     Session(Option<SessionInfo>),
     Discovery(Discovery),
     Cast(String),
@@ -184,10 +196,15 @@ impl Component for SharePage {
                         add_css_class: "device-list",
                     },
                     gtk::Label {
-                        set_label: &tr!(
-                            "Chromecast and DLNA receivers must be on the same network. For \
-                             Miracast, open screen mirroring on the TV, then search again."
-                        ),
+                        #[watch]
+                        set_label: &if model.files {
+                            tr!("Only receivers that play files are listed: Chromecast, DLNA televisions and Miracast.")
+                        } else {
+                            tr!(
+                                "Chromecast and DLNA receivers must be on the same network. For \
+                                 Miracast, open screen mirroring on the TV, then search again."
+                            )
+                        },
                         set_xalign: 0.0,
                         set_wrap: true,
                         add_css_class: "caption",
@@ -195,12 +212,31 @@ impl Component for SharePage {
                     },
 
                     gtk::Label {
+                        set_label: &tr!("Files"),
+                        set_xalign: 0.0,
+                        set_margin_top: 12,
+                        add_css_class: "heading",
+                        #[watch]
+                        set_visible: model.files,
+                    },
+                    // The media section, put here by the window.
+                    #[name = "files_slot"]
+                    gtk::Box {
+                        #[watch]
+                        set_visible: model.files,
+                    },
+
+                    gtk::Label {
                         set_label: &tr!("Other ways to share"),
                         set_xalign: 0.0,
                         set_margin_top: 12,
                         add_css_class: "heading",
+                        #[watch]
+                        set_visible: !model.files,
                     },
                     gtk::ListBox {
+                        #[watch]
+                        set_visible: !model.files,
                         set_selection_mode: gtk::SelectionMode::None,
                         add_css_class: "boxed-list",
                         add_css_class: "device-list",
@@ -261,6 +297,9 @@ impl Component for SharePage {
             )));
         let model = SharePage {
             devices,
+            all: Vec::new(),
+            files: false,
+            chosen: false,
             session: None,
             retrusted: Vec::new(),
             qr_for: None,
@@ -278,18 +317,16 @@ impl Component for SharePage {
         root: &Self::Root,
     ) {
         match message {
-            ShareMsg::Devices(mut entries) => {
-                // A refusal recorded before the identity was forgotten is shown
-                // as a receiver ready to try again.
-                self.retrusted
-                    .retain(|id| entries.iter().any(|e| &e.id == id && identity_refused(e)));
-                for entry in &mut entries {
-                    if self.retrusted.contains(&entry.id) {
-                        entry.state = nd_core::sink::SinkState::Disconnected;
-                        entry.detail.clear();
-                    }
+            ShareMsg::Devices(entries) => {
+                self.all = entries;
+                self.show_devices();
+            }
+            ShareMsg::Files { files, chosen } => {
+                if (files, chosen) != (self.files, self.chosen) {
+                    self.files = files;
+                    self.chosen = chosen;
+                    self.show_devices();
                 }
-                sync_rows(&mut self.devices, entries);
             }
             ShareMsg::Session(session) => {
                 let url = session
@@ -370,8 +407,7 @@ impl Component for SharePage {
         match outcome {
             Ok(()) => {
                 self.retrusted.push(id.clone());
-                let entries = self.devices.iter().map(|row| row.entry.clone()).collect();
-                sender.input(ShareMsg::Devices(entries));
+                self.show_devices();
                 root.announce(
                     &tr!("The device that answers on the next connection will be trusted"),
                     gtk::AccessibleAnnouncementPriority::Medium,
@@ -392,6 +428,31 @@ impl Component for SharePage {
 }
 
 impl SharePage {
+    /// The rows for the receivers found, as the current mode offers them.
+    fn show_devices(&mut self) {
+        // A refusal recorded before the identity was forgotten is shown as a
+        // receiver ready to try again.
+        let all = &self.all;
+        self.retrusted
+            .retain(|id| all.iter().any(|e| &e.id == id && identity_refused(e)));
+        let blocked = (self.files && !self.chosen).then(|| tr!("Select files below first"));
+        let entries = self
+            .all
+            .iter()
+            .filter(|entry| !self.files || entry.kind.can_receive_files(&entry.address))
+            .map(|entry| {
+                let mut entry = entry.clone();
+                if self.retrusted.contains(&entry.id) {
+                    entry.state = nd_core::sink::SinkState::Disconnected;
+                    entry.detail.clear();
+                }
+                entry.blocked = blocked.clone();
+                entry
+            })
+            .collect();
+        sync_rows(&mut self.devices, entries);
+    }
+
     fn session_field<F: Fn(&SessionInfo) -> String>(&self, f: F) -> String {
         self.session.as_ref().map(f).unwrap_or_default()
     }
@@ -460,6 +521,7 @@ mod tests {
                 nd_chromecast::identity::IDENTITY_CHANGED
             ),
             mode: String::new(),
+            blocked: None,
         };
         page.emit(ShareMsg::Devices(vec![refused.clone()]));
         flush();

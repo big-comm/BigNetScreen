@@ -58,17 +58,47 @@
 
 /* Home: destinations first, then browser and NDI sharing. */
 
-/* Sidebar options: a round badge, the name and the value, opening a card. */
+/* Sidebar options: a round badge, the name and the value. The row under the
+   pointer takes a ring in the accent 3 px inside its edges; once its card
+   opens, the row turns the card's surface and the bridge carries the ring
+   into the card's own (hover_cards.rs: RING, RING_INSET). */
 .bns-sidebar { background-color: @sidebar_bg_color; }
-.options-list { background: none; }
-.options-list > row.option-row { padding: 6px 12px; min-height: 48px; border-radius: 13px; margin: 2px 0; }
-.options-list > row.option-row:hover { background-color: alpha(currentColor, 0.06); }
+.options-list > row.option-row { padding: 6px 12px; min-height: 48px; transition: none; }
+overlay:not(.cards-open) .options-list > row.option-row:hover:not(:disabled),
+.options-list > row.option-row.card-open {
+  border-radius: 13px;
+  outline: 2px solid alpha(@accent_bg_color, 0.6);
+  outline-offset: -5px;
+}
+.options-list > row.option-row.card-open {
+  background-color: @popover_bg_color;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.options-list > row.option-row.card-open:dir(rtl) {
+  border-radius: 0 13px 13px 0;
+}
 .option-badge { min-width: 32px; min-height: 32px; border-radius: 999px; background-color: alpha(currentColor, 0.08); }
 .option-row.applied .option-badge { background-color: @accent_bg_color; color: @accent_fg_color; }
-.option-title { font-weight: 600; }
 .option-value { opacity: 0.75; }
 .option-row.applied .option-value { color: @accent_color; font-weight: bold; opacity: 1; }
-.option-card > contents { padding: 14px; border-radius: 12px; }
+/* The open card shows the value; the row's keeps its place. */
+.option-row.card-open .option-value { opacity: 0; }
+.option-card {
+  background-color: @popover_bg_color;
+  color: @popover_fg_color;
+  border-radius: 12px;
+  padding: 16px;
+  outline: 2px solid alpha(@accent_bg_color, 0.6);
+  outline-offset: -5px;
+  box-shadow: 0 0 0 1px alpha(black, 0.10), 8px 10px 24px -6px alpha(black, 0.28);
+}
+.option-card.joined { border-top-left-radius: 0; }
+.option-card.joined:dir(rtl) { border-top-left-radius: 12px; border-top-right-radius: 0; }
+.option-bridge {
+  background-color: @popover_bg_color;
+  box-shadow: inset 0 2px alpha(@accent_bg_color, 0.6), inset 0 -2px alpha(@accent_bg_color, 0.6);
+}
 .card-description { opacity: 0.75; }
 /* A card's choices are tiles; the picked one is tinted and outlined. The
    radio stays for screen readers and the keyboard, out of sight. */

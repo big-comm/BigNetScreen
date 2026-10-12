@@ -10,6 +10,7 @@
 //! a stream is running, and no page holds a stale copy of that answer.
 
 mod device_row;
+pub(crate) mod hover_cards;
 pub mod media;
 pub mod options;
 mod preview;
@@ -17,8 +18,8 @@ pub mod qr;
 pub mod settings;
 pub mod share;
 
+use relm4::gtk;
 use relm4::gtk::prelude::*;
-use relm4::{adw, gtk};
 
 use nd_core::sink::{SinkKind, SinkState};
 
@@ -44,6 +45,8 @@ pub struct DeviceEntry {
     /// What the two ends negotiated, so it is empty for a receiver that is
     /// merely available.
     pub mode: String,
+    /// Why the row's Share button cannot act yet, such as no file chosen.
+    pub blocked: Option<String>,
 }
 
 impl DeviceEntry {
@@ -71,6 +74,7 @@ impl DeviceEntry {
             // A row never shows an audience: the count belongs to the session
             // that is running, not to a receiver sitting in a list.
             mode: describe_mode(receiver.width, receiver.height, receiver.fps, -1),
+            blocked: None,
         }
     }
 
@@ -233,6 +237,7 @@ mod tests {
             state: SinkState::Disconnected,
             detail: String::new(),
             mode: String::new(),
+            blocked: None,
         };
         assert_eq!(entry.subtitle(), "Miracast");
     }
@@ -251,6 +256,7 @@ mod tests {
             state: SinkState::Disconnected,
             detail: String::new(),
             mode: String::new(),
+            blocked: None,
         };
         assert_eq!(entry.badge(), tr!("Discovery only"));
     }
@@ -315,13 +321,6 @@ pub fn placeholder(title: &str, body: Option<&str>) -> gtk::Box {
         );
     }
     content
-}
-
-/// The width below which a page stacks its columns.
-pub(crate) fn compact_breakpoint() -> adw::Breakpoint {
-    adw::Breakpoint::new(
-        adw::BreakpointCondition::parse("max-width: 720px").expect("valid breakpoint"),
-    )
 }
 
 #[cfg(test)]

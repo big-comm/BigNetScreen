@@ -163,8 +163,15 @@ impl AppModel {
             .emit(ShareMsg::Devices(self.state.entries()));
         self.share_page
             .emit(ShareMsg::Session(self.state.session_info()));
-        self.media
-            .emit(MediaMsg::Targets(self.state.media_receivers()));
+    }
+
+    /// Tells the share page whether files are shared, and whether any is
+    /// chosen to send.
+    pub(super) fn push_files_mode(&self) {
+        self.share_page.emit(ShareMsg::Files {
+            files: self.share == Share::Files,
+            chosen: self.files_chosen,
+        });
     }
 
     pub(super) fn push_media_status(&mut self) {

@@ -52,6 +52,8 @@ pub struct AppModel {
 
     /// What is shared, as chosen in the sidebar.
     share: Share,
+    /// Some file is chosen to send.
+    files_chosen: bool,
     /// The session service, once it has answered. `None` while connecting, or
     /// after it could not be reached, which shows as a banner.
     service: Option<ServiceProxy<'static>>,
@@ -104,6 +106,8 @@ pub enum AppMsg {
     SettingsSaved(Result<(), String>),
     /// Send these files to the receiver with this id.
     SendMedia(Vec<MediaFile>, String),
+    /// Whether any file is chosen to send.
+    FilesChosen(bool),
     CancelMedia,
     ControlMedia(nd_core::media::MediaCommand),
     About,
@@ -147,8 +151,12 @@ impl Component for AppModel {
             set_width_request: 480,
             set_height_request: 480,
 
+            // The sidebar's cards open on this layer, over the whole window.
+            #[local_ref]
+            layer -> gtk::Overlay {
+            #[wrap(Some)]
             #[name = "split"]
-            adw::OverlaySplitView {
+            set_child = &adw::OverlaySplitView {
                 set_min_sidebar_width: 300.0,
                 set_max_sidebar_width: 360.0,
                 set_sidebar_width_fraction: 0.32,
@@ -196,16 +204,6 @@ impl Component for AppModel {
                                 set_label: &tr!("Search"),
                             },
                         },
-                        // The session card is on the share side only.
-                        pack_end = &gtk::Button {
-                            set_label: &tr!("Stop sharing"),
-                            add_css_class: "destructive-action",
-                            #[watch]
-                            set_visible: model.share == Share::Files && !model.state.session.is_idle(),
-                            #[watch]
-                            set_sensitive: !model.state.status.is(StatusKind::Stopping),
-                            connect_clicked => AppMsg::Stop,
-                        },
                     },
 
                     #[wrap(Some)]
@@ -233,18 +231,14 @@ impl Component for AppModel {
                             connect_button_clicked => AppMsg::ShowFailure,
                         },
 
-                        #[name = "stack"]
-                        gtk::Stack {
+                        #[local_ref]
+                        share_view -> gtk::ScrolledWindow {
                             set_vexpand: true,
-                            set_transition_type: gtk::StackTransitionType::Crossfade,
-                            add_named: (model.share_page.widget(), Some("share")),
-                            add_named: (model.media.widget(), Some("media")),
-                            #[watch]
-                            set_visible_child_name: if model.share == Share::Files { "media" } else { "share" },
                         },
                     },
                 },
-            }
+            },
+            },
         }
     }
 
@@ -255,12 +249,14 @@ impl Component for AppModel {
     ) -> ComponentParts<Self> {
         let current = settings::current();
 
-        let options = OptionsPanel::builder()
-            .launch(())
-            .forward(sender.input_sender(), |output| match output {
+        let layer = gtk::Overlay::new();
+        let options = OptionsPanel::builder().launch(layer.clone()).forward(
+            sender.input_sender(),
+            |output| match output {
                 OptionsOutput::Share(share) => AppMsg::Share(share),
                 OptionsOutput::Settings(settings) => AppMsg::OptionsChanged(settings),
-            });
+            },
+        );
         let share_page = SharePage::builder()
             .launch(())
             .forward(sender.input_sender(), |output| match output {
@@ -273,6 +269,7 @@ impl Component for AppModel {
             .launch(())
             .forward(sender.input_sender(), |output| match output {
                 MediaOutput::Send(files, target) => AppMsg::SendMedia(files, target),
+                MediaOutput::Chosen(chosen) => AppMsg::FilesChosen(chosen),
                 MediaOutput::Cancel => AppMsg::CancelMedia,
                 MediaOutput::Control(command) => AppMsg::ControlMedia(command),
             });
@@ -303,6 +300,7 @@ impl Component for AppModel {
             settings_page,
             settings_dialog,
             share: Share::Screen,
+            files_chosen: false,
             service: None,
             state: ServiceState::default(),
             status: tr!("Connecting…"),
@@ -313,7 +311,13 @@ impl Component for AppModel {
             allow_close: Default::default(),
         };
 
+        let share_view = model.share_page.widget();
         let widgets = view_output!();
+        model
+            .share_page
+            .widgets()
+            .files_slot
+            .append(model.media.widget());
         let compact = adw::Breakpoint::new(
             adw::BreakpointCondition::parse("max-width: 860px").expect("valid breakpoint"),
         );
@@ -458,6 +462,7 @@ impl Component for AppModel {
                 if let Some(source) = share.source() {
                     self.source_type = source;
                 }
+                self.push_files_mode();
                 if widgets.split.is_collapsed() {
                     widgets.split.set_show_sidebar(false);
                 }
@@ -484,9 +489,16 @@ impl Component for AppModel {
                     AppCmd::NdiInstalled(crate::ndi_setup::install().await)
                 });
             }
+            AppMsg::Cast(id) if self.share == Share::Files => {
+                self.media.emit(MediaMsg::SendTo(id));
+            }
             AppMsg::Cast(id) => {
                 tracing::info!(source = ?self.source_type, "capture source chosen");
                 self.begin_cast(id, &sender);
+            }
+            AppMsg::FilesChosen(chosen) => {
+                self.files_chosen = chosen;
+                self.push_files_mode();
             }
             AppMsg::CastOnScreen(id, screen) => {
                 tracing::info!(%screen, "screen chosen");
@@ -669,6 +681,7 @@ fn main_menu() -> gtk::gio::Menu {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pages::hover_cards::CardEvent;
 
     #[test]
     #[ignore = "requires isolated GTK and XDG_CONFIG_HOME=/proc/bns-leak-test"]
@@ -757,7 +770,10 @@ mod tests {
             controller.widgets().sidebar_button.emit_clicked();
             assert!(controller.widgets().split.shows_sidebar());
             // A card of the sidebar and the settings dialog, each opened once.
-            controller.model().options.emit(OptionsMsg::Open(0));
+            controller
+                .model()
+                .options
+                .emit(OptionsMsg::Card(CardEvent::Activated(0)));
             controller.emit(AppMsg::ShowSettings);
             context.block_on(gtk::glib::timeout_future(Duration::from_millis(100)));
             controller.widget().destroy();

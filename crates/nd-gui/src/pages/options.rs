@@ -1,7 +1,8 @@
 //! The choices made before sharing, as rows of the sidebar: what to share,
 //! the sound, the microphone, the picture and the delay.
 //!
-//! Each row shows its value and opens a card with the choices. The settings
+//! Each row shows its value and opens a card with the choices beside it
+//! ([`super::hover_cards`]), on the window's overlay. The settings
 //! page persists them: a change goes out as a whole [`Settings`], and the
 //! saved value comes back through [`OptionsMsg::Settings`].
 
@@ -13,6 +14,7 @@ use nd_core::capture::SourceType;
 use nd_core::latency::Profile;
 use nd_core::settings::{self, Quality, Settings};
 
+use super::hover_cards::{self, CardEvent, HoverCards};
 use crate::tr;
 
 /// What the receiver will show.
@@ -88,7 +90,8 @@ struct Row {
     value: gtk::Label,
     /// Why the row does not apply, shown in place of the value.
     reason: gtk::Label,
-    card: gtk::Popover,
+    /// The card: the description and the choices, held to the card's width.
+    card: adw::Clamp,
 }
 
 /// A card's choices, each tile standing for one value.
@@ -147,6 +150,7 @@ pub struct OptionsPanel {
     share: Share,
     virtual_available: bool,
     rows: [Row; 5],
+    cards: HoverCards,
     share_tiles: Tiles<Share>,
     sound_tiles: Tiles<Sound>,
     microphone_tiles: Tiles<bool>,
@@ -167,7 +171,7 @@ pub enum OptionsMsg {
     /// The settings as saved, after a change from here or elsewhere.
     Settings(Settings),
     VirtualAvailable(bool),
-    Open(usize),
+    Card(CardEvent),
     Share(Share),
     Sound(Sound),
     Microphone(bool),
@@ -188,7 +192,8 @@ pub enum OptionsOutput {
 
 #[relm4::component(pub)]
 impl Component for OptionsPanel {
-    type Init = ();
+    /// The window's overlay, where the cards open.
+    type Init = gtk::Overlay;
     type Input = OptionsMsg;
     type Output = OptionsOutput;
     type CommandOutput = ();
@@ -203,20 +208,32 @@ impl Component for OptionsPanel {
                 set_margin_all: 12,
                 set_spacing: 6,
 
-                gtk::Label {
-                    set_label: &tr!("Before sharing"),
-                    set_xalign: 0.0,
-                    set_margin_start: 12,
-                    add_css_class: "heading",
-                    add_css_class: "dim-label",
-                },
                 #[name = "list"]
                 gtk::ListBox {
                     set_selection_mode: gtk::SelectionMode::None,
+                    add_css_class: "boxed-list",
                     add_css_class: "options-list",
                     connect_row_activated[sender] => move |_, row| {
-                        if let Ok(index) = usize::try_from(row.index()) {
-                            sender.input(OptionsMsg::Open(index));
+                        if let Ok(index) = row.widget_name().parse() {
+                            sender.input(OptionsMsg::Card(CardEvent::Activated(index)));
+                        }
+                    },
+                },
+                gtk::Label {
+                    set_label: &tr!("Audio"),
+                    set_xalign: 0.0,
+                    set_margin_top: 12,
+                    set_margin_start: 6,
+                    add_css_class: "heading",
+                },
+                #[name = "sound_list"]
+                gtk::ListBox {
+                    set_selection_mode: gtk::SelectionMode::None,
+                    add_css_class: "boxed-list",
+                    add_css_class: "options-list",
+                    connect_row_activated[sender] => move |_, row| {
+                        if let Ok(index) = row.widget_name().parse() {
+                            sender.input(OptionsMsg::Card(CardEvent::Activated(index)));
                         }
                     },
                 },
@@ -225,7 +242,7 @@ impl Component for OptionsPanel {
     }
 
     fn init(
-        _init: Self::Init,
+        layer: Self::Init,
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
@@ -393,15 +410,33 @@ impl Component for OptionsPanel {
                 &delay_tiles.column(),
             ),
         ];
-        for row in &rows {
-            widgets.list.append(&row.row);
+        // The picture's settings, then the sound's, as the sidebar groups
+        // them; a row is found by its name, its place in `rows`.
+        for (index, row) in rows.iter().enumerate() {
+            row.row.set_widget_name(&index.to_string());
+            match index {
+                1 | 2 => widgets.sound_list.append(&row.row),
+                _ => widgets.list.append(&row.row),
+            }
         }
+        let input = sender.input_sender().clone();
+        let cards = HoverCards::new(
+            &layer,
+            rows.iter().map(|row| row.row.clone().upcast()).collect(),
+            rows.iter().map(|row| row.card.clone().upcast()).collect(),
+            move |event| input.emit(OptionsMsg::Card(event)),
+        );
+        // A scrolled sidebar moves the rows out from under their card.
+        let input = sender.input_sender().clone();
+        root.vadjustment()
+            .connect_value_changed(move |_| input.emit(OptionsMsg::Card(CardEvent::Close)));
 
         let model = OptionsPanel {
             settings: settings::current(),
             share: Share::Screen,
             virtual_available: false,
             rows,
+            cards,
             extra_reason,
             share_tiles,
             sound_tiles,
@@ -438,9 +473,9 @@ impl Component for OptionsPanel {
                 self.show();
                 return;
             }
-            OptionsMsg::Open(index) => {
-                if let Some(row) = self.rows.get(index) {
-                    row.card.popup();
+            OptionsMsg::Card(event) => {
+                if self.cards.handle(event) {
+                    self.focus_choice();
                 }
                 return;
             }
@@ -449,7 +484,6 @@ impl Component for OptionsPanel {
                     self.share = share;
                     sender.output(OptionsOutput::Share(share)).ok();
                     self.show();
-                    self.rows[0].card.popdown();
                 }
                 return;
             }
@@ -480,16 +514,25 @@ impl Component for OptionsPanel {
                 .ok();
         }
     }
-
-    fn shutdown(&mut self, _widgets: &mut Self::Widgets, _output: relm4::Sender<Self::Output>) {
-        // A popover set on a widget outlives it unless unparented.
-        for row in &self.rows {
-            row.card.unparent();
-        }
-    }
 }
 
 impl OptionsPanel {
+    /// Moves the focus to the picked choice in the open card.
+    fn focus_choice(&self) {
+        let s = &self.settings;
+        let tile = match self.cards.open() {
+            Some(0) => self.share_tiles.get(self.share),
+            Some(1) => self.sound_tiles.get(Sound::of(s)),
+            Some(2) => self.microphone_tiles.get(s.microphone),
+            Some(3) => self.quality_tiles.get(s.quality),
+            Some(4) => self.delay_tiles.get(s.latency),
+            _ => None,
+        };
+        if let Some(tile) = tile {
+            tile.grab_focus();
+        }
+    }
+
     /// Puts the current values on the rows and in the cards.
     fn show(&self) {
         let s = &self.settings;
@@ -621,19 +664,18 @@ fn row(icon: &str, title: &str, description: &str, choices: &impl IsA<gtk::Widge
         .max_width_chars(36)
         .css_classes(["card-description"])
         .build();
-    let body = gtk::Box::builder()
+    let content = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .spacing(12)
-        .width_request(300)
         .build();
-    body.append(&about);
-    body.append(choices);
-    let card = gtk::Popover::builder()
-        .child(&body)
-        .position(gtk::PositionType::Right)
-        .css_classes(["option-card"])
+    content.append(&about);
+    content.append(choices);
+    // A long line wraps instead of widening the card.
+    let card = adw::Clamp::builder()
+        .child(&content)
+        .maximum_size(hover_cards::CARD_WIDTH)
+        .tightening_threshold(hover_cards::CARD_WIDTH)
         .build();
-    card.set_parent(&row);
     Row {
         row,
         value,

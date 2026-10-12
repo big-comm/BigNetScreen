@@ -185,17 +185,6 @@ impl ServiceState {
         })
     }
 
-    /// The receivers that can be sent a file, for the person to choose from.
-    /// None is preselected: a file playing on a device is visible to whoever
-    /// stands in front of it, so it takes an explicit choice every time.
-    pub(super) fn media_receivers(&self) -> Vec<(String, String)> {
-        self.receivers
-            .iter()
-            .filter(|receiver| wire::can_receive_files(receiver))
-            .map(|receiver| (receiver.id.clone(), receiver.display_name.clone()))
-            .collect()
-    }
-
     /// The playback the media page draws, from the service's [`wire::Media`].
     pub(super) fn media_status(&self) -> MediaStatus {
         let media = &self.media;

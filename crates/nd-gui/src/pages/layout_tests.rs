@@ -27,7 +27,10 @@ fn layout_pages_and_breakpoints() {
         &css,
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
-    let options = options::OptionsPanel::builder().launch(()).detach();
+    let layer = gtk::Overlay::new();
+    let options = options::OptionsPanel::builder()
+        .launch(layer.clone())
+        .detach();
     let share = share::SharePage::builder().launch(()).detach();
     let media = media::MediaPage::builder().launch(()).detach();
     let settings = settings::SettingsPage::builder().launch(()).detach();
@@ -51,14 +54,11 @@ fn layout_pages_and_breakpoints() {
         state: SinkState::Disconnected,
         detail: String::new(),
         mode: String::new(),
+        blocked: None,
     })
     .collect();
     share.emit(share::ShareMsg::Devices(entries.clone()));
     options.emit(options::OptionsMsg::VirtualAvailable(false));
-    media.emit(media::MediaMsg::Targets(vec![(
-        "1".into(),
-        "Projector".into(),
-    )]));
     let window = adw::Window::builder()
         .default_width(1050)
         .default_height(860)
@@ -86,7 +86,8 @@ fn layout_pages_and_breakpoints() {
         .min_sidebar_width(300.0)
         .build();
     adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
-    window.set_content(Some(&split));
+    layer.set_child(Some(&split));
+    window.set_content(Some(&layer));
     window.present();
     capture("share-dark");
     share.emit(share::ShareMsg::Devices(Vec::new()));
@@ -112,16 +113,25 @@ fn layout_pages_and_breakpoints() {
     })));
     capture("share-streaming-dark");
     share.emit(share::ShareMsg::Session(None));
-    options.emit(options::OptionsMsg::Open(3));
+    options.emit(options::OptionsMsg::Card(
+        hover_cards::CardEvent::Activated(3),
+    ));
     capture("quality-card-dark");
-    split.set_content(None::<&gtk::Widget>);
-    window.set_content(Some(settings.widget()));
-    capture("settings-dark");
-    window.set_content(Some(media.widget()));
+    options.emit(options::OptionsMsg::Card(hover_cards::CardEvent::Escape));
+    share.widgets().files_slot.append(media.widget());
+    share.emit(share::ShareMsg::Files {
+        files: true,
+        chosen: false,
+    });
     flush(1200);
     media.widgets().kind_group.set_active(1);
     flush(1200);
+    capture("files-dark");
     media.emit(media::MediaMsg::Picked(vec![dir.join("sample.webm")]));
+    share.emit(share::ShareMsg::Files {
+        files: true,
+        chosen: true,
+    });
     flush(1000);
     capture("videos-dark");
     media.emit(media::MediaMsg::Clear);
@@ -132,9 +142,13 @@ fn layout_pages_and_breakpoints() {
     capture("music-dark");
     adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceLight);
     capture("music-light");
+    split.set_collapsed(true);
     window.set_default_size(480, 700);
     capture("music-compact");
-    window.set_content(Some(share.widget()));
+    share.emit(share::ShareMsg::Files {
+        files: false,
+        chosen: false,
+    });
     capture("share-compact");
     window.set_content(Some(settings.widget()));
     capture("settings-compact");

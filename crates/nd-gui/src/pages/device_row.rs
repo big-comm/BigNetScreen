@@ -83,9 +83,14 @@ impl FactoryComponent for DeviceRow {
                     },
                 },
                 #[watch]
-                set_tooltip_text: (self.action() == Some(RowAction::TrustAgain)).then(|| tr!(
-                    "Forget the device remembered for this receiver and trust the one that answers next"
-                )).as_deref(),
+                set_sensitive: self.entry.blocked.is_none(),
+                #[watch]
+                set_tooltip_text: match self.action() {
+                    Some(RowAction::TrustAgain) => Some(tr!(
+                        "Forget the device remembered for this receiver and trust the one that answers next"
+                    )),
+                    _ => self.entry.blocked.clone(),
+                }.as_deref(),
                 #[watch]
                 update_property: &[gtk::accessible::Property::Label(&match self.action() {
                     Some(RowAction::TrustAgain) => tr!("Trust {} again"),
