@@ -1,6 +1,6 @@
 //! Addresses, ports and secrets for a published session.
 
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use nd_core::{NdError, Result};
 
@@ -10,10 +10,6 @@ use nd_core::{NdError, Result};
 /// remote, so the first one is what appears in the documentation and the
 /// rest only exist so a busy machine still works.
 pub const PORTS: [u16; 6] = [8080, 8081, 8082, 8083, 8084, 8085];
-
-fn net_err<E: std::fmt::Display>(e: E) -> NdError {
-    NdError::Network(e.to_string())
-}
 
 /// The address of this machine on the network the receivers are on.
 ///
@@ -29,7 +25,7 @@ pub fn lan_ip() -> Result<IpAddr> {
         Ipv4Addr::new(8, 8, 8, 8),
         Ipv4Addr::new(192, 168, 1, 1),
     ] {
-        if let Ok(ip) = source_towards(IpAddr::V4(probe))
+        if let Ok(ip) = nd_core::stream_server::local_ip_towards(IpAddr::V4(probe))
             && !ip.is_loopback()
             && !ip.is_unspecified()
         {
@@ -41,13 +37,6 @@ pub fn lan_ip() -> Result<IpAddr> {
     ))
 }
 
-fn source_towards(peer: IpAddr) -> Result<IpAddr> {
-    let socket =
-        UdpSocket::bind(SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0)).map_err(net_err)?;
-    socket.connect((peer, 9)).map_err(net_err)?;
-    Ok(socket.local_addr().map_err(net_err)?.ip())
-}
-
 /// A free TCP port on the loopback interface, for the WHEP element behind the
 /// front door.
 ///
@@ -55,8 +44,9 @@ fn source_towards(peer: IpAddr) -> Result<IpAddr> {
 /// in theory take it in between; the element then fails to bind and the
 /// session reports it, rather than silently serving nothing.
 pub fn free_loopback_port() -> Result<u16> {
-    let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).map_err(net_err)?;
-    Ok(listener.local_addr().map_err(net_err)?.port())
+    let listener =
+        std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).map_err(NdError::network)?;
+    Ok(listener.local_addr().map_err(NdError::network)?.port())
 }
 
 /// Binds the front door on `ip`, on the first free port of [`PORTS`].

@@ -30,10 +30,6 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
 /// `GetProtocolInfo` is the outlier and still under 64 KiB on every set seen.
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
 
-fn net_err<E: std::fmt::Display>(e: E) -> NdError {
-    NdError::Network(e.to_string())
-}
-
 /// An absolute `http://host:port/path` split into the parts a request needs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Endpoint {
@@ -131,9 +127,17 @@ async fn request(endpoint: &Endpoint, extra: &str, body: &str) -> Result<String>
     );
 
     let exchange = async {
-        let mut stream = TcpStream::connect(endpoint.addr).await.map_err(net_err)?;
-        stream.write_all(head.as_bytes()).await.map_err(net_err)?;
-        stream.write_all(body.as_bytes()).await.map_err(net_err)?;
+        let mut stream = TcpStream::connect(endpoint.addr)
+            .await
+            .map_err(NdError::network)?;
+        stream
+            .write_all(head.as_bytes())
+            .await
+            .map_err(NdError::network)?;
+        stream
+            .write_all(body.as_bytes())
+            .await
+            .map_err(NdError::network)?;
         read_response(&mut stream).await
     };
 
@@ -178,7 +182,7 @@ async fn read_response<R: AsyncRead + Unpin>(stream: &mut R) -> Result<String> {
         if let Some(at) = find_blank_line(&raw) {
             break at;
         }
-        let read = stream.read(&mut chunk).await.map_err(net_err)?;
+        let read = stream.read(&mut chunk).await.map_err(NdError::network)?;
         if read == 0 {
             return Err(NdError::Protocol(
                 "the device closed the connection mid-header".into(),
@@ -203,7 +207,7 @@ async fn read_response<R: AsyncRead + Unpin>(stream: &mut R) -> Result<String> {
             None if raw.len() > MAX_RESPONSE_BYTES => break,
             _ => {}
         }
-        let read = stream.read(&mut chunk).await.map_err(net_err)?;
+        let read = stream.read(&mut chunk).await.map_err(NdError::network)?;
         if read == 0 {
             break;
         }

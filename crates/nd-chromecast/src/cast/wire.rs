@@ -10,7 +10,7 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 
 use nd_core::{NdError, Result};
 
-use super::{CastEvent, SOURCE_ID, net_err, proto_err};
+use super::{CastEvent, SOURCE_ID};
 
 /// The message size cap.
 ///
@@ -105,7 +105,7 @@ pub(super) async fn read_message<R: AsyncRead + Unpin>(reader: &mut R) -> Result
             .payload_utf8
             .as_deref()
             .ok_or_else(|| NdError::Protocol("Cast UTF-8 payload missing".into()))?;
-        serde_json::from_str(text).map_err(proto_err)?
+        serde_json::from_str(text).map_err(NdError::protocol)?
     } else if msg.payload_type == PayloadType::Bin as i32 {
         Value::Null
     } else {
@@ -121,7 +121,10 @@ pub(super) async fn read_message<R: AsyncRead + Unpin>(reader: &mut R) -> Result
 /// One framed, envelope-checked message, payload untouched.
 pub(super) async fn read_raw_message<R: AsyncRead + Unpin>(reader: &mut R) -> Result<CastMessage> {
     let mut len_buf = [0u8; 4];
-    reader.read_exact(&mut len_buf).await.map_err(net_err)?;
+    reader
+        .read_exact(&mut len_buf)
+        .await
+        .map_err(NdError::network)?;
     let len = u32::from_be_bytes(len_buf) as usize;
     if len > MAX_MESSAGE_BYTES {
         return Err(NdError::Protocol(format!(
@@ -130,9 +133,12 @@ pub(super) async fn read_raw_message<R: AsyncRead + Unpin>(reader: &mut R) -> Re
     }
 
     let mut buf = vec![0u8; len];
-    reader.read_exact(&mut buf).await.map_err(net_err)?;
+    reader
+        .read_exact(&mut buf)
+        .await
+        .map_err(NdError::network)?;
 
-    let msg = CastMessage::decode(&buf[..]).map_err(proto_err)?;
+    let msg = CastMessage::decode(&buf[..]).map_err(NdError::protocol)?;
     // The raw dialogue is what interoperability with a real receiver is
     // debugged from: `RUST_LOG=nd_chromecast=trace`.
     tracing::trace!(

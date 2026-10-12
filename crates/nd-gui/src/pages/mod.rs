@@ -316,5 +316,12 @@ mod tests {
     }
 }
 
+/// The width below which a page stacks its columns.
+pub(crate) fn compact_breakpoint() -> adw::Breakpoint {
+    adw::Breakpoint::new(
+        adw::BreakpointCondition::parse("max-width: 720px").expect("valid breakpoint"),
+    )
+}
+
 #[cfg(test)]
 mod layout_tests;

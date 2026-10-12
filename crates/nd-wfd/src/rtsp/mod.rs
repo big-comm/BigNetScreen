@@ -511,7 +511,7 @@ async fn start_pipeline(
     status: &SinkStatus,
 ) -> Result<pipeline::MonitoredPipeline> {
     let transport = WfdTransport::new(cfg.sink_ip, sink_rtp_port);
-    let driver = nd_net::detect_gpu_driver();
+    let driver = nd_core::pipeline::GpuDriver::detect();
 
     let candidates = pipeline::encoder_candidates(driver, pipeline::Acceleration::preferred());
     if candidates.is_empty() {

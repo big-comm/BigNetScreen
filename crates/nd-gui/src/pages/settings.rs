@@ -111,33 +111,10 @@ impl Component for SettingsPage {
                                  is sent only if the receiver accepts it — many Chromecast \
                                  models mirror at 1080p and will hold it there."
                             )),
-                            set_model: Some(&string_list(&[
-                                tr!("Maximum (2160p)"),
-                                tr!("Very high (1440p)"),
-                                tr!("High (1080p)"),
-                                tr!("Medium (720p)"),
-                                tr!("Low (480p)"),
-                                "1600 × 900".into(),
-                                "1280 × 800".into(),
-                                "1920 × 1200".into(),
-                                "2560 × 1600".into(),
-                                "3440 × 1440".into(),
-                                tr!("Custom resolution"),
-                            ])),
+                            set_model: Some(&string_list(&QUALITIES.map(quality_label))),
                             connect_selected_notify[sender] => move |row| {
-                                sender.input(SettingsMsg::SetQuality(match row.selected() {
-                                    0 => Quality::Max,
-                                    1 => Quality::Ultra,
-                                    3 => Quality::Medium,
-                                    4 => Quality::Low,
-                                    5 => Quality::HdPlus,
-                                    6 => Quality::Wxga,
-                                    7 => Quality::Wuxga,
-                                    8 => Quality::Wqxga,
-                                    9 => Quality::Ultrawide,
-                                    10 => Quality::Custom,
-                                    _ => Quality::High,
-                                }));
+                                let quality = QUALITIES.get(row.selected() as usize);
+                                sender.input(SettingsMsg::SetQuality(quality.copied().unwrap_or_default()));
                             } @quality_handler,
                         },
 
@@ -148,7 +125,7 @@ impl Component for SettingsPage {
                             #[name = "custom_width"]
                             add_suffix = &gtk::SpinButton {
                                 set_valign: gtk::Align::Center,
-                                set_adjustment: &gtk::Adjustment::new(1920.0, 160.0, 7680.0, 2.0, 16.0, 0.0),
+                                set_adjustment: &dimension_adjustment(1920),
                                 set_numeric: true,
                                 connect_value_changed[sender] => move |spin| { sender.input(SettingsMsg::SetWidth(spin.value() as u32)); } @custom_width_handler,
                             },
@@ -161,7 +138,7 @@ impl Component for SettingsPage {
                             #[name = "custom_height"]
                             add_suffix = &gtk::SpinButton {
                                 set_valign: gtk::Align::Center,
-                                set_adjustment: &gtk::Adjustment::new(1080.0, 160.0, 7680.0, 2.0, 16.0, 0.0),
+                                set_adjustment: &dimension_adjustment(1080),
                                 set_numeric: true,
                                 connect_value_changed[sender] => move |spin| { sender.input(SettingsMsg::SetHeight(spin.value() as u32)); } @custom_height_handler,
                             },
@@ -567,19 +544,12 @@ impl SettingsPage {
             Protocol::Miracast => 1,
             Protocol::Cast => 2,
         });
-        widgets.quality.set_selected(match self.settings.quality {
-            Quality::Max => 0,
-            Quality::Ultra => 1,
-            Quality::High => 2,
-            Quality::Medium => 3,
-            Quality::Low => 4,
-            Quality::HdPlus => 5,
-            Quality::Wxga => 6,
-            Quality::Wuxga => 7,
-            Quality::Wqxga => 8,
-            Quality::Ultrawide => 9,
-            Quality::Custom => 10,
-        });
+        widgets.quality.set_selected(
+            QUALITIES
+                .iter()
+                .position(|quality| *quality == self.settings.quality)
+                .unwrap_or_default() as u32,
+        );
         widgets.fps.set_selected(
             FRAME_RATES
                 .iter()
@@ -618,6 +588,48 @@ impl SettingsPage {
             object.unblock_signal(handler);
         }
     }
+}
+
+/// The resolution choices, largest first and the custom size last; a row's
+/// index is a position here.
+const QUALITIES: [Quality; 11] = [
+    Quality::Max,
+    Quality::Ultrawide,
+    Quality::Wqxga,
+    Quality::Ultra,
+    Quality::Wuxga,
+    Quality::High,
+    Quality::HdPlus,
+    Quality::Wxga,
+    Quality::Medium,
+    Quality::Low,
+    Quality::Custom,
+];
+
+fn quality_label(quality: Quality) -> String {
+    match quality {
+        Quality::Max => tr!("Maximum (2160p)"),
+        Quality::Ultra => tr!("Very high (1440p)"),
+        Quality::High => tr!("High (1080p)"),
+        Quality::Medium => tr!("Medium (720p)"),
+        Quality::Low => tr!("Low (480p)"),
+        Quality::Custom => tr!("Custom resolution"),
+        sized => {
+            let (width, height) = sized.resolution();
+            format!("{width} × {height}")
+        }
+    }
+}
+
+fn dimension_adjustment(value: u32) -> gtk::Adjustment {
+    gtk::Adjustment::new(
+        f64::from(value),
+        f64::from(settings::MIN_DIMENSION),
+        f64::from(settings::MAX_DIMENSION),
+        2.0,
+        16.0,
+        0.0,
+    )
 }
 
 fn string_list(items: &[String]) -> gtk::StringList {

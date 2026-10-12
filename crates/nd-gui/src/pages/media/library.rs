@@ -5,7 +5,7 @@
 //! threads; only [`open_file_dialog`] runs on the GTK thread.
 
 use super::MediaMsg;
-use crate::tr;
+use crate::{tr, tr_n};
 use nd_chromecast::file_server::{MediaFile, MediaKind};
 use relm4::gtk::{self, glib, prelude::*};
 use std::path::PathBuf;
@@ -38,7 +38,7 @@ pub(super) fn inspect_paths(paths: Vec<PathBuf>) -> (Vec<MediaFile>, Vec<String>
         };
         for candidate in candidates {
             if files.len() + refused.len() >= nd_core::media::MAX_FILES {
-                refused.push(tr!("Select up to 1000 files at a time."));
+                refused.push(too_many_files());
                 return (files, refused);
             }
             match MediaFile::inspect(&candidate) {
@@ -48,6 +48,17 @@ pub(super) fn inspect_paths(paths: Vec<PathBuf>) -> (Vec<MediaFile>, Vec<String>
         }
     }
     (files, refused)
+}
+
+/// Why files past the queue's limit were left out.
+pub(super) fn too_many_files() -> String {
+    let limit = nd_core::media::MAX_FILES;
+    tr_n!(
+        "Select up to {} file at a time.",
+        "Select up to {} files at a time.",
+        limit
+    )
+    .replace("{}", &limit.to_string())
 }
 
 /// Lists the standard folder for this kind of file.

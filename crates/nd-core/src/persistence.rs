@@ -1,8 +1,32 @@
-//! Atomic private configuration writes.
+//! Where the application keeps its files, and atomic private writes there.
 
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+
+/// An XDG base directory.
+#[derive(Clone, Copy, Debug)]
+pub enum BaseDir {
+    Config,
+    Data,
+    State,
+}
+
+/// This application's directory under `base`: `$XDG_*_HOME/bignetscreen`,
+/// or the default under `$HOME`. A relative `$XDG_*_HOME` is ignored, as the
+/// XDG specification requires.
+pub fn app_dir(base: BaseDir) -> Option<PathBuf> {
+    let (variable, fallback) = match base {
+        BaseDir::Config => ("XDG_CONFIG_HOME", ".config"),
+        BaseDir::Data => ("XDG_DATA_HOME", ".local/share"),
+        BaseDir::State => ("XDG_STATE_HOME", ".local/state"),
+    };
+    std::env::var_os(variable)
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(fallback)))
+        .map(|dir| dir.join("bignetscreen"))
+}
 
 pub fn write_private(path: &Path, contents: &[u8]) -> std::io::Result<()> {
     static NEXT: AtomicU64 = AtomicU64::new(0);

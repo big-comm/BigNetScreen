@@ -38,10 +38,8 @@ fn store_path() -> Option<PathBuf> {
 
 #[cfg(not(test))]
 fn store_path() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))?;
-    Some(base.join("bignetscreen").join("cast-receivers"))
+    nd_core::persistence::app_dir(nd_core::persistence::BaseDir::Data)
+        .map(|dir| dir.join("cast-receivers"))
 }
 
 /// Accepts the receiver when it proves the key it proved before, and

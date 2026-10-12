@@ -344,9 +344,7 @@ impl Component for DevicesPage {
 
         let device_list = model.devices.widget();
         let widgets = view_output!();
-        let compact = adw::Breakpoint::new(
-            adw::BreakpointCondition::parse("max-width: 720px").expect("valid breakpoint"),
-        );
+        let compact = crate::pages::compact_breakpoint();
         compact.add_setter(
             &widgets.columns,
             "orientation",

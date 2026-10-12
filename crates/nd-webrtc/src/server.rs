@@ -628,7 +628,7 @@ mod tests {
     }
 
     #[test]
-    fn guesser_does_not_lock_others() {
+    fn guesser_locks_only_itself() {
         let now = Instant::now();
         let mut guards = PinGuards::default();
         for _ in 0..PIN_ATTEMPTS {

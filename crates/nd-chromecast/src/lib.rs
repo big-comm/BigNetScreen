@@ -33,10 +33,6 @@ use nd_core::{NdError, Result};
 const CHROMECAST_SERVICE: &str = "_googlecast._tcp.local.";
 const AIRPLAY_SERVICE: &str = "_airplay._tcp.local.";
 
-fn net_err<E: std::fmt::Display>(e: E) -> NdError {
-    NdError::Network(e.to_string())
-}
-
 /// An mDNS service type to browse and the protocol it stands for.
 #[derive(Clone, Copy, Debug)]
 pub struct ServiceKind {
@@ -70,7 +66,7 @@ impl MdnsProvider {
         display_name: &'static str,
         services: Vec<ServiceKind>,
     ) -> Result<Self> {
-        let daemon = ServiceDaemon::new().map_err(net_err)?;
+        let daemon = ServiceDaemon::new().map_err(NdError::network)?;
         Ok(Self {
             daemon,
             id,
@@ -120,7 +116,10 @@ impl Provider for MdnsProvider {
             // `browse` returns a synchronous flume channel; one thread per
             // service bridges it to the async stream. When the daemon shuts
             // down the channel closes and the thread ends on its own.
-            let events = self.daemon.browse(service.service_type).map_err(net_err)?;
+            let events = self
+                .daemon
+                .browse(service.service_type)
+                .map_err(NdError::network)?;
             let kind = service.kind;
             let mut tx = tx.clone();
 
@@ -163,7 +162,7 @@ impl Provider for MdnsProvider {
                         }
                     }
                 })
-                .map_err(net_err)?;
+                .map_err(NdError::network)?;
         }
 
         Ok(rx.boxed())

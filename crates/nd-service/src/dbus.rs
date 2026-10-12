@@ -160,7 +160,7 @@ impl Service {
         source: &str,
         page_text: Vec<(String, String)>,
     ) -> zbus::fdo::Result<()> {
-        let (source, screen) = engine::source_from_arg(source)
+        let (source, screen) = crate::wire::source_from_arg(source)
             .ok_or_else(|| zbus::fdo::Error::InvalidArgs(format!("unknown source `{source}`")))?;
         self.engine
             .cast(id.to_string(), source, screen, page_text)

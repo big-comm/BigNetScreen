@@ -62,18 +62,13 @@ fn restores_selection(source_type: SourceType) -> bool {
 /// selection that produced it, and handing a window's token to a screen
 /// request would restore that window instead.
 fn restore_token_path(source_type: SourceType) -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))?;
+    let dir = nd_core::persistence::app_dir(nd_core::persistence::BaseDir::Data)?;
     let kind = match source_type {
         SourceType::Monitor => "monitor",
         SourceType::Virtual => "virtual",
         SourceType::Window => "window",
     };
-    Some(
-        base.join("bignetscreen")
-            .join(format!("restore-token-{kind}")),
-    )
+    Some(dir.join(format!("restore-token-{kind}")))
 }
 
 fn load_restore_token(source_type: SourceType) -> Option<String> {

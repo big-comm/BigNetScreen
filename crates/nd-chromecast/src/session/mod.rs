@@ -171,7 +171,7 @@ async fn stream_config(size: (u32, u32)) -> Result<StreamConfig> {
         ..Default::default()
     };
     cfg.encoder = pipeline::working_encoder(
-        detect_gpu_driver(),
+        pipeline::GpuDriver::detect(),
         pipeline::Acceleration::preferred(),
         cfg,
     )
@@ -392,39 +392,6 @@ pub fn cancellation() -> (SessionHandle, tokio::sync::watch::Receiver<bool>) {
     (SessionHandle { cancel: tx }, rx)
 }
 
-/// Detects the KMS driver without depending on `nd-net`.
-///
-/// `nd-chromecast` works under Flatpak, where `nd-net` (NetworkManager, the
-/// system bus) cannot operate; the sandbox does allow reading sysfs.
-pub(crate) fn detect_gpu_driver() -> pipeline::GpuDriver {
-    use pipeline::GpuDriver;
-
-    let Ok(entries) = std::fs::read_dir("/sys/class/drm") else {
-        return GpuDriver::Unknown;
-    };
-    let mut cards: Vec<String> = entries
-        .flatten()
-        .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|name| {
-            name.starts_with("card") && name["card".len()..].chars().all(|c| c.is_ascii_digit())
-        })
-        .collect();
-    cards.sort();
-
-    for card in cards {
-        let link = format!("/sys/class/drm/{card}/device/driver");
-        if let Ok(target) = std::fs::read_link(&link)
-            && let Some(module) = target.file_name().and_then(|n| n.to_str())
-        {
-            let driver = GpuDriver::from_kernel_module(module);
-            if driver != GpuDriver::Unknown {
-                return driver;
-            }
-        }
-    }
-    GpuDriver::Unknown
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -457,11 +424,6 @@ mod tests {
         assert!(!*rx.borrow());
         handle.stop();
         assert!(*rx.borrow_and_update());
-    }
-
-    #[test]
-    fn gpu_detection_never_panics() {
-        let _ = detect_gpu_driver();
     }
 
     #[test]

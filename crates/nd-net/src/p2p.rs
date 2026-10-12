@@ -107,10 +107,6 @@ pub enum PeerEvent {
     Removed { path: String },
 }
 
-fn err<E: std::fmt::Display>(e: E) -> NdError {
-    NdError::Network(e.to_string())
-}
-
 /// How the error for a computer without Wi-Fi begins; clients match it.
 pub const NO_WIFI_ADAPTER: &str = "no Wi-Fi adapter on this computer";
 /// How the error for Wi-Fi without a P2P device begins; clients match it.
@@ -206,11 +202,11 @@ impl P2pDevice {
         for dev in devices {
             let device = DeviceProxy::builder(&conn)
                 .path(dev.clone())
-                .map_err(err)?
+                .map_err(NdError::network)?
                 .cache_properties(CacheProperties::No)
                 .build()
                 .await
-                .map_err(err)?;
+                .map_err(NdError::network)?;
             let kind = device.device_type().await.unwrap_or(0);
             if kind == DEVICE_TYPE_WIFI {
                 has_wifi = true;
@@ -218,10 +214,10 @@ impl P2pDevice {
             if kind == DEVICE_TYPE_WIFI_P2P {
                 let p2p = WifiP2pProxy::builder(&conn)
                     .path(dev.clone())
-                    .map_err(err)?
+                    .map_err(NdError::network)?
                     .build()
                     .await
-                    .map_err(err)?;
+                    .map_err(NdError::network)?;
                 tracing::info!(path = %dev, "Wi-Fi P2P device found");
 
                 // Before any search: several sinks only answer with their WFD
@@ -359,11 +355,11 @@ impl P2pDevice {
         // `GetAll` plus a PropertiesChanged match rule per peer.
         let peer = WifiP2pPeerProxy::builder(&self.conn)
             .path(path.clone())
-            .map_err(err)?
+            .map_err(NdError::network)?
             .cache_properties(CacheProperties::No)
             .build()
             .await
-            .map_err(err)?;
+            .map_err(NdError::network)?;
 
         let name = peer.name().await.unwrap_or_default();
         let hw_address = peer.hw_address().await.unwrap_or_default();
@@ -404,8 +400,16 @@ impl P2pDevice {
     /// It emits the already known peers first, then the changes. The stream
     /// lives for as long as it is consumed.
     pub async fn peer_events(&self) -> Result<impl Stream<Item = PeerEvent> + '_> {
-        let added = self.p2p.receive_peer_added().await.map_err(err)?;
-        let removed = self.p2p.receive_peer_removed().await.map_err(err)?;
+        let added = self
+            .p2p
+            .receive_peer_added()
+            .await
+            .map_err(NdError::network)?;
+        let removed = self
+            .p2p
+            .receive_peer_removed()
+            .await
+            .map_err(NdError::network)?;
 
         // Initial snapshot: peers discovered before we subscribed to signals.
         let initial = futures::stream::iter(self.peers().await?).map(PeerEvent::Added);

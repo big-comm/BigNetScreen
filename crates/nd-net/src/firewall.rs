@@ -124,13 +124,8 @@ impl FirewallLease {
 
 /// Where the open rules are remembered between runs.
 fn lease_path() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_STATE_HOME")
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
-        .or_else(|| {
-            std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/state"))
-        })?;
-    Some(base.join("bignetscreen").join("firewall-lease"))
+    nd_core::persistence::app_dir(nd_core::persistence::BaseDir::State)
+        .map(|dir| dir.join("firewall-lease"))
 }
 
 /// Writes the lease down so a later run can undo it if this one cannot.

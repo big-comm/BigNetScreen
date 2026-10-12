@@ -26,7 +26,7 @@ use nd_core::provider::DiscoveryEvent;
 use nd_core::settings::{self, Settings};
 use nd_core::sink::{Sink, SinkState};
 
-use crate::wire::{self, Issue, Receiver, Status, StatusKind};
+use crate::wire::{Issue, Status, StatusKind};
 
 mod discovery;
 mod session;
@@ -623,46 +623,6 @@ impl Engine {
     }
 }
 
-/// The receivers that can be sent a file, for a client to choose from.
-///
-/// There is no "best guess" anywhere above this: casting to a
-/// device is visible to whoever is standing in front of it, so it takes an
-/// explicit choice every time.
-pub fn can_receive_files(receiver: &Receiver) -> bool {
-    wire::kind_from_name(&receiver.kind)
-        .is_some_and(|kind| kind.can_receive_files(&receiver.address))
-}
-
-pub fn source_name(source: SourceType) -> &'static str {
-    match source {
-        SourceType::Monitor => "monitor",
-        SourceType::Window => "window",
-        SourceType::Virtual => "virtual",
-    }
-}
-
-/// A cast's source as clients spell it: a [`source_name`], and for a screen
-/// optionally the connector of the one to stream, `monitor:DP-1`.
-pub fn source_from_arg(arg: &str) -> Option<(SourceType, Option<String>)> {
-    match arg.split_once(':') {
-        Some((name, screen)) if !screen.is_empty() => match source_from_name(name)? {
-            SourceType::Monitor => Some((SourceType::Monitor, Some(screen.to_string()))),
-            _ => None,
-        },
-        Some(_) => None,
-        None => Some((source_from_name(arg)?, None)),
-    }
-}
-
-pub fn source_from_name(name: &str) -> Option<SourceType> {
-    match name {
-        "monitor" | "screen" => Some(SourceType::Monitor),
-        "window" => Some(SourceType::Window),
-        "virtual" => Some(SourceType::Virtual),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -774,33 +734,6 @@ mod tests {
         assert!(engine.active_cast.is_none());
     }
 
-    #[test]
-    fn source_names_survive_a_round_trip() {
-        for source in [SourceType::Monitor, SourceType::Window, SourceType::Virtual] {
-            assert_eq!(source_from_name(source_name(source)), Some(source));
-        }
-        assert_eq!(source_from_name("nonsense"), None);
-    }
-
-    #[test]
-    fn screen_source_names_connector() {
-        assert_eq!(
-            source_from_arg("monitor"),
-            Some((SourceType::Monitor, None))
-        );
-        assert_eq!(
-            source_from_arg("screen:DP-1"),
-            Some((SourceType::Monitor, Some("DP-1".into())))
-        );
-        assert_eq!(
-            source_from_arg("virtual"),
-            Some((SourceType::Virtual, None))
-        );
-        // Only a screen takes a name, and the name is not optional after `:`.
-        assert_eq!(source_from_arg("window:DP-1"), None);
-        assert_eq!(source_from_arg("monitor:"), None);
-    }
-
     #[tokio::test(start_paused = true)]
     async fn shutdown_waits_for_session_cleanup() {
         use std::sync::atomic::{AtomicBool, Ordering};
@@ -835,27 +768,5 @@ mod tests {
                     .unwrap();
             }
         );
-    }
-
-    #[test]
-    fn files_offered_to_capable_protocols() {
-        let receiver = |kind: &str, address: &str| Receiver {
-            id: "x".into(),
-            display_name: "x".into(),
-            kind: kind.into(),
-            address: address.into(),
-            castable: true,
-            state: "disconnected".into(),
-            detail: String::new(),
-            width: 0,
-            height: 0,
-            fps: 0,
-        };
-        assert!(can_receive_files(&receiver("chromecast", "192.168.1.2")));
-        // A Chromecast announced without a usable address has nothing to send to.
-        assert!(!can_receive_files(&receiver("chromecast", "")));
-        assert!(can_receive_files(&receiver("wfd-p2p", "")));
-        assert!(!can_receive_files(&receiver("airplay", "192.168.1.2")));
-        assert!(!can_receive_files(&receiver("ndi", "")));
     }
 }

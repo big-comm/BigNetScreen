@@ -352,18 +352,22 @@ fn parse_latency(value: &str) -> Option<crate::latency::Profile> {
     }
 }
 
+/// The custom resolution's bounds, in pixels per side.
+pub const MIN_DIMENSION: u32 = 160;
+pub const MAX_DIMENSION: u32 = 7680;
+
+/// A custom width or height within the bounds, rounded down to even: the
+/// encoders take only even sizes.
 pub fn valid_dimension(value: u32) -> u32 {
-    value.clamp(160, 7680) & !1
+    value.clamp(MIN_DIMENSION, MAX_DIMENSION) & !1
 }
 
 static CURRENT: RwLock<Option<Settings>> = RwLock::new(None);
 
 /// Where the settings file lives.
 pub fn path() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
-    Some(base.join("bignetscreen").join("settings.conf"))
+    crate::persistence::app_dir(crate::persistence::BaseDir::Config)
+        .map(|dir| dir.join("settings.conf"))
 }
 
 /// The settings in force, reading the file on first use.

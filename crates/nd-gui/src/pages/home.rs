@@ -552,9 +552,7 @@ impl Component for HomePage {
         let device_list = model.devices.widget();
         let action_grid = &action_grid;
         let widgets = view_output!();
-        let compact = adw::Breakpoint::new(
-            adw::BreakpointCondition::parse("max-width: 720px").expect("valid breakpoint"),
-        );
+        let compact = crate::pages::compact_breakpoint();
         let vertical = gtk::Orientation::Vertical.to_value();
         for stacked in [
             &widgets.receivers_heading,

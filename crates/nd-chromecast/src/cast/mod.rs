@@ -105,13 +105,6 @@ const RECEIVE_TIMEOUT: Duration = Duration::from_secs(40);
 /// The interval between the PINGs we send.
 const PING_INTERVAL: Duration = Duration::from_secs(5);
 
-fn net_err<E: std::fmt::Display>(e: E) -> NdError {
-    NdError::Network(e.to_string())
-}
-fn proto_err<E: std::fmt::Display>(e: E) -> NdError {
-    NdError::Protocol(e.to_string())
-}
-
 /// A spontaneous message from the receiver (not a reply to anything we asked).
 #[derive(Clone, Debug)]
 pub struct CastEvent {
@@ -483,7 +476,7 @@ async fn open_tls(ip: IpAddr, port: u16) -> Result<TlsStream<TcpStream>> {
                  casting service switched off"
             ))
         })?
-        .map_err(net_err)?;
+        .map_err(NdError::network)?;
     // No Nagle delay: control messages are small and their latency shows
     // up directly in the time until the picture appears.
     let _ = tcp.set_nodelay(true);
@@ -491,7 +484,7 @@ async fn open_tls(ip: IpAddr, port: u16) -> Result<TlsStream<TcpStream>> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let config = rustls::ClientConfig::builder_with_provider(provider.clone())
         .with_safe_default_protocol_versions()
-        .map_err(proto_err)?
+        .map_err(NdError::protocol)?
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(CastCertVerifier(provider)))
         .with_no_client_auth();
@@ -501,7 +494,7 @@ async fn open_tls(ip: IpAddr, port: u16) -> Result<TlsStream<TcpStream>> {
     tokio::time::timeout(CONNECT_TIMEOUT, connector.connect(server_name, tcp))
         .await
         .map_err(|_| NdError::Network("the TLS handshake timed out".into()))?
-        .map_err(net_err)
+        .map_err(NdError::network)
 }
 
 /// Our side of the heartbeat; the receiver's PINGs are answered by

@@ -44,6 +44,46 @@ impl GpuDriver {
         }
     }
 
+    /// The primary GPU's driver: the target of the
+    /// `/sys/class/drm/card*/device/driver` symlink, whose file name is the
+    /// kernel module. The first card with a known driver wins. Sysfs is
+    /// readable inside Flatpak too.
+    pub fn detect() -> Self {
+        Self::detect_in(std::path::Path::new("/sys/class/drm"))
+    }
+
+    fn detect_in(drm_root: &std::path::Path) -> Self {
+        let Ok(entries) = std::fs::read_dir(drm_root) else {
+            tracing::debug!("DRM sysfs unavailable; assuming an unknown GPU");
+            return GpuDriver::Unknown;
+        };
+        let mut cards: Vec<_> = entries
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            // `card0`, `card1`; not connectors (`card0-HDMI-A-1`) or `renderD128`.
+            .filter(|name| {
+                name.starts_with("card") && name["card".len()..].chars().all(|c| c.is_ascii_digit())
+            })
+            .collect();
+        // `card0` is usually the primary GPU.
+        cards.sort();
+        for card in cards {
+            let link = drm_root.join(&card).join("device").join("driver");
+            let Ok(target) = std::fs::read_link(&link) else {
+                continue;
+            };
+            let Some(module) = target.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            let driver = GpuDriver::from_kernel_module(module);
+            tracing::info!(%card, %module, ?driver, "KMS driver detected");
+            if driver != GpuDriver::Unknown {
+                return driver;
+            }
+        }
+        GpuDriver::Unknown
+    }
+
     /// Whether a hardware encoder is worth trying on this driver.
     ///
     /// Only `nouveau` is ruled out: it exposes no usable NVENC. Elsewhere the
@@ -278,6 +318,38 @@ pub fn best_encoder(driver: GpuDriver, acceleration: Acceleration) -> Result<H26
 mod tests {
     use super::*;
     use crate::pipeline::PIPELINE_LATENCY_AUTO;
+
+    #[test]
+    fn missing_sysfs_means_unknown_driver() {
+        assert_eq!(
+            GpuDriver::detect_in(std::path::Path::new("/definitely/does/not/exist")),
+            GpuDriver::Unknown
+        );
+    }
+
+    #[test]
+    fn first_known_driver_wins() {
+        use std::os::unix::fs::symlink;
+        let root = std::env::temp_dir().join(format!("nd-core-drm-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for (entry, module) in [
+            ("card0-HDMI-A-1", "i915"),
+            ("renderD128", "i915"),
+            ("card0", "simpledrm"),
+            ("card1", "amdgpu"),
+        ] {
+            let device = root.join(entry).join("device");
+            std::fs::create_dir_all(&device).unwrap();
+            symlink(
+                format!("../../bus/pci/drivers/{module}"),
+                device.join("driver"),
+            )
+            .unwrap();
+        }
+        let driver = GpuDriver::detect_in(&root);
+        std::fs::remove_dir_all(&root).unwrap();
+        assert_eq!(driver, GpuDriver::Amdgpu);
+    }
 
     #[test]
     fn intel_drivers_prefer_hardware() {

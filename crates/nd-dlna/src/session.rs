@@ -120,7 +120,7 @@ async fn stream(
         audio: source.audio_source(),
         ..Default::default()
     };
-    let driver = nd_net::detect_gpu_driver();
+    let driver = nd_core::pipeline::GpuDriver::detect();
     cfg.encoder =
         pipeline::working_encoder(driver, pipeline::Acceleration::preferred(), cfg).await?;
 

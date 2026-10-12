@@ -9,7 +9,7 @@ use zbus::zvariant::{ObjectPath, OwnedObjectPath, Value};
 
 use nd_core::{NdError, Result};
 
-use super::{GROUP_STATE_POLL, P2pDevice, WFD_SOURCE_IES, classify, err, is_gone};
+use super::{GROUP_STATE_POLL, P2pDevice, WFD_SOURCE_IES, classify, is_gone};
 use crate::networkmanager::{ActiveConnectionProxy, DeviceProxy, Ip4ConfigProxy};
 
 /// The state of a NetworkManager active connection (`NMActiveConnectionState`).
@@ -85,7 +85,7 @@ impl P2pDevice {
         options.insert("bind-activation", Value::from("dbus-client"));
         options.insert("persist", Value::from("volatile"));
 
-        let peer = ObjectPath::try_from(peer_path).map_err(err)?;
+        let peer = ObjectPath::try_from(peer_path).map_err(NdError::network)?;
 
         let (_conn_path, active, _result) = self
             .nm
@@ -108,11 +108,11 @@ impl P2pDevice {
     async fn active_proxy(&self, active: &OwnedObjectPath) -> Result<ActiveConnectionProxy<'_>> {
         ActiveConnectionProxy::builder(&self.conn)
             .path(active.clone())
-            .map_err(err)?
+            .map_err(NdError::network)?
             .cache_properties(CacheProperties::No)
             .build()
             .await
-            .map_err(err)
+            .map_err(NdError::network)
     }
 
     /// Reads an active connection's state.
@@ -129,7 +129,7 @@ impl P2pDevice {
             Ok(state) => Ok(ActiveState::from(state)),
             // The object was removed: the connection really did end.
             Err(e) if is_gone(&e) => Ok(ActiveState::Deactivated),
-            Err(e) => Err(err(e)),
+            Err(e) => Err(NdError::network(e)),
         }
     }
 
@@ -144,7 +144,7 @@ impl P2pDevice {
         let ip4 = match ac.ip4_config().await {
             Ok(path) => path,
             Err(e) if is_gone(&e) => return Ok(Vec::new()),
-            Err(e) => return Err(err(e)),
+            Err(e) => return Err(NdError::network(e)),
         };
         if ip4.as_str() == "/" {
             return Ok(Vec::new());
@@ -152,15 +152,15 @@ impl P2pDevice {
 
         let ip4_proxy = Ip4ConfigProxy::builder(&self.conn)
             .path(ip4)
-            .map_err(err)?
+            .map_err(NdError::network)?
             .cache_properties(CacheProperties::No)
             .build()
             .await
-            .map_err(err)?;
+            .map_err(NdError::network)?;
         let address_data = match ip4_proxy.address_data().await {
             Ok(address_data) => address_data,
             Err(e) if is_gone(&e) => return Ok(Vec::new()),
-            Err(e) => return Err(err(e)),
+            Err(e) => return Err(NdError::network(e)),
         };
 
         let mut addresses = Vec::new();
@@ -186,16 +186,16 @@ impl P2pDevice {
         let devices = match ac.devices().await {
             Ok(devices) => devices,
             Err(e) if is_gone(&e) => return Ok(None),
-            Err(e) => return Err(err(e)),
+            Err(e) => return Err(NdError::network(e)),
         };
         for dev in devices {
             let device = DeviceProxy::builder(&self.conn)
                 .path(dev)
-                .map_err(err)?
+                .map_err(NdError::network)?
                 .cache_properties(CacheProperties::No)
                 .build()
                 .await
-                .map_err(err)?;
+                .map_err(NdError::network)?;
             // `IpInterface` is the link's real name; `Interface` serves as a
             // fallback while the device is still coming up.
             let mut name = device.ip_interface().await.ok().filter(|n| !n.is_empty());

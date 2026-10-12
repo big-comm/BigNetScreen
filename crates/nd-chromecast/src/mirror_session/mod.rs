@@ -269,7 +269,7 @@ async fn mirror_config(size: (u32, u32)) -> Result<StreamConfig> {
     // before there is a size to offer. A GPU that encodes the portal's guess
     // encodes the real size: they differ by the compositor's scale factor.
     cfg.encoder = pipeline::working_encoder(
-        crate::session::detect_gpu_driver(),
+        pipeline::GpuDriver::detect(),
         pipeline::Acceleration::preferred(),
         cfg,
     )

@@ -55,5 +55,17 @@ pub enum NdError {
     Cancelled,
 }
 
+impl NdError {
+    /// For `map_err` on a socket, D-Bus or HTTP failure.
+    pub fn network(err: impl std::fmt::Display) -> Self {
+        Self::Network(err.to_string())
+    }
+
+    /// For `map_err` on a malformed or refused protocol message.
+    pub fn protocol(err: impl std::fmt::Display) -> Self {
+        Self::Protocol(err.to_string())
+    }
+}
+
 /// The crate's standard alias.
 pub type Result<T> = std::result::Result<T, NdError>;

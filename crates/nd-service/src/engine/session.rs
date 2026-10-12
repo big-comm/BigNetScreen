@@ -43,7 +43,7 @@ impl Engine {
             let name = self.settings.display_name();
             Arc::new(nd_webrtc::WebRtcPublisher::new(
                 name.clone(),
-                nd_net::detect_gpu_driver(),
+                nd_core::pipeline::GpuDriver::detect(),
                 crate::web_page_text(name, &page_text),
             ))
         } else if let Some(sink) = self.registry.get(&id).cloned() {

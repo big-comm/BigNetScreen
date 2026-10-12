@@ -20,7 +20,7 @@ use tokio_rustls::client::TlsStream;
 use nd_core::{NdError, Result};
 
 use super::wire::{CastMessage, read_raw_message};
-use super::{PLATFORM_DEST, SOURCE_ID, WRITE_TIMEOUT, net_err, proto_err};
+use super::{PLATFORM_DEST, SOURCE_ID, WRITE_TIMEOUT};
 
 pub(super) const NS_DEVICE_AUTH: &str = "urn:x-cast:com.google.cast.tp.deviceauth";
 /// How long a receiver gets to answer the identity challenge. A Google
@@ -130,7 +130,7 @@ pub(super) async fn authenticate_device(
     })
     .await
     .map_err(|_| NdError::Network("the identity challenge could not be sent".into()))?
-    .map_err(net_err)?;
+    .map_err(NdError::network)?;
 
     let answer = tokio::time::timeout(AUTH_TIMEOUT, async {
         // Nothing else is expected before CONNECT; a few strays are skipped.
@@ -151,7 +151,7 @@ pub(super) async fn authenticate_device(
         }
         Ok(Err(err)) => return Err(err),
     };
-    let reply = DeviceAuthMessage::decode(&binary[..]).map_err(proto_err)?;
+    let reply = DeviceAuthMessage::decode(&binary[..]).map_err(NdError::protocol)?;
     let Some(response) = reply.response else {
         tracing::info!(
             error = ?reply.error.map(|e| e.error_type),

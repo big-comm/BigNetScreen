@@ -191,7 +191,7 @@ impl ServiceState {
     pub(super) fn media_receivers(&self) -> Vec<(String, String)> {
         self.receivers
             .iter()
-            .filter(|receiver| nd_service::engine::can_receive_files(receiver))
+            .filter(|receiver| wire::can_receive_files(receiver))
             .map(|receiver| (receiver.id.clone(), receiver.display_name.clone()))
             .collect()
     }

@@ -15,9 +15,7 @@ use tokio_rustls::client::TlsStream;
 use nd_core::{NdError, Result};
 
 use super::wire::CastMessage;
-use super::{
-    CLOSE_PAYLOAD, NS_CONNECTION, NS_HEARTBEAT, PLATFORM_DEST, SOURCE_ID, WRITE_TIMEOUT, net_err,
-};
+use super::{CLOSE_PAYLOAD, NS_CONNECTION, NS_HEARTBEAT, PLATFORM_DEST, SOURCE_ID, WRITE_TIMEOUT};
 
 pub(super) struct ControlWriter<W = WriteHalf<TlsStream<TcpStream>>> {
     stream: Mutex<W>,
@@ -115,7 +113,7 @@ impl<W: AsyncWrite + Unpin> ControlWriter<W> {
         })
         .await
         .map_err(|_| NdError::Network("Cast frame write timed out; channel closed".into()))?
-        .map_err(net_err)?;
+        .map_err(NdError::network)?;
         transaction.complete = true;
         if last {
             // Still holding the lock: no request can follow the CLOSE.

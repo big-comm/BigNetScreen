@@ -382,9 +382,7 @@ impl Component for MediaPage {
 
         let grid = model.tiles.widget();
         let widgets = view_output!();
-        let compact = adw::Breakpoint::new(
-            adw::BreakpointCondition::parse("max-width: 720px").expect("valid breakpoint"),
-        );
+        let compact = crate::pages::compact_breakpoint();
         compact.add_setter(
             &widgets.toolbar,
             "orientation",
@@ -473,7 +471,7 @@ impl Component for MediaPage {
                 for file in files {
                     if !self.chosen.iter().any(|f| f.path == file.path) {
                         if self.chosen.len() >= nd_core::media::MAX_FILES {
-                            self.refused.push(tr!("Select up to 1000 files at a time."));
+                            self.refused.push(library::too_many_files());
                             break;
                         }
                         self.chosen.push(file.clone());

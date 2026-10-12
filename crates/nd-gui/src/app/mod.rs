@@ -539,7 +539,7 @@ impl Component for AppModel {
             }
             AppMsg::CastOnScreen(id, screen) => {
                 tracing::info!(%screen, "screen chosen");
-                let monitor = nd_service::engine::source_name(SourceType::Monitor);
+                let monitor = wire::source_name(SourceType::Monitor);
                 self.cast(id, format!("{monitor}:{screen}"), &sender);
             }
             AppMsg::Stop | AppMsg::CancelMedia => {
@@ -703,7 +703,7 @@ impl Component for AppModel {
                 self.status = tr!("The sharing service is not responding. Try again.");
             }
             AppCmd::Screens { id, mut screens } => {
-                let monitor = nd_service::engine::source_name(SourceType::Monitor);
+                let monitor = wire::source_name(SourceType::Monitor);
                 match screens.len() {
                     0 => self.cast(id, monitor.to_string(), &sender),
                     1 => {
@@ -790,7 +790,7 @@ impl AppModel {
             });
             return;
         }
-        let source = nd_service::engine::source_name(self.source_type).to_string();
+        let source = wire::source_name(self.source_type).to_string();
         self.cast(id, source, sender);
     }
 

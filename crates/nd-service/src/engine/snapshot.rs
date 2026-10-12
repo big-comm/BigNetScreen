@@ -4,8 +4,8 @@ use nd_chromecast::media::MediaStatus;
 use nd_core::settings::Settings;
 use nd_core::sink::SinkState;
 
-use super::{Engine, source_name};
-use crate::wire::{self, Issue, Media, Receiver, Session, Status, StatusKind};
+use super::Engine;
+use crate::wire::{self, Issue, Media, Receiver, Session, Status, StatusKind, source_name};
 
 /// Everything a client needs to draw, in one value.
 #[derive(Clone, Debug, PartialEq)]

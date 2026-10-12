@@ -23,10 +23,6 @@ const MAX_HEADERS: usize = 64;
 /// A sink that stops reading must not hold the session open forever.
 const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 
-fn proto_err<E: std::fmt::Display>(e: E) -> NdError {
-    NdError::Protocol(e.to_string())
-}
-
 /// An RTSP message (request or response).
 #[derive(Debug)]
 pub(super) struct RtspMessage {
@@ -72,7 +68,7 @@ async fn bounded_line<R: AsyncBufReadExt + Unpin>(
 ) -> Result<String> {
     let mut line = Vec::new();
     loop {
-        let bytes = reader.fill_buf().await.map_err(proto_err)?;
+        let bytes = reader.fill_buf().await.map_err(NdError::protocol)?;
         if bytes.is_empty() {
             return Err(NdError::Protocol(
                 "RTSP connection closed during headers".into(),
@@ -89,7 +85,7 @@ async fn bounded_line<R: AsyncBufReadExt + Unpin>(
         *budget -= count;
         reader.consume(count);
         if line.last() == Some(&b'\n') {
-            return String::from_utf8(line).map_err(proto_err);
+            return String::from_utf8(line).map_err(NdError::protocol);
         }
     }
 }
@@ -128,13 +124,16 @@ where
     }
     let mut body = String::new();
     if let Some(value) = headers.get("content-length") {
-        let len = value.parse::<usize>().map_err(proto_err)?;
+        let len = value.parse::<usize>().map_err(NdError::protocol)?;
         if len > MAX_BODY_BYTES {
             return Err(NdError::Protocol("RTSP body too large".into()));
         }
         let mut buf = vec![0u8; len];
-        reader.read_exact(&mut buf).await.map_err(proto_err)?;
-        body = String::from_utf8(buf).map_err(proto_err)?;
+        reader
+            .read_exact(&mut buf)
+            .await
+            .map_err(NdError::protocol)?;
+        body = String::from_utf8(buf).map_err(NdError::protocol)?;
     }
 
     let msg = RtspMessage {
@@ -172,8 +171,8 @@ async fn write_message<W: AsyncWrite + Unpin>(
     deadline: Duration,
 ) -> Result<()> {
     tokio::time::timeout(deadline, async {
-        writer.write_all(message).await.map_err(proto_err)?;
-        writer.flush().await.map_err(proto_err)
+        writer.write_all(message).await.map_err(NdError::protocol)?;
+        writer.flush().await.map_err(NdError::protocol)
     })
     .await
     .map_err(|_| NdError::Protocol("RTSP receiver stopped reading control messages".into()))?
