@@ -388,15 +388,6 @@ pub fn session_of(sink: &dyn Sink, source: &str, round_trip_ms: u64) -> Session 
     }
 }
 
-/// The receivers that can be sent a file, for a client to choose from.
-///
-/// There is no "best guess" anywhere above this: casting to a
-/// device is visible to whoever is standing in front of it, so it takes an
-/// explicit choice every time.
-pub fn can_receive_files(receiver: &Receiver) -> bool {
-    kind_from_name(&receiver.kind).is_some_and(|kind| kind.can_receive_files(&receiver.address))
-}
-
 pub fn source_name(source: SourceType) -> &'static str {
     match source {
         SourceType::Monitor => "monitor",
@@ -527,28 +518,5 @@ mod tests {
         // Only a screen takes a name, and the name is not optional after `:`.
         assert_eq!(source_from_arg("window:DP-1"), None);
         assert_eq!(source_from_arg("monitor:"), None);
-    }
-
-    #[test]
-    fn files_offered_to_capable_protocols() {
-        let receiver = |kind: &str, address: &str| Receiver {
-            id: "x".into(),
-            display_name: "x".into(),
-            kind: kind.into(),
-            address: address.into(),
-            castable: true,
-            state: "disconnected".into(),
-            detail: String::new(),
-            width: 0,
-            height: 0,
-            fps: 0,
-        };
-        assert!(can_receive_files(&receiver("chromecast", "192.168.1.2")));
-        // A Chromecast announced without a usable address has nothing to send to.
-        assert!(!can_receive_files(&receiver("chromecast", "")));
-        assert!(can_receive_files(&receiver("dlna", "192.168.1.3")));
-        assert!(can_receive_files(&receiver("wfd-p2p", "")));
-        assert!(!can_receive_files(&receiver("airplay", "192.168.1.2")));
-        assert!(!can_receive_files(&receiver("ndi", "")));
     }
 }

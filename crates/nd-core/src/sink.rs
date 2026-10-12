@@ -382,6 +382,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn files_offered_to_capable_protocols() {
+        assert!(SinkKind::Chromecast.can_receive_files("192.168.1.2"));
+        // A Chromecast announced without a usable address has nothing to send to.
+        assert!(!SinkKind::Chromecast.can_receive_files(""));
+        assert!(SinkKind::Dlna.can_receive_files("192.168.1.3"));
+        assert!(SinkKind::WfdP2p.can_receive_files(""));
+        assert!(!SinkKind::AirPlay.can_receive_files("192.168.1.2"));
+        assert!(!SinkKind::Ndi.can_receive_files(""));
+    }
+
+    #[test]
     fn disconnect_keeps_error_state() {
         // A teardown that reports `Disconnected` must not hide why it failed.
         let status = SinkStatus::new();
