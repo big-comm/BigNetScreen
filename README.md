@@ -41,7 +41,7 @@ Use trusted networks only. A Chromecast is remembered by the device key it prove
 
 ## Build, improve, and share results
 
-The [architecture](ARCHITECTURE.md) maps the crates; the [contributor guide](CONTRIBUTING.md) explains how to submit a focused change with evidence. [AGENTS.md](AGENTS.md) holds the engineering rules shared by maintainers and coding agents. Protocol notes, tests and packaging instructions are indexed in [docs](docs/README.md).
+The [architecture](ARCHITECTURE.md) maps the crates; the [contributor guide](CONTRIBUTING.md) explains how to submit a focused change with evidence. Protocol notes, tests and packaging instructions are indexed in [docs](docs/README.md).
 
 A useful contribution can be small: report your receiver and firmware with a reproducible result, improve a translation, or test repeated reconnections. If BigNetScreen solves a problem for you, star the repository and tell other Linux users about it.
 

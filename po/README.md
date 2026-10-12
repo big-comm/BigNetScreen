@@ -13,11 +13,11 @@ handled with standard gettext tooling.
 `xgettext --language=C` chokes on Rust lifetimes (`'static` reads as an
 unterminated character constant), so the extraction is done by `extract.py`,
 which understands the `tr!`/`tr_n!` macros. The script also normalises the
-source references to relative paths — translation tooling tends to record
+source references to relative paths: translation tooling tends to record
 absolute ones, which would put a developer's home directory into every
 committed catalogue.
 
-The `.desktop` and AppStream files are deliberately left out of the template:
+The `.desktop` and AppStream files stay out of the template:
 they carry their translations inline (`Comment[pt_BR]`, `xml:lang="pt_BR"`),
 which is the usual AppStream convention.
 
@@ -45,8 +45,8 @@ BIGNETSCREEN_LOCALEDIR=./build/locale cargo run -p nd-gui
 ## Two things worth checking after a bulk translation
 
 1. **No `fuzzy` markers.** gettext ignores a message flagged `fuzzy`, and a
-   `fuzzy` *header* makes it ignore the catalogue's metadata entirely — which
-   is how a catalogue ends up looking as if it had no project name at all.
+   `fuzzy` *header* makes it ignore the catalogue's metadata entirely, so the
+   catalogue looks as if it had no project name at all.
    `msgfmt --check --statistics` reports both.
 2. **Relative source references.** Run `./po/update-pot.sh` once before
    committing; it strips absolute paths.

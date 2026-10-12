@@ -48,7 +48,7 @@ The two share nothing but multicast. `avahi-browse` cannot see a DLNA television
 
 ## The ordering that matters
 
-A renderer fetches the URL **from inside `SetAVTransportURI`**, not after `Play`. Proven by pointing one at an unreachable address: it answered `500` with UPnP `errorCode 716, Resource not found`, a verdict it could only reach by trying. So the stream server must already be *accepting* when the handshake runs, not merely listening. Handing the URL over first and serving afterwards deadlocks the SOAP call against our own accept loop, and the session dies reporting a network error against the control URL — which names the wrong culprit entirely.
+A renderer fetches the URL from inside `SetAVTransportURI`, before `Play`: pointed at an unreachable address, it answers `500` with UPnP `errorCode 716, Resource not found`. The stream server must already be accepting when the handshake runs. Handing the URL over first and serving afterwards deadlocks the SOAP call against our own accept loop, and the session fails with a network error that blames the control URL.
 
 Expect the television to open and close a few connections before it settles: it probes with `HEAD` and `getcontentFeatures.dlna.org: 1` before committing to a single `GET`.
 
@@ -60,8 +60,8 @@ The same asymmetry runs the other way: our *response* carries no length, because
 
 ## Evidence and limits
 
-Every measurement here comes from one renderer, a Panasonic 75GX880 over Ethernet. It is the interoperability oracle for this protocol in the same way a physical Chromecast is for Cast, and one model cannot speak for the installed base — another television may disagree in details only it knows. `cargo run -p nd-dlna --example dlna_probe` runs discovery, the description and each SOAP action in order and prints what came back; it is how the ordering and framing defects above were found, and it is the first thing to reach for when a new device misbehaves.
+Every measurement here comes from one renderer, a Panasonic 75GX880 over Ethernet. It is the interoperability oracle for this protocol in the same way a physical Chromecast is for Cast, and one model cannot speak for the installed base. `cargo run -p nd-dlna --example dlna_probe` runs discovery, the description and each SOAP action in order and prints what came back; it is the first thing to reach for when a new device misbehaves.
 
-The DLNA guidelines themselves are member-only documents. The open implementations that encode them — `libdlna`, `GUPnP`, `dleyna` — agree on the flag bits and are cited in [references](references.md).
+The DLNA guidelines themselves are member-only documents. The open implementations that encode them (`libdlna`, `GUPnP`, `dleyna`) agree on the flag bits and are cited in [references](references.md).
 
 Untested: any renderer that is not this television, and the `ContentDirectory` half of the protocol (serving our own media library), which is a different feature and not implemented.

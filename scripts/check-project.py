@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Check maintained docs, source hygiene and release metadata without building.
 
-Uses only Python >= 3.11 standard library. External links and hardware are not
-validated. Generated/ignored build trees are deliberately excluded.
+Uses only the Python >= 3.11 standard library and reads tracked files only, so
+external links, hardware and ignored build trees are out of its reach.
 """
 from __future__ import annotations
 
@@ -42,9 +42,9 @@ def main() -> int:
     for package in lock["package"]:
         if package["name"].startswith("nd-") and package["version"] != version:
             errors.append(f"Cargo.lock: inconsistent {package['name']} version")
-    # pkgbuild/PKGBUILD deliberately derives pkgver/pkgrel from the build clock:
-    # the distribution publishes rolling builds of a moving branch, so it carries
-    # no workspace version to compare against.
+    # pkgbuild/PKGBUILD derives pkgver/pkgrel from the build clock: the
+    # distribution publishes rolling builds of a moving branch, so it carries no
+    # workspace version to compare against.
     if 'env!("BIGNETSCREEN_VERSION")' not in (ROOT / "crates/nd-gui/src/main.rs").read_text(encoding="utf-8"):
         errors.append("GUI version is not the build date stamped by build.rs")
     if "+%y.%m.%d" not in (ROOT / "crates/nd-gui/build.rs").read_text(encoding="utf-8"):
@@ -58,7 +58,7 @@ def main() -> int:
         if not path.exists():
             # A staged/tracked deletion is checked by Git, not read as a file.
             continue
-        if relative.name == "CLAUDE.md" or relative.suffix in (".rej", ".orig", ".pyc", ".swp"):
+        if relative.suffix in (".rej", ".orig", ".pyc", ".swp"):
             errors.append(f"development residue: {relative}")
         if path.is_symlink() or not path.is_file():
             continue
@@ -71,9 +71,7 @@ def main() -> int:
             continue  # upstream keeps its own formatting/documentation policy
         if relative.suffix in (".rs", ".sh", ".py") and re.search(r"/usr/lib/python3\.\d+/site-packages", path.read_text(encoding="utf-8")):
             errors.append(f"version-pinned Python runtime path: {relative}")
-        # Audit evidence/history records old layouts and is explicitly not
-        # maintained guidance; check only currently maintained Markdown links.
-        if relative.suffix == ".md" and relative.parts[0] != "audit" and "history" not in relative.parts:
+        if relative.suffix == ".md":
             checked_docs += 1
             errors += markdown_errors(relative)
     for error in errors:

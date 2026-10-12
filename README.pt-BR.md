@@ -41,7 +41,7 @@ Use apenas redes confiáveis. Cada Chromecast é lembrado pela chave de disposit
 
 ## Participe
 
-Relate o modelo e o firmware do seu receptor, ajude nas traduções ou teste ciclos de conectar, parar e reconectar. Para alterar o código, comece por [CONTRIBUTING.md](CONTRIBUTING.md), [ARCHITECTURE.md](ARCHITECTURE.md) e [AGENTS.md](AGENTS.md). A documentação técnica é mantida em inglês para facilitar contribuições internacionais.
+Relate o modelo e o firmware do seu receptor, ajude nas traduções ou teste ciclos de conectar, parar e reconectar. Para alterar o código, comece por [CONTRIBUTING.md](CONTRIBUTING.md) e [ARCHITECTURE.md](ARCHITECTURE.md). A documentação técnica é mantida em inglês para facilitar contribuições internacionais.
 
 O BigNetScreen foi útil? Dê uma estrela ao repositório e apresente o projeto a outras pessoas que usam Linux.
 

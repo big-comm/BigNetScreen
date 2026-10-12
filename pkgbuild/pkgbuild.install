@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Enable NDI discovery for native installs, including offline image builds.
+# Enable NDI discovery on first install, including offline image builds.
+# Upgrades keep whatever the administrator chose since.
 configure_ndi_discovery() {
     if ! systemctl enable avahi-daemon.service; then
         printf '%s\n' 'BigNetScreen: Avahi could not be enabled; NDI discovery needs avahi-daemon.service.'
@@ -12,9 +13,5 @@ configure_ndi_discovery() {
 }
 
 post_install() {
-    configure_ndi_discovery
-}
-
-post_upgrade() {
     configure_ndi_discovery
 }

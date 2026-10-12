@@ -21,7 +21,7 @@ ashpd = { version = "0.13", default-features = false, features = ["tokio", "scre
 # A virtual monitor only exists while something consumes its stream, so the
 # Mutter backend keeps a minimal pipeline of its own alive.
 gstreamer.workspace = true
-# KDE has no portal call for "a virtual screen of this size" — the size is a
+# KDE has no portal call for "a virtual screen of this size": the size is a
 # literal in xdg-desktop-portal-kde. `zkde_screencast_unstable_v1` does take
 # one, so on KWin we ask the compositor ourselves.
 wayland-client = "0.31"

@@ -1,8 +1,8 @@
-//! Exercises the Wi-Fi Direct CONNECTION (phase 3b) with a Miracast sink.
+//! Forms a Wi-Fi Direct connection with a Miracast sink.
 //!
 //!   cargo run -p nd-net --example p2p_connect
 //!
-//! Put the TV/projector into "Screen Mirroring" FIRST. The test discovers the
+//! Put the TV or projector into "Screen Mirroring" first. The test discovers the
 //! WFD peer, forms the P2P group and follows the connection state
 //! (2 = ACTIVATED = group formed).
 

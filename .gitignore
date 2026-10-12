@@ -10,12 +10,6 @@
 *~
 .DS_Store
 
-# Agent and tooling state
-.codex
-.serena/
-.claude/
-.cache/
-
 # Some translation tools scaffold a `locale/` of their own. The catalogues
 # live in `po/`; anything written to `locale/` never reaches the package.
 /locale/
@@ -37,7 +31,3 @@
 /dist/
 __pycache__/
 *.pyc
-
-# Review deliveries dropped here to be applied: archive material whose own
-# links assume the repository root, so they also fail the link check.
-/docs/*-DELIVERY/

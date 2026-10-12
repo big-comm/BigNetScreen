@@ -1,6 +1,6 @@
 # Public test-only TLS credentials
 
-These generated certificates and the deliberately public receiver private key
+These generated certificates and the receiver private key, public on purpose,
 are used only by the local control-channel regression test. They are not trust
 anchors for real Cast devices, are never installed, and must never protect real
 traffic. The root private key is not retained. This fixture tests our current

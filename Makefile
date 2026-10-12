@@ -1,4 +1,4 @@
-# BigNetScreen — native build and installation.
+# BigNetScreen: native build and installation.
 #
 # `cargo` handles the binaries; this Makefile handles what Cargo does not
 # install: the .desktop file, the D-Bus activation file, AppStream metainfo,

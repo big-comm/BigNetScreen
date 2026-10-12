@@ -2,13 +2,13 @@
 //!
 //! ```sh
 //! # test pattern (opens no capture dialog)
-//! cargo run -p nd-chromecast --example cc_cast -- 192.168.68.108
+//! cargo run -p nd-chromecast --example cc_cast -- <receiver-ip>
 //!
 //! # the actual screen (the portal asks for permission the first time)
-//! cargo run -p nd-chromecast --example cc_cast -- 192.168.68.108 screen
+//! cargo run -p nd-chromecast --example cc_cast -- <receiver-ip> screen
 //!
 //! # duration in seconds (default 60)
-//! cargo run -p nd-chromecast --example cc_cast -- 192.168.68.108 screen 30
+//! cargo run -p nd-chromecast --example cc_cast -- <receiver-ip> screen 30
 //! ```
 //!
 //! This takes over the receiver: the app on the TV or projector is started

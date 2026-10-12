@@ -118,7 +118,7 @@ impl DeviceEntry {
         }
     }
 
-    /// "Chromecast · 192.168.68.113", the line under the name.
+    /// "Chromecast · 192.168.1.20", the line under the name.
     pub fn subtitle(&self) -> String {
         if self.address.is_empty() {
             self.protocol.clone()

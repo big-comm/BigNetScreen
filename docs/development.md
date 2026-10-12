@@ -32,23 +32,8 @@ make run
 
 On a machine with the `bignetscreen` package installed, start yours before opening the window: otherwise D-Bus activates the installed service. A service started later takes the bus name over from a running one, which stops its sessions and exits.
 
-`make` builds the release binaries and translations; `make install` takes `PREFIX` and `DESTDIR` (see [packaging](packaging.md)). A sandbox-built binary linked to isolated native libraries is a test artifact, not a portable distribution package.
+`make` builds the release binaries and translations; `make install` takes `PREFIX` and `DESTDIR` (see [packaging](packaging.md)).
 
-## Offline review bundle
+## Tests
 
-The code and buildenv archives unpack side by side into `bignetscreen-audit`; neither is part of this repository. Read BUILD-ENV.md and inspect setup.sh before running it. It provides Cargo sources, headers/.pc files and link symlinks, not a guarantee that every runtime library exists in every recreated executor.
-
-```sh
-cd bignetscreen-audit
-./setup.sh
-source ./build-env.sh
-export PATH=/path/to/isolated/rust-1.98.1/bin:$PATH
-export CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0
-export CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0
-cd repo
-cargo test --offline --locked -p nd-core -p nd-chromecast
-```
-
-Verify rustc/cargo/clippy/rustfmt versions and actual linker dependencies. A successful pkg-config query only proves metadata exists. Do not replace libc/Python/graphics packages to repair a review sandbox: extract compatible missing files into a private prefix and record it. Never ship absolute sandbox paths or `.cargo/config.toml` that points into a local vendor.
-
-Use isolated HOME and XDG directories for tests. Keep one Cargo target directory and sequential gates; see [executor safety](executor-safety.md). Do not copy target, toolchains or Cargo caches into checkpoints. Do preserve `vendor/gst-plugin-ndi` because it is actual project source.
+Use isolated HOME and XDG directories for tests and run the gates one after another in one Cargo target directory. `vendor/gst-plugin-ndi` and `vendor/relm4` are project source; target directories, toolchains and Cargo caches are not.
