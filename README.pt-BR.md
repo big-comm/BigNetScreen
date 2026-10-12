@@ -18,7 +18,7 @@ Apresente uma janela sem mostrar o restante da área de trabalho, envie vídeos 
 
 O programa prefere codificação H.264 por hardware quando os drivers e plugins conseguem produzir vídeo; há alternativas por software. Resolução, FPS e atraso variam com a origem, o receptor e a rede. Não prometemos o mesmo desempenho em todos os aparelhos.
 
-A versão atual é candidata a release. O que falta para declarar uma versão estável, incluindo testes com receptores reais, está no [checklist de release](docs/releasing.md).
+A versão atual é candidata a release. O que falta para declarar uma versão estável, incluindo testes com receptores reais, está na [seção de release](CONTRIBUTING.md#releasing) do guia de contribuição.
 
 ## Primeiro uso
 

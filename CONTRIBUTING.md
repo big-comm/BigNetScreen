@@ -34,4 +34,8 @@ Update the closest maintained guide when behavior changes: user documentation in
 
 ## Pull request evidence
 
-Describe the problem, the fix, risks and rollback, tests run, and any remaining hardware checks. Commit subjects name the subsystem and the change in the imperative. Tags, packages and stable status follow [releasing](docs/releasing.md).
+Describe the problem, the fix, risks and rollback, tests run, and any remaining hardware checks. Commit subjects name the subsystem and the change in the imperative. Tags, packages and stable status follow [releasing](#releasing).
+
+## Releasing
+
+Only maintainers tag a release or call a build stable. Before that, every [gate](docs/testing.md) passes in a complete environment, with skipped hardware, display and advisory checks listed; the receiver and compositor matrix in the same guide is run, including sustained sessions and repeated Cast reconnection; and the native package, and the Flatpak if it is advertised, is installed, upgraded and removed on the target distribution. `bignetscreen --version` prints the build date, the newest AppStream release names the workspace version, and the source archive holds every tracked file, `vendor/` included, and no build output. Release notes separate fixes from measurements, list the hardware actually tested and state the remaining limitations.

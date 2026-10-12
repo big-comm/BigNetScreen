@@ -18,6 +18,6 @@ Keep the channel and heartbeat alive while targeted STOP is confirmed. Verify th
 
 ## Evidence and limits
 
-Primary references are Google's Cast media docs and Open Screen source. The Android SDK describes session management for its own API; do not equate sender disconnection with stopping every receiver application. Community repositories/issues can supply traces and hardware hypotheses, but test those hypotheses against the protocol and target firmware. See [references](references.md).
+Primary references are Google's [Cast media docs](https://developers.google.com/cast/docs/media) and the [Open Screen](https://chromium.googlesource.com/openscreen/) source. The Android SDK describes session management for its own API; do not equate sender disconnection with stopping every receiver application. Community repositories/issues can supply traces and hardware hypotheses, but test those hypotheses against the protocol and target firmware.
 
 Receiver identity is trust on first use: DeviceAuth proves the same device key on every later connection, but the certificate is not chained to Google's root (see [security](../SECURITY.md)). Adaptive congestion control is incomplete. Sender-side limits do not promise increased receiver FPS. No unit test substitutes for the [physical reconnection/soak matrix](testing.md). Record the exact tree and mode with every measurement.

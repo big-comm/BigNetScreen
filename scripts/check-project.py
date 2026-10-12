@@ -49,7 +49,7 @@ def main() -> int:
         errors.append("GUI version is not the build date stamped by build.rs")
     if "+%y.%m.%d" not in (ROOT / "crates/nd-gui/build.rs").read_text(encoding="utf-8"):
         errors.append("build.rs does not stamp the PKGBUILD's pkgver format")
-    for required in ("README.md", "README.pt-BR.md", "AGENTS.md", "CONTRIBUTING.md", "SECURITY.md", "SUPPORT.md", "ARCHITECTURE.md", "vendor/gst-plugin-ndi/Cargo.toml"):
+    for required in ("README.md", "README.pt-BR.md", "CONTRIBUTING.md", "SECURITY.md", "SUPPORT.md", "ARCHITECTURE.md", "vendor/gst-plugin-ndi/Cargo.toml"):
         if not (ROOT / required).is_file():
             errors.append(f"required tracked source/document missing: {required}")
     checked_docs = 0

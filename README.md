@@ -18,7 +18,7 @@ Present a window without sharing the rest of your desktop, send local video and 
 
 Hardware H.264 encoding is preferred where the driver and plugins can actually produce frames; software encoding remains available. Resolution, frame rate and quality depend on the source, receiver, encoder and network. No single latency or FPS figure applies to every combination.
 
-The current version is a release candidate. What it takes to call a build stable, including tests on physical receivers, is in the [release checklist](docs/releasing.md).
+The current version is a release candidate. What it takes to call a build stable, including tests on physical receivers, is in the [release section](CONTRIBUTING.md#releasing) of the contributor guide.
 
 ## Try it
 
@@ -41,7 +41,7 @@ Use trusted networks only. A Chromecast is remembered by the device key it prove
 
 ## Build, improve, and share results
 
-The [architecture](ARCHITECTURE.md) maps the crates; the [contributor guide](CONTRIBUTING.md) explains how to submit a focused change with evidence. Protocol notes, tests and packaging instructions are indexed in [docs](docs/README.md).
+The [architecture](ARCHITECTURE.md) maps the crates; the [contributor guide](CONTRIBUTING.md) explains how to submit a focused change with evidence. Protocol notes, tests and packaging instructions are in [docs](docs/).
 
 A useful contribution can be small: report your receiver and firmware with a reproducible result, improve a translation, or test repeated reconnections. If BigNetScreen solves a problem for you, star the repository and tell other Linux users about it.
 

@@ -64,6 +64,6 @@ The same asymmetry runs the other way: our *response* carries no length, because
 
 Every measurement here comes from one renderer, a Panasonic 75GX880 over Ethernet. It is the interoperability oracle for this protocol in the same way a physical Chromecast is for Cast, and one model cannot speak for the installed base. `cargo run -p nd-dlna --example dlna_probe` runs discovery, the description and each SOAP action in order and prints what came back; it is the first thing to reach for when a new device misbehaves.
 
-The DLNA guidelines themselves are member-only documents. The open implementations that encode them (`libdlna`, `GUPnP`, `dleyna`) agree on the flag bits and are cited in [references](references.md).
+The DLNA guidelines themselves are member-only documents. The open implementations that encode them (`libdlna`, `GUPnP`, `dleyna`) agree on the flag bits.
 
 Untested: any renderer that is not this television, and the `ContentDirectory` half of the protocol (serving our own media library), which is a different feature and not implemented.
