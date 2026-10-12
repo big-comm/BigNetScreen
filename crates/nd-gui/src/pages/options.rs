@@ -151,19 +151,11 @@ pub struct OptionsPanel {
     virtual_available: bool,
     rows: [Row; 5],
     cards: HoverCards,
-    share_tiles: Tiles<Share>,
-    sound_tiles: Tiles<Sound>,
-    microphone_tiles: Tiles<bool>,
-    quality_tiles: Tiles<Quality>,
+    share_card: ShareCard,
+    sound_card: SoundCard,
+    microphone_card: MicrophoneCard,
+    quality_card: QualityCard,
     delay_tiles: Tiles<Profile>,
-    /// Why the extra screen cannot be chosen, under its tile.
-    extra_reason: gtk::Label,
-    open_sound: gtk::Button,
-    mic_volume: gtk::Scale,
-    custom_size: gtk::Box,
-    custom_width: gtk::SpinButton,
-    custom_height: gtk::SpinButton,
-    fps_tiles: Tiles<u32>,
 }
 
 #[derive(Debug)]
@@ -248,59 +240,10 @@ impl Component for OptionsPanel {
     ) -> ComponentParts<Self> {
         let widgets = view_output!();
 
-        let share_tiles = Tiles::new(
-            [
-                (
-                    Share::Screen,
-                    tr!("Everything on your screen, as you see it"),
-                ),
-                (
-                    Share::Window,
-                    tr!("Only the window you pick; the rest stays private"),
-                ),
-                (
-                    Share::Extra,
-                    tr!("A new screen beside yours, to use as a second monitor"),
-                ),
-                (
-                    Share::Files,
-                    tr!("Photos, videos and music, played by the receiver"),
-                ),
-            ]
-            .map(|(share, detail)| (share, share.label(), detail)),
-            &sender,
-            OptionsMsg::Share,
-        );
-        let sound_tiles = Tiles::new(
-            [
-                (Sound::Off, tr!("No sound"), String::new()),
-                (
-                    Sound::All,
-                    tr!("All computer sound"),
-                    tr!("Everything this computer plays, notifications included"),
-                ),
-                (
-                    Sound::Routed,
-                    tr!("Only chosen applications"),
-                    tr!("Adds a “BigNetScreen” output: only what you send to it is shared"),
-                ),
-            ],
-            &sender,
-            OptionsMsg::Sound,
-        );
-        let microphone_tiles = Tiles::new(
-            [
-                (false, tr!("Off"), String::new()),
-                (true, tr!("On"), tr!("Mix your voice into what is sent")),
-            ],
-            &sender,
-            OptionsMsg::Microphone,
-        );
-        let quality_tiles = Tiles::new(
-            QUALITIES.map(|quality| (quality, quality_label(quality), String::new())),
-            &sender,
-            OptionsMsg::Quality,
-        );
+        let share_card = ShareCard::new(&sender);
+        let sound_card = SoundCard::new(&sender);
+        let microphone_card = MicrophoneCard::new(&sender);
+        let quality_card = QualityCard::new(&sender);
         let delay_tiles = Tiles::new(
             [
                 (
@@ -315,81 +258,24 @@ impl Component for OptionsPanel {
             OptionsMsg::Delay,
         );
 
-        let extra_reason = caption(&tr!("This desktop cannot create an extra screen."));
-        extra_reason.add_css_class("dim-label");
-        extra_reason.set_wrap(true);
-        let share = share_tiles.column();
-        share.append(&extra_reason);
-
-        let open_sound = gtk::Button::with_label(&tr!("Open sound settings"));
-        open_sound.set_halign(gtk::Align::Start);
-        open_sound.connect_clicked({
-            let input = sender.input_sender().clone();
-            move |_| input.emit(OptionsMsg::OpenSound)
-        });
-        let sound = sound_tiles.column();
-        sound.append(&open_sound);
-
-        let mic_volume = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 100.0, 5.0);
-        mic_volume.set_draw_value(true);
-        mic_volume.set_value_pos(gtk::PositionType::Right);
-        mic_volume.set_digits(0);
-        mic_volume.update_property(&[gtk::accessible::Property::Label(&tr!("Microphone volume"))]);
-        mic_volume.connect_value_changed({
-            let input = sender.input_sender().clone();
-            move |scale| input.emit(OptionsMsg::MicVolume(scale.value() as u8))
-        });
-        let microphone = microphone_tiles.column();
-        microphone.append(&caption(&tr!("Microphone volume")));
-        microphone.append(&mic_volume);
-
-        let picture = gtk::Grid::builder()
-            .column_spacing(6)
-            .row_spacing(6)
-            .column_homogeneous(true)
-            .build();
-        for (index, (_, tile)) in quality_tiles.0.iter().enumerate() {
-            picture.attach(tile, (index % 2) as i32, (index / 2) as i32, 1, 1);
-        }
-        let custom_width = dimension(&tr!("Width (pixels)"), &sender, OptionsMsg::Width);
-        let custom_height = dimension(&tr!("Height (pixels)"), &sender, OptionsMsg::Height);
-        let custom_size = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        custom_size.append(&custom_width);
-        custom_size.append(&gtk::Label::new(Some("×")));
-        custom_size.append(&custom_height);
-        let fps_tiles = Tiles::new(
-            FRAME_RATES.map(|fps| (fps, fps.to_string(), String::new())),
-            &sender,
-            OptionsMsg::Fps,
-        );
-        let frame_rate = gtk::Box::builder().spacing(6).homogeneous(true).build();
-        for (_, tile) in &fps_tiles.0 {
-            frame_rate.append(tile);
-        }
-        let quality = gtk::Box::new(gtk::Orientation::Vertical, 6);
-        quality.append(&picture);
-        quality.append(&custom_size);
-        quality.append(&caption(&tr!("Frames per second")));
-        quality.append(&frame_rate);
-
         let rows = [
             row(
                 "video-display-symbolic",
                 &tr!("Share"),
                 &tr!("What the receiver shows. Choose before picking where to share."),
-                &share,
+                &share_card.content,
             ),
             row(
                 "audio-volume-high-symbolic",
                 &tr!("Sound"),
                 &tr!("The sound that goes with the picture."),
-                &sound,
+                &sound_card.content,
             ),
             row(
                 "audio-input-microphone-symbolic",
                 &tr!("Microphone"),
                 &tr!("Your voice, mixed into the sound that is sent."),
-                &microphone,
+                &microphone_card.content,
             ),
             row(
                 "view-fullscreen-symbolic",
@@ -398,7 +284,7 @@ impl Component for OptionsPanel {
                     "The largest picture sent; a smaller screen is sent as it is. Many \
                      Chromecast models stay at 1080p and 30 frames per second."
                 ),
-                &quality,
+                &quality_card.content,
             ),
             row(
                 "preferences-system-time-symbolic",
@@ -437,18 +323,11 @@ impl Component for OptionsPanel {
             virtual_available: false,
             rows,
             cards,
-            extra_reason,
-            share_tiles,
-            sound_tiles,
-            microphone_tiles,
-            quality_tiles,
+            share_card,
+            sound_card,
+            microphone_card,
+            quality_card,
             delay_tiles,
-            open_sound,
-            mic_volume,
-            custom_size,
-            custom_width,
-            custom_height,
-            fps_tiles,
         };
         model.show();
         ComponentParts { model, widgets }
@@ -521,10 +400,10 @@ impl OptionsPanel {
     fn focus_choice(&self) {
         let s = &self.settings;
         let tile = match self.cards.open() {
-            Some(0) => self.share_tiles.get(self.share),
-            Some(1) => self.sound_tiles.get(Sound::of(s)),
-            Some(2) => self.microphone_tiles.get(s.microphone),
-            Some(3) => self.quality_tiles.get(s.quality),
+            Some(0) => self.share_card.tiles.get(self.share),
+            Some(1) => self.sound_card.tiles.get(Sound::of(s)),
+            Some(2) => self.microphone_card.tiles.get(s.microphone),
+            Some(3) => self.quality_card.sizes.get(s.quality),
             Some(4) => self.delay_tiles.get(s.latency),
             _ => None,
         };
@@ -537,55 +416,15 @@ impl OptionsPanel {
     fn show(&self) {
         let s = &self.settings;
         let [share, sound, microphone, quality, delay] = &self.rows;
-
-        self.share_tiles.show(self.share);
-        share.value.set_label(&self.share.label());
-        if let Some(extra) = self.share_tiles.get(Share::Extra) {
-            extra.set_sensitive(self.virtual_available);
-        }
-        self.extra_reason.set_visible(!self.virtual_available);
-
-        let current = Sound::of(s);
-        self.sound_tiles.show(current);
-        self.open_sound.set_visible(current == Sound::Routed);
-        sound.value.set_label(&match current {
-            Sound::Off => tr!("Off"),
-            Sound::All => tr!("All"),
-            Sound::Routed => tr!("Chosen apps"),
-        });
-        set_applied(sound, current != Sound::Off);
-
-        self.microphone_tiles.show(s.microphone);
-        self.mic_volume.set_sensitive(s.microphone);
-        if self.mic_volume.value() as u8 != s.mic_volume {
-            self.mic_volume.set_value(f64::from(s.mic_volume));
-        }
-        microphone.value.set_label(&if s.microphone {
-            format!("{} %", s.mic_volume)
-        } else {
-            tr!("Off")
-        });
-        set_applied(microphone, s.microphone);
-
-        self.quality_tiles.show(s.quality);
-        self.custom_size.set_visible(s.quality == Quality::Custom);
-        for (spin, value) in [
-            (&self.custom_width, s.custom_width),
-            (&self.custom_height, s.custom_height),
-        ] {
-            if spin.value() as u32 != value {
-                spin.set_value(f64::from(value));
-            }
-        }
-        self.fps_tiles.show(s.fps);
-        let height = match s.quality {
-            Quality::Custom => s.custom_height,
-            quality => quality.resolution().1,
-        };
-        quality
+        share
             .value
-            .set_label(&format!("{height}p · {} FPS", s.fps));
-
+            .set_label(&self.share_card.show(self.share, self.virtual_available));
+        let current = Sound::of(s);
+        sound.value.set_label(&self.sound_card.show(current));
+        set_applied(sound, current != Sound::Off);
+        microphone.value.set_label(&self.microphone_card.show(s));
+        set_applied(microphone, s.microphone);
+        quality.value.set_label(&self.quality_card.show(s));
         self.delay_tiles.show(s.latency);
         delay.value.set_label(&match s.latency {
             Profile::Low => tr!("Low"),
@@ -609,6 +448,238 @@ impl OptionsPanel {
             row.row
                 .update_property(&[gtk::accessible::Property::Description(&description)]);
         }
+    }
+}
+
+/// What the receiver shows.
+struct ShareCard {
+    tiles: Tiles<Share>,
+    /// Why the extra screen cannot be chosen, under its tile.
+    extra_reason: gtk::Label,
+    content: gtk::Box,
+}
+
+impl ShareCard {
+    fn new(sender: &ComponentSender<OptionsPanel>) -> Self {
+        let tiles = Tiles::new(
+            [
+                (
+                    Share::Screen,
+                    tr!("Everything on your screen, as you see it"),
+                ),
+                (
+                    Share::Window,
+                    tr!("Only the window you pick; the rest stays private"),
+                ),
+                (
+                    Share::Extra,
+                    tr!("A new screen beside yours, to use as a second monitor"),
+                ),
+                (
+                    Share::Files,
+                    tr!("Photos, videos and music, played by the receiver"),
+                ),
+            ]
+            .map(|(share, detail)| (share, share.label(), detail)),
+            sender,
+            OptionsMsg::Share,
+        );
+        let extra_reason = caption(&tr!("This desktop cannot create an extra screen."));
+        extra_reason.add_css_class("dim-label");
+        extra_reason.set_wrap(true);
+        let content = tiles.column();
+        content.append(&extra_reason);
+        Self {
+            tiles,
+            extra_reason,
+            content,
+        }
+    }
+
+    /// Shows `share` picked, and returns the row's value.
+    fn show(&self, share: Share, virtual_available: bool) -> String {
+        self.tiles.show(share);
+        if let Some(extra) = self.tiles.get(Share::Extra) {
+            extra.set_sensitive(virtual_available);
+        }
+        self.extra_reason.set_visible(!virtual_available);
+        share.label()
+    }
+}
+
+/// The sound that goes with the picture.
+struct SoundCard {
+    tiles: Tiles<Sound>,
+    open_sound: gtk::Button,
+    content: gtk::Box,
+}
+
+impl SoundCard {
+    fn new(sender: &ComponentSender<OptionsPanel>) -> Self {
+        let tiles = Tiles::new(
+            [
+                (Sound::Off, tr!("No sound"), String::new()),
+                (
+                    Sound::All,
+                    tr!("All computer sound"),
+                    tr!("Everything this computer plays, notifications included"),
+                ),
+                (
+                    Sound::Routed,
+                    tr!("Only chosen applications"),
+                    tr!("Adds a “BigNetScreen” output: only what you send to it is shared"),
+                ),
+            ],
+            sender,
+            OptionsMsg::Sound,
+        );
+        let open_sound = gtk::Button::with_label(&tr!("Open sound settings"));
+        open_sound.set_halign(gtk::Align::Start);
+        let input = sender.input_sender().clone();
+        open_sound.connect_clicked(move |_| input.emit(OptionsMsg::OpenSound));
+        let content = tiles.column();
+        content.append(&open_sound);
+        Self {
+            tiles,
+            open_sound,
+            content,
+        }
+    }
+
+    fn show(&self, sound: Sound) -> String {
+        self.tiles.show(sound);
+        self.open_sound.set_visible(sound == Sound::Routed);
+        match sound {
+            Sound::Off => tr!("Off"),
+            Sound::All => tr!("All"),
+            Sound::Routed => tr!("Chosen apps"),
+        }
+    }
+}
+
+/// The microphone and its volume.
+struct MicrophoneCard {
+    tiles: Tiles<bool>,
+    volume: gtk::Scale,
+    content: gtk::Box,
+}
+
+impl MicrophoneCard {
+    fn new(sender: &ComponentSender<OptionsPanel>) -> Self {
+        let tiles = Tiles::new(
+            [
+                (false, tr!("Off"), String::new()),
+                (true, tr!("On"), tr!("Mix your voice into what is sent")),
+            ],
+            sender,
+            OptionsMsg::Microphone,
+        );
+        let volume = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 100.0, 5.0);
+        volume.set_draw_value(true);
+        volume.set_value_pos(gtk::PositionType::Right);
+        volume.set_digits(0);
+        volume.update_property(&[gtk::accessible::Property::Label(&tr!("Microphone volume"))]);
+        let input = sender.input_sender().clone();
+        volume.connect_value_changed(move |scale| {
+            input.emit(OptionsMsg::MicVolume(scale.value() as u8))
+        });
+        let content = tiles.column();
+        content.append(&caption(&tr!("Microphone volume")));
+        content.append(&volume);
+        Self {
+            tiles,
+            volume,
+            content,
+        }
+    }
+
+    fn show(&self, settings: &Settings) -> String {
+        self.tiles.show(settings.microphone);
+        self.volume.set_sensitive(settings.microphone);
+        if self.volume.value() as u8 != settings.mic_volume {
+            self.volume.set_value(f64::from(settings.mic_volume));
+        }
+        if settings.microphone {
+            format!("{} %", settings.mic_volume)
+        } else {
+            tr!("Off")
+        }
+    }
+}
+
+/// The largest picture and the frame rate.
+struct QualityCard {
+    sizes: Tiles<Quality>,
+    rates: Tiles<u32>,
+    custom_size: gtk::Box,
+    custom_width: gtk::SpinButton,
+    custom_height: gtk::SpinButton,
+    content: gtk::Box,
+}
+
+impl QualityCard {
+    fn new(sender: &ComponentSender<OptionsPanel>) -> Self {
+        let sizes = Tiles::new(
+            QUALITIES.map(|quality| (quality, quality_label(quality), String::new())),
+            sender,
+            OptionsMsg::Quality,
+        );
+        let grid = gtk::Grid::builder()
+            .column_spacing(6)
+            .row_spacing(6)
+            .column_homogeneous(true)
+            .build();
+        for (index, (_, tile)) in sizes.0.iter().enumerate() {
+            grid.attach(tile, (index % 2) as i32, (index / 2) as i32, 1, 1);
+        }
+        let custom_width = dimension(&tr!("Width (pixels)"), sender, OptionsMsg::Width);
+        let custom_height = dimension(&tr!("Height (pixels)"), sender, OptionsMsg::Height);
+        let custom_size = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        custom_size.append(&custom_width);
+        custom_size.append(&gtk::Label::new(Some("×")));
+        custom_size.append(&custom_height);
+        let rates = Tiles::new(
+            FRAME_RATES.map(|fps| (fps, fps.to_string(), String::new())),
+            sender,
+            OptionsMsg::Fps,
+        );
+        let rate_row = gtk::Box::builder().spacing(6).homogeneous(true).build();
+        for (_, tile) in &rates.0 {
+            rate_row.append(tile);
+        }
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        content.append(&grid);
+        content.append(&custom_size);
+        content.append(&caption(&tr!("Frames per second")));
+        content.append(&rate_row);
+        Self {
+            sizes,
+            rates,
+            custom_size,
+            custom_width,
+            custom_height,
+            content,
+        }
+    }
+
+    fn show(&self, settings: &Settings) -> String {
+        self.sizes.show(settings.quality);
+        self.custom_size
+            .set_visible(settings.quality == Quality::Custom);
+        for (spin, value) in [
+            (&self.custom_width, settings.custom_width),
+            (&self.custom_height, settings.custom_height),
+        ] {
+            if spin.value() as u32 != value {
+                spin.set_value(f64::from(value));
+            }
+        }
+        self.rates.show(settings.fps);
+        let height = match settings.quality {
+            Quality::Custom => settings.custom_height,
+            quality => quality.resolution().1,
+        };
+        format!("{height}p · {} FPS", settings.fps)
     }
 }
 
