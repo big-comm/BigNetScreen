@@ -366,7 +366,7 @@ impl Sink for MdnsSink {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn cancellation_does_not_release_session_reservation() {
+    fn cancellation_keeps_session_reservation() {
         use super::*;
         let slot = Mutex::new(None);
         let (handle, cancelled) = session::cancellation();
@@ -403,7 +403,7 @@ mod tests {
     }
 
     #[test]
-    fn ipv4_wins_over_routable_ipv6_but_ipv6_still_works() {
+    fn ipv4_preferred_ipv6_still_works() {
         use std::net::{Ipv4Addr, Ipv6Addr};
 
         let v4: IpAddr = Ipv4Addr::new(192, 168, 68, 114).into();

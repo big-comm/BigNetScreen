@@ -155,7 +155,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn oversized_length_prefix_is_rejected_before_allocating() {
+    async fn oversized_prefix_rejected_before_allocation() {
         // Only the prefix arrives: the claim alone has to be refused, before
         // a buffer of that size exists.
         let prefix = u32::MAX.to_be_bytes();

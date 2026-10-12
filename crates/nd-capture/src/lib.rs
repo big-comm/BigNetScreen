@@ -285,7 +285,7 @@ impl CaptureBackend for PortalBackend {
             && let Err(err) = session.close().await
         {
             // It may already have been closed by the compositor:
-            // informational, not fatal — teardown must not fail over it.
+            // informational, and teardown must not fail over it.
             tracing::debug!(%err, "the portal session was already closed");
         }
         Ok(())
@@ -296,7 +296,7 @@ impl CaptureBackend for PortalBackend {
 ///
 /// `org.gnome.Mutter.ScreenCast` is a private GNOME API: it carries no
 /// stability guarantee across versions and may start refusing external calls.
-/// Being "available" on the bus does not mean `start()` will work — which is
+/// Being "available" on the bus does not mean `start()` will work, which is
 /// why the fall back to the portal happens at the point of failure, not only
 /// in the availability check.
 struct MutterWithPortalFallback {
@@ -454,7 +454,7 @@ pub async fn screens() -> Vec<Screen> {
 ///
 /// The person's preference, held down to what the protocol can actually carry.
 /// Miracast tops out at 1920x1200 whatever the sink is, so a larger desktop is
-/// not extra detail on the receiver — it is a `videoscale` on every frame and a
+/// not extra detail on the receiver: it is a `videoscale` on every frame and a
 /// bigger screen to composite, for a picture that arrives the same size.
 fn virtual_size(limit: Option<(u32, u32)>) -> (u32, u32) {
     let (width, height) = nd_core::settings::current().resolution_limit();
@@ -524,10 +524,9 @@ mod tests {
     }
 
     #[test]
-    fn a_token_is_never_offered_to_a_different_kind_of_source() {
-        // The bug this pins down: one token file for every source kind. A
-        // window session stored its token, and the next screen cast handed that
-        // token back to the portal, which restored the window.
+    fn token_stays_with_its_source_kind() {
+        // A shared token would make the portal restore a window session for
+        // the next screen cast.
         let paths: Vec<_> = [SourceType::Monitor, SourceType::Virtual, SourceType::Window]
             .into_iter()
             .filter_map(restore_token_path)

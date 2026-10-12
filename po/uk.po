@@ -61,7 +61,7 @@ msgstr ""
 "Обмеження: менший екран передається як є. Понад 1080p не кожен приймач його "
 "прийме."
 
-#: crates/nd-gui/src/pages/home.rs:512
+#: crates/nd-gui/src/pages/home.rs:511
 msgid "A new screen"
 msgstr "Новий екран"
 
@@ -69,7 +69,7 @@ msgstr "Новий екран"
 msgid "A stream is already running"
 msgstr "Потік уже запущено"
 
-#: crates/nd-gui/src/pages/home.rs:505
+#: crates/nd-gui/src/pages/home.rs:504
 msgid "A window"
 msgstr "Вікно"
 
@@ -82,7 +82,7 @@ msgstr "Про BigNetScreen"
 msgid "Add a folder"
 msgstr "Надіслати теку"
 
-#: crates/nd-gui/src/pages/devices.rs:286
+#: crates/nd-gui/src/pages/devices.rs:285
 msgid "Address"
 msgstr "Адреса"
 
@@ -96,7 +96,7 @@ msgstr ""
 msgid "Advanced settings"
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:184
+#: crates/nd-gui/src/pages/mod.rs:183
 msgid "AirPlay"
 msgstr "AirPlay"
 
@@ -104,11 +104,11 @@ msgstr "AirPlay"
 msgid "All computer sound"
 msgstr ""
 
-#: crates/nd-gui/src/pages/devices.rs:358
+#: crates/nd-gui/src/pages/devices.rs:357
 msgid "All protocols"
 msgstr "Усі протоколи"
 
-#: crates/nd-gui/src/pages/home.rs:513
+#: crates/nd-gui/src/pages/home.rs:512
 msgid "An extra desktop, just for this"
 msgstr "Додатковий робочий стіл, лише для цього"
 
@@ -124,11 +124,11 @@ msgstr ""
 "Співвідношення сторін зберігається. Miracast використовує підтримуваний "
 "режим у цих межах."
 
-#: crates/nd-gui/src/pages/home.rs:544 crates/nd-gui/src/pages/settings.rs:203
+#: crates/nd-gui/src/pages/home.rs:543 crates/nd-gui/src/pages/settings.rs:203
 msgid "Audio"
 msgstr "Аудіо"
 
-#: crates/nd-gui/src/app/dialogs.rs:105
+#: crates/nd-gui/src/app/dialogs.rs:109
 msgid ""
 "Authenticate when prompted. Downloading and building the package may take a "
 "few minutes. Keep the app open until installation finishes."
@@ -150,11 +150,11 @@ msgstr "Автоматичне виявлення"
 msgid "Automatic discovery is off"
 msgstr "Автоматичне виявлення вимкнено"
 
-#: crates/nd-gui/src/pages/mod.rs:136
+#: crates/nd-gui/src/pages/mod.rs:135
 msgid "Available"
 msgstr "Доступно"
 
-#: crates/nd-gui/src/pages/home.rs:199
+#: crates/nd-gui/src/pages/home.rs:198
 msgid "Back"
 msgstr "Назад"
 
@@ -178,7 +178,7 @@ msgstr ""
 "Miracast це застосовується тут; на Chromecast це запит, який приймач може "
 "проігнорувати."
 
-#: crates/nd-gui/src/app/dialogs.rs:57 crates/nd-gui/src/pages/devices.rs:455
+#: crates/nd-gui/src/app/dialogs.rs:61 crates/nd-gui/src/pages/devices.rs:454
 msgid "Cancel"
 msgstr ""
 
@@ -198,16 +198,16 @@ msgstr "Виберіть папку"
 msgid "Choose files"
 msgstr "Виберіть файли"
 
-#: crates/nd-gui/src/pages/home.rs:711
+#: crates/nd-gui/src/pages/home.rs:710
 msgid "Choose the device to send to."
 msgstr "Виберіть пристрій, на який надіслати."
 
-#: crates/nd-gui/src/pages/home.rs:125 crates/nd-gui/src/pages/settings.rs:235
+#: crates/nd-gui/src/pages/home.rs:124 crates/nd-gui/src/pages/settings.rs:235
 #, fuzzy
 msgid "Choose the sound to share"
 msgstr "Виберіть пристрій, на який надіслати."
 
-#: crates/nd-gui/src/pages/home.rs:448
+#: crates/nd-gui/src/pages/home.rs:447
 msgid ""
 "Choose this computer in OBS or another NDI receiver. Uses the name and audio "
 "options in Settings."
@@ -215,7 +215,7 @@ msgstr ""
 "Виберіть цей комп’ютер в OBS або іншому приймачі NDI. Використовуються ім’я "
 "та налаштування звуку з розділу «Параметри»."
 
-#: crates/nd-gui/src/pages/home.rs:412
+#: crates/nd-gui/src/pages/home.rs:411
 msgid ""
 "Choose what to share. Then open the address and enter the PIN on a TV, phone "
 "or computer on the same network."
@@ -225,7 +225,7 @@ msgstr ""
 msgid "Choose which device to send to."
 msgstr "Виберіть, на який пристрій надіслати."
 
-#: crates/nd-gui/src/pages/mod.rs:178
+#: crates/nd-gui/src/pages/mod.rs:177
 msgid "Chromecast"
 msgstr "Chromecast"
 
@@ -233,17 +233,17 @@ msgstr "Chromecast"
 msgid "Clear queue"
 msgstr "Очистити чергу"
 
-#: crates/nd-gui/src/app/dialogs.rs:28 crates/nd-gui/src/app/dialogs.rs:70
-#: crates/nd-gui/src/app/dialogs.rs:149 crates/nd-gui/src/app/dialogs.rs:171
+#: crates/nd-gui/src/app/dialogs.rs:28 crates/nd-gui/src/app/dialogs.rs:74
+#: crates/nd-gui/src/app/dialogs.rs:153 crates/nd-gui/src/app/dialogs.rs:175
 #: crates/nd-gui/src/pages/settings.rs:460
 msgid "Close"
 msgstr "Закрити"
 
-#: crates/nd-gui/src/app/dialogs.rs:87
+#: crates/nd-gui/src/app/dialogs.rs:91
 msgid "Close without saving"
 msgstr ""
 
-#: crates/nd-gui/src/app/wording.rs:38 crates/nd-gui/src/pages/mod.rs:133
+#: crates/nd-gui/src/app/wording.rs:38 crates/nd-gui/src/pages/mod.rs:132
 msgid "Connected"
 msgstr "Підключено"
 
@@ -253,11 +253,11 @@ msgstr "Підключено до"
 
 #: crates/nd-gui/src/app/mod.rs:369 crates/nd-gui/src/app/mod.rs:803
 #: crates/nd-gui/src/app/wording.rs:26 crates/nd-gui/src/app/wording.rs:142
-#: crates/nd-gui/src/pages/mod.rs:204
+#: crates/nd-gui/src/pages/mod.rs:203
 msgid "Connecting…"
 msgstr "Підключення…"
 
-#: crates/nd-gui/src/pages/home.rs:360
+#: crates/nd-gui/src/pages/home.rs:359
 msgid "Connection"
 msgstr "З'єднання"
 
@@ -266,7 +266,7 @@ msgstr "З'єднання"
 msgid "Connection details"
 msgstr "Якість з'єднання"
 
-#: crates/nd-gui/src/pages/home.rs:311
+#: crates/nd-gui/src/pages/home.rs:310
 msgid "Copy the address"
 msgstr ""
 
@@ -275,7 +275,7 @@ msgstr ""
 msgid "Could not connect. Make sure both devices are on the same network."
 msgstr "Для Chromecast під’єднайте обидва пристрої до однієї мережі Wi-Fi."
 
-#: crates/nd-gui/src/pages/devices.rs:556
+#: crates/nd-gui/src/pages/devices.rs:555
 msgid "Could not forget this receiver's identity: {}"
 msgstr ""
 
@@ -285,7 +285,7 @@ msgid ""
 "Settings and try again."
 msgstr ""
 
-#: crates/nd-gui/src/app/dialogs.rs:85 crates/nd-gui/src/app/mod.rs:582
+#: crates/nd-gui/src/app/dialogs.rs:89 crates/nd-gui/src/app/mod.rs:582
 #: crates/nd-gui/src/app/wording.rs:60
 msgid "Could not save settings"
 msgstr ""
@@ -306,17 +306,17 @@ msgstr ""
 msgid "Device discovery is unavailable. Open Details to see the reason."
 msgstr ""
 
-#: crates/nd-gui/src/pages/devices.rs:112 crates/nd-gui/src/pages/mod.rs:50
+#: crates/nd-gui/src/pages/devices.rs:112 crates/nd-gui/src/pages/mod.rs:49
 msgid "Devices"
 msgstr "Пристрої"
 
 #: crates/nd-gui/src/pages/device_row.rs:107
-#: crates/nd-gui/src/pages/devices.rs:560
-#: crates/nd-gui/src/pages/devices.rs:694
+#: crates/nd-gui/src/pages/devices.rs:559
+#: crates/nd-gui/src/pages/devices.rs:693
 msgid "Did not prove it is the same device used before"
 msgstr ""
 
-#: crates/nd-gui/src/pages/devices.rs:244 crates/nd-gui/src/pages/home.rs:337
+#: crates/nd-gui/src/pages/devices.rs:243 crates/nd-gui/src/pages/home.rs:336
 msgid "Disconnect"
 msgstr "Відключитися"
 
@@ -324,8 +324,8 @@ msgstr "Відключитися"
 msgid "Discovery and devices"
 msgstr "Виявлення та пристрої"
 
-#: crates/nd-gui/src/pages/devices.rs:567 crates/nd-gui/src/pages/mod.rs:137
-#: crates/nd-gui/src/pages/mod.rs:316
+#: crates/nd-gui/src/pages/devices.rs:566 crates/nd-gui/src/pages/mod.rs:136
+#: crates/nd-gui/src/pages/mod.rs:315
 msgid "Discovery only"
 msgstr "Лише виявлення"
 
@@ -339,15 +339,15 @@ msgstr ""
 msgid "Enter the PIN shown on the computer that is sharing."
 msgstr ""
 
-#: crates/nd-gui/src/pages/home.rs:499
+#: crates/nd-gui/src/pages/home.rs:498
 msgid "Everything on your screen"
 msgstr "Усе на вашому екрані"
 
-#: crates/nd-gui/src/pages/home.rs:428 crates/nd-gui/src/pages/home.rs:464
+#: crates/nd-gui/src/pages/home.rs:427 crates/nd-gui/src/pages/home.rs:463
 msgid "Extra screen"
 msgstr "Додатковий екран"
 
-#: crates/nd-gui/src/pages/mod.rs:134 crates/nd-gui/src/pages/mod.rs:209
+#: crates/nd-gui/src/pages/mod.rs:133 crates/nd-gui/src/pages/mod.rs:208
 msgid "Failed"
 msgstr "Не вдалося"
 
@@ -359,7 +359,7 @@ msgstr ""
 msgid "Find and connect to nearby wireless receivers."
 msgstr "Знайдіть andи підключіться до бездротових приймачів поруч."
 
-#: crates/nd-gui/src/pages/home.rs:170
+#: crates/nd-gui/src/pages/home.rs:169
 msgid "Find compatible devices"
 msgstr "Знайти сумісні пристрої"
 
@@ -371,12 +371,12 @@ msgstr "Завершено"
 msgid "Fixed port"
 msgstr "Фіксований порт"
 
-#: crates/nd-gui/src/pages/home.rs:385
+#: crates/nd-gui/src/pages/home.rs:384
 #, fuzzy
 msgid "For Chromecast and DLNA, connect both devices to the same network."
 msgstr "Для Chromecast під’єднайте обидва пристрої до однієї мережі Wi-Fi."
 
-#: crates/nd-gui/src/pages/home.rs:389
+#: crates/nd-gui/src/pages/home.rs:388
 #, fuzzy
 msgid ""
 "For Miracast, open screen mirroring on the TV or projector, then refresh the "
@@ -384,7 +384,7 @@ msgid ""
 msgstr ""
 "Перед підключенням увімкніть дублювання екрана на телевізорі або проєкторі."
 
-#: crates/nd-gui/src/pages/devices.rs:251
+#: crates/nd-gui/src/pages/devices.rs:250
 msgid ""
 "Forget the device remembered for this receiver and trust the one that "
 "answers next"
@@ -411,7 +411,7 @@ msgstr ""
 msgid "Height (pixels)"
 msgstr "Висота (у пікселях)"
 
-#: crates/nd-gui/src/pages/home.rs:377
+#: crates/nd-gui/src/pages/home.rs:376
 msgid "Help connecting a device"
 msgstr ""
 
@@ -419,7 +419,7 @@ msgstr ""
 msgid "High (1080p)"
 msgstr "Висока (1080p)"
 
-#: crates/nd-gui/src/pages/mod.rs:49
+#: crates/nd-gui/src/pages/mod.rs:48
 msgid "Home"
 msgstr "Додому"
 
@@ -443,11 +443,11 @@ msgstr "Включати системний звук"
 msgid "Include the microphone"
 msgstr "Включати мікрофон"
 
-#: crates/nd-gui/src/app/dialogs.rs:174
+#: crates/nd-gui/src/app/dialogs.rs:178
 msgid "Install"
 msgstr "Установити"
 
-#: crates/nd-gui/src/app/dialogs.rs:128
+#: crates/nd-gui/src/app/dialogs.rs:132
 msgid ""
 "Installation failed or authentication was cancelled. You can try again or "
 "install the library manually."
@@ -455,15 +455,15 @@ msgstr ""
 "Не вдалося встановити програму або автентифікацію було скасовано. Можна "
 "спробувати ще раз або встановити бібліотеку вручну."
 
-#: crates/nd-gui/src/app/dialogs.rs:104
+#: crates/nd-gui/src/app/dialogs.rs:108
 msgid "Installing NDI…"
 msgstr "Встановлення NDI…"
 
-#: crates/nd-gui/src/app/dialogs.rs:86
+#: crates/nd-gui/src/app/dialogs.rs:90
 msgid "Keep open"
 msgstr ""
 
-#: crates/nd-gui/src/pages/devices.rs:358
+#: crates/nd-gui/src/pages/devices.rs:357
 msgid "Local network"
 msgstr ""
 
@@ -480,7 +480,7 @@ msgstr ""
 msgid "Look for receivers as soon as the app starts"
 msgstr "Шукати приймачі одразу після запуску застосунку"
 
-#: crates/nd-gui/src/pages/home.rs:826
+#: crates/nd-gui/src/pages/home.rs:825
 msgid "Looking for receivers…"
 msgstr "Пошук приймачів…"
 
@@ -496,11 +496,11 @@ msgstr ""
 msgid "Maximum (2160p)"
 msgstr "Максимальна (2160p)"
 
-#: crates/nd-gui/src/pages/mod.rs:257
+#: crates/nd-gui/src/pages/mod.rs:256
 msgid "Measuring…"
 msgstr "Вимірювання…"
 
-#: crates/nd-gui/src/pages/mod.rs:51
+#: crates/nd-gui/src/pages/mod.rs:50
 msgid "Media"
 msgstr "Медіа"
 
@@ -522,7 +522,7 @@ msgstr "Гучність мікрофона"
 msgid "Microphone volume"
 msgstr "Гучність мікрофона"
 
-#: crates/nd-gui/src/pages/devices.rs:358 crates/nd-gui/src/pages/mod.rs:185
+#: crates/nd-gui/src/pages/devices.rs:357 crates/nd-gui/src/pages/mod.rs:184
 msgid "Miracast"
 msgstr "Miracast"
 
@@ -555,7 +555,7 @@ msgstr "Лише Miracast"
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast недоступний: ця Wi-Fi картка не підтримує Wi-Fi Direct"
 
-#: crates/nd-gui/src/pages/devices.rs:233
+#: crates/nd-gui/src/pages/devices.rs:232
 msgid "Mirror screen"
 msgstr "Дзеркалювання екрана"
 
@@ -572,15 +572,15 @@ msgstr ""
 msgid "Music"
 msgstr "Музика"
 
-#: crates/nd-gui/src/app/dialogs.rs:127
+#: crates/nd-gui/src/app/dialogs.rs:131
 msgid "NDI installation did not finish"
 msgstr "Встановлення NDI не завершилося"
 
-#: crates/nd-gui/src/app/dialogs.rs:121
+#: crates/nd-gui/src/app/dialogs.rs:125
 msgid "NDI installed"
 msgstr "NDI встановлено"
 
-#: crates/nd-gui/src/app/dialogs.rs:162
+#: crates/nd-gui/src/app/dialogs.rs:166
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install ndi-sdk from the AUR and the required build tools? Your system will "
@@ -591,7 +591,7 @@ msgstr ""
 "автентифікацію адміністратора. Інші способи спільного доступу працюють і без "
 "цієї бібліотеки."
 
-#: crates/nd-gui/src/app/dialogs.rs:166
+#: crates/nd-gui/src/app/dialogs.rs:170
 msgid ""
 "NDI needs a proprietary library that is not included with BigNetScreen. "
 "Install the NDI 5 or 6 runtime for your distribution, then restart the app. "
@@ -602,11 +602,11 @@ msgstr ""
 "перезапустіть програму. Інші способи спільного доступу працюють і без цієї "
 "бібліотеки."
 
-#: crates/nd-gui/src/app/dialogs.rs:170 crates/nd-gui/src/app/wording.rs:29
+#: crates/nd-gui/src/app/dialogs.rs:174 crates/nd-gui/src/app/wording.rs:29
 msgid "NDI runtime required"
 msgstr "Потрібне середовище виконання NDI"
 
-#: crates/nd-gui/src/app/dialogs.rs:181
+#: crates/nd-gui/src/app/dialogs.rs:185
 msgid "NDI setup"
 msgstr "Налаштування NDI"
 
@@ -614,12 +614,12 @@ msgstr "Налаштування NDI"
 msgid "NDI unavailable. See the NDI setup guide."
 msgstr "NDI недоступний. Див. посібник із налаштування NDI."
 
-#: crates/nd-gui/src/pages/home.rs:358
+#: crates/nd-gui/src/pages/home.rs:357
 #, fuzzy
 msgid "Network response"
 msgstr "швидка відповідь"
 
-#: crates/nd-gui/src/pages/mod.rs:255
+#: crates/nd-gui/src/pages/mod.rs:254
 msgid "Network response: {} ms. This is not the picture delay."
 msgstr ""
 
@@ -633,7 +633,7 @@ msgid "No device found yet. Turn your TV, projector or Chromecast on."
 msgstr ""
 "Пристрої поки не знайдено. Увімкніть телевізор, проєктор або Chromecast."
 
-#: crates/nd-gui/src/pages/devices.rs:579
+#: crates/nd-gui/src/pages/devices.rs:578
 msgid "No devices found"
 msgstr "Пристроїв не знайдено"
 
@@ -645,11 +645,11 @@ msgstr "У вашій теці «Музика» немає музики. Ско�
 msgid "No photos in your Pictures folder. Use “Select files”."
 msgstr "У вашій теці «Зображення» немає фото. Скористайтеся «Вибрати файли»."
 
-#: crates/nd-gui/src/app/wording.rs:24 crates/nd-gui/src/pages/home.rs:828
+#: crates/nd-gui/src/app/wording.rs:24 crates/nd-gui/src/pages/home.rs:827
 msgid "No receivers found"
 msgstr "Приймачів не знайдено"
 
-#: crates/nd-gui/src/pages/mod.rs:167
+#: crates/nd-gui/src/pages/mod.rs:166
 #, fuzzy
 msgid "No receivers yet"
 msgstr "Приймачів не знайдено"
@@ -666,11 +666,11 @@ msgstr "Нічого не вибрано"
 msgid "Now playing"
 msgstr "Зараз відтворюється"
 
-#: crates/nd-gui/src/pages/home.rs:291
+#: crates/nd-gui/src/pages/home.rs:290
 msgid "On the TV, phone or computer, open:"
 msgstr ""
 
-#: crates/nd-gui/src/pages/home.rs:506
+#: crates/nd-gui/src/pages/home.rs:505
 msgid "One window only"
 msgstr "Лише одне вікно"
 
@@ -686,7 +686,7 @@ msgstr ""
 msgid "Open your desktop's sound settings to choose the BigNetScreen output."
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:205
+#: crates/nd-gui/src/pages/mod.rs:204
 msgid "Opening the firewall port…"
 msgstr "Відкриття порту брандмауера…"
 
@@ -698,7 +698,7 @@ msgstr "Пауза"
 msgid "Photos"
 msgstr "Фото"
 
-#: crates/nd-gui/src/pages/home.rs:520
+#: crates/nd-gui/src/pages/home.rs:519
 msgid "Photos, videos and music"
 msgstr "Фото, відео та музика"
 
@@ -710,15 +710,15 @@ msgstr "Виберіть файли та вкажіть, де їх відтво�
 msgid "Preferred protocol"
 msgstr "Бажаний протокол"
 
-#: crates/nd-gui/src/pages/mod.rs:207
+#: crates/nd-gui/src/pages/mod.rs:206
 msgid "Preparing the video…"
 msgstr "Підготовка відео…"
 
-#: crates/nd-gui/src/pages/devices.rs:281
+#: crates/nd-gui/src/pages/devices.rs:280
 msgid "Protocol"
 msgstr "Протокол"
 
-#: crates/nd-gui/src/pages/home.rs:447
+#: crates/nd-gui/src/pages/home.rs:446
 msgid "Publish with NDI"
 msgstr "Публікувати через NDI"
 
@@ -726,11 +726,11 @@ msgstr "Публікувати через NDI"
 msgid "Queue"
 msgstr "Черга"
 
-#: crates/nd-gui/src/pages/devices.rs:566
+#: crates/nd-gui/src/pages/devices.rs:565
 msgid "Ready"
 msgstr "Готово"
 
-#: crates/nd-gui/src/pages/home.rs:160
+#: crates/nd-gui/src/pages/home.rs:159
 msgid "Receivers found"
 msgstr "Знайдені приймачі"
 
@@ -746,7 +746,7 @@ msgstr "Видалити з черги"
 msgid "Resolution limit"
 msgstr "Максимальна роздільна здатність"
 
-#: crates/nd-gui/src/app/dialogs.rs:122
+#: crates/nd-gui/src/app/dialogs.rs:126
 msgid "Restart BigNetScreen to use NDI."
 msgstr "Перезапустіть BigNetScreen, щоб користуватися NDI."
 
@@ -763,7 +763,7 @@ msgstr "Продовжити"
 msgid "Scan again"
 msgstr "Сканувати знову"
 
-#: crates/nd-gui/src/pages/home.rs:420 crates/nd-gui/src/pages/home.rs:456
+#: crates/nd-gui/src/pages/home.rs:419 crates/nd-gui/src/pages/home.rs:455
 msgid "Screen"
 msgstr "Екран"
 
@@ -780,7 +780,7 @@ msgstr "Виберіть файли"
 msgid "Select up to 1000 files at a time."
 msgstr "За раз можна вибрати до 1000 файлів."
 
-#: crates/nd-gui/src/pages/devices.rs:270 crates/nd-gui/src/pages/home.rs:519
+#: crates/nd-gui/src/pages/devices.rs:269 crates/nd-gui/src/pages/home.rs:518
 msgid "Send media"
 msgstr "Надіслати медіа"
 
@@ -796,7 +796,7 @@ msgstr "Надіслати на пристрій"
 msgid "Sending files…"
 msgstr "Надсилання файлів…"
 
-#: crates/nd-gui/src/app/dialogs.rs:71 crates/nd-gui/src/pages/mod.rs:52
+#: crates/nd-gui/src/app/dialogs.rs:75 crates/nd-gui/src/pages/mod.rs:51
 #: crates/nd-gui/src/pages/settings.rs:93
 msgid "Settings"
 msgstr "Параметри"
@@ -805,7 +805,7 @@ msgstr "Параметри"
 msgid "Share media"
 msgstr "Поділіться медіа"
 
-#: crates/nd-gui/src/pages/home.rs:411
+#: crates/nd-gui/src/pages/home.rs:410
 msgid "Share with a web browser"
 msgstr ""
 
@@ -813,12 +813,12 @@ msgstr ""
 msgid "Share your screen wirelessly"
 msgstr "Діліться екраном бездротово"
 
-#: crates/nd-gui/src/app/dialogs.rs:195
+#: crates/nd-gui/src/app/dialogs.rs:199
 #, fuzzy
 msgid "Share your screen with TVs, projectors and web browsers"
 msgstr "Діліться екраном із телевізором, проєктором або Chromecast."
 
-#: crates/nd-gui/src/pages/home.rs:224
+#: crates/nd-gui/src/pages/home.rs:223
 msgid ""
 "Sharing a window opens your desktop’s own picker. Only visible windows can "
 "be shared."
@@ -826,7 +826,7 @@ msgstr ""
 "Доступ до вікна відкриває власний вибір вашої системи. Спільний доступ можна "
 "надати лише до видимих вікон."
 
-#: crates/nd-gui/src/app/dialogs.rs:69
+#: crates/nd-gui/src/app/dialogs.rs:73
 msgid "Sharing could not be completed"
 msgstr ""
 
@@ -854,7 +854,7 @@ msgstr "Про BigNetScreen"
 msgid "Sound settings"
 msgstr "Параметри"
 
-#: crates/nd-gui/src/pages/devices.rs:297
+#: crates/nd-gui/src/pages/devices.rs:296
 msgid "Status"
 msgstr "Статус"
 
@@ -870,11 +870,11 @@ msgstr "Зупинити надсилання"
 msgid "Stopping…"
 msgstr "Зупинка…"
 
-#: crates/nd-gui/src/pages/mod.rs:208 crates/nd-gui/src/pages/settings.rs:99
+#: crates/nd-gui/src/pages/mod.rs:207 crates/nd-gui/src/pages/settings.rs:99
 msgid "Streaming"
 msgstr "Трансляція"
 
-#: crates/nd-gui/src/pages/devices.rs:302
+#: crates/nd-gui/src/pages/devices.rs:301
 msgid "Streaming at"
 msgstr "Трансляція при"
 
@@ -882,7 +882,7 @@ msgstr "Трансляція при"
 msgid "Tap or click the picture for full screen."
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:186
+#: crates/nd-gui/src/pages/mod.rs:185
 msgid "Test"
 msgstr "Тест"
 
@@ -894,19 +894,19 @@ msgstr ""
 msgid "That device is no longer available"
 msgstr "Цей пристрій більше недоступний"
 
-#: crates/nd-gui/src/pages/devices.rs:555
-#: crates/nd-gui/src/pages/devices.rs:709
+#: crates/nd-gui/src/pages/devices.rs:554
+#: crates/nd-gui/src/pages/devices.rs:708
 msgid "The device that answers on the next connection will be trusted"
 msgstr ""
 
-#: crates/nd-gui/src/pages/devices.rs:449
+#: crates/nd-gui/src/pages/devices.rs:448
 msgid ""
 "The next device that answers for this receiver will be trusted and "
 "remembered. Do this only if you replaced or reset it and nobody else can "
 "reach this network."
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:252
+#: crates/nd-gui/src/pages/mod.rs:251
 #, fuzzy
 msgid "The receiver did not answer the connection check"
 msgstr "Приймач не відповідає"
@@ -927,7 +927,7 @@ msgstr "Це застосується до вашого наступного с�
 msgid "This computer's name"
 msgstr "Назва цього комп'ютера"
 
-#: crates/nd-gui/src/pages/home.rs:631
+#: crates/nd-gui/src/pages/home.rs:630
 msgid ""
 "This desktop cannot create an extra screen (it needs GNOME running natively)"
 msgstr ""
@@ -948,16 +948,16 @@ msgstr ""
 msgid "Too many attempts. Wait half a minute and try again."
 msgstr ""
 
-#: crates/nd-gui/src/pages/devices.rs:258
-#: crates/nd-gui/src/pages/devices.rs:456
+#: crates/nd-gui/src/pages/devices.rs:257
+#: crates/nd-gui/src/pages/devices.rs:455
 msgid "Trust again"
 msgstr ""
 
-#: crates/nd-gui/src/pages/devices.rs:448
+#: crates/nd-gui/src/pages/devices.rs:447
 msgid "Trust this receiver again?"
 msgstr ""
 
-#: crates/nd-gui/src/pages/home.rs:836
+#: crates/nd-gui/src/pages/home.rs:835
 msgid ""
 "Turn on your TV or projector and open screen mirroring, or share with a web "
 "browser below."
@@ -971,11 +971,11 @@ msgstr "Дуже висока (1440p)"
 msgid "Videos"
 msgstr "Відео"
 
-#: crates/nd-gui/src/app/dialogs.rs:179
+#: crates/nd-gui/src/app/dialogs.rs:183
 msgid "View ndi-sdk in the AUR"
 msgstr "Переглянути ndi-sdk в AUR"
 
-#: crates/nd-gui/src/pages/mod.rs:206
+#: crates/nd-gui/src/pages/mod.rs:205
 msgid "Waiting for the receiver…"
 msgstr "Очікування приймача…"
 
@@ -983,15 +983,15 @@ msgstr "Очікування приймача…"
 msgid "Watch"
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:183
+#: crates/nd-gui/src/pages/mod.rs:182
 msgid "Web browser"
 msgstr ""
 
-#: crates/nd-gui/src/pages/home.rs:705
+#: crates/nd-gui/src/pages/home.rs:704
 msgid "What do you want to share?"
 msgstr "Що ви хочете опублікувати?"
 
-#: crates/nd-gui/src/pages/home.rs:704
+#: crates/nd-gui/src/pages/home.rs:703
 #, fuzzy
 msgid "Where do you want to share?"
 msgstr "Що ви хочете опублікувати?"
@@ -1005,7 +1005,7 @@ msgstr "Який тип приймача шукати"
 msgid "Which screen do you want to share?"
 msgstr "Що ви хочете опублікувати?"
 
-#: crates/nd-gui/src/pages/home.rs:498
+#: crates/nd-gui/src/pages/home.rs:497
 msgid "Whole screen"
 msgstr "Весь екран"
 
@@ -1013,19 +1013,19 @@ msgstr "Весь екран"
 msgid "Width (pixels)"
 msgstr "Ширина (у пікселях)"
 
-#: crates/nd-gui/src/pages/home.rs:424 crates/nd-gui/src/pages/home.rs:460
+#: crates/nd-gui/src/pages/home.rs:423 crates/nd-gui/src/pages/home.rs:459
 msgid "Window"
 msgstr "Вікно"
 
-#: crates/nd-gui/src/pages/home.rs:393
+#: crates/nd-gui/src/pages/home.rs:392
 msgid "You can also share with a web browser using the option below."
 msgstr ""
 
-#: crates/nd-gui/src/pages/home.rs:316
+#: crates/nd-gui/src/pages/home.rs:315
 msgid "and enter the PIN"
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:218
+#: crates/nd-gui/src/pages/mod.rs:217
 msgid "delayed a few seconds"
 msgstr ""
 
@@ -1033,7 +1033,7 @@ msgstr ""
 msgid "item"
 msgstr "елемент"
 
-#: crates/nd-gui/src/pages/devices.rs:290
+#: crates/nd-gui/src/pages/devices.rs:289
 msgid "not published yet"
 msgstr "ще не опубліковано"
 
@@ -1041,7 +1041,7 @@ msgstr "ще не опубліковано"
 msgid "shows up in discovery only"
 msgstr "видимий лише під час виявлення"
 
-#: crates/nd-gui/src/pages/devices.rs:581
+#: crates/nd-gui/src/pages/devices.rs:580
 msgid "{} device found"
 msgid_plural "{} devices found"
 msgstr[0] "знайдено {} пристрій"
@@ -1055,7 +1055,7 @@ msgstr[0] "Вибрано {} файл"
 msgstr[1] "Вибрано {} файли"
 msgstr[2] "Вибрано {} файлів"
 
-#: crates/nd-gui/src/pages/mod.rs:170
+#: crates/nd-gui/src/pages/mod.rs:169
 #, fuzzy
 msgid "{} receiver"
 msgid_plural "{} receivers"

@@ -1,15 +1,8 @@
 //! A Cast mirroring session: negotiate, encode and stream.
 //!
-//! ```text
-//!   capture ──► pipeline (appsink, no container)
-//!                    │  H.264 / Opus frames
-//!                    ▼
-//!            AES-CTR-128 encryption per frame
-//!                    ▼
-//!            packetised into Cast RTP
-//!                    ▼
-//!                UDP ──► receiver
-//! ```
+//! Capture feeds a pipeline ending in an appsink with no container; each
+//! H.264 or Opus frame is encrypted with AES-CTR-128, packetised into Cast RTP
+//! and sent over UDP to the receiver.
 //!
 //! No muxer, no HTTP and no media player on the other end: the delay is the
 //! negotiated `targetDelay` (the receiver's jitter buffer) rather than the
@@ -555,7 +548,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_negotiation_failures_fall_back_to_http() {
+    fn http_fallback_on_negotiation_failure_only() {
         // The HTTP path costs seconds of delay: it is only worth taking when
         // the device genuinely has no mirroring support.
         assert!(is_unsupported(&NdError::Unsupported(

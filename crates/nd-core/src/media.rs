@@ -490,7 +490,7 @@ mod tests {
     }
 
     #[test]
-    fn a_television_frame_is_16_by_9_and_holds_the_picture() {
+    fn tv_frame_is_16_by_9() {
         let file = MediaSource::File("/nonexistent.mkv".into());
         for (height, frame) in [
             (720, (1280, 720)),
@@ -522,7 +522,7 @@ mod tests {
     }
 
     #[test]
-    fn media_volume_and_mute_change_encoded_input_samples() {
+    fn volume_and_mute_change_samples() {
         use crate::pipeline::{AudioSource, PipelineGuard};
         gst::init().unwrap();
         let description = format!(
@@ -584,7 +584,7 @@ mod tests {
     }
 
     #[test]
-    fn mirrored_transport_keeps_decoding_after_pause_and_seeks() {
+    fn mirrored_transport_survives_pause_and_seek() {
         use crate::pipeline::{
             self, AudioSource, H264Encoder, PipelineGuard, StreamConfig, VideoSource,
         };
@@ -655,7 +655,7 @@ mod tests {
     }
 
     #[test]
-    fn local_file_pause_seek_and_resume_preserve_audio_and_video() {
+    fn local_file_survives_pause_and_seek() {
         use crate::pipeline::{self, AudioSource, PipelineGuard, VideoSource};
         use std::time::Duration;
         pipeline::init().unwrap();

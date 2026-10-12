@@ -197,8 +197,7 @@ struct Engine {
     /// next attempt to it: that is where the person can trust it again.
     refused: Option<(String, String)>,
     /// The last link measurement. The outer `None` means *not measured yet*,
-    /// the inner one means *the receiver did not answer* — one `Option` would
-    /// have to call one of those the other.
+    /// the inner one means *the receiver did not answer*.
     measured: Option<Option<Duration>>,
     probing: bool,
     operation_generation: u64,
@@ -584,9 +583,9 @@ impl Engine {
             self.refresh_status();
             return;
         }
-        // Cancelling is the whole of it. The cast task owns the orderly
-        // teardown — STOP for the session, CLOSE for both virtual connections,
-        // then the socket — and it reports back with `CastFinished`, which is
+        // Cancelling is enough. The cast task owns the orderly teardown (STOP
+        // for the session, CLOSE for both virtual connections, then the
+        // socket) and it reports back with `CastFinished`, which is
         // what clears the session here.
         //
         // Calling `stop_stream` here as well would race the task: whichever
@@ -708,7 +707,7 @@ mod tests {
     }
 
     #[test]
-    fn a_running_session_outranks_the_receiver_count_in_the_status() {
+    fn running_session_outranks_receiver_count() {
         let mut engine = engine();
         engine.settings.auto_discovery = true;
         engine.searching = false;
@@ -731,7 +730,7 @@ mod tests {
     }
 
     #[test]
-    fn discovery_off_with_nothing_found_says_so_rather_than_empty() {
+    fn discovery_off_is_reported() {
         let mut engine = engine();
         engine.settings.auto_discovery = false;
         engine.searching = false;
@@ -740,7 +739,7 @@ mod tests {
     }
 
     #[test]
-    fn a_failure_survives_polling_and_discovery_until_an_explicit_action() {
+    fn failure_persists_until_user_action() {
         let mut engine = engine();
         engine.active_cast = Some("a".into());
         engine.active_sink = Some(sink("a"));
@@ -758,7 +757,7 @@ mod tests {
     }
 
     #[test]
-    fn stopping_survives_polling_until_the_cast_has_finished() {
+    fn stopping_persists_until_cast_finishes() {
         let mut engine = engine();
         engine.active_cast = Some("a".into());
         engine.active_sink = Some(streaming_sink("a"));
@@ -803,7 +802,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn shutdown_waits_for_the_session_to_finish_cleanup() {
+    async fn shutdown_waits_for_session_cleanup() {
         use std::sync::atomic::{AtomicBool, Ordering};
         let mut engine = engine();
         engine.active_cast = Some("test".into());
@@ -839,7 +838,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_protocols_that_can_play_a_file_are_offered_one() {
+    fn files_offered_to_capable_protocols() {
         let receiver = |kind: &str, address: &str| Receiver {
             id: "x".into(),
             display_name: "x".into(),

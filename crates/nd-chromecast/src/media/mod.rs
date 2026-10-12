@@ -397,9 +397,9 @@ impl MediaSession {
         )
     }
 
-    /// A DLNA television plays the files itself when it lists their format
-    /// — music goes as music, not as a black picture with sound — and gets
-    /// them decoded otherwise, as [`Self::start_mirroring`] does.
+    /// A DLNA television plays the files itself when it lists their format,
+    /// so music goes as music, and gets them decoded otherwise, as
+    /// [`Self::start_mirroring`] does.
     pub fn start_upnp(
         sink: Arc<dyn Sink>,
         renderer: UpnpRenderer,
@@ -529,7 +529,7 @@ mod tests {
     use std::time::Duration;
 
     #[tokio::test]
-    async fn a_dragged_slider_is_one_seek_not_a_full_queue() {
+    async fn dragged_slider_seeks_once() {
         let (release, released) = tokio::sync::oneshot::channel::<()>();
         let (seen_tx, seen) = tokio::sync::oneshot::channel();
         let file = MediaItem::Url {
@@ -585,7 +585,7 @@ mod tests {
     }
 
     #[test]
-    fn stop_failure_is_not_reported_as_success_after_user_cancellation() {
+    fn cancelled_stop_failure_is_reported() {
         let shared = Shared {
             status: Mutex::new(MediaStatus::default()),
             stopping: AtomicBool::new(true),
@@ -598,7 +598,7 @@ mod tests {
     }
 
     #[test]
-    fn remote_items_preserve_file_indexes_without_publishing_url_credentials() {
+    fn remote_items_hide_url_credentials() {
         let remote = MediaItem::url(
             "https://example.invalid/radio?token=private".into(),
             "audio/mpeg".into(),
@@ -624,7 +624,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn an_http_audio_source_decodes_and_obeys_playback_controls() {
+    async fn http_audio_obeys_playback_controls() {
         use gstreamer::{self as gst, prelude::*};
         use nd_core::pipeline::{self, AudioSource, PipelineGuard, VideoSource};
         pipeline::init().unwrap();
@@ -710,7 +710,7 @@ mod tests {
     }
 
     #[test]
-    fn removing_files_keeps_http_indexes_and_current_item_consistent() {
+    fn removal_keeps_http_indexes_consistent() {
         let shared = Shared {
             status: Mutex::new(MediaStatus::default()),
             stopping: AtomicBool::new(false),

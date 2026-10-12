@@ -33,7 +33,7 @@ pub struct MediaPage {
     refused: Vec<String>,
     /// The receivers that can play a file: (id, name).
     targets: Vec<(String, String)>,
-    /// The one chosen to send to. Never filled in automatically — sending to
+    /// The one chosen to send to. Never filled in automatically: sending to
     /// the wrong device is visible in someone else's room and cannot be undone
     /// from here.
     chosen_target: Option<String>,
@@ -743,7 +743,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires a graphical GTK session and image loader"]
-    fn media_library_is_lazy_and_background_thumbnails_preserve_pixels() {
+    fn lazy_library_thumbnails_keep_pixels() {
         adw::init().expect("GTK session");
         relm4::set_global_css(include_str!("../../style.css"));
         let context = glib::MainContext::default();
@@ -809,7 +809,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires a graphical GTK session"]
-    fn media_queue_edits_sync_tiles_and_discard_stale_picker_results() {
+    fn queue_edits_sync_tiles() {
         adw::init().expect("GTK session");
         relm4::set_global_css(include_str!("../../style.css"));
         let context = glib::MainContext::default();
@@ -944,7 +944,7 @@ mod tests {
     }
 
     #[test]
-    fn nothing_is_selected_until_someone_selects_it() {
+    fn selection_starts_empty() {
         // A file plays on whatever receiver this returns, possibly in another
         // room: the placeholder must never resolve to a device.
         let targets = vec![
@@ -964,7 +964,7 @@ mod tests {
     }
 
     #[test]
-    fn sizes_read_the_way_a_person_expects() {
+    fn sizes_are_human_readable() {
         assert_eq!(human_size(512), "512 B");
         assert_eq!(human_size(1024), "1.0 KB");
         assert_eq!(human_size(47_500_000), "45.3 MB");
@@ -973,7 +973,7 @@ mod tests {
     }
 
     #[test]
-    fn the_largest_unit_is_not_exceeded() {
+    fn sizes_stop_at_largest_unit() {
         // Without the bound on `unit`, a large enough number would index past
         // the end of the table.
         assert!(human_size(u64::MAX).ends_with("GB"));

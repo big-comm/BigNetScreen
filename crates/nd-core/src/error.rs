@@ -37,7 +37,7 @@ pub enum NdError {
     /// The receiver joined (or was paired with) and then never opened the
     /// connection back.
     ///
-    /// Its own variant because it is the one failure worth **retrying**: a
+    /// Its own variant because it is the one failure worth retrying: a
     /// Miracast receiver that pairs and goes quiet almost always accepts a
     /// freshly formed group. It carries the capture back so that retrying does
     /// not put a second permission dialog in front of someone who already

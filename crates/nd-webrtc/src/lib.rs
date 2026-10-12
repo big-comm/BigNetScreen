@@ -465,7 +465,7 @@ mod tests {
     /// A real receiver (`whepclientsrc`, from the same plugin) joins
     /// through the front door with the PIN and gets decoded video.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn a_receiver_joins_with_the_pin_and_gets_video() {
+    async fn receiver_with_pin_gets_video() {
         use std::sync::atomic::AtomicUsize;
         use std::time::Instant;
 
@@ -559,7 +559,7 @@ mod tests {
     }
 
     #[test]
-    fn the_description_parses_and_audio_is_optional() {
+    fn description_audio_is_optional() {
         assert!(available());
         for audio in [None, Some(pipeline::AudioSource::Silence)] {
             let desc = description(&pipeline::VideoSource::Test, audio, (1280, 720), 30);

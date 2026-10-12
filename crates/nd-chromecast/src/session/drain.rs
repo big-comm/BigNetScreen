@@ -43,9 +43,9 @@ const LAG_TIGHTEN_AFTER: u32 = 10;
 const LAG_STALL_MARGIN: f64 = 0.4;
 /// How many stalls are tolerated before the target is frozen.
 ///
-/// After that, this device's floor — with this content and this network — is
-/// known well enough; pushing further only costs smoothness. Stutter grates
-/// far more than delay.
+/// After that, this device's floor with this content and this network is
+/// known well enough; pushing further only costs smoothness, and stutter
+/// grates more than delay.
 const MAX_STALL_PROBES: u32 = 2;
 /// Hysteresis: how far above the target the delay must be before draining
 /// starts.
@@ -60,18 +60,16 @@ const DRAIN_RATE: f64 = 1.2;
 /// same rate it plays, keeps that slack forever. Playing back slightly faster
 /// consumes the slack and brings the picture closer to real time.
 ///
-/// Draining too hard empties the buffer, the
-/// receiver stalls to refill and the whole delay comes back — worse than the
-/// original problem. Exactly where that happens depends on the device and the
-/// network, so the target starts low and rises on its own with each stall,
-/// rather than hardcoding a number that would only suit one receiver model.
+/// Draining too hard empties the buffer, the receiver stalls to refill and the
+/// whole delay comes back. Where that happens depends on the device and the
+/// network, so the target starts low and rises with each stall.
 struct DrainController {
     target: f64,
     rate: f64,
     enabled: bool,
     /// Consecutive stall-free samples.
     stable: u32,
-    /// The lowest target that ever caused a stall — never tried below again.
+    /// The lowest target that ever caused a stall; nothing below it is tried again.
     floor: f64,
     /// How many stalls have happened in this session.
     stalls: u32,
@@ -299,7 +297,7 @@ impl BufferDrain {
 /// `elapsed − currentTime` is how far behind the receiver is: the depth of its
 /// buffer.
 struct LagMeter {
-    /// The instant the receiver opened the connection — the stream's zero from
+    /// The instant the receiver opened the connection: the stream's zero from
     /// its point of view. It only exists once that has happened.
     started: Option<std::time::Instant>,
     /// The most recent [`MAX_LAG_SAMPLES`] delays, oldest first.
@@ -378,7 +376,7 @@ impl LagMeter {
         self.samples.back().copied()
     }
 
-    /// The samples' median — resistant to the spikes at the start.
+    /// The samples' median, which resists the spikes at the start.
     fn median(&self) -> Option<f64> {
         if self.samples.is_empty() {
             return None;
@@ -433,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn drain_backs_off_when_the_receiver_stalls() {
+    fn drain_backs_off_on_stall() {
         // Each stall loosens the target: that is how the logic adapts to a
         // device that cannot hold a small buffer, instead of insisting on a
         // fixed number and leaving the picture stuttering.
@@ -443,8 +441,8 @@ mod tests {
         // The stall also becomes a floor: nothing below it is tried again.
         assert!(drain.floor > LAG_TARGET_MIN);
 
-        // Successive stalls lead to freezing and then to giving up — at no
-        // point does the target run away unbounded.
+        // Successive stalls freeze the target and then give up; the target
+        // stays bounded throughout.
         for _ in 0..20 {
             drain.on_stall();
         }
@@ -454,8 +452,8 @@ mod tests {
 
     #[test]
     fn drain_converges_downwards_while_stable() {
-        // With no stalls the target tightens on its own — that is how it
-        // approaches the device's floor without stuttering along the way.
+        // With no stalls the target tightens on its own, approaching the
+        // device's floor without stuttering along the way.
         let mut drain = controller(0.9);
         for _ in 0..LAG_TIGHTEN_AFTER {
             drain.on_stable();
@@ -525,7 +523,7 @@ mod tests {
     }
 
     #[test]
-    fn drain_gives_up_when_even_the_frozen_target_stalls() {
+    fn drain_gives_up_on_frozen_stall() {
         // If not even the final target holds, pushing on would only cause more stutter.
         let mut drain = controller(0.9);
         for _ in 0..MAX_STALL_PROBES {
@@ -562,7 +560,7 @@ mod tests {
     }
 
     #[test]
-    fn lag_meter_ignores_samples_before_the_stream_starts() {
+    fn lag_meter_ignores_prestart_samples() {
         // Before the receiver connects there is no stream, and the arithmetic
         // makes no sense.
         let mut meter = LagMeter::new();
@@ -586,7 +584,7 @@ mod tests {
     }
 
     #[test]
-    fn lag_samples_stay_bounded_through_a_long_session() {
+    fn lag_samples_stay_bounded() {
         let mut meter = LagMeter::new();
         meter.start(std::time::Instant::now() - Duration::from_secs(10));
         for _ in 0..MAX_LAG_SAMPLES * 3 {
@@ -596,7 +594,7 @@ mod tests {
     }
 
     #[test]
-    fn a_refused_rate_change_is_not_taken_as_applied() {
+    fn refused_rate_change_is_unapplied() {
         let refused = json!({"type": "INVALID_REQUEST", "reason": "INVALID_COMMAND"});
         assert!(!rate_change_confirmed(&refused));
         let applied = json!({"type": "MEDIA_STATUS", "status": [{"playbackRate": 1.2}]});

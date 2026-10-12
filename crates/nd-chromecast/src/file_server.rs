@@ -48,7 +48,7 @@ pub struct MediaFile {
 impl MediaFile {
     /// Describes a file, or explains why this receiver cannot play it.
     ///
-    /// The check is by extension, and that is the honest limit: the container
+    /// The check is by extension, which has a limit: the container
     /// says nothing about the codecs inside, and a Chromecast rejects `.mp4`
     /// carrying HEVC as it rejects `.mkv`. It catches a file type the Default
     /// Media Receiver never plays, so the interface can say so instead of the
@@ -354,8 +354,8 @@ fn parse_target(target: &str, token: &str) -> Option<usize> {
     let path = target.split('?').next().unwrap_or(target);
     let rest = path.strip_prefix('/')?;
     let (given, index) = rest.split_once('/')?;
-    // Constant-time comparison is not warranted here — the token is 128 bits of
-    // one-shot randomness, not a password to be attacked over many attempts.
+    // Plain comparison: the token is 128 bits of one-shot randomness, not a
+    // password to be attacked over many attempts.
     if given != token {
         return None;
     }
@@ -449,7 +449,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ranges_heads_and_bad_ranges_get_their_own_answers() {
+    async fn range_and_head_requests_answered() {
         let (_server, authority, target, path) = fixture(b"0123456789", "range").await;
         let range = fetch(
             &authority,
@@ -502,7 +502,7 @@ mod tests {
     }
 
     #[test]
-    fn a_player_can_hand_over_files_only_the_decoder_plays() {
+    fn decoder_only_files_are_handed_over() {
         let dir = std::env::temp_dir().join(format!("nd-decodable-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let film = dir.join("film.mkv");
@@ -526,7 +526,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_right_token_gets_a_file() {
+    fn wrong_token_gets_no_file() {
         assert_eq!(parse_target("/abc123/2", "abc123"), Some(2));
         assert_eq!(parse_target("/wrong/2", "abc123"), None);
         assert_eq!(parse_target("/abc123", "abc123"), None);
@@ -534,7 +534,7 @@ mod tests {
     }
 
     #[test]
-    fn a_path_cannot_be_asked_for_only_an_index() {
+    fn only_indexes_are_served() {
         // The point of indexing: there is no filename to escape from. Each of
         // these is simply not a number, so it addresses nothing.
         for attack in [
@@ -552,13 +552,13 @@ mod tests {
     }
 
     #[test]
-    fn a_query_string_does_not_confuse_the_index() {
+    fn query_string_keeps_the_index() {
         // Receivers append cache-busting parameters.
         assert_eq!(parse_target("/abc123/0?t=1699", "abc123"), Some(0));
     }
 
     #[test]
-    fn seeking_asks_for_the_rest_of_the_file() {
+    fn seek_requests_the_file_rest() {
         assert_eq!(parse_range("bytes=0-99", 1000), Some((0, 99)));
         assert_eq!(parse_range("bytes=500-", 1000), Some((500, 999)));
         assert_eq!(parse_range("bytes=-100", 1000), Some((900, 999)));
@@ -576,7 +576,7 @@ mod tests {
     }
 
     #[test]
-    fn a_file_is_classified_by_what_the_receiver_can_play() {
+    fn files_classified_by_receiver_support() {
         assert_eq!(
             inspect_fixture(Path::new("/tmp/holiday.JPG")).unwrap().kind,
             MediaKind::Photo,
@@ -597,7 +597,7 @@ mod tests {
     }
 
     #[test]
-    fn the_title_is_the_name_without_the_extension() {
+    fn title_drops_the_extension() {
         let file = inspect_fixture(Path::new("/tmp/Sunset at the lake.jpg")).unwrap();
         assert_eq!(file.title(), "Sunset at the lake");
     }

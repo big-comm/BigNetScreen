@@ -257,7 +257,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn media_arrives_at_the_page_with_everything_it_draws() {
+    fn media_reaches_page_complete() {
         let media = wire::Media {
             active: true,
             title: "Song".into(),

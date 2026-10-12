@@ -4,10 +4,9 @@
 //! `239.255.255.250:1900`, and every device that matches answers by unicast
 //! with a `LOCATION` pointing at its description.
 //!
-//! This is **not** mDNS, which is what the Chromecast and AirPlay providers
-//! use. `avahi-browse` cannot see a DLNA television at all, and a network that
-//! looks empty to it may be full of renderers — the two protocols share
-//! nothing but the idea of multicast.
+//! The Chromecast and AirPlay providers use mDNS instead. `avahi-browse` cannot
+//! see a DLNA television, so a network that looks empty to it may be full of
+//! renderers.
 
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -26,10 +25,10 @@ use nd_core::{NdError, Result};
 use crate::DlnaSink;
 use crate::upnp::Endpoint;
 
-/// The device type worth answering: something that can be played *to*.
+/// The device type worth answering: something that can be played to.
 ///
-/// A television usually also announces `MediaServer`, which is it offering its
-/// own content — the opposite direction, and not ours.
+/// A television usually also announces `MediaServer`, which offers its own
+/// content in the opposite direction.
 const MEDIA_RENDERER: &str = "urn:schemas-upnp-org:device:MediaRenderer:1";
 
 /// How long a device may wait before answering, in seconds. It staggers
@@ -102,10 +101,9 @@ fn describes_itself(announcement: &Announcement, sender: SocketAddr) -> bool {
 
 /// Sends one `M-SEARCH` and collects the replies.
 ///
-/// The search names `MediaRenderer` rather than `ssdp:all`. Both were measured
-/// against a real television and both work; the narrow one is preferred
-/// because only renderers answer it, where `ssdp:all` also brings in every
-/// router, printer and set-top box on the network for us to discard.
+/// The search names `MediaRenderer` rather than `ssdp:all`: televisions answer
+/// both, and only renderers answer the narrow one, where `ssdp:all` also
+/// brings in every router, printer and set-top box on the network.
 pub async fn search() -> Result<Vec<Announcement>> {
     search_announcements(None).await
 }
@@ -370,7 +368,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn searches_each_source_and_delivers_before_the_sweep_ends() {
+    async fn searches_each_source_and_delivers_early() {
         let receiver = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
         let target = receiver.local_addr().unwrap();
         let replies = tokio::spawn(async move {
@@ -417,7 +415,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_reply_pointing_at_another_host_is_not_followed() {
+    async fn foreign_host_reply_is_ignored() {
         let device = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
         let target = device.local_addr().unwrap();
         let replies = tokio::spawn(async move {
@@ -436,14 +434,14 @@ mod tests {
     }
 
     #[test]
-    fn a_real_reply_yields_its_identity_and_description_url() {
+    fn real_reply_yields_identity_and_url() {
         let a = parse_reply(REPLY).expect("a well-formed reply");
         assert_eq!(a.location, "http://192.168.1.59:55000/dmr/ddd.xml");
         assert!(a.usn.starts_with("uuid:4D454930-0100"), "{}", a.usn);
     }
 
     #[test]
-    fn header_case_does_not_matter_because_devices_disagree_on_it() {
+    fn headers_are_case_insensitive() {
         let reply = "HTTP/1.1 200 OK\r\nlocation: http://10.0.0.5:80/d.xml\r\nUsn: uuid:x\r\n\r\n";
         let a = parse_reply(reply).expect("lowercase headers are still headers");
         assert_eq!(a.location, "http://10.0.0.5:80/d.xml");
@@ -451,9 +449,9 @@ mod tests {
     }
 
     #[test]
-    fn replies_that_cannot_be_acted_on_are_discarded() {
+    fn unusable_replies_are_discarded() {
         for reply in [
-            // Not a reply at all — an unsolicited NOTIFY on the same socket.
+            // An unsolicited NOTIFY on the same socket.
             "NOTIFY * HTTP/1.1\r\nLOCATION: http://10.0.0.5/d.xml\r\nUSN: uuid:x\r\n\r\n",
             // No LOCATION: nothing to fetch.
             "HTTP/1.1 200 OK\r\nUSN: uuid:x\r\n\r\n",

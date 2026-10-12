@@ -1,8 +1,8 @@
 //! The session service: everything BigNetScreen does that is not drawing.
 //!
 //! A window is one way to ask for a stream, not the thing that holds it. This
-//! crate holds it, so closing the window stops drawing and nothing else — and
-//! so a panel applet, a script or a keyboard shortcut can ask for the same
+//! crate holds it, so closing the window stops drawing and nothing else, and
+//! a panel applet, a script or a keyboard shortcut can ask for the same
 //! things the window asks for, through the same door.
 //!
 //! - [`engine`] is the state and the work: discovery, the running cast, the
@@ -17,8 +17,8 @@
 //! prose. The one exception is the page a web browser is shown when someone
 //! shares to one: that text is not for a client, it is for a stranger on the
 //! network, and the client that started the session passes it in already
-//! translated. Without it the page stays in the source language — see
-//! [`web_page_text`].
+//! translated. Without it the page stays in the source language
+//! ([`web_page_text`]).
 
 mod cast;
 pub mod dbus;
@@ -38,8 +38,8 @@ pub const OBJECT_PATH: &str = "/br/com/biglinux/BigNetScreen";
 /// What the web page says, in whatever language the caller supplied.
 ///
 /// The keys match the field names. Anything missing keeps the source-language
-/// wording, which is the honest fallback: the service has no catalogue and no
-/// locale worth trusting, and a client that cares passes its own strings.
+/// wording: the service has no catalogue and no locale worth trusting, and a
+/// client that cares passes its own strings.
 pub fn web_page_text(title: String, overrides: &[(String, String)]) -> nd_webrtc::PageText {
     let pick = |key: &str, fallback: &str| -> String {
         overrides
@@ -81,7 +81,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn supplied_page_text_wins_and_the_rest_keeps_the_source_language() {
+    fn supplied_page_text_overrides_source() {
         let text = web_page_text("Sala".into(), &[("join".into(), "Assistir".into())]);
         assert_eq!(text.title, "Sala");
         assert_eq!(text.join, "Assistir");

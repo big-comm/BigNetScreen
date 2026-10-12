@@ -194,7 +194,7 @@ async fn connect() -> Option<Connection> {
 /// `interface` is the P2P link's name (e.g. `p2p-wlan0-0`); when `None`, the
 /// default zone is used. Returns the "lease" to hand to [`release`].
 ///
-/// It never fails because firewalld is missing — only on a real error while
+/// A missing firewalld is not an error. It fails only on an error while
 /// applying a rule, after undoing the rules this call had applied.
 pub async fn ensure_ports_open(interface: Option<&str>) -> Result<FirewallLease> {
     let Some(conn) = connect().await else {
@@ -374,15 +374,14 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires explicit host firewall access"]
-    async fn absent_firewalld_is_not_an_error() {
-        // On a machine without firewalld this has to return Ok (a no-op), not
-        // Err: most desktop users do not run firewalld.
+    async fn absent_firewalld_is_a_no_op() {
+        // Most desktop users do not run firewalld.
         let result = ensure_ports_open(Some("p2p-wlan0-0")).await;
         let lease = result.expect("firewall integration");
         release(lease).await;
     }
     #[test]
-    fn lease_cannot_authorize_cleanup_of_unrelated_ports() {
+    fn lease_cleans_only_its_ports() {
         for text in [
             "public\n22 tcp\n",
             "public\n7236 udp\n",

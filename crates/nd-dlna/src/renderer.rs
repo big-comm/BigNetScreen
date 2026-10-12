@@ -126,7 +126,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_reported_volume_is_a_fraction_or_nothing() {
+    fn reported_volume_is_a_fraction() {
         assert_eq!(volume_level("37"), Some(0.37));
         assert_eq!(volume_level("150"), Some(1.0));
         for text in ["NaN", "inf", "-inf", "loud", ""] {
@@ -135,7 +135,7 @@ mod tests {
     }
 
     #[test]
-    fn a_sink_list_yields_its_content_types() {
+    fn sink_list_yields_content_types() {
         // Abridged from a Panasonic TX-75GX880's answer.
         let sink = "http-get:*:audio/mpeg:DLNA.ORG_PN=MP3,http-get:*:audio/L16;rate=44100;channels=2:DLNA.ORG_PN=LPCM,\
                     http-get:*:audio/x-wav:*, http-get:*:video/mpeg:*,http-get:*:audio/flac:*,junk";

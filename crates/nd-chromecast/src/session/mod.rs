@@ -2,13 +2,10 @@
 //! MPEG-TS stream. The sink in `lib.rs` takes it when the receiver has no
 //! mirroring app ([`crate::mirror_session`] is the low-latency path).
 //!
-//! ```text
-//!   capture ──► pipeline (nd-core) ──► multisocketsink
-//!                                            ▲
-//!                                            │ socket handed over by
-//!                                            │ nd_core::stream_server
-//!   Cast channel (crate::cast) ── LAUNCH ── LOAD(url) ──► receiver opens the GET
-//! ```
+//! Capture feeds the nd-core pipeline into a `multisocketsink`. The Cast
+//! channel ([`crate::cast`]) sends LAUNCH and then LOAD with the URL; the
+//! receiver opens the GET, and `nd_core::stream_server` hands that socket to
+//! the sink.
 //!
 //! The order is load-bearing:
 //!
@@ -398,8 +395,7 @@ pub fn cancellation() -> (SessionHandle, tokio::sync::watch::Receiver<bool>) {
 /// Detects the KMS driver without depending on `nd-net`.
 ///
 /// `nd-chromecast` works under Flatpak, where `nd-net` (NetworkManager, the
-/// system bus) cannot operate — hence reading sysfs directly, which the
-/// sandbox does allow.
+/// system bus) cannot operate; the sandbox does allow reading sysfs.
 pub(crate) fn detect_gpu_driver() -> pipeline::GpuDriver {
     use pipeline::GpuDriver;
 
@@ -435,7 +431,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn load_failure_is_reported_as_an_error() {
+    fn load_failure_is_an_error() {
         let event = CastEvent {
             source_id: "transport-test".into(),
             namespace: NS_MEDIA.to_string(),
@@ -446,7 +442,7 @@ mod tests {
     }
 
     #[test]
-    fn ordinary_media_status_is_not_an_error() {
+    fn ordinary_media_status_passes() {
         let event = CastEvent {
             source_id: "transport-test".into(),
             namespace: NS_MEDIA.to_string(),

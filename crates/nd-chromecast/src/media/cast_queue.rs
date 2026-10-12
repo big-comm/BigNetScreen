@@ -293,7 +293,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn receiver_updates_preserve_duration_and_use_capabilities() {
+    fn receiver_updates_keep_duration() {
         let mut playback = PlaybackState::default();
         update_playback(
             &mut playback,
@@ -321,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn explicit_controls_target_only_the_owned_media_and_validate_levels() {
+    fn controls_target_owned_media_only() {
         let mut state = PlaybackState::default();
         update_playback(
             &mut state,
@@ -369,7 +369,7 @@ mod tests {
     }
 
     #[test]
-    fn stale_status_cannot_finish_the_current_item() {
+    fn stale_status_keeps_current_item() {
         let status = json!({"type": "MEDIA_STATUS", "status": [{"mediaSessionId": 5, "media": {"contentId": "file-one"}, "playerState": "IDLE", "idleReason": "FINISHED"}]});
         assert!(active_status(&status, 6, "file-two").is_none());
         assert!(active_status(&status, 5, "file-two").is_none());
@@ -378,7 +378,7 @@ mod tests {
     }
 
     #[test]
-    fn the_end_of_an_item_is_idle_with_a_reason() {
+    fn item_end_is_idle_with_reason() {
         for reason in ["FINISHED", "ERROR", "CANCELLED"] {
             assert!(has_ended(
                 &json!({"playerState": "IDLE", "idleReason": reason})
@@ -387,13 +387,13 @@ mod tests {
     }
 
     #[test]
-    fn idle_before_the_first_item_is_not_the_end() {
+    fn idle_before_first_item_waits() {
         // The receiver is IDLE when the app has just started.
         assert!(!has_ended(&json!({"playerState": "IDLE"})));
     }
 
     #[test]
-    fn playing_and_buffering_are_not_the_end() {
+    fn playing_and_buffering_keep_item() {
         for state in ["PLAYING", "BUFFERING", "PAUSED"] {
             assert!(
                 !has_ended(&json!({"playerState": state})),

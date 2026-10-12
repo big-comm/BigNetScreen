@@ -248,7 +248,7 @@ mod tests {
     }
 
     #[test]
-    fn texts_are_escaped_and_no_placeholder_is_left() {
+    fn texts_are_escaped_and_filled() {
         let html = render(&text());
         assert!(html.contains("Tales &lt;b&gt;PC&lt;/b&gt;"));
         assert!(!html.contains("{{"), "unfilled placeholder in the page");

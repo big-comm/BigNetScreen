@@ -1,4 +1,4 @@
-//! Creates a **virtual monitor** and reports what came back.
+//! Creates a virtual monitor and reports what came back.
 //!
 //! ```sh
 //! cargo run -p nd-capture --example virtual_monitor [width] [height] [seconds] [fps]
@@ -6,14 +6,12 @@
 //!
 //! A virtual monitor is an extra desktop that exists only for the cast: the
 //! receiver shows a second screen instead of duplicating the laptop's. It goes
-//! through whatever [`nd_capture::select_backend_for`] picks here — Mutter on
-//! GNOME, `zkde_screencast_unstable_v1` on KWin, the portal otherwise — so the
+//! through whatever [`nd_capture::select_backend_for`] picks here (Mutter on
+//! GNOME, `zkde_screencast_unstable_v1` on KWin, the portal otherwise), so the
 //! size below is also the check that the chosen backend honours a size at all.
 //!
-//! The example exists because this path is easy to write and hard to trust: it
-//! either creates a screen the compositor really renders to, or it succeeds on
-//! D-Bus and produces a node that never emits a frame. Only running it tells
-//! the two apart, so it also **counts the frames** that come out.
+//! The backend can succeed on D-Bus and still produce a node that never emits
+//! a frame, so the example also counts the frames that come out.
 
 use std::time::Duration;
 

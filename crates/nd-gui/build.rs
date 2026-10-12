@@ -2,8 +2,8 @@
 //!
 //! The distribution publishes rolling builds straight from the branch, so
 //! `pkgbuild/PKGBUILD` names each one `$(date +%y.%m.%d)`. The About dialog and
-//! `--version` have to say the same thing, and the only way to be sure they do
-//! is to ask the same program for the same format — `date` reads the local
+//! `--version` have to say the same thing, so this asks the same program for
+//! the same format: `date` reads the local
 //! clock and the local timezone, which no calculation from a Unix timestamp
 //! would reproduce without pulling in a timezone database.
 //!

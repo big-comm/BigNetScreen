@@ -280,7 +280,7 @@ mod tests {
     use crate::pipeline::PIPELINE_LATENCY_AUTO;
 
     #[test]
-    fn hardware_is_preferred_on_every_intel_driver() {
+    fn intel_drivers_prefer_hardware() {
         // A driver that hangs or stalls is caught at runtime by the absence of
         // frames, so no Intel driver is ruled out in advance.
         let avail = [H264Encoder::VaH264, H264Encoder::X264];
@@ -305,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    fn what_each_driver_is_allowed_to_encode_with() {
+    fn driver_encoder_allow_list() {
         use H264Encoder::*;
 
         // The machines this ships to mostly have no usable hardware encoder,
@@ -387,8 +387,7 @@ mod tests {
     #[test]
     fn candidates_keep_a_software_backup() {
         // If the GPU produces no frames, the software path has to be in the
-        // list to take over — without it the fallback would have nowhere to
-        // go.
+        // list to take over.
         let candidates = encoder_candidates(GpuDriver::Xe, Acceleration::Allowed);
         if candidates.len() < 2 {
             return; // a test machine with only one encoder
@@ -423,10 +422,9 @@ mod tests {
     }
 
     #[test]
-    fn monitor_reports_zero_when_the_encoder_stays_silent() {
-        // This is the case that triggers the fall back to software: the
-        // encoder exists, accepts the configuration and encodes nothing — the
-        // silent failure the driver blacklist was trying to guess at.
+    fn silent_encoder_reports_zero() {
+        // The case that triggers the fall back to software: the encoder
+        // exists, accepts the configuration and encodes nothing.
         if init().is_err() || gst::ElementFactory::find("fakesrc").is_none() {
             return;
         }
@@ -458,7 +456,7 @@ mod tests {
     }
 
     #[test]
-    fn va_not_used_on_proprietary_nvidia() {
+    fn proprietary_nvidia_skips_va() {
         let avail = [H264Encoder::VaH264, H264Encoder::X264];
         assert_eq!(
             select_encoder(&avail, GpuDriver::Nvidia),

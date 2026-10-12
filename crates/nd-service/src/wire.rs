@@ -12,8 +12,8 @@
 //! ## No translated text crosses this boundary
 //!
 //! The service has no locale of its own worth trusting: it may be started by
-//! D-Bus activation with a bare environment, and its clients — the window, the
-//! command line, a panel applet — can each be running under a different one.
+//! D-Bus activation with a bare environment, and its clients (the window, the
+//! command line, a panel applet) can each be running under a different one.
 //! So the service reports *what is happening* and every client writes the
 //! sentence itself. That is why [`Status`] is a shape and not a string, and why
 //! the one free-text field left, [`Issue::reason`], carries text that was
@@ -80,7 +80,7 @@ pub struct Session {
     pub height: u32,
     pub fps: u32,
     /// How many receivers are pulling the stream; negative when the protocol
-    /// cannot tell. Only NDI publishes to whoever asks, so only NDI knows —
+    /// cannot tell. Only NDI publishes to whoever asks, so only NDI knows;
     /// on the point-to-point protocols "streaming" already means one.
     pub receivers: i32,
     /// Can this protocol's link be measured at all?
@@ -321,7 +321,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_kind_and_state_has_a_name_a_client_can_switch_on() {
+    fn every_kind_and_state_is_named() {
         // A name added to the enum and forgotten here would reach an applet as
         // a string it has no branch for, so the mapping is exhaustive by
         // construction (no `_` arm) and this checks the names stay distinct.
@@ -358,7 +358,7 @@ mod tests {
     }
 
     #[test]
-    fn names_survive_the_trip_in_both_directions() {
+    fn names_round_trip() {
         for kind in [
             SinkKind::Ndi,
             SinkKind::WebRtc,
@@ -387,7 +387,7 @@ mod tests {
     }
 
     #[test]
-    fn an_idle_session_is_told_apart_by_its_empty_id() {
+    fn idle_session_has_empty_id() {
         assert!(Session::idle().is_idle());
     }
 }

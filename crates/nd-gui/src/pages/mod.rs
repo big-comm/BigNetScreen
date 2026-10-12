@@ -1,14 +1,13 @@
 //! The application's pages, and the little that is shared between them.
 //!
 //! Each page is a relm4 component of its own. The root component ([`crate::app`])
-//! owns the state that outlives any single page — the receivers found, the
-//! running session, the preferences — and hands each page the part it shows.
+//! owns the state that outlives any single page (the receivers found, the
+//! running session, the preferences) and hands each page the part it shows.
 //! Pages never reach back into that state: they emit an output and the root
 //! decides what it means.
 //!
-//! That split is what keeps the window honest. There is one place where a cast
-//! starts, one place that knows whether a stream is running, and a page cannot
-//! contradict another by holding a stale copy of the answer.
+//! So there is one place where a cast starts and one place that knows whether
+//! a stream is running, and no page holds a stale copy of that answer.
 
 mod device_row;
 pub mod devices;
@@ -86,7 +85,7 @@ pub struct DeviceEntry {
     /// "1920 × 1080 · 60 Hz" while a session is running on this receiver.
     ///
     /// What the two ends negotiated, so it is empty for a receiver that is
-    /// merely available — nothing has been agreed with it yet.
+    /// merely available.
     pub mode: String,
 }
 
@@ -263,7 +262,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn no_two_pages_answer_to_the_same_name() {
+    fn page_names_are_unique() {
         // The stack addresses pages by string and the sidebar by position in
         // `all()`. A duplicate id would show one page while the sidebar
         // highlighted another, with nothing failing to build.
@@ -281,7 +280,7 @@ mod tests {
     }
 
     #[test]
-    fn a_receiver_without_an_address_still_reads_well() {
+    fn addressless_receiver_reads_well() {
         // Miracast before the group is formed has no address to show. The
         // subtitle must not come out as "Miracast · ".
         let entry = DeviceEntry {
@@ -299,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn a_discovery_only_receiver_says_so_instead_of_available() {
+    fn discovery_only_receiver_is_labelled() {
         // Claiming "Available" for something that cannot be streamed to sends
         // the person clicking at a row that will never work.
         let entry = DeviceEntry {

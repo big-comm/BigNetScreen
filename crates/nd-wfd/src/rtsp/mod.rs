@@ -1,18 +1,18 @@
 //! A hand-written RTSP/WFD (Miracast) source.
 //!
-//! Once the Wi-Fi Direct group forms, the **sink** (TV/projector) connects to
-//! our RTSP server (port 7236). We, in the **source** role, drive the WFD
+//! Once the Wi-Fi Direct group forms, the sink (TV/projector) connects to
+//! our RTSP server (port 7236). We, in the source role, drive the WFD
 //! negotiation over a single TCP connection where both sides exchange
 //! requests and responses:
 //!
-//! - **M1** us→sink: `OPTIONS` (Require: org.wfa.wfd1.0)
-//! - **M2** sink→us: `OPTIONS` → we answer with the methods we support
-//! - **M3** us→sink: `GET_PARAMETER` asking for the capabilities
-//! - **M4** us→sink: `SET_PARAMETER` with the format **chosen from the sink's
-//!   capabilities** and the presentation URL
-//! - **M5** us→sink: `SET_PARAMETER wfd_trigger_method: SETUP`
-//! - **M6/M7** sink→us: `SETUP`/`PLAY` → streaming begins
-//! - **M16** us→sink: an empty periodic `GET_PARAMETER` (keepalive)
+//! - M1 us→sink: `OPTIONS` (Require: org.wfa.wfd1.0)
+//! - M2 sink→us: `OPTIONS` → we answer with the methods we support
+//! - M3 us→sink: `GET_PARAMETER` asking for the capabilities
+//! - M4 us→sink: `SET_PARAMETER` with the format chosen from the sink's
+//!   capabilities and the presentation URL
+//! - M5 us→sink: `SET_PARAMETER wfd_trigger_method: SETUP`
+//! - M6/M7 sink→us: `SETUP`/`PLAY` → streaming begins
+//! - M16 us→sink: an empty periodic `GET_PARAMETER` (keepalive)
 //!
 //! Capabilities and the mode chosen from them live in `capabilities`; the
 //! byte-level framing in `message`.
@@ -381,10 +381,8 @@ impl WfdCastConfig {
 /// Drives the entire WFD session (M1–M7) and, on PLAY, starts the MPEG-TS/RTP
 /// streaming to the sink. Returns when the session ends.
 ///
-/// `status` is here for one reason: the resolution and frame rate are settled
-/// *inside* this negotiation, and the interface has nothing truthful to show
-/// about a session until they are. Reporting them from the caller would mean
-/// reporting what was asked for.
+/// `status` is reported from here because the resolution and frame rate are
+/// settled inside this negotiation; the caller only knows what was asked for.
 pub async fn cast_to_sink(
     stream: TcpStream,
     cfg: WfdCastConfig,
@@ -599,7 +597,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_client_port_and_rejects_unusable_ones() {
+    fn client_port_rejects_unusable_ports() {
         assert_eq!(
             parse_client_port("RTP/AVP/UDP;unicast;client_port=19000-19001"),
             Some(19000)
@@ -630,7 +628,7 @@ mod tests {
     };
 
     #[test]
-    fn the_sink_options_are_answered_and_capabilities_asked_once() {
+    fn capabilities_are_asked_once() {
         let mut session = Negotiation::default();
         session.begin();
         assert!(
@@ -660,7 +658,7 @@ mod tests {
     }
 
     #[test]
-    fn a_repeated_play_keeps_the_running_stream() {
+    fn repeated_play_keeps_stream() {
         // A sink that pauses (M9) and plays again (M7) must not get a second
         // pipeline: it would find the local RTP port taken and end the session.
         let mut session = Negotiation {
@@ -680,7 +678,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unanswered_keepalive_ends_the_session_and_a_refused_one_does_not() {
+    fn unanswered_keepalive_ends_session() {
         let mut session = Negotiation::default();
         session.keepalive().unwrap();
         assert!(session.keepalive().is_err());

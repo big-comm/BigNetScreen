@@ -22,7 +22,7 @@ use nd_core::{NdError, Result};
 /// How `ApplyMonitorsConfig` should treat the configuration.
 ///
 /// `1` = temporary: it applies now and is not written to the user's stored
-/// configuration. That is what we want — casting must not rewrite how someone's
+/// configuration: casting must not rewrite how someone's
 /// desktop is laid out after the session ends.
 const METHOD_TEMPORARY: u32 = 1;
 
@@ -116,8 +116,8 @@ impl LayoutSnapshot {
     /// Reads the current arrangement.
     ///
     /// Returns `None` when `org.gnome.Mutter.DisplayConfig` is not there
-    /// (another compositor, or Flatpak) — the caller then simply skips the
-    /// whole layout dance.
+    /// (another compositor, or Flatpak); the caller then skips the layout
+    /// handling.
     pub async fn capture(conn: &Connection) -> Option<Self> {
         let proxy = DisplayConfigProxy::new(conn).await.ok()?;
         let (_serial, monitors, logical, props) = proxy.get_current_state().await.ok()?;
@@ -244,12 +244,10 @@ impl LayoutSnapshot {
     /// the virtual monitor goes away too, and that default is what changed the
     /// user's scale in the first place.
     ///
-    /// Retried, and that is the whole point. `ApplyMonitorsConfig` rejects a
-    /// configuration whose serial is not the current one, and the serial keeps
-    /// changing while the virtual monitor is being torn down — the first
-    /// attempt reliably came back with *"the requested configuration is based
-    /// on stale information"*, the restore never happened, and the user was
-    /// left with the compositor's default scale on their own screen.
+    /// Retried: `ApplyMonitorsConfig` rejects a configuration whose serial is
+    /// not the current one ("the requested configuration is based on stale
+    /// information"), and the serial keeps changing while the virtual monitor
+    /// is being torn down.
     pub async fn restore(&self, conn: &Connection) -> Result<()> {
         let proxy = DisplayConfigProxy::new(conn)
             .await
@@ -461,7 +459,7 @@ pub async fn preferred_mode(conn: &Connection, connector: &str) -> Option<(Strin
 mod tests {
     use super::*;
     #[test]
-    fn portrait_width_and_physical_layout_are_preserved() {
+    fn portrait_layout_is_preserved() {
         let monitors = vec![(
             (
                 "DP-1".into(),

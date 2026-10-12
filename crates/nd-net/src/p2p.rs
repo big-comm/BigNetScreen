@@ -65,8 +65,8 @@ const DEVICE_TYPE_WIFI_P2P: u32 = 30;
 /// wpa_supplicant's global interface.
 ///
 /// NetworkManager drives discovery, but the WFD Information Elements live one
-/// layer below, on the supplicant itself — and NM exposes no way to set them
-/// for the *search*, only for a connection.
+/// layer below, on the supplicant itself, and NM exposes no way to set them
+/// for the search, only for a connection.
 #[zbus::proxy(
     interface = "fi.w1.wpa_supplicant1",
     default_service = "fi.w1.wpa_supplicant1",
@@ -234,8 +234,8 @@ impl P2pDevice {
     /// Advertises this machine as a Wi-Fi Display source during discovery.
     ///
     /// A sink decides whether to answer with its own WFD Information Elements
-    /// based on what the probe request carries. Several receivers — Amazon Fire
-    /// TV among them — stay silent for a peer that does not identify itself as
+    /// based on what the probe request carries. Several receivers, Amazon Fire
+    /// TV among them, stay silent for a peer that does not identify itself as
     /// a WFD device, and the search then finds a plain P2P peer with no WFD
     /// IEs, which discovery filters out. The device is right there and never
     /// appears in the list.
@@ -309,7 +309,7 @@ impl P2pDevice {
     /// Runs until the future is dropped, so a receiver switched on later
     /// still appears.
     ///
-    /// While a stream is running, scanning stops — see [`nd_core::radio`].
+    /// While a stream is running, scanning stops (see [`nd_core::radio`]).
     /// Searching and streaming compete for the same antenna, and the scan's
     /// channel hopping turns into choppy audio and delay on the other end.
     pub async fn keep_finding(&self) {
@@ -419,7 +419,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wfd_source_ies_announce_a_source_on_the_port_the_firewall_opens() {
+    fn wfd_ies_use_firewall_port() {
         // Subelement 0 (Device Information); bytes 1-2 the length of what
         // follows, or the sink discards the element without a word.
         assert_eq!(WFD_SOURCE_IES[0], 0x00);

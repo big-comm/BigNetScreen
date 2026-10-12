@@ -14,7 +14,7 @@
 //! Everything parsed here arrives from a device on the LAN, and the friendly
 //! name ends up in the interface. Sizes are capped before reading, the name
 //! goes through [`nd_core::sink::sanitize_name`], and the extraction is a
-//! deliberate tag scan rather than a parser that could be led somewhere.
+//! plain tag scan with no entity or reference resolution.
 
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -72,7 +72,7 @@ impl Endpoint {
 
     /// Resolves a `controlURL` from a description against this endpoint.
     ///
-    /// The value may be absolute, root-relative, or relative — all three occur
+    /// The value may be absolute, root-relative, or relative; all three occur
     /// in the wild, and a Panasonic uses the root-relative form. An absolute
     /// one must stay on this device: the description is the device's own
     /// word, and following it to another address would let any host on the
@@ -236,9 +236,8 @@ pub async fn describe(location: &Endpoint) -> Result<String> {
 
 /// Invokes one SOAP action and returns the response body.
 ///
-/// `arguments` is the already-built XML of the action's children — the callers
-/// each have a fixed, small set, so building it by hand beats a generic
-/// serialiser that would need escaping rules anyway.
+/// `arguments` is the already-built XML of the action's children: each caller
+/// has a small fixed set, built and escaped by hand.
 pub async fn soap(
     control: &Endpoint,
     service_type: &str,
@@ -279,8 +278,7 @@ pub fn tag_text<'a>(xml: &'a str, tag: &str) -> Option<&'a str> {
             .next()
             .unwrap_or("");
         // `<dlna:friendlyName>` is the same element as `<friendlyName>`, and
-        // `<myFriendlyName>` is not. Comparing the part after the colon, whole,
-        // is what tells those two apart — a substring search cannot.
+        // `<myFriendlyName>` is not: the whole part after the colon must match.
         if name.rsplit(':').next() == Some(tag) {
             match (closing, body_start) {
                 (false, None) => body_start = Some(close + 1),
@@ -296,9 +294,8 @@ pub fn tag_text<'a>(xml: &'a str, tag: &str) -> Option<&'a str> {
 /// The `controlURL` of the service whose `serviceType` ends with `wanted`.
 ///
 /// A renderer's description lists several services and only their order tells
-/// them apart, so this walks the `<service>` blocks rather than searching the
-/// whole document — which would happily return RenderingControl's URL for an
-/// AVTransport request.
+/// them apart, so this walks the `<service>` blocks: a search of the whole
+/// document can return RenderingControl's URL for an AVTransport request.
 pub fn control_url(description: &str, wanted: &str) -> Option<String> {
     for block in description.split("<service>").skip(1) {
         let block = block.split("</service>").next()?;
@@ -330,7 +327,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn a_reply_is_framed_by_its_length_even_if_the_device_keeps_the_socket_open() {
+    async fn reply_framed_by_content_length() {
         // We ask for `Connection: close`, and the Panasonic answers with a
         // length and holds the socket open anyway. The writer here is never
         // dropped, so the read only returns if the length was honoured.
@@ -355,7 +352,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_device_that_sends_no_length_is_still_read_to_the_end() {
+    async fn reply_without_length_reads_to_eof() {
         let (device, mut ours) = tokio::io::duplex(4096);
         let mut device = device;
         tokio::io::AsyncWriteExt::write_all(&mut device, b"HTTP/1.1 200 OK\r\n\r\n<ok/>")
@@ -367,7 +364,7 @@ mod tests {
     }
 
     #[test]
-    fn the_length_header_is_read_whatever_case_the_device_spelled_it_in() {
+    fn length_header_is_case_insensitive() {
         assert_eq!(
             content_length("HTTP/1.1 200 OK\r\ncontent-length: 42"),
             Some(42)
@@ -398,10 +395,9 @@ mod tests {
 </serviceList></device></root>"#;
 
     #[test]
-    fn the_right_service_url_is_picked_out_of_several() {
-        // The bug this guards against is real and silent: searching the whole
-        // document for `controlURL` returns RenderingControl's, and every
-        // later Play lands on the volume service.
+    fn picks_the_right_service_url() {
+        // Searching the whole document for `controlURL` returns
+        // RenderingControl's, and every later Play lands on the volume service.
         assert_eq!(
             control_url(PANASONIC, "AVTransport:1").as_deref(),
             Some("/dmr/control_2")
@@ -419,7 +415,7 @@ mod tests {
     }
 
     #[test]
-    fn a_namespace_prefix_does_not_hide_a_tag_and_a_longer_name_does_not_match() {
+    fn tag_match_ignores_namespace_prefix() {
         assert_eq!(
             tag_text("<dlna:friendlyName>X</dlna:friendlyName>", "friendlyName"),
             Some("X")
@@ -432,7 +428,7 @@ mod tests {
     }
 
     #[test]
-    fn a_truncated_document_returns_nothing_rather_than_garbage() {
+    fn truncated_document_yields_nothing() {
         assert_eq!(
             tag_text("<friendlyName>no closing tag", "friendlyName"),
             None
@@ -445,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn urls_are_split_into_what_a_request_needs() {
+    fn splits_urls_for_requests() {
         let e = Endpoint::parse("http://192.168.1.59:55000/dmr/ddd.xml").unwrap();
         assert_eq!(e.authority, "192.168.1.59:55000");
         assert_eq!(e.path, "/dmr/ddd.xml");
@@ -461,7 +457,7 @@ mod tests {
     }
 
     #[test]
-    fn control_urls_resolve_in_all_three_forms_devices_use() {
+    fn control_urls_resolve_all_forms() {
         let base = Endpoint::parse("http://192.168.1.59:55000/dmr/ddd.xml").unwrap();
         assert_eq!(
             base.resolve("/dmr/control_2").unwrap().path,
@@ -487,7 +483,7 @@ mod tests {
     }
 
     #[test]
-    fn metadata_from_a_device_cannot_break_out_of_the_xml_we_build() {
+    fn device_metadata_is_escaped() {
         assert_eq!(
             escape(r#"<a href="x">&'"#),
             "&lt;a href=&quot;x&quot;&gt;&amp;&apos;"

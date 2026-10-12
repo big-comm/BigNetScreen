@@ -109,7 +109,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn installer_output_is_drained_but_retained_memory_is_bounded() {
+    async fn installer_output_retention_is_bounded() {
         let mut data = vec![b'a'; 1024 * 1024];
         data.extend_from_slice(b"END");
         let tail = read_log_tail(data.as_slice()).await.unwrap();

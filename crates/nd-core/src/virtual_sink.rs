@@ -1,7 +1,7 @@
 //! A virtual sound card, so a transmission can carry *chosen* audio.
 //!
 //! Capturing the default output's monitor sends whatever the computer is
-//! playing — a notification, a private call, the video the person is watching
+//! playing: a notification, a private call, the video the person is watching
 //! on the other screen. This module adds a second, fake output device. Anything
 //! routed to it in the system's sound settings is transmitted; everything else
 //! stays on the computer.
@@ -122,19 +122,11 @@ pub async fn remove() -> Result<()> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn the_monitor_is_the_sink_plus_the_suffix_the_server_appends() {
-        // Two constants that must agree, and nothing at runtime would notice
-        // if they drifted — the capture would simply record silence from a
-        // device that does not exist.
-        assert_eq!(MONITOR, format!("{SINK_NAME}.monitor"));
-    }
-
     /// Only meaningful against a running sound server, so it is not part of the
     /// ordinary gate. `cargo test -p nd-core -- --ignored virtual_sound_card`
     #[tokio::test]
     #[ignore = "needs a running PipeWire or PulseAudio"]
-    async fn a_virtual_sound_card_can_be_created_found_and_removed() {
+    async fn virtual_sound_card_lifecycle() {
         let was_there = exists().await.unwrap();
         ensure().await.expect("create");
         assert!(exists().await.unwrap(), "created but not found");

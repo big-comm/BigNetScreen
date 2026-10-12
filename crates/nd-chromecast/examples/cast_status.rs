@@ -3,7 +3,7 @@
 //!   cargo run -p nd-chromecast --example cast_status -- <IP> [launch]
 //!
 //! Without `launch`: connects and prints the status (read-only, safe).
-//! With `launch`: also starts the Default Media Receiver — the "ready to cast"
+//! With `launch`: also starts the Default Media Receiver; the "ready to cast"
 //! screen appears on the projector. A refusal from the receiver is an error.
 
 use std::net::IpAddr;
@@ -53,8 +53,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "app started: transport={} session={}",
                     app.transport_id, app.session_id
                 );
-                // The namespaces reveal which protocol the app speaks — that
-                // is how one finds out whether the mirroring path is there.
+                // The namespaces show which protocols the app speaks, including
+                // whether the mirroring path is there.
                 if let Ok(status) = channel.status().await {
                     println!("status after the launch: {status:#}");
                 }

@@ -2,8 +2,8 @@
 //! firewalld, negotiates WFD (M1–M7) and streams to the sink.
 //!
 //!   cargo run -p nd-wfd --example wfd_cast              # test pattern
-//!   cargo run -p nd-wfd --example wfd_cast -- screen    # capture the screen
-//!   cargo run -p nd-wfd --example wfd_cast -- virtual   # an extra desktop
+//!   cargo run -p nd-wfd --example wfd_cast screen       # capture the screen
+//!   cargo run -p nd-wfd --example wfd_cast virtual      # an extra desktop
 //!
 //! Requires the TV/projector to be in "Screen Mirroring" mode.
 //! `WFD_PEER` selects an exact MAC address. `WFD_TEST_SECONDS` bounds the session.
@@ -126,7 +126,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut cfg = WfdCastConfig::new(our_ip, addr.ip(), video)
             .with_source_size(source_size)
             .with_audio(audio);
-        // `WFD_MAX_RES=1280x720` caps the negotiated mode — handy for bisecting
+        // `WFD_MAX_RES=1280x720` caps the negotiated mode, for bisecting
         // interoperability problems with a specific sink.
         if let Ok(spec) = std::env::var("WFD_MAX_RES")
             && let Some((w, h)) = spec.split_once('x')

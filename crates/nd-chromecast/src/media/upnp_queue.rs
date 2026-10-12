@@ -308,7 +308,7 @@ mod tests {
     use nd_core::sink::UpnpRenderer;
 
     #[tokio::test]
-    async fn a_dlna_tv_is_handed_music_as_music() {
+    async fn dlna_tv_gets_music_as_audio() {
         use tokio::io::AsyncWriteExt;
         let dir = std::env::temp_dir().join(format!("nd-upnp-music-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -447,7 +447,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn music_a_tv_does_not_list_is_decoded_for_it() {
+    async fn unlisted_music_is_decoded() {
         use tokio::io::AsyncWriteExt;
         let dir = std::env::temp_dir().join(format!("nd-upnp-ogg-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();

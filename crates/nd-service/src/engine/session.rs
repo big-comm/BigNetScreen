@@ -236,7 +236,7 @@ mod tests {
     use crate::engine::tests::engine;
 
     #[tokio::test]
-    async fn cancelling_file_playback_retains_the_session_until_cleanup_finishes() {
+    async fn cancelled_playback_waits_for_cleanup() {
         let mut engine = engine();
         let file = MediaFile {
             path: "/nonexistent/cancellation-test.png".into(),

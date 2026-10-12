@@ -92,8 +92,8 @@ impl FactoryComponent for DeviceRow {
 }
 
 impl DeviceRow {
-    /// Protocol, address, and — when there is one — what the receiver is doing
-    /// or why it failed.
+    /// Protocol, address, and what the receiver is doing or why it failed, when
+    /// known.
     fn subtitle(&self) -> String {
         if self.entry.kind == nd_core::sink::SinkKind::AirPlay {
             return tr!("This device is visible, but AirPlay sharing is not supported.");

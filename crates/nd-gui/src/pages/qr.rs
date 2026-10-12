@@ -52,7 +52,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn modules_are_drawn_inside_a_white_quiet_zone() {
+    fn modules_sit_inside_quiet_zone() {
         let (side, pixels) = rgba("http://192.168.1.20:8080").expect("short address fits");
         let pixel = |x: usize, y: usize| &pixels[(y * side + x) * 4..(y * side + x) * 4 + 4];
         let margin = QUIET_ZONE * SCALE;

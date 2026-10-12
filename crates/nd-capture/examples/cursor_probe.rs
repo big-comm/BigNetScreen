@@ -1,17 +1,16 @@
-//! Answers one question with bytes instead of opinions: **is the compositor
-//! drawing the pointer into the stream?**
+//! Checks from the captured bytes whether the compositor draws the pointer
+//! into the stream.
 //!
 //! ```sh
 //! cargo run -p nd-capture --example cursor_probe -- [monitor|virtual]
 //! ```
 //!
-//! It captures the same screen twice — once with `cursor-mode: hidden`, once
-//! with `cursor-mode: embedded` — and compares the frames. Identical frames
-//! mean the cursor is not being composited, however loudly the documentation
-//! says the mode is supported. Different frames mean it is.
+//! It captures the same screen twice, once with `cursor-mode: hidden` and once
+//! with `cursor-mode: embedded`, and compares the frames. Identical frames
+//! mean the cursor is not being composited, whatever the advertised modes
+//! say. Different frames mean it is.
 //!
-//! For this to mean anything the pointer must be **sitting still over the
-//! screen being captured**, and nothing else on it may move.
+//! The pointer must sit still over the screen being captured, and nothing else on it may move.
 
 use std::time::Duration;
 
@@ -28,7 +27,7 @@ async fn grab(source_type: SourceType, cursor_mode: u32) -> nd_core::Result<(Vec
     backend.set_virtual_size(1920, 1080).await;
 
     let source = backend.start(source_type).await?;
-    // **Raw** frames, not encoded ones. Comparing H.264 output proves nothing:
+    // Raw frames, not encoded ones. Comparing H.264 output proves nothing:
     // any difference at all re-encodes the whole frame, so two captures of the
     // same still screen come out wildly different byte-wise. On raw video a
     // still screen gives byte-identical frames, and a drawn pointer shows up as
@@ -93,8 +92,8 @@ async fn main() -> nd_core::Result<()> {
         .init();
 
     // `virtual-as-monitor`: create the extra screen with RecordVirtual, then
-    // capture it with RecordMonitor. The point is the pointer — Mutter draws it
-    // in a monitor stream and not in a virtual one.
+    // capture it with RecordMonitor. Mutter draws the pointer in a monitor
+    // stream and not in a virtual one.
     if std::env::args().nth(1).as_deref() == Some("virtual-as-monitor") {
         return virtual_as_monitor().await;
     }
@@ -166,10 +165,10 @@ async fn main() -> nd_core::Result<()> {
     Ok(())
 }
 
-/// Creates a virtual monitor and captures it as a **monitor**, saving a PNG.
+/// Creates a virtual monitor and captures it as a monitor, saving a PNG.
 ///
-/// The virtual monitor's own stream has to stay alive — the screen exists only
-/// for as long as something consumes it — so it is kept running into a
+/// The virtual monitor's own stream has to stay alive, since the screen exists
+/// only while something consumes it, so it is kept running into a
 /// `fakesink` while a second session captures the same screen by connector.
 async fn virtual_as_monitor() -> nd_core::Result<()> {
     let conn = zbus::Connection::session()

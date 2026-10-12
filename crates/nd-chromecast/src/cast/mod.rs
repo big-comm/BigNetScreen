@@ -71,7 +71,7 @@ fn connect_payload() -> String {
     .to_string()
 }
 
-/// `CLOSE`, with the reason that says this was deliberate.
+/// `CLOSE`, with the reason for a sender that left on purpose.
 ///
 /// `reasonCode` 5 is Chromium's `kVirtualConnectionClosedByPeer`: "gracefully
 /// closed by the sender". Without it the receiver cannot tell a sender that
@@ -625,11 +625,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_handshake_says_who_we_are_and_the_goodbye_says_it_was_deliberate() {
-        // Against Chromium's own sender. A receiver that never learned it had
-        // a local sender kept the session after that sender left, and the
-        // device had to be reset from its own casting settings before it would
-        // take a new connection.
+    fn handshake_and_close_identify_sender() {
+        // Matches Chromium's sender. A receiver that does not know its sender
+        // is local keeps the session after the sender leaves and refuses new
+        // connections until reset.
         let connect: Value = serde_json::from_str(&connect_payload()).unwrap();
         assert_eq!(connect["type"], "CONNECT");
         assert_eq!(connect["connType"], 1, "CONNECTION_TYPE_LOCAL");
@@ -650,7 +649,7 @@ mod tests {
     }
 
     #[test]
-    fn stop_confirmation_is_scoped_and_structurally_valid() {
+    fn stop_confirmation_is_scoped() {
         let stopped = json!({"type":"RECEIVER_STATUS", "status":{"applications":[]}});
         assert!(session_absent(&stopped, "ours"));
         let other =

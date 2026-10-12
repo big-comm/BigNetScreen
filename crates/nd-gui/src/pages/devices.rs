@@ -1,7 +1,7 @@
 //! Every receiver found, with what is known about the one selected.
 //!
 //! The home page lists receivers so that one can be picked; this page is for
-//! looking at them — filtering by protocol, rescanning, and reading what
+//! looking at them: filtering by protocol, rescanning, and reading what
 //! discovery reported about a device before sending a screen to it. The detail
 //! panel shows only fields discovery reports: mDNS and Wi-Fi Direct carry no
 //! firmware version, Chromecast MAC address or "last seen".
@@ -188,8 +188,7 @@ impl Component for DevicesPage {
                         },
                     },
 
-                    // The detail panel. Empty until a row is picked, because
-                    // there is nothing truthful to put in it before that.
+                    // The detail panel. Empty until a row is picked.
                     gtk::Box {
                         set_orientation: gtk::Orientation::Vertical,
                         set_spacing: 12,
@@ -588,7 +587,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires a graphical GTK session"]
-    fn discovery_switch_does_not_echo_initialization_or_settings_reload() {
+    fn discovery_switch_ignores_programmatic_updates() {
         adw::init().expect("GTK session");
         let outputs = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
         let received = outputs.clone();
@@ -663,7 +662,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires a graphical GTK session and a temporary XDG_DATA_HOME"]
-    fn trusting_a_refused_receiver_again_forgets_only_its_identity() {
+    fn retrust_forgets_only_identity() {
         let data_home = std::env::var_os("XDG_DATA_HOME").expect("XDG_DATA_HOME");
         assert!(
             std::path::Path::new(&data_home).starts_with(std::env::temp_dir()),

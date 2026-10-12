@@ -185,7 +185,7 @@ mod tests {
     use crate::engine::tests::{engine, sink};
 
     #[test]
-    fn discovery_bounds_new_receivers_and_replaces_provider_diagnostics() {
+    fn discovery_bounds_receivers_and_diagnostics() {
         let mut engine = engine();
         for index in 0..nd_core::provider::MAX_RECEIVERS + 10 {
             engine.discovery_event(DiscoveryEvent::Added(sink(&index.to_string())));
@@ -203,7 +203,7 @@ mod tests {
     }
 
     #[test]
-    fn the_streaming_receiver_survives_a_discovery_dropout() {
+    fn streaming_receiver_survives_dropout() {
         let mut engine = engine();
         engine.order.push("a".into());
         engine.registry.insert("a".into(), sink("a"));

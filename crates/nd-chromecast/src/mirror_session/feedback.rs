@@ -172,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn feedback_reaches_only_the_track_it_names() {
+    fn feedback_reaches_named_track_only() {
         let (mut routes, video, audio) = routes();
         let video_window = Arc::new(Mutex::new(AckWindow::default()));
         let audio_window = Arc::new(Mutex::new(AckWindow::default()));
@@ -199,7 +199,7 @@ mod tests {
     }
 
     #[test]
-    fn a_picture_loss_for_the_video_pair_asks_for_a_key_frame() {
+    fn video_pli_requests_key_frame() {
         let (routes, video, audio) = routes();
         let signals = signals();
         let pli = |receiver: u32, sender: u32| {

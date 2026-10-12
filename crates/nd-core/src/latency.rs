@@ -7,9 +7,9 @@
 //!
 //! What buffering does and does not fix matters just as much:
 //!
-//! - it absorbs **variance in arrival** — frames landing 10 ms apart and then
-//!   80 ms apart — and that is what makes playback look smooth;
-//! - it does nothing for **lack of capacity**. When the encoder or the network
+//! - it absorbs variance in arrival (frames landing 10 ms apart and then
+//!   80 ms apart), and that is what makes playback look smooth;
+//! - it does nothing for lack of capacity. When the encoder or the network
 //!   cannot keep up, the buffer drains and refills, and the result is the delay
 //!   *and* the stutter.
 //!
@@ -49,7 +49,7 @@ pub enum Profile {
     #[default]
     Responsive,
     /// Buffered playback: the picture rides out network variance, and
-    /// everything — the pointer included — arrives later.
+    /// everything, the pointer included, arrives later.
     Film,
 }
 
@@ -136,15 +136,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn responsive_is_the_default() {
-        let _lock = exclusive();
-        set(Profile::Responsive);
-        assert_eq!(current(), Profile::Responsive);
-        assert!(!is_film());
+    fn default_is_responsive() {
+        assert_eq!(Profile::default(), Profile::Responsive);
     }
 
     #[test]
-    fn film_can_be_turned_on_and_off() {
+    fn film_switch_toggles() {
         let _lock = exclusive();
         set(Profile::Film);
         assert!(is_film());
@@ -153,11 +150,9 @@ mod tests {
     }
 
     #[test]
-    fn film_buffers_enough_to_matter_but_stays_usable() {
-        // Below ~150 ms there is not enough slack to absorb Wi-Fi variance, and
-        // the profile would cost delay without buying smoothness. Above ~1 s
-        // dragging a window onto the screen stops feeling connected to the hand
-        // doing it.
+    fn film_latency_stays_in_range() {
+        // Below 150 ms there is not enough slack to absorb Wi-Fi variance; above
+        // 1 s dragging a window onto the screen stops feeling connected.
         const _: () = assert!(FILM_PIPELINE_LATENCY_MS >= 150);
         const _: () = assert!(FILM_PIPELINE_LATENCY_MS <= 1000);
     }

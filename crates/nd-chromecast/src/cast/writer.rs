@@ -150,7 +150,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn heartbeat_remains_live_during_stop_until_terminal_close() {
+    async fn heartbeat_runs_until_terminal_close() {
         for _ in 0..20 {
             let (stream, mut peer) = tokio::io::duplex(128);
             let writer = ControlWriter::new(stream);

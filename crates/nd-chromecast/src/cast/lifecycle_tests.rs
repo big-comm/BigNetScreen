@@ -107,7 +107,7 @@ async fn stop_scoped_session<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S, 
                 assert_eq!(payload["sessionId"], session_id);
                 assert!(stop_request.is_none());
                 stop_request = Some(payload["requestId"].clone());
-                // Deliberately withhold STOP confirmation until PONG:
+                // STOP confirmation waits for PONG:
                 // disabling heartbeat before STOP would deadlock here.
                 reply(stream, PLATFORM_DEST, NS_HEARTBEAT, json!({"type":"PING"})).await;
             }
@@ -215,7 +215,7 @@ async fn play_media_item<S: AsyncRead + AsyncWrite + Unpin>(
 }
 
 #[tokio::test]
-async fn twenty_tls_sessions_keep_heartbeat_until_scoped_stop_then_close() {
+async fn heartbeat_lasts_until_scoped_close() {
     let acceptor = tls_acceptor();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -247,7 +247,7 @@ async fn twenty_tls_sessions_keep_heartbeat_until_scoped_stop_then_close() {
 }
 
 #[tokio::test]
-async fn media_load_applies_position_and_mute_before_play_and_refuses_unconfirmed_volume() {
+async fn media_load_applies_settings_before_play() {
     let acceptor = tls_acceptor();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -350,7 +350,7 @@ async fn prove_identity<S: AsyncRead + AsyncWrite + Unpin>(
 }
 
 #[tokio::test]
-async fn a_receiver_keeps_the_device_key_it_first_proved() {
+async fn receiver_keeps_first_proved_key() {
     const A_KEY: &[u8] = include_bytes!("../../tests/fixtures/test-device-a-key.der");
     const A: &[u8] = include_bytes!("../../tests/fixtures/test-device-a.der");
     const B_KEY: &[u8] = include_bytes!("../../tests/fixtures/test-device-b-key.der");

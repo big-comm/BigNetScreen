@@ -234,7 +234,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn oversized_headers_and_truncated_messages_are_rejected() {
+    async fn oversized_or_truncated_messages_rejected() {
         let large = format!(
             "OPTIONS * RTSP/1.0\r\nX: {}\r\n\r\n",
             "x".repeat(1024 * 1024)
@@ -294,7 +294,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn closed_connection_is_an_error_not_a_hang() {
+    async fn closed_connection_is_an_error() {
         assert!(parse("").await.is_err());
     }
 }

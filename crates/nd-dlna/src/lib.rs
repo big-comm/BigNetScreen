@@ -1,20 +1,14 @@
-//! Casting to DLNA/UPnP renderers — the televisions that predate Chromecast.
+//! Casting to DLNA/UPnP renderers: the televisions that predate Chromecast.
 //!
-//! ```text
-//!   SSDP M-SEARCH ──► renderer answers with its description
-//!                            │
-//!   GET description ─────────┘  → friendly name + AVTransport control URL
-//!                            │
-//!   capture ──► pipeline ──► multisocketsink
-//!                                  ▲
-//!                                  │ socket handed over by the stream server
-//!   SetAVTransportURI(url) ── Play ─┘  → the television opens the GET
-//! ```
+//! An SSDP M-SEARCH finds the renderer, and its description gives the friendly
+//! name and the AVTransport control URL. Capture feeds the pipeline into a
+//! `multisocketsink`; `SetAVTransportURI` and `Play` make the television open
+//! the GET, and the stream server hands that socket to the sink.
 //!
 //! The media half is shared: the transport stream, the HTTP server and the
 //! socket handover are the same [`nd_core::stream_server`] and
 //! [`nd_core::pipeline::ts_http_pipeline_description`] the Cast fallback uses.
-//! What this crate adds is the two halves DLNA does differently — finding the
+//! What this crate adds is the two halves DLNA does differently: finding the
 //! device ([`ssdp`]) and driving it ([`avtransport`]).
 //!
 //! DLNA reaches receivers over the existing LAN without a Wi-Fi Direct
@@ -214,7 +208,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn a_session_that_ended_on_its_own_lets_the_next_one_start() {
+    async fn ended_session_frees_the_slot() {
         nd_core::pipeline::init().unwrap();
         let previous = nd_core::settings::current();
         nd_core::settings::set_in_memory(&nd_core::settings::Settings {

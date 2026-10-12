@@ -4,11 +4,11 @@
 //! reach it directly; they talk to this server, which lets them through once
 //! the PIN has been accepted:
 //!
-//! 1. `GET /` — the page (no secret needed; it is only a form).
-//! 2. `POST /pin` — the four digits. Right: `200` and the session token.
+//! 1. `GET /`: the page (no secret needed; it is only a form).
+//! 2. `POST /pin`: the four digits. Right: `200` and the session token.
 //!    Wrong: `403`. Too many wrong ones: `429` for a while, because four
 //!    digits are only a lock if they cannot be tried ten thousand times.
-//! 3. `POST /whep?token=…`, `PATCH`/`DELETE /whep/resource/<id>?token=…` —
+//! 3. `POST /whep?token=…`, `PATCH`/`DELETE /whep/resource/<id>?token=…`:
 //!    forwarded to the element. A missing or wrong token is a `404`, so the
 //!    server does not even confirm what lives here.
 //!
@@ -450,7 +450,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_page_is_served_and_the_rest_is_hidden() {
+    async fn only_the_page_is_served() {
         let door = door("1234", 1).await;
         let (status, headers, body) = request(
             door.local_addr(),
@@ -482,7 +482,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_pin_opens_the_door_and_wrong_ones_lock_it() {
+    async fn wrong_pins_lock_the_door() {
         let door = door("4321", 1).await;
         let (status, _, _) = request(door.local_addr(), &post("/pin", "text/plain", "1111")).await;
         assert_eq!(status, 403);
@@ -501,7 +501,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn media_requests_are_forwarded_with_the_token_added_to_location() {
+    async fn forwarded_location_carries_token() {
         // A stand-in for the WHEP element: answers any POST with 201 + Location.
         let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let whep_port = upstream.local_addr().unwrap().port();
@@ -543,7 +543,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn an_absent_element_is_a_bad_gateway_not_a_hang() {
+    async fn absent_element_is_bad_gateway() {
         let door = door("1234", free_port()).await;
         let (status, _, _) = request(
             door.local_addr(),
@@ -561,7 +561,7 @@ mod tests {
             .port()
     }
     #[test]
-    fn delayed_parallel_attempt_cannot_bypass_newly_acquired_pin_lockout() {
+    fn parallel_attempt_respects_lockout() {
         let now = Instant::now();
         let mut guard = PinGuard::default();
         // Bodies whose reads started before the lockout.
@@ -616,7 +616,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn pin_does_not_discard_embedded_non_digits() {
+    async fn pin_keeps_embedded_letters() {
         let door = door("1234", 1).await;
         let (status, _, _) =
             request(door.local_addr(), &post("/pin", "text/plain", "a1b2c3d4")).await;
@@ -624,7 +624,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dropping_the_front_door_closes_an_existing_partial_request() {
+    async fn dropping_door_closes_partial_request() {
         let door = door("1234", 1).await;
         let mut stream = TcpStream::connect(door.local_addr()).await.unwrap();
         stream

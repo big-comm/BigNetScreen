@@ -1,6 +1,6 @@
 //! WFD negotiation diagnostic: forms the Wi-Fi Direct group, brings the RTSP
-//! server up on 7236 and negotiates M1–M3, printing **the decoded video
-//! modes** from the CEA/VESA/HH tables — and which one would be chosen.
+//! server up on 7236 and negotiates M1–M3, printing the decoded video
+//! modes from the CEA/VESA/HH tables and the one that would be chosen.
 //!
 //!   cargo run -p nd-wfd --example wfd_negotiate
 //!

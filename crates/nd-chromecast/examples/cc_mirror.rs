@@ -4,8 +4,8 @@
 //!   cargo run -p nd-chromecast --example cc_mirror -- <IP> screen 60  # screen
 //!
 //! Unlike `cc_cast` (Default Media Receiver + HTTP), there is no container and
-//! no media player on the other end — the delay is the negotiated
-//! `targetDelay`, not seconds of pre-buffering.
+//! no media player on the other end: the delay is the negotiated
+//! `targetDelay`.
 
 use std::net::IpAddr;
 use std::sync::Arc;

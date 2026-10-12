@@ -90,7 +90,7 @@ mod tests {
     use std::time::Duration;
 
     #[test]
-    fn startup_is_bounded_even_without_one_feedback_packet() {
+    fn startup_bounded_without_feedback() {
         let mut window = AckWindow::default();
         for id in 0..MAX_UNACKED_FRAMES {
             assert!(window.can_send());
@@ -104,7 +104,7 @@ mod tests {
     }
 
     #[test]
-    fn new_outstanding_frame_restarts_timeout_after_an_idle_track() {
+    fn idle_track_restarts_frame_timeout() {
         let mut window = AckWindow::default();
         let before = Instant::now();
         window.last_progress = before - Duration::from_secs(60);
@@ -117,7 +117,7 @@ mod tests {
     }
 
     #[test]
-    fn sentinel_future_and_reordered_ids_do_not_invent_progress() {
+    fn bogus_acks_make_no_progress() {
         let mut window = AckWindow::default();
         assert!(window.acknowledge(255, None)); // before frame zero
         assert!(!window.acknowledge(0, None));
@@ -132,7 +132,7 @@ mod tests {
     }
 
     #[test]
-    fn every_wire_wrap_keeps_full_ids_and_all_window_distances() {
+    fn wire_wrap_keeps_window_distances() {
         for last in 120..4096i64 {
             for count in 1..=120i64 {
                 let mut window = AckWindow {
@@ -149,7 +149,7 @@ mod tests {
     }
 
     #[test]
-    fn xr_rejects_an_old_packet_even_after_an_entire_wire_cycle() {
+    fn xr_rejects_packet_a_cycle_old() {
         let mut window = AckWindow {
             last_sent: 1000,
             checkpoint: 990,

@@ -351,7 +351,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn a_seek_restarts_the_item_where_it_was_asked() {
+    fn seek_restarts_at_requested_position() {
         let state = PlaybackState {
             paused: true,
             seconds: 40.0,
@@ -391,7 +391,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn removing_and_skipping_files_updates_the_running_mirrored_queue() {
+    async fn removal_and_skip_update_running_queue() {
         // A cold plugin registry is scanned here, outside the deadlines below.
         nd_core::pipeline::init().unwrap();
         let sink = RecordingSink::new();
@@ -430,7 +430,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn an_initially_paused_renderer_waits_for_play_and_keeps_pending_settings() {
+    async fn paused_renderer_waits_for_play() {
         // A cold plugin registry is scanned here, outside the deadlines below.
         nd_core::pipeline::init().unwrap();
         let sink = RecordingSink::new();

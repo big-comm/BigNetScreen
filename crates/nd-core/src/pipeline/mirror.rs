@@ -84,7 +84,7 @@ mod tests {
     use gstreamer as gst;
 
     #[test]
-    fn mirror_pipeline_has_no_muxer_and_no_container() {
+    fn mirror_pipeline_has_no_muxer() {
         // Cast Streaming receives access units; any muxer here would be extra
         // buffering, and the receiver would not know what to do with the
         // container.
@@ -100,7 +100,7 @@ mod tests {
     }
 
     #[test]
-    fn mirror_pipeline_exposes_both_sinks_without_queueing() {
+    fn mirror_exposes_both_sinks_unqueued() {
         let cfg = StreamConfig::default();
         let desc =
             mirror_pipeline_description(&cfg, &VideoSource::Test, CHROMECAST_MAX_RESOLUTION, false);
@@ -119,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn only_the_video_queue_may_drop_data() {
+    fn only_video_queue_drops() {
         let cfg = StreamConfig::default();
         let desc = mirror_pipeline_description(
             &cfg,
@@ -181,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn nvenc_gets_its_input_uploaded_by_the_element_that_is_best_at_it() {
+    fn nvenc_input_goes_through_cudaupload() {
         // `cudaupload` uploads faster than NVENC does for itself.
         let nv = StreamConfig {
             encoder: H264Encoder::NvH264,

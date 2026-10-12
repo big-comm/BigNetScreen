@@ -2,8 +2,7 @@
 //!
 //! The page answers three questions in the order a person asks them: *where can
 //! I send this*, *what am I sending*, and *what is happening now*. The right
-//! column only exists once something is running — an empty panel labelled
-//! "connected device" while nothing is connected is furniture, not information.
+//! column only exists once something is running.
 
 use nd_core::capture::SourceType;
 use relm4::adw::{self, prelude::*};

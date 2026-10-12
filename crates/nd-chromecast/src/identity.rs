@@ -162,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn the_first_key_is_remembered_and_only_that_key_is_accepted() {
+    fn only_first_key_is_accepted() {
         let path = store("tofu");
         check_in(&path, "tv._googlecast._tcp.local.", Some(b"key-a")).unwrap();
         check_in(&path, "tv._googlecast._tcp.local.", Some(b"key-a")).unwrap();
@@ -176,7 +176,7 @@ mod tests {
     }
 
     #[test]
-    fn a_forgotten_receiver_remembers_the_next_device_and_only_it() {
+    fn forgotten_receiver_pins_next_key() {
         let path = store("forget");
         check_in(&path, "tv", Some(b"key-a")).unwrap();
         check_in(&path, "other", Some(b"key-a")).unwrap();
@@ -191,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn a_receiver_that_never_proved_anything_is_not_remembered() {
+    fn unproved_receiver_stays_unknown() {
         let path = store("none");
         check_in(&path, "tv", None).unwrap();
         assert!(!path.exists());
@@ -201,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    fn the_store_is_bounded_and_forgets_the_oldest() {
+    fn store_evicts_the_oldest() {
         let path = store("bound");
         for i in 0..=MAX_REMEMBERED {
             check_in(&path, &format!("tv-{i}"), Some(b"key")).unwrap();

@@ -1,4 +1,4 @@
-//! The **provider** abstraction: discovering receivers on the network.
+//! The provider abstraction: discovering receivers on the network.
 //!
 //! Every protocol has its own provider (Chromecast over mDNS, WFD-P2P over
 //! NetworkManager, WFD-MICE over mDNS). The aggregator
@@ -27,7 +27,7 @@ pub enum DiscoveryEvent {
     /// An already known receiver had its data refreshed (name, IP).
     ///
     /// Kept apart from `Added` so the UI updates the existing row instead of
-    /// replacing the instance — swapping the `Arc` mid-session would lose the
+    /// replacing the instance: swapping the `Arc` mid-session would lose the
     /// connection state.
     Updated(Arc<dyn Sink>),
     /// A receiver went away (identified by `SinkInfo::id`).

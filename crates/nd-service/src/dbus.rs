@@ -5,7 +5,7 @@
 //! start-on-demand for free, so nothing runs while nothing is sharing; and
 //! `zbus` is already in this tree for the portal and NetworkManager.
 //!
-//! Preferences stay where they were — a file `nd_core::settings` owns. A client
+//! Preferences live in the file `nd_core::settings` owns. A client
 //! that changes them writes the file and calls [`ServiceProxy::reload_settings`],
 //! which is one method instead of a second copy of every field.
 
@@ -594,7 +594,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn an_idle_service_leaves_even_while_receivers_come_and_go() {
+    async fn idle_service_exits_despite_receivers() {
         // Receivers appear and vanish the whole time a machine is idle; a
         // deadline restarted by every change would never expire.
         let (tx, rx) = watch::channel(idle_snapshot());
@@ -618,7 +618,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn a_running_session_keeps_the_service_alive() {
+    async fn running_session_keeps_service_alive() {
         let (tx, rx) = watch::channel(idle_snapshot());
         let mut busy = idle_snapshot();
         busy.session.id = "receiver".into();
@@ -632,7 +632,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn an_open_client_keeps_discovery_alive_until_it_leaves() {
+    async fn open_client_keeps_discovery_alive() {
         let (tx, rx) = watch::channel(idle_snapshot());
         let waiting = tokio::spawn(idle_after(rx, Duration::from_secs(10)));
         tokio::task::yield_now().await;

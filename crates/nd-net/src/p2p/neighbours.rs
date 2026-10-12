@@ -2,18 +2,18 @@
 
 /// Which peers took an address on this link, according to the kernel.
 ///
-/// Tells two very different failures apart when the receiver never opens the
-/// RTSP connection:
+/// Tells two failures apart when the receiver never opens the RTSP
+/// connection:
 ///
-/// - **nothing here**: the receiver completed the pairing and then never
+/// - nothing here: the receiver completed the pairing and then never
 ///   joined the group. Re-forming the group is worth a try; telling the person
 ///   to check their mirroring menu is not, because the receiver never got far
 ///   enough for that to matter.
-/// - **something here**: it joined, took an address, and then went quiet —
-///   which usually means the mirroring screen was closed on the device.
+/// - something here: it joined, took an address, and then went quiet, which
+///   usually means the mirroring screen was closed on the device.
 ///
-/// The limit is worth stating: an entry appears once there has been traffic
-/// with that peer, so an empty result is evidence, not proof.
+/// An entry appears only once there has been traffic with that peer, so an
+/// empty result is evidence, not proof.
 pub fn peers_on_link(interface: &str) -> Vec<String> {
     match std::fs::read_to_string("/proc/net/arp") {
         Ok(table) => parse_arp(&table, interface),
@@ -27,8 +27,8 @@ pub fn peers_on_link(interface: &str) -> Vec<String> {
 /// Parses `/proc/net/arp`, keeping the peers on one interface.
 ///
 /// Columns: address, HW type, flags, HW address, mask, device. A flags value
-/// of `0x0` is an *incomplete* entry — an address the kernel asked about and
-/// never got an answer for — so it is not a peer that is there.
+/// of `0x0` is an incomplete entry: an address the kernel asked about and
+/// never got an answer for, so not a peer.
 fn parse_arp(table: &str, interface: &str) -> Vec<String> {
     table
         .lines()
@@ -56,7 +56,7 @@ mod tests {
 10.42.0.99       0x1         0x0         00:00:00:00:00:00     *        p2p-wlp2s0-0\n";
 
     #[test]
-    fn only_peers_on_the_asked_for_link_are_returned() {
+    fn filters_peers_by_link() {
         // The machine is on its home network at the same time; a receiver
         // there is not a peer of the Wi-Fi Direct group.
         assert_eq!(super::parse_arp(TABLE, "p2p-wlp2s0-0"), vec!["10.42.0.215"]);
@@ -64,7 +64,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unanswered_entry_is_not_a_peer() {
+    fn unanswered_entry_is_skipped() {
         // Flags `0x0` is an address the kernel asked about and never heard
         // back from. Counting it would report a receiver that joined when
         // nothing did, and turn a useful retry into a misleading message.
@@ -72,7 +72,7 @@ mod tests {
     }
 
     #[test]
-    fn a_link_with_nobody_on_it_is_empty() {
+    fn empty_link_has_no_peers() {
         assert!(parse_arp(TABLE, "p2p-wlp2s0-9").is_empty());
         assert!(parse_arp("", "p2p-wlp2s0-0").is_empty());
         // A truncated line must not panic.

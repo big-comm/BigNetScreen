@@ -50,7 +50,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn a_closed_port_answers_quickly_and_negatively() {
+    async fn closed_port_fails_fast() {
         // Port 1 on the loopback: nothing listens, and the refusal is
         // immediate. This is the "refused" branch, which must not be reported
         // as a fast round trip.

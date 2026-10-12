@@ -67,8 +67,8 @@ pub const CAST_MEDIA: MediaType = MediaType {
 /// `GET`; answering it is what separates a live stream from a file download.
 /// The flags are the ones a Panasonic VIErA advertised for its own AVC_TS
 /// profiles, and they decode to sender-paced (bit 31) plus s0-increasing and
-/// sn-increasing (bits 27 and 26) — DLNA's signature for content with no fixed
-/// start and no end — plus streaming transfer mode and DLNA 1.5.
+/// sn-increasing (bits 27 and 26), DLNA's signature for content with no fixed
+/// start and no end, plus streaming transfer mode and DLNA 1.5.
 ///
 /// `DLNA.ORG_OP=00` says neither seek mode is available, which is the truth
 /// for a live screen and stops a renderer from probing for byte ranges.
@@ -122,10 +122,10 @@ pub fn random_token() -> Result<String> {
 
 /// Finds the local IP of the interface that reaches `peer`.
 ///
-/// The classic trick: a "connected" UDP socket sends nothing, but it makes the
-/// kernel pick the route — and with it the source address. Far better than
-/// guessing the first interface: on a machine with a VPN (Tailscale, say) the
-/// wrong IP leaves the Chromecast unable to connect back.
+/// A "connected" UDP socket sends nothing, but it makes the kernel pick the
+/// route and with it the source address. The first interface is not enough:
+/// on a machine with a VPN (Tailscale, say) the wrong IP leaves the Chromecast
+/// unable to connect back.
 pub fn local_ip_towards(peer: IpAddr) -> Result<IpAddr> {
     let bind = if peer.is_ipv4() {
         SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0))
@@ -435,7 +435,7 @@ impl StreamServer {
     /// `multisocketsink`: from then on the bytes go from GStreamer straight to
     /// the receiver, never passing through here.
     ///
-    /// `on_first_client` is called when the first client is accepted — the
+    /// `on_first_client` is called when the first client is accepted: the
     /// hook for putting the pipeline into `Playing` (before that there is
     /// nowhere to write).
     pub async fn serve<F>(
@@ -675,7 +675,7 @@ mod tests {
     }
 
     #[test]
-    fn serves_the_receiver_on_the_right_path() {
+    fn serves_the_right_path() {
         assert_eq!(
             triage(&get("/secret"), "/secret", CAST, CAST),
             Verdict::Stream
@@ -683,7 +683,7 @@ mod tests {
     }
 
     #[test]
-    fn wrong_path_is_404_not_403() {
+    fn wrong_path_is_404() {
         // Do not distinguish protected resources from unknown paths.
         assert_eq!(
             triage(&get("/guess"), "/secret", CAST, CAST),
@@ -694,7 +694,7 @@ mod tests {
     }
 
     #[test]
-    fn right_path_from_another_host_is_rejected() {
+    fn foreign_host_is_rejected() {
         // Defence in depth: even with the token leaked, only the session's
         // receiver is served.
         assert_eq!(
@@ -704,7 +704,7 @@ mod tests {
     }
 
     #[test]
-    fn query_string_is_not_part_of_the_secret() {
+    fn secret_ignores_query_string() {
         assert_eq!(
             triage(&get("/secret?x=1"), "/secret", CAST, CAST),
             Verdict::Stream
@@ -712,7 +712,7 @@ mod tests {
     }
 
     #[test]
-    fn head_probe_is_answered_without_a_body() {
+    fn head_probe_has_no_body() {
         let request = "HEAD /secret HTTP/1.1\r\nHost: x\r\n\r\n";
         assert_eq!(triage(request, "/secret", CAST, CAST), Verdict::HeadOnly);
     }
@@ -727,7 +727,7 @@ mod tests {
     }
 
     #[test]
-    fn malformed_requests_do_not_panic() {
+    fn malformed_requests_are_refused() {
         for raw in ["", "\r\n", "JUNK", "GET", "GET  \r\n"] {
             let verdict = triage(raw, "/secret", CAST, CAST);
             assert_ne!(verdict, Verdict::Stream, "accepted {raw:?}");
@@ -735,7 +735,7 @@ mod tests {
     }
 
     #[test]
-    fn stream_response_has_no_length_so_it_can_run_forever() {
+    fn stream_response_has_no_length() {
         let headers = response_headers(Verdict::Stream, CAST_MEDIA);
         assert!(headers.contains("200 OK"), "{headers}");
         assert!(headers.contains(CAST_MEDIA.content_type), "{headers}");
@@ -746,7 +746,7 @@ mod tests {
     }
 
     #[test]
-    fn a_dlna_renderer_is_told_the_stream_is_live() {
+    fn dlna_renderer_sees_live_stream() {
         // A renderer that gets no `transferMode` treats the body as a file to
         // download, and one that gets no flags has no way to know the content
         // never ends. Both were verified against a Panasonic VIErA, which
@@ -781,7 +781,7 @@ mod tests {
     }
 
     #[test]
-    fn local_ip_towards_picks_a_routable_address() {
+    fn local_ip_is_routable() {
         // It does not depend on the real network: only on a route existing at all.
         let Ok(ip) = local_ip_towards(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))) else {
             return; // a machine with no external route (isolated CI)
@@ -807,7 +807,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn refuses_a_request_on_the_wrong_path() {
+    async fn server_refuses_wrong_path() {
         let Ok(server) = StreamServer::bind(IpAddr::V4(Ipv4Addr::LOCALHOST), CAST_MEDIA).await
         else {
             return;
@@ -858,7 +858,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn header_reader_rejects_eof_invalid_utf8_and_oversized_final_chunk() {
+    async fn header_reader_rejects_bad_input() {
         for bytes in [
             b"GET /secret HTTP/1.1\r\nHost: a\r\n".to_vec(),
             b"GET /secret HTTP/1.1\r\nHost: \xff\r\n\r\n".to_vec(),
@@ -873,7 +873,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_partial_header_cannot_hold_the_reader_indefinitely() {
+    async fn partial_header_times_out() {
         let (mut writer, mut reader) = tokio::io::duplex(64);
         writer
             .write_all(b"GET /secret HTTP/1.1\r\nHost: a")
@@ -887,7 +887,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_stalled_dlna_reader_ends_with_a_bounded_queue_error() {
+    async fn stalled_dlna_reader_hits_queue_bound() {
         use crate::pipeline::{self, PipelineGuard, StreamConfig, VideoSource, VideoTarget};
         use gst::prelude::*;
 

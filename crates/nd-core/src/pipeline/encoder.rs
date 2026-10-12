@@ -47,8 +47,8 @@ pub const OPENH264_PIPELINE_LATENCY_MS: u64 = 500;
 
 /// The H.264 feature set a path's receiver is known to decode.
 ///
-/// One decision with two consequences — the profile written into the caps and
-/// whether the encoder may use CABAC — so it is one value rather than two that
+/// One decision with two consequences, the profile written into the caps and
+/// whether the encoder may use CABAC, so it is one value rather than two that
 /// can disagree.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum H264Profile {
@@ -301,7 +301,7 @@ mod tests {
     use crate::pipeline::CAST_VBV_FRAMES;
 
     #[test]
-    fn only_the_path_that_asks_for_a_vbv_limit_gets_one() {
+    fn vbv_limit_only_when_asked() {
         // The limit is per path: Miracast, NDI and the browser path ask for
         // none, and their encoder line must not name the property.
         let untouched = StreamConfig {
@@ -327,13 +327,12 @@ mod tests {
     }
 
     #[test]
-    fn a_link_that_can_ask_for_a_key_frame_is_not_sent_one_every_second() {
+    fn key_frames_on_request_only() {
         // A periodic IDR bounds recovery where the receiver cannot ask. Cast
         // can: it sends a picture loss indication and the sender answers, and
-        // NACK repairs loss before that. Scheduling one a second as well only
-        // makes the picture pulse — each IDR is a whole picture inside a
-        // rate-control budget a few frames wide, so it lands softer than its
-        // neighbours and they sharpen it again.
+        // NACK repairs loss before that. A scheduled IDR on top makes the
+        // picture pulse: each IDR is a whole picture inside a rate-control
+        // budget a few frames wide, so it lands softer than its neighbours.
         let direct = StreamConfig {
             fps: 60,
             ..Default::default()
@@ -384,7 +383,7 @@ mod tests {
     }
 
     #[test]
-    fn a_rate_control_buffer_is_asked_for_or_left_alone() {
+    fn rate_control_buffer_is_optional() {
         // The arithmetic is pinned because it crosses two units and getting it
         // wrong shows up only as a picture that takes too long to change.
         let cfg = StreamConfig {
@@ -436,7 +435,7 @@ mod tests {
     }
 
     #[test]
-    fn openh264_bitrate_is_in_bits_per_second() {
+    fn openh264_bitrate_is_bits_per_second() {
         // `openh264enc` measures bitrate in bit/s; fed kbit/s, the software
         // fallback sends 10 kbit/s of unrecognisable picture.
         let cfg = StreamConfig {
@@ -495,7 +494,7 @@ mod tests {
     }
 
     #[test]
-    fn low_latency_encoders_use_the_automatic_minimum() {
+    fn low_latency_uses_automatic_minimum() {
         // A fixed latency below the pipeline's own minimum leaves the sink
         // receiving data and showing black, so automatic is the default.
         for enc in [
@@ -519,7 +518,7 @@ mod tests {
     }
 
     #[test]
-    fn the_software_encoder_is_not_cut_into_a_slice_per_core() {
+    fn x264_slice_count_is_bounded() {
         // `threads` is also the slice count, and `0` means one per core: on a
         // large machine, a dozen slices a frame that cost bits and buy no
         // throughput.
@@ -548,7 +547,7 @@ mod tests {
     }
 
     #[test]
-    fn hardware_encoders_are_told_to_emit_one_slice() {
+    fn hardware_encoders_emit_one_slice() {
         // These take an explicit slice count, so here the interoperability
         // requirement is something we can actually ask for.
         for enc in [H264Encoder::VaH264, H264Encoder::VaapiH264] {
@@ -566,7 +565,7 @@ mod tests {
     }
 
     #[test]
-    fn cast_high_selects_v4l2_high_without_changing_default_wfd_control() {
+    fn v4l2_high_profile_is_opt_in() {
         let cfg = StreamConfig {
             profile: H264Profile::High,
             ..Default::default()

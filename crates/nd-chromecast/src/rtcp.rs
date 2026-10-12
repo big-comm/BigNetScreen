@@ -375,7 +375,7 @@ mod tests {
     }
 
     #[test]
-    fn ntp_fraction_scales_to_2_pow_32() {
+    fn ntp_fraction_spans_32_bits() {
         // Half a second must be exactly half of the fractional scale.
         let half = UNIX_EPOCH + Duration::from_millis(500);
         let ntp = ntp_timestamp(half);
@@ -441,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn ignores_rtp_arriving_on_the_same_socket() {
+    fn ignores_rtp_on_shared_socket() {
         // Video RTP: payload type 101, outside the RTCP range.
         let mut rtp = vec![0x80, 101];
         rtp.resize(40, 0);
@@ -467,7 +467,7 @@ mod tests {
     }
 
     #[test]
-    fn walks_every_block_of_a_compound_packet() {
+    fn walks_every_compound_block() {
         // A real packet from the receiver carries several concatenated
         // blocks; looking only at the first hid the feedback with the NACKs.
         let mut packet = block(0x81, PT_RECEIVER_REPORT, 7);
@@ -492,7 +492,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_a_valid_prefix_followed_by_a_truncated_block() {
+    fn rejects_truncated_trailing_block() {
         let mut packet = block(0x80, PT_RECEIVER_REPORT, 1);
         // A block that declares more than exists.
         packet.extend_from_slice(&[0x80, PT_PAYLOAD_SPECIFIC, 0xFF, 0xFF]);
@@ -540,7 +540,7 @@ mod tests {
     }
 
     #[test]
-    fn the_bitmask_expands_to_the_following_packets() {
+    fn bitmask_expands_to_following_packets() {
         // bits 0 and 1 flag packets 6 and 7 in addition to 5.
         let nack = Nack {
             frame_id: 1,
@@ -558,7 +558,7 @@ mod tests {
     }
 
     #[test]
-    fn a_whole_frame_request_has_no_packet_list() {
+    fn whole_frame_request_lists_no_packets() {
         let nack = Nack {
             frame_id: 9,
             packet_id: 0xFFFF,
@@ -568,7 +568,7 @@ mod tests {
     }
 
     #[test]
-    fn finds_the_feedback_inside_a_compound_packet() {
+    fn finds_feedback_in_compound_packet() {
         // Feedback rarely arrives alone.
         let mut packet = vec![0x81, PT_RECEIVER_REPORT, 0x00, 0x07];
         packet.resize(32, 0);
@@ -578,7 +578,7 @@ mod tests {
     }
 
     #[test]
-    fn ignores_payload_specific_blocks_without_the_cast_word() {
+    fn ignores_psfb_without_cast_word() {
         // A key-frame request is payload-specific too, but carries no "CAST"
         // and must not be read as feedback.
         let mut pli = vec![0x81, PT_PAYLOAD_SPECIFIC, 0x00, 0x02];
@@ -587,14 +587,14 @@ mod tests {
     }
 
     #[test]
-    fn a_truncated_loss_list_does_not_panic() {
+    fn truncated_loss_list_is_safe() {
         let mut block = feedback_block(1, &[(2, 0, 0)]);
         block.truncate(block.len() - 2);
         // No partial ACK/NACK state may escape a malformed packet.
         assert!(parse_cast_feedback(&block).is_none());
     }
     #[test]
-    fn every_truncation_and_malformed_tail_is_rejected_atomically() {
+    fn malformed_tails_rejected_atomically() {
         let valid = feedback_block(42, &[(43, 1, 3)]);
         for end in 0..valid.len() {
             assert!(parse_cast_feedback(&valid[..end]).is_none(), "prefix {end}");
@@ -615,7 +615,7 @@ mod tests {
     }
 
     #[test]
-    fn padding_is_removed_and_must_be_final_and_nonzero() {
+    fn padding_must_be_final_and_nonzero() {
         let mut packet = feedback_block(42, &[]);
         packet[0] |= 0x20;
         packet[3] += 1;
@@ -632,7 +632,7 @@ mod tests {
     }
 
     #[test]
-    fn feedback_keeps_receiver_identity_and_multiple_tracks() {
+    fn feedback_keeps_ssrc_and_tracks() {
         let mut packet = feedback_block(42, &[]);
         packet.extend(feedback_block(43, &[]));
         let reports = parse_cast_feedbacks(&packet);
@@ -641,7 +641,7 @@ mod tests {
     }
 
     #[test]
-    fn nack_bitmap_never_wraps_packet_numbers_or_requests_the_sentinel() {
+    fn nack_bitmap_stops_before_wrap() {
         let nack = Nack {
             frame_id: 0,
             packet_id: 0xfffe,

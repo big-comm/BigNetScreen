@@ -393,7 +393,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn finite_video_with_or_without_audio_keeps_frames_and_ends() {
+    async fn finite_video_keeps_frames_and_ends() {
         use futures::StreamExt;
         init().unwrap();
         for with_audio in [false, true] {
@@ -452,7 +452,7 @@ mod tests {
     }
 
     #[test]
-    fn a_pipeline_guard_leaves_the_pipeline_in_null() {
+    fn pipeline_guard_sets_null() {
         // A pipeline dropped while playing leaves its elements running.
         init().expect("gstreamer");
         let pipeline = gst::parse::launch("fakesrc num-buffers=1 ! fakesink")
@@ -474,7 +474,7 @@ mod tests {
     }
 
     #[test]
-    fn the_profile_travels_with_the_path_and_takes_cabac_with_it() {
+    fn profile_carries_cabac_setting() {
         // Constrained baseline forbids CABAC, so the two must never be set
         // apart: a "high" profile encoded without CABAC would throw away most
         // of what raising it was for, and nothing would report the mistake.
@@ -540,7 +540,7 @@ mod tests {
     }
 
     #[test]
-    fn every_h264_path_gets_the_same_capture_and_encode_stage() {
+    fn h264_paths_share_capture_stage() {
         // The three H.264 paths differ in what they do with the result (Cast
         // mirroring sends access units, Cast HTTP and Miracast mux) and not in
         // how the picture reaches the encoder, so they share that stage.

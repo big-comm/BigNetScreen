@@ -3,8 +3,7 @@
 //! The session path has three places where a television can disagree with us
 //! and only one of them shows up in the service's log as anything but a
 //! timeout: discovery, the description, and each SOAP action. This runs them
-//! in order and prints what came back, which is how the `Content-Length`
-//! framing bug was found.
+//! in order and prints what came back.
 //!
 //! ```sh
 //! cargo run -p nd-dlna --example dlna_probe

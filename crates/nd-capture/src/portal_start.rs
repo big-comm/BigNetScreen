@@ -149,7 +149,7 @@ mod tests {
     }
 
     #[test]
-    fn preserves_full_u64_serial_without_node_id_conversion() {
+    fn full_u64_serial_is_preserved() {
         let serial = u64::from(u32::MAX) + 123;
         let s = parse_response(0, response(Some(serial.into()), (1920, 1080), 1)).unwrap();
         assert_eq!(s.node_id, 42);
@@ -157,7 +157,7 @@ mod tests {
         assert_eq!(s.size, Some((1920, 1080)));
     }
     #[test]
-    fn older_portals_keep_the_explicit_node_id() {
+    fn older_portals_keep_node_id() {
         assert_eq!(
             parse_response(0, response(None, (1280, 720), 1))
                 .unwrap()
@@ -166,12 +166,12 @@ mod tests {
         );
     }
     #[test]
-    fn malformed_serial_never_falls_back_to_a_reusable_id() {
+    fn malformed_serial_fails_closed() {
         assert!(parse_response(0, response(Some(0u64.into()), (10, 10), 1)).is_err());
         assert!(parse_response(0, response(Some(42u32.into()), (10, 10), 1)).is_err());
     }
     #[test]
-    fn rejects_ambiguous_streams_bad_sizes_and_cancelled_requests() {
+    fn rejects_invalid_portal_responses() {
         for count in [0, 2] {
             assert!(parse_response(0, response(None, (10, 10), count)).is_err());
         }

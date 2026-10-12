@@ -117,10 +117,9 @@ impl Engine {
             settings: self.settings.clone(),
             last_client_activity: self.last_client_activity,
         };
-        // Only when something actually moved. This runs every poll tick, and
-        // `send_replace` would wake every watcher two and a half times a second
-        // to be told nothing changed — including the task that decides the
-        // service has been idle long enough to leave.
+        // Only when something moved. This runs every poll tick, and
+        // `send_replace` would wake every watcher on each tick, including the
+        // task that decides the service has been idle long enough to leave.
         self.snapshots.send_if_modified(|current| {
             if *current == next {
                 return false;
@@ -166,7 +165,7 @@ mod tests {
     use crate::engine::tests::sink;
 
     #[test]
-    fn a_receiver_refused_while_sending_files_says_so_on_its_row() {
+    fn file_refusal_shows_on_row() {
         let (tx, snapshots) = watch::channel(Snapshot::initial(Settings::default()));
         let mut engine = Engine::new(tx);
         engine.registry.insert("a".into(), sink("a"));

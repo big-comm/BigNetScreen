@@ -45,14 +45,14 @@ impl CastChannel {
 
     /// Tells the receiver app to play a file from this computer.
     ///
-    /// Deliberately not [`Self::load_media`], which describes the live
-    /// stream. Two differences decide whether the file plays properly:
+    /// [`Self::load_media`] describes the live stream instead. Two
+    /// differences decide whether the file plays properly:
     ///
     /// - `streamType: BUFFERED`. A file has a beginning and an end, so the
     ///   receiver may buffer ahead and offer a position bar. Declared `LIVE`,
     ///   as mirroring is, the receiver refuses to seek and shows no duration;
-    /// - metadata. Without it the receiver shows a bare URL — the token and
-    ///   an index — which tells the room nothing. `metadataType` 0 is the
+    /// - metadata. Without it the receiver shows a bare URL (the token and
+    ///   an index). `metadataType` 0 is the
     ///   generic one, understood by every receiver.
     pub async fn load_item(
         &self,

@@ -202,7 +202,7 @@ mod tests {
     use crate::pipeline::init;
 
     #[test]
-    fn diagnostics_map_the_encoder_pts_offset_through_its_segment() {
+    fn encoder_pts_maps_through_segment() {
         init().unwrap();
         let pad = gst::Pad::builder(gst::PadDirection::Src).build();
         pad.set_active(true).unwrap();

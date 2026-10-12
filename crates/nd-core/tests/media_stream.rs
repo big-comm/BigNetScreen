@@ -10,7 +10,7 @@ use gstreamer as gst;
 use nd_core::pipeline::{self, AudioSource, PipelineGuard, StreamConfig, VideoSource, VideoTarget};
 
 #[test]
-fn a_file_stream_announces_its_picture_in_the_first_program_table() {
+fn first_pmt_announces_the_picture() {
     pipeline::init().unwrap();
     let path = std::env::temp_dir().join(format!("nd-first-pmt-{}.webm", std::process::id()));
     write_fixture(&format!(
@@ -69,7 +69,7 @@ fn a_file_stream_announces_its_picture_in_the_first_program_table() {
 }
 
 #[test]
-fn the_position_is_what_is_playing_not_what_was_read() {
+fn position_tracks_playback() {
     use nd_core::media::{FilePlaybackControl, MediaKind, MediaSource, PlaybackStart};
     pipeline::init().unwrap();
     let path = std::env::temp_dir().join(format!("nd-position-{}.webm", std::process::id()));
@@ -117,7 +117,7 @@ fn the_position_is_what_is_playing_not_what_was_read() {
 }
 
 #[test]
-fn the_original_size_is_read_from_the_file() {
+fn original_size_comes_from_file() {
     use nd_core::media::{MediaSource, tv_frame};
     pipeline::init().unwrap();
     let path = std::env::temp_dir().join(format!("nd-tv-frame-{}.webm", std::process::id()));

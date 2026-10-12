@@ -319,7 +319,7 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn video_preview_has_real_pixels_duration_and_original_aspect_ratio() {
+    fn video_preview_keeps_pixels_and_aspect() {
         let path =
             std::env::temp_dir().join(format!("bns-video-preview-{}.webm", std::process::id()));
         fixture(&path, true, false);
@@ -348,7 +348,7 @@ pub(super) mod tests {
 
     #[test]
     #[ignore = "requires an image loader with a working sandbox (bwrap or Flatpak)"]
-    fn music_preview_uses_embedded_cover_and_metadata() {
+    fn music_preview_uses_embedded_tags() {
         let path =
             std::env::temp_dir().join(format!("bns-audio-preview-{}.ogg", std::process::id()));
         fixture(&path, false, true);

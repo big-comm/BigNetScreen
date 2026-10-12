@@ -18,7 +18,7 @@ pub enum SinkKind {
     WebRtc,
     /// Google Chromecast (mDNS + Cast + HTTP).
     Chromecast,
-    /// A DLNA/UPnP renderer — the televisions that predate Cast (SSDP +
+    /// A DLNA/UPnP renderer: the televisions that predate Cast (SSDP +
     /// AVTransport + the same MPEG-TS over HTTP).
     Dlna,
     /// Apple AirPlay (mDNS). Discovered, but casting is out of scope.
@@ -119,10 +119,9 @@ pub struct SinkStatus {
 
 /// What the session actually settled on, once it has settled on it.
 ///
-/// Every field here is **negotiated, not requested**. A receiver that agreed to
-/// 1280x720 while the preference asked for 1080p is described by what it
-/// agreed to, because that is what is on the wall. Showing the request instead
-/// would be a number the interface made up.
+/// Every field is what was negotiated rather than requested: a receiver that
+/// agreed to 1280x720 while the preference asked for 1080p is described by
+/// 1280x720, because that is what is on the wall.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StreamLink {
     pub width: u32,
@@ -201,7 +200,7 @@ impl SinkStatus {
     /// Records what the session negotiated.
     ///
     /// Called by the protocol once, after negotiation and before the first
-    /// frame — the point at which the numbers stop being a request.
+    /// frame, when the numbers stop being a request.
     pub fn set_link(&self, link: StreamLink) {
         tracing::info!(?link, "session negotiated");
         self.inner
@@ -225,8 +224,8 @@ impl SinkStatus {
 
     /// Changes the state.
     ///
-    /// An error state is **not** overwritten by `Disconnected`: that is how the
-    /// reason for a failure survives long enough for the user to read it. Use
+    /// An error state is kept over `Disconnected`, so the reason for a failure
+    /// survives long enough for the user to read it. Use
     /// [`Self::reset`] to clear it explicitly.
     pub fn set(&self, state: SinkState) {
         let mut guard = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
@@ -274,7 +273,7 @@ pub struct SinkInfo {
     pub address: Option<String>,
 }
 
-/// How a receiver joins a session that **we** host.
+/// How a receiver joins a session that we host.
 ///
 /// Most protocols push to a receiver the person picked. A published stream
 /// works the other way round: the receiver comes to us, and needs an address
@@ -311,7 +310,7 @@ pub trait Sink: Send + Sync {
         None
     }
 
-    /// A renderer that can be handed a file's URL and driven over UPnP — a
+    /// A renderer that can be handed a file's URL and driven over UPnP: a
     /// DLNA television. `None` for every other kind of receiver.
     fn upnp_renderer(&self) -> Option<UpnpRenderer> {
         None
@@ -344,7 +343,7 @@ pub trait Sink: Send + Sync {
     /// The largest capture this protocol can carry, when it has a fixed limit.
     ///
     /// Read before the capture opens, so it is the protocol's own ceiling and
-    /// not the mode a particular receiver negotiated — that is only known once
+    /// not the mode a particular receiver negotiated; that is only known once
     /// the session is up, and by then the screen exists. `None` for a protocol
     /// that carries whatever it is given.
     fn max_source_size(&self) -> Option<(u32, u32)> {
@@ -359,11 +358,8 @@ pub trait Sink: Send + Sync {
 }
 
 /// Sanitises a name coming off the network (mDNS/P2P) before displaying it or
-/// passing it as an argument to another process.
-///
-/// Debt carried over from the C code, where the announced name went raw into
-/// the PulseAudio module's arguments — trivial injection from any machine on
-/// the LAN.
+/// passing it as an argument to another process: any machine on the LAN
+/// chooses what it announces.
 pub fn sanitize_name(raw: &str) -> String {
     const MAX_CHARS: usize = 64;
     let cleaned: String = raw
@@ -385,7 +381,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn error_state_is_not_masked_by_disconnect() {
+    fn disconnect_keeps_error_state() {
         // A teardown that reports `Disconnected` must not hide why it failed.
         let status = SinkStatus::new();
         status.fail("no route to host");
@@ -422,7 +418,7 @@ mod tests {
     }
 
     #[test]
-    fn airplay_is_discovered_but_not_castable() {
+    fn only_airplay_is_uncastable() {
         assert!(!SinkKind::AirPlay.is_castable());
         assert!(SinkKind::Chromecast.is_castable());
         assert!(SinkKind::WfdP2p.is_castable());

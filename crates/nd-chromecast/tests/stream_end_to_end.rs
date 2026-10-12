@@ -66,7 +66,7 @@ async fn read_http_response(stream: &mut TcpStream, want: usize) -> (String, Vec
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn serves_real_mpegts_bytes_to_the_receiver() {
+async fn serves_mpegts_to_the_receiver() {
     assert!(
         media_stack_available(),
         "DEPENDENCY: GStreamer Cast media plugins are required"

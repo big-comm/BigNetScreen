@@ -55,9 +55,7 @@ pub async fn run(
     //
     // Failing here ends the cast rather than falling back. Asking to send
     // only what was routed to the card and being given the whole computer's
-    // sound instead is the one outcome worse than not transmitting: it is a
-    // notification, or a private call, leaving the machine. Better to say why
-    // now than to be quietly wrong.
+    // sound instead would send notifications or a private call off the machine.
     let settings = nd_core::settings::current();
     if settings.system_audio
         && settings.virtual_audio

@@ -5,7 +5,7 @@
 //! `GetTransportInfo` to notice when the television was turned off or the
 //! viewer pressed stop on its own remote. A file transmission adds `Pause`.
 //!
-//! A file the renderer plays itself — sent as it is, not as our stream — adds
+//! A file the renderer plays itself, sent as it is rather than as our stream, adds
 //! [`set_file`], [`seek`] and [`position`]: the renderer fetches it, seeks in
 //! it and knows where it is, so those questions go to it.
 //!
@@ -49,8 +49,8 @@ impl TransportState {
 ///
 /// Sent before `SetAVTransportURI`, not only at the end: a renderer already
 /// playing something may refuse a new URI, and this is cheaper than finding
-/// out from a SOAP fault. A failure here is not worth aborting for — there may
-/// have been nothing to stop.
+/// out from a SOAP fault. A failure here does not abort: there may have been
+/// nothing to stop.
 pub async fn stop(control: &Endpoint) -> Result<()> {
     upnp::soap(control, SERVICE_TYPE, "Stop", "<InstanceID>0</InstanceID>").await?;
     Ok(())
@@ -58,11 +58,10 @@ pub async fn stop(control: &Endpoint) -> Result<()> {
 
 /// Hands the renderer the stream's address.
 ///
-/// The metadata is not decoration. A renderer reads `protocolInfo` from it to
-/// decide how to treat the body, and the same DLNA flags that go in the HTTP
-/// response belong here too — one says what the response is, the other says
-/// what the item is, and a renderer that sees them disagree believes the
-/// metadata.
+/// A renderer reads `protocolInfo` from the metadata to decide how to treat
+/// the body, so the DLNA flags of the HTTP response go here too: one says what
+/// the response is, the other what the item is, and a renderer that sees them
+/// disagree believes the metadata.
 pub async fn set_uri(
     control: &Endpoint,
     url: &str,
@@ -262,7 +261,7 @@ mod tests {
     use nd_core::stream_server::{DLNA_FILE_MEDIA, DLNA_MEDIA};
 
     #[test]
-    fn a_file_stream_says_the_renderer_may_pause_it() {
+    fn file_stream_allows_pause() {
         let didl = stream_didl("http://x/y", "BigNetScreen", None, DLNA_FILE_MEDIA);
         assert!(
             didl.contains("DLNA.ORG_OP=00;DLNA.ORG_FLAGS=8d300000"),
@@ -276,7 +275,7 @@ mod tests {
     }
 
     #[test]
-    fn the_item_describes_a_live_stream_with_no_seeking() {
+    fn live_item_disallows_seeking() {
         let didl = stream_didl(
             "http://192.168.1.41:7236/abc",
             "BigNetScreen",
@@ -296,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn a_hostile_screen_name_cannot_forge_an_item() {
+    fn hostile_screen_name_is_escaped() {
         // The title reaches here from the user's settings, and the URL from
         // our own server, but neither is a reason to skip escaping: one
         // unescaped `<` ends the element early and the rest is anyone's.
@@ -316,7 +315,7 @@ mod tests {
     }
 
     #[test]
-    fn a_file_item_escapes_every_value_it_carries() {
+    fn file_item_escapes_every_value() {
         let didl = file_didl(
             "http://x/a?b&c",
             "Tom & Jerry",

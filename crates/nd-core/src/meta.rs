@@ -154,7 +154,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn one_failing_provider_does_not_kill_the_others() {
+    async fn failing_provider_spares_others() {
         let meta = MetaProvider::new(vec![Arc::new(FailingProvider), Arc::new(OneSinkProvider)]);
         let events = meta.discover().await.collect::<Vec<_>>().await;
         assert!(
@@ -178,7 +178,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_stalled_provider_does_not_delay_other_receivers() {
+    async fn stalled_provider_delays_nobody() {
         let meta = MetaProvider::new(vec![Arc::new(StalledProvider), Arc::new(OneSinkProvider)]);
         let mut events = meta.discover().await;
         tokio::time::timeout(std::time::Duration::from_secs(1), async {

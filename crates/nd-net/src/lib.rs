@@ -69,7 +69,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn missing_sysfs_is_not_fatal() {
+    fn missing_sysfs_means_unknown_driver() {
         assert_eq!(
             detect_gpu_driver_in(Path::new("/definitely/does/not/exist")),
             GpuDriver::Unknown
@@ -77,7 +77,7 @@ mod tests {
     }
 
     #[test]
-    fn the_first_card_with_a_known_driver_wins() {
+    fn first_known_driver_wins() {
         use std::os::unix::fs::symlink;
         let root = std::env::temp_dir().join(format!("nd-net-drm-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);

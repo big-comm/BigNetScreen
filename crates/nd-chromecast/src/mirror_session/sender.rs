@@ -532,10 +532,8 @@ impl StreamSender {
 /// Watches how regular the output is.
 ///
 /// It exists to separate two explanations that sound identical to a listener
-/// ("the sound stutters"): either the hole already comes from the pipeline —
-/// in which case the frames' timestamps jump — or the hole is ours, because
-/// the sender thread was late. Without measuring, both cases lead to the wrong
-/// fix.
+/// ("the sound stutters"): either the hole comes from the pipeline, and the
+/// frames' timestamps jump, or the sender thread was late.
 #[derive(Debug, Default)]
 pub(super) struct FlowWatch {
     /// The previous frame's timestamp (ns).
@@ -619,7 +617,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn encoded_pts_is_converted_through_its_segment() {
+    fn pts_converted_through_segment() {
         gst::init().unwrap();
         let offset = gst::ClockTime::from_seconds(1000 * 3600);
         let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
@@ -640,7 +638,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_pts_is_not_silently_sent_as_time_zero() {
+    fn missing_pts_is_an_error() {
         gst::init().unwrap();
         let buffer = gst::Buffer::new();
         let segment = gst::FormattedSegment::<gst::ClockTime>::new();
@@ -652,7 +650,7 @@ mod tests {
     }
 
     #[test]
-    fn flow_gap_detection_respects_configured_video_fps() {
+    fn flow_gap_follows_video_fps() {
         for (fps, expected_jumps) in [(24, 0), (30, 0), (60, 1)] {
             let mut flow = FlowWatch::default();
             let interval = video_frame_interval(fps);
@@ -663,7 +661,7 @@ mod tests {
     }
 
     #[test]
-    fn flow_tolerates_two_video_frames_with_timestamp_rounding() {
+    fn flow_tolerates_timestamp_rounding() {
         for fps in [24, 30, 60, 120, 144] {
             let mut flow = FlowWatch::default();
             let interval = video_frame_interval(fps);
@@ -708,7 +706,7 @@ mod tests {
     }
 
     #[test]
-    fn the_history_covers_everything_that_can_still_be_asked_for() {
+    fn history_covers_repairable_frames() {
         // The sender never runs further ahead than the window, so a frame
         // outside the history is a frame the receiver has already given up on.
         // If the history were shorter, requests would expire while the frame
@@ -720,7 +718,7 @@ mod tests {
     }
 
     #[test]
-    fn history_expires_by_age_not_by_count() {
+    fn history_expires_by_age() {
         // Video at 30 fps: 2 s holds ~60 frames, well under the cap. Age is
         // what governs here, not the count.
         let step = Duration::from_millis(33);
@@ -733,7 +731,7 @@ mod tests {
     }
 
     #[test]
-    fn unacknowledged_frames_do_not_expire_while_the_window_is_full() {
+    fn full_window_keeps_unacked_frames() {
         let (mut history, now) = history_of(120, Duration::from_millis(100));
         prune_history(&mut history, now, -1);
         assert_eq!(history.len(), 120);
@@ -741,7 +739,7 @@ mod tests {
     }
 
     #[test]
-    fn rtp_ticks_follow_the_stream_time_base_through_long_sessions() {
+    fn rtp_ticks_follow_stream_time_base() {
         let second = 1_000_000_000;
         assert_eq!(rtp_ticks(second, mirror::VIDEO_TIME_BASE), 90_000);
         assert_eq!(rtp_ticks(second, mirror::AUDIO_TIME_BASE), 48_000);
@@ -756,7 +754,7 @@ mod tests {
     }
 
     #[test]
-    fn corrected_sender_reports_are_default_and_can_be_disabled_explicitly() {
+    fn corrected_sender_reports_default_on() {
         assert!(resolve_rtcp_enabled(None));
         assert!(resolve_rtcp_enabled(Some("1")));
         for value in ["0", "false", "OFF", "no"] {
@@ -812,7 +810,7 @@ mod tests {
     }
 
     #[test]
-    fn video_dropped_for_a_full_window_resumes_only_at_a_key_frame() {
+    fn dropped_video_resumes_at_key_frame() {
         let (mut sender, frames, peer, pipeline) = video_sender();
         let window = MAX_UNACKED_FRAMES;
         for index in 0..u64::from(window) {

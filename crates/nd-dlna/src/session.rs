@@ -2,17 +2,16 @@
 //!
 //! ## The order matters
 //!
-//! 1. **the stream server listening**;
-//! 2. **the pipeline built and in `Ready`**: `multisocketsink` refuses `add`
-//!    while the pipeline is in `Null`, and refuses it with nothing louder than
-//!    a warning — the renderer would get zero bytes and the session would fail
-//!    with everything apparently fine;
-//! 3. **the server accepting**, and only then `Stop`, `SetAVTransportURI`,
-//!    `Play` — *concurrently*, because a Panasonic fetches the URL from inside
-//!    `SetAVTransportURI` rather than after `Play`. Handing it over first and
-//!    serving afterwards deadlocks the handshake against our own accept loop;
-//! 4. the renderer opens the `GET`; the socket goes to the sink and **only
-//!    then** does the pipeline move to `Playing`.
+//! 1. the stream server listening;
+//! 2. the pipeline built and in `Ready`: `multisocketsink` refuses `add`
+//!    while the pipeline is in `Null` with only a warning, and the renderer
+//!    then gets zero bytes;
+//! 3. the server accepting, and only then `Stop`, `SetAVTransportURI` and
+//!    `Play`, concurrently with serving, because a Panasonic fetches the URL
+//!    from inside `SetAVTransportURI` rather than after `Play`. Handing it over
+//!    first and serving afterwards deadlocks against our own accept loop;
+//! 4. the renderer opens the `GET`; the socket goes to the sink and only then
+//!    does the pipeline move to `Playing`.
 //!
 //! Going to `Playing` before there is a client burns the first keyframe into
 //! nothing and delays the picture by a whole GOP.
@@ -70,9 +69,8 @@ const PAUSE_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 /// What the renderer shows as the item's title.
 ///
-/// Not translated, and deliberately so: the service runs with whatever
-/// environment D-Bus activation gave it, and this string is read off a
-/// television, not out of a window.
+/// Not translated: the service runs with whatever environment D-Bus
+/// activation gave it, and this string is read off a television.
 const ITEM_TITLE: &str = "BigNetScreen";
 
 pub async fn run(
@@ -194,14 +192,12 @@ async fn stream(
 
 /// Hands the renderer the URL and serves it until the session is over.
 ///
-/// **The handshake runs while the server is already accepting**, and that
-/// ordering is the whole reason this is one function. A Panasonic fetches the
-/// URL from inside `SetAVTransportURI` — proven by pointing it at an
-/// unreachable address, which came back `500` with UPnP `errorCode 716,
-/// Resource not found`, a verdict it could only have reached by trying. Doing
-/// the handshake first and serving afterwards means nobody accepts that
-/// connection: the television waits, the SOAP call times out, and the session
-/// dies with a network error that names the wrong culprit.
+/// The handshake runs while the server is already accepting, which is why this
+/// is one function. A Panasonic fetches the URL from inside
+/// `SetAVTransportURI` (an unreachable URL answers `500` with UPnP
+/// `errorCode 716, Resource not found`). Handshaking first and serving
+/// afterwards leaves that connection unaccepted: the SOAP call times out and
+/// the session fails with a network error.
 async fn serve_until_over(
     server: &StreamServer,
     gst_pipeline: &gst::Pipeline,
@@ -728,7 +724,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_pause_from_the_remote_holds_the_file_until_the_renderer_plays() {
+    async fn remote_pause_holds_the_file() {
         use std::sync::atomic::{AtomicBool, Ordering};
         pipeline::init().unwrap();
         let file = gst::parse::launch("videotestsrc is-live=true ! fakesink")
@@ -813,7 +809,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn delayed_renderer_get_reports_actual_pixels_and_stays_streaming() {
+    async fn delayed_get_reports_actual_pixels() {
         let path = test_film("delayed", 12);
         let playback = nd_core::media::FilePlaybackControl::default();
         let source = CaptureSource::media_file(

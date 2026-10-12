@@ -3,11 +3,11 @@
 //! Two concrete implementations (in the `nd-capture` crate) behind the same
 //! trait, picked at runtime according to the environment:
 //!
-//! - **Portal** (`ashpd` / xdg-desktop-portal `ScreenCast`): mandatory under
+//! - Portal (`ashpd` / xdg-desktop-portal `ScreenCast`): mandatory under
 //!   Flatpak, and works on any desktop (KDE, GNOME, …).
-//! - **Mutter directly** (`org.gnome.Mutter.ScreenCast` over D-Bus): the
+//! - Mutter directly (`org.gnome.Mutter.ScreenCast` over D-Bus): the
 //!   lowest-latency path on native GNOME, and the one that can capture a
-//!   **virtual monitor**.
+//!   virtual monitor.
 //!
 //! This split is what makes the "native + Flatpak" goal possible without
 //! `#ifdef`s scattered through the code.
@@ -26,7 +26,7 @@ pub enum SourceType {
     Monitor,
     /// One specific window (needs a backend with window-capture support).
     Window,
-    /// A **virtual** monitor created on demand (Mutter path; ideal for WFD).
+    /// A virtual monitor created on demand (Mutter path; ideal for WFD).
     Virtual,
 }
 
@@ -34,7 +34,7 @@ pub enum SourceType {
 ///
 /// Prefer `pipewire_serial` when provided by the portal. The legacy node ID
 /// is retained for older portals and the direct Mutter API.
-/// `pipewire_fd` is the remote descriptor handed over by the portal — under
+/// `pipewire_fd` is the remote descriptor handed over by the portal; under
 /// Flatpak there is no other way. Mutter directly hands over no descriptor: the
 /// node lives in the session's own PipeWire daemon, and the field is `None`.
 #[derive(Debug)]
@@ -56,7 +56,7 @@ pub struct CaptureSource {
     /// receiver in place of the screen.
     ///
     /// Modelled here rather than as a separate kind of session because every
-    /// protocol already knows how to send "a source" — making a file one of
+    /// protocol already knows how to send "a source": making a file one of
     /// those means Miracast, Cast mirroring, the resolution caps and the stop
     /// button all keep working with no changes of their own.
     pub media: Option<MediaPlayback>,
@@ -101,8 +101,8 @@ impl CaptureSource {
     /// The sound that goes with this source.
     ///
     /// A file brings its own; a screen capture takes whatever the preferences
-    /// say. Deciding it here keeps the two from disagreeing — sending a film
-    /// with the computer's system audio over it is not what anyone meant.
+    /// say. Deciding it here keeps the two from disagreeing: a film never
+    /// goes out with the computer's system audio over it.
     pub fn audio_source(&self) -> crate::pipeline::AudioSource {
         match &self.media {
             Some(_) => crate::pipeline::AudioSource::MediaFile,
@@ -178,7 +178,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stable_serial_reaches_pipeline_without_legacy_node_target() {
+    fn serial_reaches_pipeline_without_node() {
         let source = CaptureSource {
             pipewire_fd: None,
             node_id: 42,
@@ -197,7 +197,7 @@ mod tests {
     }
 
     #[test]
-    fn a_declared_size_is_preferred_over_the_caller_s_guess() {
+    fn declared_size_beats_caller_guess() {
         let source = CaptureSource::media_file(
             MediaPlayback {
                 control: None,

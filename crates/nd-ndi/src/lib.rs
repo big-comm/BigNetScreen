@@ -282,7 +282,7 @@ mod tests {
     }
 
     #[test]
-    fn bundled_plugin_registers_without_a_system_plugin_or_runtime() {
+    fn bundled_plugin_registers_standalone() {
         assert!(available());
         assert!(available());
         let plugin = gst::Registry::get().find_plugin("ndi").unwrap();
@@ -424,7 +424,7 @@ mod tests {
     }
 
     #[test]
-    fn without_audio_the_video_skips_the_combiner() {
+    fn video_only_skips_combiner() {
         let silent = description(&pipeline::VideoSource::Test, None, (1280, 720), 30);
         assert!(!silent.contains("ndisinkcombiner"), "{silent}");
         assert!(silent.contains("! ndisink name=ndi-output"), "{silent}");
@@ -440,7 +440,7 @@ mod tests {
     }
 
     #[test]
-    fn captured_frames_pass_through_in_their_own_format() {
+    fn captured_frames_keep_their_format() {
         // The screen arrives as BGRx, and forcing UYVY would cost a conversion
         // pass per frame. With the sink's formats listed, `videoconvert` must
         // leave a BGRx stream alone and only convert what the sink cannot take.

@@ -35,7 +35,7 @@ pub const DLNA_MAX_RESOLUTION: (u32, u32) = (1920, 1080);
 const MEDIA_MUX_WAIT_NS: u64 = 1_000_000_000;
 
 /// Builds an H.264 + AAC transport stream for a receiver that fetches it over
-/// HTTP — the Cast fallback and every DLNA renderer.
+/// HTTP: the Cast fallback and every DLNA renderer.
 ///
 /// MPEG-TS is a supported Cast container and the one DLNA profile family a
 /// television is certain to have. Short mux and queue batches bound what the
@@ -108,7 +108,7 @@ mod tests {
     use gstreamer as gst;
 
     #[test]
-    fn dlna_ts_negotiates_physical_pixels_within_the_ceiling() {
+    fn dlna_ts_fits_physical_ceiling() {
         use gst::prelude::*;
 
         for (source, ceiling, expected) in [
@@ -175,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    fn chromecast_sink_does_not_sync_on_the_clock() {
+    fn chromecast_sink_is_unsynced() {
         // `sync=true` on multisocketsink adds an entire pipeline latency
         // before the byte reaches the socket. The source is already live.
         let cfg = StreamConfig::default();

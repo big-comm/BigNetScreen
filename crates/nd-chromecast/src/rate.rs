@@ -8,7 +8,7 @@
 //! floor of 300 kbit, raises by a tenth at a time, and lowers the rate only
 //! when the sender is actually dropping frames, not on any dip in an estimate.
 //!
-//! Two deliberate differences:
+//! Two differences:
 //!
 //! - It starts at the mode's own bitrate, not Chrome's conservative 5 Mbit.
 //!   Starting low costs seconds of visibly worse picture at the top of every
@@ -137,7 +137,7 @@ mod tests {
     }
 
     #[test]
-    fn a_window_spanning_the_packet_counter_wrap_counts_what_was_sent() {
+    fn counter_wrap_counts_sent_packets() {
         let mut baseline = Baseline::default();
         baseline.advance(u32::MAX - 5, 0, 0);
         let window = baseline.advance(10, 2, 1);
@@ -152,7 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn a_session_that_goes_well_is_never_touched() {
+    fn healthy_session_keeps_its_rate() {
         let mut rate = RateControl::new(20_000);
         for _ in 0..50 {
             assert_eq!(rate.observe(healthy()), None);
@@ -161,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    fn the_receiver_falling_behind_lowers_the_rate_at_once() {
+    fn receiver_lag_lowers_rate_at_once() {
         let mut rate = RateControl::new(20_000);
         let behind = Window {
             frames_dropped: 1,
@@ -172,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn the_odd_lost_packet_is_not_congestion() {
+    fn sporadic_loss_keeps_the_rate() {
         // One in a thousand. A link that does this is a link that works.
         let mut rate = RateControl::new(20_000);
         let scratchy = Window {
@@ -186,7 +186,7 @@ mod tests {
     }
 
     #[test]
-    fn sustained_loss_is_congestion_and_the_rate_retreats() {
+    fn sustained_loss_lowers_the_rate() {
         let mut rate = RateControl::new(20_000);
         let lossy = Window {
             packets_resent: 30,
@@ -196,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn the_rate_comes_back_slowly_and_stops_where_it_was_allowed_to() {
+    fn rate_recovers_slowly_to_ceiling() {
         let mut rate = RateControl::new(20_000);
         rate.observe(Window {
             frames_dropped: 1,
@@ -220,7 +220,7 @@ mod tests {
     }
 
     #[test]
-    fn it_never_goes_below_the_floor_however_bad_the_link_gets() {
+    fn rate_stays_above_the_floor() {
         let mut rate = RateControl::new(20_000);
         let awful = Window {
             frames_dropped: 10,
@@ -233,7 +233,7 @@ mod tests {
     }
 
     #[test]
-    fn a_mode_below_the_floor_is_raised_to_it_rather_than_honoured() {
+    fn mode_below_floor_is_raised() {
         // Nothing useful is sent at 100 kbit, and the arithmetic below would
         // have a ceiling under its own floor.
         let rate = RateControl::new(100);
@@ -241,7 +241,7 @@ mod tests {
     }
 
     #[test]
-    fn an_idle_window_is_not_read_as_a_healthy_one_by_accident() {
+    fn idle_window_counts_as_healthy() {
         // Nothing sent, nothing lost: no evidence either way, and the ratio
         // would divide by zero.
         let mut rate = RateControl::new(20_000);
@@ -254,9 +254,9 @@ mod tests {
         for _ in 0..HEALTHY_WINDOWS_BEFORE_RAISING {
             rate.observe(idle);
         }
-        // Silence counts as health here, deliberately: a session with nothing
-        // to send has nothing to be congested about, and holding the rate down
-        // after a quiet patch would punish a still screen.
+        // Silence counts as health: a session with nothing to send has nothing
+        // to be congested about, and holding the rate down after a quiet patch
+        // would punish a still screen.
         assert_eq!(rate.current_kbps, 17_600);
     }
 }

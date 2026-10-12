@@ -79,7 +79,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_radio_is_free_until_someone_asks_for_silence() {
+    async fn radio_free_until_silence_requested() {
         let _lock = exclusive().await;
         assert!(!is_quiet());
         let guard = quiet();
@@ -89,7 +89,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn silence_lasts_while_any_session_is_alive() {
+    async fn silence_lasts_while_sessions_live() {
         let _lock = exclusive().await;
         // Two streams at once: the first one to end must not turn scanning back
         // on and ruin the other.
@@ -102,7 +102,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn waiting_for_the_radio_wakes_up_when_it_frees() {
+    async fn radio_wait_wakes_when_freed() {
         let _lock = exclusive().await;
         let guard = quiet();
         let waiter = tokio::spawn(until_free());

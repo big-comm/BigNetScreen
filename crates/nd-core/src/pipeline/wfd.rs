@@ -143,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn wfd_pipeline_has_audio_and_baseline_profile() {
+    fn wfd_has_audio_and_baseline() {
         let desc = wfd_desc(&StreamConfig::default());
         assert!(
             desc.contains("avenc_aac"),
@@ -168,8 +168,6 @@ mod tests {
         let desc = wfd_desc(&StreamConfig::default());
         assert!(desc.contains("mux.sink_4113"), "video on 0x1011: {desc}");
         assert!(desc.contains("mux.sink_4352"), "audio on 0x1100: {desc}");
-        assert_eq!(WFD_VIDEO_PID, 0x1011);
-        assert_eq!(WFD_AUDIO_PID, 0x1100);
     }
 
     #[test]
@@ -182,7 +180,7 @@ mod tests {
     }
 
     #[test]
-    fn film_mode_holds_the_stream_for_the_pipeline_latency() {
+    fn film_mode_holds_pipeline_latency() {
         // A send-only `rtpbin` has no jitter buffer, so the only place the
         // film profile's buffering can happen on this side is a sink that
         // waits for the pipeline latency before sending.

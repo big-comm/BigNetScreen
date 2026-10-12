@@ -9,7 +9,7 @@
 # this script is for working without it. Both produce the same strings, so only
 # the source references need reconciling afterwards (see below).
 #
-# The `.desktop` and AppStream files are deliberately left out. They carry their
+# The `.desktop` and AppStream files are left out. They carry their
 # translations inline (`Comment[pt_BR]`, `xml:lang="pt_BR"`), which is the normal
 # AppStream convention; feeding them to xgettext would turn the translated
 # variants into source strings.

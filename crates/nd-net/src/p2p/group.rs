@@ -117,7 +117,7 @@ impl P2pDevice {
 
     /// Reads an active connection's state.
     ///
-    /// If the object vanished (the connection dropped — common on the Realtek
+    /// If the object vanished (the connection dropped, common on the Realtek
     /// driver), it returns `Deactivated`. Other D-Bus errors are propagated,
     /// so "the group dropped" stays distinct from "the bus is in trouble".
     pub async fn active_state(&self, active: &OwnedObjectPath) -> Result<ActiveState> {
@@ -134,7 +134,7 @@ impl P2pDevice {
     }
 
     /// The local IPv4 addresses assigned to an active connection (our IP on
-    /// the P2P link — where the WFD RTSP server will listen).
+    /// the P2P link, where the WFD RTSP server will listen).
     pub async fn addresses(&self, active: &OwnedObjectPath) -> Result<Vec<IpAddr>> {
         let ac = self.active_proxy(active).await?;
         // The connection can vanish between reading the state and this call
@@ -179,7 +179,7 @@ impl P2pDevice {
 
     /// The P2P group's network interface name (e.g. `p2p-wlan0-0`).
     ///
-    /// Needed to ask firewalld to open the port **only** on that link, rather
+    /// Needed to ask firewalld to open the port only on that link, rather
     /// than on the whole machine.
     pub async fn interface(&self, active: &OwnedObjectPath) -> Result<Option<String>> {
         let ac = self.active_proxy(active).await?;
@@ -409,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn only_a_group_that_is_already_down_counts_as_torn_down() {
+    fn torn_down_means_already_down() {
         assert!(already_inactive(&method_error(
             "org.freedesktop.NetworkManager.ConnectionNotActive"
         )));
@@ -426,7 +426,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_dropped_cancel_sender_ends_the_wait() {
+    async fn dropped_sender_ends_wait() {
         let (sender, mut cancel) = tokio::sync::watch::channel(false);
         drop(sender);
         let wait = cancelled_during(&mut cancel, Duration::from_millis(200));
@@ -437,7 +437,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_wait_ends_early_only_when_cancelled() {
+    async fn wait_ends_early_on_cancel() {
         let (sender, mut cancel) = tokio::sync::watch::channel(false);
         assert!(!cancelled_during(&mut cancel, Duration::from_millis(10)).await);
         sender.send_replace(true);

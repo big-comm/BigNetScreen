@@ -1,12 +1,12 @@
 //! Wi-Fi Display (Miracast) support.
 //!
-//! **Discovery**: every Wi-Fi Direct peer that advertises Wi-Fi Display
+//! Discovery: every Wi-Fi Direct peer that advertises Wi-Fi Display
 //! (`WfdIEs`) becomes a [`Sink`] in the list. The scan is driven by
-//! NetworkManager **signals** and is **renewed** periodically (NM's
+//! NetworkManager signals and is renewed periodically (NM's
 //! `StartFind` expires after 30 s), reconnecting automatically after a
 //! transient failure.
 //!
-//! **Streaming** ([`rtsp`]): P2P group → firewalld → RTSP server on 7236 →
+//! Streaming ([`rtsp`]): P2P group → firewalld → RTSP server on 7236 →
 //! M1–M7 negotiation → the MPEG-TS/RTP pipeline from `nd_core::pipeline`.
 //!
 //! Unavailable under Flatpak (it depends on NetworkManager on the system bus);
@@ -370,7 +370,7 @@ pub mod cast {
                 return disconnect(&device, &active).await;
             }
 
-            // Radio silence **only once the group is formed**: forming it
+            // Radio silence once the group is formed: forming it
             // depends on the radio being in a searching state, and silencing it
             // earlier would be pulling the bridge out from under us. From here
             // on, going on looking for peers would only disturb the link we
@@ -381,7 +381,7 @@ pub mod cast {
                 run_session(&device, &active, our_ip, source, status, cancel.clone()).await;
             // Always tear the group down, errors and cancellation included.
             // The receiver has to see it go away before it will accept a new
-            // one, which is exactly what the next attempt depends on.
+            // one, and the next attempt depends on that.
             let teardown = disconnect(&device, &active).await;
             drop(quiet);
 
@@ -455,7 +455,7 @@ pub mod cast {
             return Ok(());
         }
         status.set(SinkState::WaitSocket);
-        // Listen **only** on the P2P link's IP: this does not expose the RTSP
+        // Listen on the P2P link's IP only: this does not expose the RTSP
         // port to the rest of the network.
         let listener = TcpListener::bind((our_ip, RTSP_PORT)).await.map_err(|e| {
             NdError::Network(format!("could not listen on {our_ip}:{RTSP_PORT}: {e}"))

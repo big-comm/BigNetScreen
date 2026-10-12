@@ -8,15 +8,15 @@
 //! ```text
 //!   LAUNCH 0F5096E8 ("Chrome Mirroring")
 //!        ↓
-//!   OFFER  (urn:x-cast:com.google.cast.webrtc) — codecs, SSRCs, AES keys
+//!   OFFER  (urn:x-cast:com.google.cast.webrtc): codecs, SSRCs, AES keys
 //!        ↓
-//!   ANSWER — the receiver's UDP port and its SSRCs
+//!   ANSWER: the receiver's UDP port and its SSRCs
 //!        ↓
 //!   RTP/UDP with an AES-CTR-128 encrypted payload
 //! ```
 //!
-//! There is no container, no HTTP server and no media player on the other end
-//! — and therefore none of the pre-buffering that costs seconds.
+//! There is no container, no HTTP server and no media player on the other end,
+//! and therefore none of the pre-buffering that costs seconds.
 //!
 //! The protocol is not proprietary: it is implemented in the
 //! [Open Screen Library](https://chromium.googlesource.com/openscreen/+/HEAD/cast/streaming/),
@@ -59,7 +59,7 @@ const ANSWER_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// The playout delay requested from the receiver, in milliseconds.
 ///
-/// This is the jitter buffer on the other end — the floor of end-to-end
+/// This is the jitter buffer on the other end: the floor of end-to-end
 /// latency on this path. Chrome uses ~150 ms for screen mirroring; below that
 /// the receiver starts stuttering on any network variation. Adjustable because
 /// the sweet spot depends on the network.
@@ -69,7 +69,7 @@ pub const DEFAULT_TARGET_DELAY_MS: u32 = 150;
 ///
 /// This is the Cast equivalent of the Miracast jitter buffer: the receiver
 /// holds frames for this long before showing them, which is what smooths out
-/// uneven arrival — and what delays the pointer by the same amount.
+/// uneven arrival and delays the pointer by the same amount.
 pub fn target_delay_ms() -> u32 {
     let default = nd_core::latency::cast_playout_delay_ms(DEFAULT_TARGET_DELAY_MS);
     resolve_target_delay_ms(
@@ -188,9 +188,9 @@ pub struct Offer {
 /// The bitrate to ask the encoder for.
 ///
 /// What the mode needs, held to what the sender can actually push. The two are
-/// decided independently — the table by resolution and frame rate, the pacer by
-/// what a Wi-Fi queue tolerates — and above 1440p60 the table wins an argument
-/// it cannot deliver. See [`crate::mirror_session::MAX_VIDEO_BITRATE_KBPS`].
+/// decided independently (the table by resolution and frame rate, the pacer by
+/// what a Wi-Fi queue tolerates), and above 1440p60 the table asks for more
+/// than the pacer delivers. See [`crate::mirror_session::MAX_VIDEO_BITRATE_KBPS`].
 pub(crate) fn cast_bitrate_kbps(cfg: &nd_core::pipeline::StreamConfig) -> u32 {
     let ceiling = crate::mirror_session::MAX_VIDEO_BITRATE_KBPS;
     // `BIGNETSCREEN_CAST_BITRATE_KBPS` answers one question the table cannot:
@@ -398,7 +398,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn offer_has_audio_priority_and_only_implemented_extensions() {
+    fn offer_advertises_implemented_extensions_only() {
         let (payload, offer) = build_offer(&MirrorConfig::default(), 1).unwrap();
         let audio = offer.streams.iter().find(|s| !s.is_video).unwrap();
         let video = offer.streams.iter().find(|s| s.is_video).unwrap();
@@ -410,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn target_delay_keeps_profile_defaults_without_a_valid_override() {
+    fn invalid_delay_override_keeps_default() {
         for default in [
             DEFAULT_TARGET_DELAY_MS,
             nd_core::latency::FILM_PLAYOUT_DELAY_MS,
@@ -428,7 +428,7 @@ mod tests {
     }
 
     #[test]
-    fn target_delay_override_is_bounded_for_both_profiles() {
+    fn delay_override_is_bounded() {
         for default in [
             DEFAULT_TARGET_DELAY_MS,
             nd_core::latency::FILM_PLAYOUT_DELAY_MS,
@@ -448,7 +448,7 @@ mod tests {
     }
 
     #[test]
-    fn offer_requests_the_same_delay_for_audio_and_video() {
+    fn offer_shares_audio_video_delay() {
         for value in [None, Some("75"), Some("0"), Some("2000"), Some("invalid")] {
             let cfg = MirrorConfig {
                 target_delay_ms: resolve_target_delay_ms(DEFAULT_TARGET_DELAY_MS, value),
@@ -464,7 +464,7 @@ mod tests {
     }
 
     #[test]
-    fn offer_has_the_fields_the_receiver_requires() {
+    fn offer_has_required_fields() {
         let (payload, offer) = build_offer(&MirrorConfig::default(), 7).unwrap();
         assert_eq!(payload["type"], "OFFER");
         assert_eq!(payload["seqNum"], 7);
@@ -508,7 +508,7 @@ mod tests {
     }
 
     #[test]
-    fn aes_material_is_hex_and_unique_per_stream() {
+    fn aes_keys_are_unique_hex() {
         let (payload, _) = build_offer(&MirrorConfig::default(), 1).unwrap();
         let streams = payload["offer"]["supportedStreams"].as_array().unwrap();
         for stream in streams {
@@ -523,7 +523,7 @@ mod tests {
     }
 
     #[test]
-    fn keys_are_not_leaked_in_debug_output() {
+    fn debug_output_hides_keys() {
         let keys = StreamKeys::random().unwrap();
         let printed = format!("{keys:?}");
         assert!(

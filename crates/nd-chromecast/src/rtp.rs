@@ -111,7 +111,7 @@ impl Packetizer {
     /// Splits a frame into packets ready for the socket.
     pub fn packetize(&mut self, frame: &Frame<'_>) -> Vec<Vec<u8>> {
         let payload_limit = self.max_payload_size();
-        // "At least one packet, even with no payload bytes" — an empty frame
+        // "At least one packet, even with no payload bytes": an empty frame
         // still has to exist in the numbering, or the receiver stalls waiting
         // for it.
         let total = frame.payload.len().div_ceil(payload_limit).max(1);
@@ -192,7 +192,7 @@ mod tests {
     }
 
     #[test]
-    fn key_frame_packet_has_the_right_header() {
+    fn key_frame_header_is_correct() {
         let mut p = Packetizer::new(100_001, 101);
         let payload = vec![0xAB; 100];
         let packets = p.packetize(&Frame {
@@ -247,7 +247,7 @@ mod tests {
     }
 
     #[test]
-    fn frame_ids_are_truncated_to_eight_bits() {
+    fn frame_ids_truncate_to_8_bits() {
         // Ids go past 255 in a long session; the receiver reconstructs the
         // full value, but the field on the wire is 8 bits wide.
         let mut p = Packetizer::new(1, 101);
@@ -262,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn a_large_frame_is_split_and_only_the_last_is_marked() {
+    fn large_frame_marks_last_packet() {
         let mut p = Packetizer::new(1, 101);
         let size = p.max_payload_size() * 3 + 17;
         let payload = vec![0x5A; size];
@@ -294,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_frame_still_produces_one_packet() {
+    fn empty_frame_yields_one_packet() {
         let mut p = Packetizer::new(1, 101);
         let packets = p.packetize(&Frame {
             frame_id: 0,

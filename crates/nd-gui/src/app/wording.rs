@@ -164,7 +164,7 @@ mod tests {
     }
 
     #[test]
-    fn a_shape_the_client_does_not_know_is_shown_rather_than_swallowed() {
+    fn unknown_shape_is_shown() {
         // A newer service could publish a kind this build has no sentence for.
         // Printing the tag beats an empty subtitle that says nothing is wrong.
         let unknown = describe_status(&status("something-new"), &wire::Session::idle());
@@ -172,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn the_negotiated_mode_is_shown_only_once_there_is_one() {
+    fn negotiated_mode_shown_when_known() {
         let mut session = wire::Session::idle();
         session.id = "x".into();
         let mut streaming = status("streaming");
@@ -187,7 +187,7 @@ mod tests {
     }
 
     #[test]
-    fn a_refusal_reads_as_a_sentence_even_wrapped_in_a_bus_error() {
+    fn wrapped_refusal_reads_as_sentence() {
         // zbus prefixes the reason with the error name; the tag is at the end.
         let wrapped = "org.freedesktop.DBus.Error.Failed: unknown-receiver";
         assert_eq!(

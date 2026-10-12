@@ -32,7 +32,7 @@ class TranslationExtraction(unittest.TestCase):
         for patcher in self.patchers:
             self.addCleanup(patcher.stop)
 
-    def test_repeated_extraction_is_identical_and_deduplicates_strings(self):
+    def test_extraction_is_stable_and_deduplicated(self):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(extract.main(), 0)
             first = self.output.read_bytes()
@@ -46,12 +46,12 @@ class TranslationExtraction(unittest.TestCase):
         with patch.dict(os.environ, {"SOURCE_DATE_EPOCH": "0"}):
             self.assertEqual(extract._timestamp(), "1970-01-01 00:00+0000")
 
-    def test_invalid_epoch_is_not_silently_replaced_by_current_time(self):
+    def test_invalid_epoch_is_rejected(self):
         for epoch in ("-1", "not-a-timestamp", "9" * 60):
             with patch.dict(os.environ, {"SOURCE_DATE_EPOCH": epoch}), self.assertRaises(ValueError):
                 extract._timestamp()
 
-    def test_missing_listed_source_does_not_erase_the_existing_template(self):
+    def test_missing_source_keeps_template(self):
         self.output.write_text('"POT-Creation-Date: 2026-09-20 00:00+0000\\n"\nKEEP\n')
         old = self.output.read_bytes()
         (self.root / "src/main.rs").unlink()
@@ -59,7 +59,7 @@ class TranslationExtraction(unittest.TestCase):
             self.assertEqual(extract.main(), 1)
         self.assertEqual(self.output.read_bytes(), old)
 
-    def test_unlisted_source_with_strings_does_not_rewrite_the_template(self):
+    def test_unlisted_source_keeps_template(self):
         self.output.write_text("KEEP\n")
         extra = self.root / "crates/nd-gui/src/extra.rs"
         extra.parent.mkdir(parents=True)

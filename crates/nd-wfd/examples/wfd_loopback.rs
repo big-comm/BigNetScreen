@@ -1,4 +1,4 @@
-//! Diagnostic: runs the **real** WFD pipeline pointed at loopback.
+//! Diagnostic: runs the real WFD pipeline pointed at loopback.
 //!
 //! It answers "is what we are sending valid?" without depending on the
 //! projector. In another terminal:

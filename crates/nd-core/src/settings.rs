@@ -1,13 +1,13 @@
 //! The preferences the person sets once and expects to hold.
 //!
-//! Two rules shape this module, and both come from the same place — a setting
-//! that does not change anything is worse than no setting at all:
+//! A setting that changes nothing is worse than no setting, so two rules
+//! shape this module:
 //!
-//! 1. **Everything here has a consumer.** Each field is read somewhere that
+//! 1. Everything here has a consumer. Each field is read somewhere that
 //!    changes what leaves the machine: the encoder's resolution and frame rate,
 //!    the audio branch, which receivers are listed, the port the receiver
 //!    connects back to. Nothing is stored just because a mock-up drew a switch.
-//! 2. **It is global, like [`crate::latency`].** A preference describes what
+//! 2. It is global, like [`crate::latency`]. A preference describes what
 //!    the person wants of the application, not a property of one stream, and
 //!    the sessions that read it are started deep inside the protocol crates.
 //!
@@ -67,7 +67,7 @@ pub enum Quality {
     /// 1920x1080.
     #[default]
     High,
-    /// 1280x720 — for a weak link, or a receiver that stutters at 1080p.
+    /// 1280x720: for a weak link, or a receiver that stutters at 1080p.
     Medium,
     /// 854x480.
     Low,
@@ -147,7 +147,7 @@ pub struct Settings {
     /// Narrows [`Self::system_audio`] rather than replacing it: with this on,
     /// "the computer's sound" means the card's monitor instead of the default
     /// output's, so a notification or a private call stays on the computer.
-    /// The microphone switch is unaffected — that is the person's own voice,
+    /// The microphone switch is unaffected: that is the person's own voice,
     /// not something an application routes anywhere.
     pub virtual_audio: bool,
     /// Mix the microphone into the audio that is sent.
@@ -436,7 +436,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reload_sees_past_what_this_process_had_cached() {
+    fn reload_bypasses_the_cache() {
         // The service's whole relationship with the preferences file. The
         // sentinel is a name no file on any machine holds, so the assertion
         // holds whatever the person running the tests has configured.
@@ -453,7 +453,7 @@ mod tests {
     }
 
     #[test]
-    fn custom_resolution_round_trips_and_is_bounded() {
+    fn custom_resolution_is_bounded() {
         let settings = Settings::from_file("quality=custom\ncustom_width=3441\ncustom_height=1441");
         assert_eq!(settings.resolution_limit(), (3440, 1440));
         assert_eq!(Settings::from_file(&settings.to_file()), settings);
@@ -473,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    fn turning_hardware_encoding_off_survives_the_file() {
+    fn hardware_encoding_off_persists() {
         let off = Settings {
             hardware_encoding: false,
             ..Default::default()
@@ -484,7 +484,7 @@ mod tests {
     }
 
     #[test]
-    fn what_is_written_is_what_is_read() {
+    fn settings_round_trip() {
         let settings = Settings {
             protocol: Protocol::Miracast,
             quality: Quality::Medium,
@@ -507,7 +507,7 @@ mod tests {
     }
 
     #[test]
-    fn every_latency_profile_survives_a_write_and_a_read() {
+    fn latency_profiles_round_trip() {
         for latency in [
             crate::latency::Profile::Low,
             crate::latency::Profile::Responsive,
@@ -522,7 +522,7 @@ mod tests {
     }
 
     #[test]
-    fn an_upgraded_file_keeps_the_choice_the_film_switch_recorded() {
+    fn upgrade_keeps_film_switch_choice() {
         // Older files carry a `film_mode` boolean; someone who had turned it
         // on keeps the film profile.
         assert_eq!(
@@ -542,7 +542,7 @@ mod tests {
     }
 
     #[test]
-    fn a_broken_file_still_starts_the_application() {
+    fn broken_file_still_loads() {
         // Everything that could come out of a hand-edited file: an unknown key,
         // a value of the wrong type, a stray line, a comment.
         let text = "# comment\n\
@@ -568,7 +568,7 @@ mod tests {
     }
 
     #[test]
-    fn every_step_is_smaller_than_the_one_above_it() {
+    fn quality_steps_strictly_shrink() {
         // A "lower" quality that enlarged one side would cost bandwidth
         // instead of saving it, and a step that repeated the one above would
         // be a choice with no effect.
@@ -604,7 +604,7 @@ mod tests {
     }
 
     #[test]
-    fn a_nameless_computer_still_has_something_to_show() {
+    fn blank_name_falls_back() {
         let settings = Settings {
             device_name: "   ".to_string(),
             ..Default::default()

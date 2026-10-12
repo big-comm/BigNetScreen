@@ -15,7 +15,7 @@ pub struct Answer {
     pub udp_port: u16,
     /// Indices of the streams it accepted.
     pub send_indexes: Vec<u32>,
-    /// **Its** SSRCs (one per accepted stream), used by RTCP.
+    /// The receiver's SSRCs (one per accepted stream), used by RTCP.
     pub ssrcs: Vec<u32>,
     /// Decoder limits, not display size. Missing limits use a conservative mode.
     pub video_limits: Option<VideoLimits>,
@@ -217,11 +217,10 @@ impl Answer {
             }
             cfg.bitrate_kbps = cast_bitrate_kbps(cfg).min(ceiling).max(floor);
         } else {
-            // Silence is not a claim of 1080p30: the receiver was sent this
-            // exact mode in the OFFER and accepted the video stream, so the
-            // mode and its own bitrate stand. On default settings the OFFER
-            // is already 1080p30; a ceiling here could only overrule someone
-            // who deliberately asked for more.
+            // No limits means the receiver accepted the video stream of the
+            // exact mode in the OFFER, so the mode and its own bitrate stand.
+            // On default settings the OFFER is already 1080p30; a ceiling here
+            // could only overrule a user who asked for more.
             cfg.bitrate_kbps = cast_bitrate_kbps(cfg);
         }
         if with_audio
@@ -368,7 +367,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_an_answer_without_a_usable_port() {
+    fn rejects_answer_without_usable_port() {
         let payload = json!({
             "type": "ANSWER", "seqNum": 1, "result": "ok",
             "answer": {"udpPort": 0, "sendIndexes": [0]}
@@ -391,7 +390,7 @@ mod tests {
     }
 
     #[test]
-    fn answer_rejects_truncation_overflow_duplicates_and_missing_sequence() {
+    fn rejects_malformed_answers() {
         for (field, bad) in [
             ("sendIndexes", json!([0, "1"])),
             ("sendIndexes", json!([0, 4294967296u64])),
@@ -410,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn frame_rate_handles_numeric_and_fractional_limits() {
+    fn parses_fractional_frame_rate_limits() {
         assert_eq!(parse_frame_rate(&json!(30)).unwrap(), 30.0);
         assert!((parse_frame_rate(&json!("60000/1001")).unwrap() - 59.94005994).abs() < 0.00001);
         for bad in [
@@ -425,7 +424,7 @@ mod tests {
     }
 
     #[test]
-    fn decoder_limits_bound_pixels_bitrate_and_fps_independently() {
+    fn decoder_limits_apply_independently() {
         let mut answer = parse_answer(&answer_json(1), 1).unwrap();
         answer.video_limits = Some(VideoLimits {
             max_width: 1920,
@@ -457,7 +456,7 @@ mod tests {
     }
 
     #[test]
-    fn a_silent_answer_keeps_the_mode_the_receiver_accepted() {
+    fn silent_answer_keeps_accepted_mode() {
         let answer = parse_answer(&answer_json(1), 1).unwrap();
         let mut cfg = nd_core::pipeline::StreamConfig {
             width: 2560,
@@ -472,7 +471,7 @@ mod tests {
     }
 
     #[test]
-    fn a_declared_bitrate_limit_still_caps_a_larger_mode() {
+    fn bitrate_limit_caps_larger_mode() {
         let mut answer = parse_answer(&answer_json(1), 1).unwrap();
         answer.video_limits = Some(VideoLimits {
             max_width: 3840,
@@ -496,7 +495,7 @@ mod tests {
     }
 
     #[test]
-    fn audio_limits_refuse_the_opus_mode_only_when_audio_is_sent() {
+    fn audio_limits_apply_only_with_audio() {
         let mut answer = parse_answer(&answer_json(1), 1).unwrap();
         let fits = AudioLimits {
             max_sample_rate: 48_000,

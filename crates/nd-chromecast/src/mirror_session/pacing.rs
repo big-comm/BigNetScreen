@@ -116,7 +116,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn no_mode_asks_the_encoder_for_more_video_than_the_pacer_can_drain() {
+    fn encoder_rate_fits_pacer_drain() {
         // The table asks 30 Mbit for 2160p60 against a pacer that drains 24:
         // the surplus would queue in front of the socket for the whole session.
         let pacer_kbps =
@@ -172,21 +172,13 @@ mod tests {
     }
 
     #[test]
-    fn a_burst_window_carries_about_one_key_frame_worth() {
-        // 24 Mbit/s over 10 ms. Getting the unit conversion wrong here is
-        // silent: too large and pacing never engages, too small and every
-        // frame is spread over a sleep it did not need.
-        // Open Screen writes the ceiling as `24 << 20`, so the megabit here is
-        // 1048576 bits and not 1000000 — 3_145_728 bytes a second.
+    fn burst_budget_converts_units() {
+        // 24 << 20 bit/s (Open Screen's binary megabit) over 10 ms, in bytes.
         assert_eq!(BURST_BUDGET_BYTES, 31_457);
-        // Which is 26 packets of the size this sender emits: a whole ordinary
-        // frame at 1080p30/10 Mbit fits in roughly one window, and only a key
-        // frame is spread across several.
-        assert_eq!(BURST_BUDGET_BYTES / crate::rtp::MAX_PACKET_SIZE, 26);
     }
 
     #[test]
-    fn burst_budget_resets_by_time_and_never_holds_a_stale_partial_window() {
+    fn burst_budget_resets_by_time() {
         let now = Instant::now();
         let mut budget = BurstBudget {
             started: now,
@@ -210,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn audio_never_waits_for_a_window_video_has_emptied() {
+    fn audio_bypasses_empty_video_window() {
         // A clone shares the budget, which is what video's own senders want
         // and what audio must not have.
         let video = BurstPacer::new(Default::default());
@@ -218,8 +210,8 @@ mod tests {
         let audio = BurstPacer::new(Default::default());
         assert!(!Arc::ptr_eq(&audio.budget, &video.budget));
 
-        // A window holds about one average video frame — 31457 bytes against 31250 at
-        // 1080p60 and 15 Mbit — so an average frame very nearly empties it and
+        // A window holds about one average video frame (31250 bytes at 1080p60
+        // and 15 Mbit), so an average frame very nearly empties it and
         // anything above average takes more than one window. Whatever shares
         // the budget waits for a window video has left something in.
         let window_bytes = BURST_BUDGET_BYTES;

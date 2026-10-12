@@ -1,11 +1,10 @@
 //! The command line client.
 //!
 //! Every word of it goes through the same D-Bus interface a panel applet would
-//! use, which is the point: if something is awkward here it will be awkward
-//! there, and a method nothing calls is a method nobody has tried.
+//! use, so every method has a caller and the interface gets exercised.
 //!
-//! Calling any command starts the service if it is not running — D-Bus does
-//! that — so `bignetscreenctl cast …` from a keyboard shortcut works on a
+//! Calling any command starts the service if it is not running (D-Bus
+//! activation), so `bignetscreenctl cast …` from a keyboard shortcut works on a
 //! machine where nothing of ours is running yet.
 
 use std::process::ExitCode;
@@ -132,9 +131,8 @@ async fn run(args: &[String]) -> Result<(), String> {
 
 /// The status in one line.
 ///
-/// The service reports a shape, never a sentence — it has no locale worth
-/// trusting and its clients may each have a different one. This is this
-/// client's sentence.
+/// The service reports a shape, never a sentence: it has no locale worth
+/// trusting and its clients may each have a different one.
 async fn describe(service: &ServiceProxy<'_>) -> Result<String, String> {
     let status = service.status().await.map_err(bus)?;
     let session = service.session().await.map_err(bus)?;

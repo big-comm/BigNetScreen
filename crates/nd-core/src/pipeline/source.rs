@@ -377,7 +377,7 @@ mod tests {
     use gst::prelude::*;
 
     #[test]
-    fn a_still_screen_is_not_left_at_one_frame_per_second() {
+    fn still_screen_keeps_frame_rate() {
         // A compositor repaints what changed, so on a still screen the only
         // thing producing buffers is this timeout: it is the frame rate.
         const _: () = assert!(CAPTURE_KEEPALIVE_MS <= 1000 / 30);
@@ -396,7 +396,7 @@ mod tests {
     }
 
     #[test]
-    fn mutter_source_omits_the_fd_but_keeps_the_node() {
+    fn mutter_source_has_node_without_fd() {
         // Mutter publishes into the session's PipeWire daemon: there is no fd
         // to pass, but `path` remains mandatory.
         let desc = VideoSource::PipeWire {
@@ -412,7 +412,7 @@ mod tests {
     }
 
     #[test]
-    fn the_virtual_card_replaces_the_default_monitor_rather_than_adding_to_it() {
+    fn virtual_card_replaces_default_monitor() {
         // The whole point of the option is what is *not* captured. A branch
         // that read both would send the private call the person switched the
         // card on to avoid, and would look perfectly healthy doing it.
@@ -446,7 +446,7 @@ mod tests {
     }
 
     #[test]
-    fn the_switch_is_what_chooses_the_monitor() {
+    fn switch_chooses_the_monitor() {
         let off = crate::settings::Settings {
             virtual_audio: false,
             ..Default::default()
@@ -460,7 +460,7 @@ mod tests {
     }
 
     #[test]
-    fn a_buffer_floor_is_asked_for_only_where_it_was_given() {
+    fn buffer_floor_only_where_given() {
         let source = |min_buffers| {
             VideoSource::PipeWire {
                 fd: None,
@@ -483,7 +483,7 @@ mod tests {
     }
 
     #[test]
-    fn the_capture_source_never_has_caps_forced_on_it() {
+    fn capture_source_has_no_forced_caps() {
         // A privacy contract. `pipewiresrc` defaults `autoconnect` to true:
         // when forced caps left the authorised node unable to negotiate, it
         // found another video peer and streamed the webcam. The portal's `fd`
@@ -510,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn a_hostile_file_name_stays_one_property_value() {
+    fn hostile_file_name_stays_quoted() {
         // GStreamer's own parser is the oracle: the value must come back whole,
         // and no element named in it may be created.
         init().unwrap();

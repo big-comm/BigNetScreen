@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 POTFILES = ROOT / "po" / "POTFILES.in"
 OUTPUT = ROOT / "po" / "bignetscreen.pot"
 
-# tr!("text") and tr!("text", args...) — the string may span several lines.
+# tr!("text") and tr!("text", args...); the string may span several lines.
 SINGULAR = re.compile(r'\btr!\(\s*"((?:[^"\\]|\\.)*)"', re.DOTALL)
 PLURAL = re.compile(r'\btr_n!\(\s*"((?:[^"\\]|\\.)*)"\s*,\s*"((?:[^"\\]|\\.)*)"', re.DOTALL)
 
@@ -103,9 +103,8 @@ def main() -> int:
 
     # The header is never marked `fuzzy`, and its fields must not be left at
     # the template defaults. gettext ignores the metadata of a fuzzy header, and
-    # tooling that reads the catalogue then sees a project with no name at all —
-    # which is exactly how translation tools end up reporting an empty
-    # textdomain.
+    # tooling that reads the catalogue then sees a project with no name, which
+    # translation tools report as an empty textdomain.
     out = [
         "# BigNetScreen translation template.",
         "# Copyright (C) 2026 BigCommunity",

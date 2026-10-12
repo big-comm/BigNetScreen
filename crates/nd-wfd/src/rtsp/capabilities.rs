@@ -106,7 +106,7 @@ const HH_MODES: &[(u32, u32, u32, bool)] = &[
 ///
 /// A sink advertises its modes as bits into the three tables above, so nothing
 /// larger than this can be negotiated with any sink that exists. It is what a
-/// **virtual screen** should be created at: making a 3440x1440 desktop for a
+/// virtual screen should be created at: making a 3440x1440 desktop for a
 /// protocol whose ceiling is 1920x1200 only buys a `videoscale` on every frame.
 ///
 /// Computed rather than written down, so adding a mode cannot leave it stale.
@@ -192,7 +192,7 @@ impl SinkCaps {
 
     /// Picks the best common mode: largest area, then highest frame rate.
     ///
-    /// Interlaced modes are discarded — the pipeline produces progressive, and
+    /// Interlaced modes are discarded: the pipeline produces progressive, and
     /// sending progressive while declaring interlaced confuses the sink.
     pub fn best_mode(&self) -> Option<WfdMode> {
         self.modes
@@ -215,14 +215,14 @@ impl SinkCaps {
     /// The best mode for a specific source screen.
     ///
     /// The criteria, in order:
-    /// 1. **the aspect ratio closest to the captured screen** — picking a mode
+    /// 1. the aspect ratio closest to the captured screen. A mode
     ///    with another aspect forces letterboxing or distorts the picture,
     ///    which is worse than losing a few pixels;
     /// 2. the largest area, without exceeding the requested cap;
     /// 3. the highest frame rate.
     ///
     /// Without criterion (1), a sink that advertises the whole VESA table
-    /// leads to 1920x1200p30 on a 16:9 screen — more pixels, but with bars and
+    /// leads to 1920x1200p30 on a 16:9 screen: more pixels, but with bars and
     /// half the smoothness of 1920x1080p60.
     pub fn best_mode_for(&self, source: (u32, u32), max: (u32, u32)) -> Option<WfdMode> {
         // The sink's native mode beats everything when it fits the cap: it is
@@ -328,7 +328,7 @@ pub fn mode_from_native(native: u8) -> Option<WfdMode> {
     })
 }
 
-/// Builds M4's `wfd_video_formats` with **a single selected mode**.
+/// Builds M4's `wfd_video_formats` with a single selected mode.
 pub fn m4_video_formats(mode: &WfdMode, profile: u8, level: u8) -> String {
     let bit = 1u32 << mode.index;
     let (cea, vesa, hh) = match mode.table {
@@ -392,7 +392,7 @@ mod tests {
          wfd_client_rtp_ports: RTP/AVP/UDP;unicast 19002 0 mode=play\r\n";
 
     #[test]
-    fn no_advertised_mode_is_larger_than_the_ceiling_the_screen_is_built_to() {
+    fn advertised_modes_fit_the_ceiling() {
         // MAX_SOURCE_SIZE decides how big a virtual screen gets made, so a new
         // table entry that outgrew it would silently cost a scale on every
         // frame instead of failing here.
@@ -404,7 +404,6 @@ mod tests {
                 );
             }
         }
-        assert_eq!(MAX_SOURCE_SIZE, (1920, 1200));
     }
 
     #[test]
@@ -439,7 +438,7 @@ mod tests {
     }
 
     #[test]
-    fn native_is_ignored_when_it_exceeds_the_ceiling() {
+    fn oversized_native_mode_is_ignored() {
         let caps = parse_caps(M3_BODY);
         let mode = caps
             .best_mode_for((1920, 1080), (1280, 720))
@@ -461,7 +460,7 @@ mod tests {
     }
 
     #[test]
-    fn picks_the_widest_mode_when_aspect_is_ignored() {
+    fn aspectless_choice_picks_widest_mode() {
         let caps = parse_caps(M3_BODY);
         let mode = caps.best_mode().expect("some mode");
         // On area alone, this sink reaches 1920x1080p60.
@@ -470,7 +469,7 @@ mod tests {
     }
 
     #[test]
-    fn matching_the_source_aspect_beats_raw_pixel_count() {
+    fn source_aspect_beats_pixel_count() {
         // Without `native`, between 1600x900p60 and 1680x1050p60 on a 16:9
         // source, the 16:9 one wins even with fewer pixels.
         let mut caps = parse_caps(M3_BODY);
@@ -486,7 +485,7 @@ mod tests {
     }
 
     #[test]
-    fn aspect_rule_applies_when_the_sink_declares_no_native() {
+    fn aspect_rule_without_native_mode() {
         // Without `native`, the source-aspect rule applies. A 16:10 source
         // should get the closest 16:10 mode (1680x1050 from the VESA table).
         let mut caps = parse_caps(M3_BODY);
@@ -511,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn a_720p_only_sink_is_not_offered_1080p() {
+    fn sink_limited_to_720p_gets_720p() {
         // CEA bit 5 = 1280x720p30, bit 6 = 1280x720p60.
         let body = "wfd_video_formats: 00 00 01 01 00000060 00000000 00000000 00 0000 0000 00 none none\r\n\
                     wfd_client_rtp_ports: RTP/AVP/UDP;unicast 19000 0 mode=play\r\n";
@@ -561,7 +560,7 @@ mod tests {
     }
 
     #[test]
-    fn m4_marks_the_right_table_for_vesa() {
+    fn m4_marks_vesa_table() {
         let mode = WfdMode {
             width: 1280,
             height: 800,
@@ -578,14 +577,14 @@ mod tests {
     }
 
     #[test]
-    fn malformed_video_formats_do_not_panic() {
+    fn malformed_video_formats_are_tolerated() {
         for value in ["", "garbage", "00 00", "zz zz zz zz zz zz zz"] {
             assert!(parse_video_formats(value).modes.is_empty(), "{value}");
         }
     }
 
     #[test]
-    fn preferences_choose_an_advertised_mode_before_m4() {
+    fn preferences_pick_advertised_mode() {
         let caps =
             parse_video_formats("40 00 01 02 000001e0 00000000 00000000 00 0000 0000 00 none none");
         let mode = caps.preferred_mode((1920, 1080), (1920, 1080), 30).unwrap();

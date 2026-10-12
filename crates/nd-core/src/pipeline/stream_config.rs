@@ -250,10 +250,10 @@ impl StreamConfig {
         )
     }
 
-    /// The Cast mirroring audio branch's queue — **without** `leaky`.
+    /// The Cast mirroring audio branch's queue, without `leaky`.
     ///
     /// The video queue leaks on purpose: an old frame is of no interest, the
-    /// next one arrives whole. Audio is the opposite — dropping samples does
+    /// next one arrives whole. Audio is the opposite: dropping samples does
     /// not "advance" the sound, it opens a hole in the middle of it. Not
     /// leaking is possible here because nothing waits on this track; on the
     /// muxed path, video would.
@@ -309,7 +309,7 @@ mod tests {
     }
 
     #[test]
-    fn a_preference_may_exceed_the_cast_default_but_never_a_negotiated_mode() {
+    fn preference_capped_by_negotiated_mode() {
         // Cast: 1080p is our own safe guess, so a person who chooses 1440p
         // gets 1440p. Miracast: the sink listed the modes it accepts, and
         // exceeding them is not ours to decide. The preference is set here so
@@ -368,7 +368,7 @@ mod tests {
     }
 
     #[test]
-    fn the_muxed_path_keeps_its_audio_queue_short() {
+    fn muxed_audio_queue_is_short() {
         // On the muxed path video is interleaved with audio, so slack given to
         // the audio queue becomes picture delay.
         const _: () = assert!(
@@ -388,7 +388,7 @@ mod tests {
     }
 
     #[test]
-    fn film_mode_buffers_without_going_under_the_encoder_minimum() {
+    fn film_buffer_respects_encoder_minimum() {
         // Buffering is added on top of what the encoder needs: below the
         // pipeline's own minimum, sinks drop late buffers and show black.
         let spiky = StreamConfig {
@@ -415,7 +415,7 @@ mod tests {
     }
 
     #[test]
-    fn fit_within_preserves_aspect_and_never_upscales() {
+    fn fit_within_keeps_aspect_without_upscaling() {
         // A real case: the laptop's 16:10 screen onto a 1080p panel.
         assert_eq!(
             StreamConfig::fit_within((1920, 1200), (1920, 1080)),
@@ -460,7 +460,7 @@ mod tests {
     }
 
     #[test]
-    fn degenerate_dimensions_never_make_zero_sized_h264_caps() {
+    fn degenerate_dimensions_give_nonzero_caps() {
         for source in [(0, 0), (1, 1), (1, 1080), (1920, 1)] {
             for cap in [(0, 0), (1, 1), (1919, 1079)] {
                 let (w, h) = StreamConfig::fit_within(source, cap);

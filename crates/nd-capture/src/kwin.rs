@@ -6,7 +6,7 @@
 //! installed service alone.
 //!
 //! The ScreenCast portal has no way to say how big a virtual screen should be,
-//! so `xdg-desktop-portal-kde` picks for everyone — with a literal:
+//! so `xdg-desktop-portal-kde` picks for everyone with a literal:
 //!
 //! ```c++
 //! // src/screencast.cpp, v6.7.4:234
@@ -490,14 +490,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn only_virtual_screens_are_this_backend_s_business() {
+    async fn only_virtual_screens_are_handled() {
         let backend = KWinBackend::new();
         assert!(backend.start(SourceType::Monitor).await.is_err());
         assert!(backend.start(SourceType::Window).await.is_err());
     }
 
     #[test]
-    fn the_serial_event_rebuilds_a_64_bit_value_from_its_halves() {
+    fn serial_event_joins_64_bit_halves() {
         assert_eq!(object_serial(1, 0xffff_fffe), 0x0000_0001_ffff_fffe);
     }
 

@@ -213,7 +213,7 @@ mod tests {
     /// run feeds the minimum as a fixed value, to show the scaler still
     /// misbehaves on it without the pin.
     #[test]
-    fn a_capture_offering_any_pixel_aspect_keeps_its_size() {
+    fn any_pixel_aspect_keeps_size() {
         init().unwrap();
         let cfg = StreamConfig {
             width: 1920,
@@ -260,7 +260,7 @@ mod tests {
     }
 
     #[test]
-    fn a_ten_bit_film_gets_black_bars() {
+    fn ten_bit_film_gets_bars() {
         init().unwrap();
         let cfg = StreamConfig::default();
         let description = format!(
@@ -300,7 +300,7 @@ mod tests {
     }
 
     #[test]
-    fn every_encoder_keeps_the_element_that_fixes_the_cadence() {
+    fn every_encoder_keeps_cadence_element() {
         // Without `videorate` the Cast sender cannot map an encoded frame
         // through its segment and the receiver shows black. Its holding delay
         // is the price of that.
@@ -356,7 +356,7 @@ mod tests {
     }
 
     #[test]
-    fn the_gpu_path_asks_for_a_dmabuf_and_builds() {
+    fn gpu_path_requests_dmabuf() {
         let cfg = StreamConfig {
             width: 2560,
             height: 1440,
@@ -366,7 +366,7 @@ mod tests {
         };
         let desc = mirror_pipeline_description(&cfg, &VideoSource::Test, (2560, 1440), true);
         // Without asking for the DMA-BUF, `glupload` would accept system memory
-        // and upload it — the same copy, behind a longer pipeline.
+        // and upload it: the same copy, behind a longer pipeline.
         assert!(desc.contains("video/x-raw(memory:DMABuf)"), "{desc}");
         assert!(desc.contains("glupload"), "{desc}");
         // `glcolorscale` does not link to this encoder, which is why the caller
@@ -377,12 +377,11 @@ mod tests {
 
     /// The requirement is enforced when the pipeline is built, not silently
     /// dropped later: a source that cannot produce a DMA-BUF fails to link.
-    /// That is what makes this path safe to gate behind a switch — it either
-    /// runs on the graphics card or it refuses to start, and never quietly
-    /// becomes the copy it was meant to remove.
+    /// So the path either runs on the graphics card or refuses to start, and
+    /// never quietly becomes the copy it was meant to remove.
     #[test]
     #[ignore = "needs GStreamer's NVIDIA plugins (nvh264enc)"]
-    fn the_gpu_path_refuses_a_source_without_a_dmabuf() {
+    fn gpu_path_needs_dmabuf_source() {
         init().unwrap();
         let cfg = StreamConfig {
             width: 2560,
@@ -400,7 +399,7 @@ mod tests {
     }
 
     #[test]
-    fn mirroring_asks_for_a_ceiling_rather_than_the_portal_s_guess() {
+    fn mirroring_requests_a_ceiling() {
         // A 2560x1440 panel at 110% scale is announced by the portal as
         // 2328x1310 and delivered at 2560x1440. A range lets the capture
         // through at its own size and only bites above the person's ceiling.
@@ -423,7 +422,7 @@ mod tests {
     }
 
     #[test]
-    fn mirroring_lets_the_encoder_take_the_capture_s_own_format() {
+    fn mirroring_keeps_capture_format() {
         // The portal delivers BGRA and NVENC accepts it; asking for NV12 first
         // spends a CPU pass over every frame on a conversion the card does
         // while encoding.
