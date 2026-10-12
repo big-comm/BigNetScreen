@@ -27,7 +27,7 @@ pub(super) fn describe_status(status: &wire::Status, session: &wire::Session) ->
         Some(StatusKind::Stopping) => tr!("Stopping…"),
         Some(StatusKind::Sending) => tr!("Sending files…"),
         Some(StatusKind::NdiRuntimeMissing) => tr!("NDI runtime required"),
-        Some(StatusKind::Error) => describe_refusal(&status.detail),
+        Some(StatusKind::Error) => tr!("Sharing failed"),
         Some(StatusKind::Streaming) => {
             if session.width > 0 {
                 format!(
@@ -42,6 +42,9 @@ pub(super) fn describe_status(status: &wire::Status, session: &wire::Session) ->
     }
 }
 
+/// How a failure to save the preferences begins.
+pub(super) const SAVE_FAILED: &str = "could not save settings";
+
 /// A refusal from the service, in the person's language.
 ///
 /// The service answers with a tag for the cases it knows and the underlying
@@ -51,19 +54,31 @@ pub(super) fn describe_refusal(reason: &str) -> String {
     if reason.is_empty() {
         return String::new();
     }
+    known_refusal(reason)
+        .unwrap_or_else(|| tr!("Sharing could not be completed. Open Details to see why."))
+}
+
+/// The sentence for a refusal this build recognises.
+pub(super) fn known_refusal(reason: &str) -> Option<String> {
     if reason.contains(refusal::SOUND_CARD) {
-        return tr!(
+        return Some(tr!(
             "Could not prepare the BigNetScreen sound output. Check the audio options in Settings and try again."
-        );
+        ));
     }
-    if reason.contains("could not save settings") {
-        return tr!("Could not save settings");
+    if reason.starts_with(SAVE_FAILED) {
+        return Some(tr!("Could not save settings"));
     }
     let tail = reason.rsplit(": ").next().unwrap_or(reason);
-    match tail {
-        refusal::UNKNOWN_RECEIVER => tr!("That device is no longer available"),
-        refusal::NOT_CASTABLE => tr!("shows up in discovery only"),
-        refusal::NDI_UNAVAILABLE => tr!("NDI unavailable. See the NDI setup guide."),
+    let sentence = match tail {
+        refusal::UNKNOWN_RECEIVER => {
+            tr!("That device is no longer available. Search for devices and pick it again.")
+        }
+        refusal::NOT_CASTABLE => {
+            tr!("This device can be found on the network, but BigNetScreen cannot share to it.")
+        }
+        refusal::NDI_UNAVAILABLE => {
+            tr!("NDI support could not be loaded. Reinstall BigNetScreen to restore it.")
+        }
         refusal::NDI_CPU_UNSUPPORTED => tr!(
             "The NDI runtime does not support this processor, so installing it again will not help."
         ),
@@ -74,19 +89,21 @@ pub(super) fn describe_refusal(reason: &str) -> String {
         refusal::STREAM_RUNNING => tr!("A stream is already running"),
         nd_chromecast::identity::IDENTITY_CHANGED => tr!(
             "This receiver did not prove it is the same device used before, so the screen was \
-             not sent. Someone on the network may be impersonating it."
+             not sent. Someone on the network may be impersonating it. If you replaced or reset \
+             the device, open it in Devices and choose Trust again."
         ),
-        _ => tr!("Sharing could not be completed. Open Details to see the reason."),
-    }
+        _ => return None,
+    };
+    Some(sentence)
 }
 
 pub(super) fn audio_summary(settings: &Settings) -> String {
     let sound = if !settings.system_audio {
-        tr!("Application sound off")
+        tr!("System audio off")
     } else if settings.virtual_audio {
-        tr!("Sound routed to BigNetScreen")
+        tr!("Only applications routed to BigNetScreen")
     } else {
-        tr!("All computer sound")
+        tr!("All system audio")
     };
     let microphone = if settings.microphone {
         tr!("Microphone on")
@@ -122,7 +139,7 @@ pub(super) fn friendly_reason(provider: &str, reason: &str) -> String {
     if matches!(provider, "mdns" | "dlna") {
         return tr!("Local network discovery is unavailable. Check your network connection.");
     }
-    tr!("Device discovery is unavailable. Open Details to see the reason.")
+    tr!("Device discovery is unavailable. Open Details to see why.")
 }
 
 /// What the web page says, in the application's language.
@@ -202,7 +219,7 @@ mod tests {
         assert!(!describe_refusal(wrapped).is_empty());
         assert_eq!(
             describe_refusal("something odd"),
-            tr!("Sharing could not be completed. Open Details to see the reason.")
+            tr!("Sharing could not be completed. Open Details to see why.")
         );
         assert!(describe_refusal("").is_empty());
     }

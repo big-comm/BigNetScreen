@@ -101,7 +101,7 @@ pub(super) fn scan_library(
 }
 
 /// The XDG folder for this kind of file, falling back to the home directory.
-fn user_directory(kind: MediaKind) -> Option<PathBuf> {
+pub(super) fn user_directory(kind: MediaKind) -> Option<PathBuf> {
     let directory = match kind {
         MediaKind::Photo => glib::user_special_dir(glib::UserDirectory::Pictures),
         MediaKind::Video => glib::user_special_dir(glib::UserDirectory::Videos),

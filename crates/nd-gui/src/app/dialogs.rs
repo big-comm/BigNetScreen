@@ -13,24 +13,64 @@ use super::AppMsg;
 use crate::pages::Page;
 use crate::tr;
 
-/// The provider failures behind the banner. "Got it" dismisses them.
+/// The provider failures behind the banner, in words and as the technical
+/// detail. "Got it" dismisses them.
 pub(super) fn issues(
     root: &adw::ApplicationWindow,
     issues: &[wire::Issue],
     input: relm4::Sender<AppMsg>,
 ) {
-    let details = issues
+    let summary = issues
+        .iter()
+        .map(|issue| super::friendly_reason(&issue.provider, &issue.reason))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let detail = issues
         .iter()
         .map(|issue| format!("{}: {}", issue.provider, issue.reason))
         .collect::<Vec<_>>()
-        .join("\n\n");
-    let dialog = adw::AlertDialog::new(Some(&tr!("Connection details")), Some(&details));
-    dialog.add_response("close", &tr!("Close"));
+        .join("\n");
+    let dialog = adw::AlertDialog::new(Some(&tr!("Device discovery problems")), Some(&summary));
+    add_detail(root, &dialog, &detail);
     dialog.add_response("dismiss", &tr!("Got it"));
+    dialog.set_default_response(Some("dismiss"));
     dialog.connect_response(Some("dismiss"), move |_, _| {
         input.emit(AppMsg::DismissIssues)
     });
     dialog.present(Some(root));
+}
+
+/// Puts `detail` under the dialog's text where it can be selected, with a
+/// response that copies it, and a Close response.
+fn add_detail(root: &adw::ApplicationWindow, dialog: &adw::AlertDialog, detail: &str) {
+    let label = gtk::Label::builder()
+        .label(detail)
+        .selectable(true)
+        .wrap(true)
+        .wrap_mode(gtk::pango::WrapMode::WordChar)
+        .xalign(0.0)
+        .css_classes(["caption", "monospace"])
+        .build();
+    let scrolled = gtk::ScrolledWindow::builder()
+        .child(&label)
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .max_content_height(200)
+        .propagate_natural_height(true)
+        .build();
+    dialog.set_extra_child(Some(&scrolled));
+    dialog.add_response("close", &tr!("Close"));
+    dialog.add_response("copy", &tr!("Copy details"));
+    dialog.set_close_response("close");
+    // Focus starts on a response, so the detail is not shown all selected.
+    dialog.set_default_response(Some("close"));
+    label.set_can_focus(false);
+    let window = root.downgrade();
+    let detail = detail.to_string();
+    dialog.connect_response(Some("copy"), move |_, _| {
+        if let Some(window) = window.upgrade() {
+            window.clipboard().set_text(&detail);
+        }
+    });
 }
 
 /// Which of several screens to share with the receiver `id`.
@@ -68,14 +108,54 @@ pub(super) fn choose_screen(
     dialog.present(Some(root));
 }
 
-/// Why sharing failed, with a way to the settings that can fix it.
-pub(super) fn failure(root: &adw::ApplicationWindow, detail: &str, input: relm4::Sender<AppMsg>) {
-    let dialog = adw::AlertDialog::new(Some(&tr!("Sharing could not be completed")), Some(detail));
-    dialog.add_response("close", &tr!("Close"));
+/// Why sharing failed, with the technical detail and a way to the settings
+/// that can fix it.
+pub(super) fn failure(
+    root: &adw::ApplicationWindow,
+    summary: &str,
+    detail: &str,
+    input: relm4::Sender<AppMsg>,
+) {
+    let dialog = adw::AlertDialog::new(Some(&tr!("Sharing could not be completed")), Some(summary));
+    add_detail(root, &dialog, detail);
     dialog.add_response("settings", &tr!("Settings"));
     dialog.connect_response(Some("settings"), move |_, _| {
         input.emit(AppMsg::Navigate(Page::Settings))
     });
+    dialog.present(Some(root));
+}
+
+/// The preferences could not be saved while the window stays open.
+pub(super) fn settings_failure(root: &adw::ApplicationWindow, detail: &str) {
+    let dialog = adw::AlertDialog::new(
+        Some(&tr!("Could not save settings")),
+        Some(&tr!(
+            "The changes apply until BigNetScreen closes. Check that your configuration folder can be written."
+        )),
+    );
+    add_detail(root, &dialog, detail);
+    dialog.present(Some(root));
+}
+
+/// Another transmission is running: stop it and start the new one, or keep it.
+pub(super) fn switch_stream(
+    root: &adw::ApplicationWindow,
+    current: &str,
+    input: relm4::Sender<AppMsg>,
+) {
+    let dialog = adw::AlertDialog::new(
+        Some(&tr!("Stop the current sharing?")),
+        Some(
+            &tr!("{} is receiving your screen. It stops before the new sharing starts.")
+                .replace("{}", current),
+        ),
+    );
+    dialog.add_response("keep", &tr!("Keep Sharing"));
+    dialog.add_response("switch", &tr!("Stop and Switch"));
+    dialog.set_response_appearance("switch", adw::ResponseAppearance::Destructive);
+    dialog.set_default_response(Some("keep"));
+    dialog.set_close_response("keep");
+    dialog.connect_response(Some("switch"), move |_, _| input.emit(AppMsg::SwitchStream));
     dialog.present(Some(root));
 }
 
@@ -111,9 +191,7 @@ pub(super) fn ndi_installing(root: &adw::ApplicationWindow) -> adw::AlertDialog 
         )),
     );
     dialog.set_can_close(false);
-    let spinner = gtk::Spinner::new();
-    spinner.start();
-    dialog.set_extra_child(Some(&spinner));
+    dialog.set_extra_child(Some(&adw::Spinner::new()));
     dialog.present(Some(root));
     dialog
 }

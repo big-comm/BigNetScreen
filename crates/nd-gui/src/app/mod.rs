@@ -13,6 +13,7 @@
 
 mod dialogs;
 mod service_link;
+mod session;
 mod wording;
 
 use std::cell::Cell;
@@ -27,17 +28,21 @@ use relm4::prelude::*;
 use nd_chromecast::file_server::MediaFile;
 use nd_core::capture::SourceType;
 use nd_core::settings::{self, Settings};
+use nd_core::sink::SinkState;
 use nd_service::dbus::ServiceProxy;
 use nd_service::wire::{self, StatusKind};
 
-use crate::pages::Page;
 use crate::pages::devices::{DevicesMsg, DevicesOutput, DevicesPage};
 use crate::pages::home::{HomeMsg, HomeOutput, HomePage};
 use crate::pages::media::{MediaMsg, MediaOutput, MediaPage};
 use crate::pages::settings::{SettingsMsg, SettingsOutput, SettingsPage};
+use crate::pages::{Discovery, Page};
 use crate::tr;
 use service_link::{Connection, ServiceState, follow_the_service};
-use wording::{audio_summary, describe_refusal, describe_status, friendly_reason, web_page_text};
+use wording::{
+    SAVE_FAILED, audio_summary, describe_refusal, describe_status, friendly_reason, known_refusal,
+    web_page_text,
+};
 
 pub struct AppModel {
     home: Controller<HomePage>,
@@ -53,6 +58,11 @@ pub struct AppModel {
     /// The sentence under the window title, in the person's language.
     status: String,
     failure: Option<String>,
+    /// The receiver picked while another session ran, until the person says
+    /// whether to switch.
+    switch_to: Option<String>,
+    /// The receiver to start once the running session has stopped.
+    pending_cast: Option<String>,
     settings_changed: bool,
     /// Issues the person has dismissed, so the banner does not come back for
     /// something they have already read.
@@ -69,8 +79,6 @@ pub struct AppModel {
 pub enum AppMsg {
     CloseRequested,
     Navigate(Page),
-    /// Start streaming to this receiver.
-    Cast(String),
     PublishNdi(SourceType),
     /// Share to web browsers on the network.
     PublishWeb(SourceType),
@@ -80,6 +88,8 @@ pub enum AppMsg {
     /// Stream the screen with this connector to this receiver.
     CastOnScreen(String, String),
     Stop,
+    /// Stop the running session, then start the one asked for meanwhile.
+    SwitchStream,
     Rescan,
     DismissIssues,
     ShowIssues,
@@ -203,14 +213,18 @@ impl Component for AppModel {
                                 set_spacing: 6,
 
                                 gtk::Label {
-                                    set_label: &tr!("Connected to"),
+                                    #[watch]
+                                    set_label: &model.session_state_label(),
                                     set_hexpand: true,
                                     set_xalign: 0.0,
                                     add_css_class: "caption",
                                 },
-                                gtk::Label {
-                                    set_label: "●",
+                                gtk::Image {
+                                    set_icon_name: Some("media-record-symbolic"),
+                                    set_pixel_size: 10,
                                     add_css_class: "live-dot",
+                                    #[watch]
+                                    set_visible: model.is_streaming(),
                                 },
                             },
                             gtk::Label {
@@ -259,18 +273,20 @@ impl Component for AppModel {
                         },
 
                         #[wrap(Some)]
+                        // Each page carries its own heading, so the bar says
+                        // what the service is doing.
                         set_title_widget = &adw::WindowTitle {
                             #[watch]
-                            set_title: &model.page.title(),
-                            #[watch]
-                            set_subtitle: &model.status,
+                            set_title: &model.status,
                         },
 
                         pack_end = &gtk::Button {
-                            set_label: &tr!("Stop"),
+                            set_label: &tr!("Stop sharing"),
                             add_css_class: "destructive-action",
                             #[watch]
                             set_visible: model.is_busy(),
+                            #[watch]
+                            set_sensitive: !model.state.status.is(StatusKind::Stopping),
                             connect_clicked => AppMsg::Stop,
                         },
                     },
@@ -338,7 +354,7 @@ impl Component for AppModel {
         let devices = DevicesPage::builder()
             .launch(())
             .forward(sender.input_sender(), |output| match output {
-                DevicesOutput::Cast(id) => AppMsg::Cast(id),
+                DevicesOutput::Cast(id) => AppMsg::CastWith(id, SourceType::Monitor),
                 DevicesOutput::Stop => AppMsg::Stop,
                 DevicesOutput::Rescan => AppMsg::Rescan,
                 DevicesOutput::AutoDiscovery(on) => AppMsg::SetAutoDiscovery(on),
@@ -361,6 +377,8 @@ impl Component for AppModel {
 
         let model = AppModel {
             failure: None,
+            switch_to: None,
+            pending_cast: None,
             settings_changed: false,
             home,
             devices,
@@ -408,6 +426,37 @@ impl Component for AppModel {
             }
             gtk::glib::Propagation::Stop
         });
+
+        // Ctrl+Q closes through the window, so the close request still
+        // flushes preferences; F5 searches again; Ctrl+, opens the settings.
+        let shortcuts = gtk::ShortcutController::new();
+        shortcuts.set_scope(gtk::ShortcutScope::Managed);
+        let add = |trigger: &str, action: gtk::CallbackAction| {
+            shortcuts.add_shortcut(gtk::Shortcut::new(
+                gtk::ShortcutTrigger::parse_string(trigger),
+                Some(action),
+            ));
+        };
+        let emit = |message: fn() -> AppMsg| {
+            let input = sender.input_sender().clone();
+            gtk::CallbackAction::new(move |_, _| {
+                input.emit(message());
+                gtk::glib::Propagation::Stop
+            })
+        };
+        let window = root.downgrade();
+        add(
+            "<Control>q",
+            gtk::CallbackAction::new(move |_, _| {
+                if let Some(window) = window.upgrade() {
+                    window.close();
+                }
+                gtk::glib::Propagation::Stop
+            }),
+        );
+        add("F5", emit(|| AppMsg::Rescan));
+        add("<Control>comma", emit(|| AppMsg::Navigate(Page::Settings)));
+        root.add_controller(shortcuts);
 
         let mapped = std::cell::Cell::new(false);
         root.connect_map(move |window| {
@@ -461,7 +510,11 @@ impl Component for AppModel {
         // "home" does not exist.
         widgets.stack.set_visible_child_name(model.page.id());
 
-        model.home.emit(HomeMsg::Searching(current.auto_discovery));
+        model.push_discovery(if current.auto_discovery {
+            Discovery::Searching
+        } else {
+            Discovery::Off
+        });
         model
             .home
             .emit(HomeMsg::AudioSummary(audio_summary(&current)));
@@ -509,7 +562,6 @@ impl Component for AppModel {
                     widgets.split.set_show_sidebar(false);
                 }
             }
-            AppMsg::Cast(id) => self.begin_cast(id, &sender),
             // The service checks the plugins and refuses with a reason the
             // status line explains.
             AppMsg::PublishNdi(source) => {
@@ -542,6 +594,10 @@ impl Component for AppModel {
                 let monitor = wire::source_name(SourceType::Monitor);
                 self.cast(id, format!("{monitor}:{screen}"), &sender);
             }
+            AppMsg::SwitchStream => {
+                self.pending_cast = self.switch_to.take();
+                sender.input(AppMsg::Stop);
+            }
             AppMsg::Stop | AppMsg::CancelMedia => {
                 self.failure = None;
                 self.status = tr!("Stopping…");
@@ -559,7 +615,13 @@ impl Component for AppModel {
             }
             AppMsg::ShowFailure => {
                 let detail = self.failure.as_deref().unwrap_or(&self.state.status.detail);
-                dialogs::failure(root, detail, sender.input_sender().clone());
+                if let Some(reason) = detail.strip_prefix(SAVE_FAILED) {
+                    dialogs::settings_failure(root, reason.trim_start_matches(": "));
+                } else {
+                    let summary = known_refusal(detail)
+                        .unwrap_or_else(|| tr!("The details below say what went wrong."));
+                    dialogs::failure(root, &summary, detail, sender.input_sender().clone());
+                }
             }
             AppMsg::SetAutoDiscovery(on) => {
                 self.settings_page.emit(SettingsMsg::SyncAutoDiscovery(on));
@@ -577,7 +639,7 @@ impl Component for AppModel {
                     |service| async move { service.reload_settings().await },
                 ),
                 Err(reason) => {
-                    self.failure = Some(format!("could not save settings: {reason}"));
+                    self.failure = Some(format!("{SAVE_FAILED}: {reason}"));
                     self.status = tr!("Could not save settings");
                 }
             },
@@ -696,11 +758,11 @@ impl Component for AppModel {
                 tracing::error!(%reason, "the session service could not be reached");
                 self.service = None;
                 self.state = ServiceState::default();
-                self.home.emit(HomeMsg::Searching(false));
+                self.push_discovery(Discovery::Unreachable);
                 self.home.emit(HomeMsg::VirtualAvailable(false));
                 self.push_devices();
                 self.push_media_status();
-                self.status = tr!("The sharing service is not responding. Try again.");
+                self.status = tr!("Reconnecting to the sharing service…");
             }
             AppCmd::Screens { id, mut screens } => {
                 let monitor = wire::source_name(SourceType::Monitor);
@@ -721,160 +783,6 @@ impl Component for AppModel {
         }
 
         self.update_view(widgets, sender);
-    }
-}
-
-impl AppModel {
-    /// Is anything running that the Stop button should end?
-    fn is_busy(&self) -> bool {
-        !self.state.session.is_idle() || self.state.media.active
-    }
-
-    /// Calls the service, turning a refusal into something the window can say.
-    ///
-    /// Every action goes through here so that no call site has to remember
-    /// that the service may not be there yet.
-    fn call<F, Fut>(&self, sender: &ComponentSender<Self>, call: F)
-    where
-        F: FnOnce(ServiceProxy<'static>) -> Fut + Send + 'static,
-        Fut: std::future::Future<Output = zbus::Result<()>> + Send,
-    {
-        let Some(service) = self.service.clone() else {
-            sender.oneshot_command(async { AppCmd::Unreachable("not connected".into()) });
-            return;
-        };
-        sender.oneshot_command(async move {
-            match call(service).await {
-                Ok(()) => AppCmd::Done,
-                Err(err) => AppCmd::Refused(err.to_string()),
-            }
-        });
-    }
-
-    fn call_with_settings<F, Fut>(&self, sender: &ComponentSender<Self>, call: F)
-    where
-        F: FnOnce(ServiceProxy<'static>) -> Fut + Send + 'static,
-        Fut: std::future::Future<Output = zbus::Result<()>> + Send,
-    {
-        let settings_changed = self.settings_changed;
-        self.call(sender, move |service| async move {
-            if settings_changed {
-                relm4::spawn_blocking(settings::persist)
-                    .await
-                    .map_err(|err| zbus::Error::Failure(err.to_string()))?
-                    .map_err(|err| {
-                        zbus::Error::Failure(format!("could not save settings: {err}"))
-                    })?;
-            }
-            service.reload_settings().await?;
-            call(service).await
-        });
-    }
-
-    fn begin_cast(&mut self, id: String, sender: &ComponentSender<Self>) {
-        self.failure = None;
-        if self.is_busy() {
-            self.status = tr!("A stream is already running");
-            return;
-        }
-        // Which screen, when the compositor streams them directly, is asked
-        // here; where it does not, the portal asks once the cast starts.
-        if self.source_type == SourceType::Monitor
-            && let Some(service) = self.service.clone()
-        {
-            sender.oneshot_command(async move {
-                match service.screens().await {
-                    Ok(screens) => AppCmd::Screens { id, screens },
-                    Err(err) => AppCmd::Refused(err.to_string()),
-                }
-            });
-            return;
-        }
-        let source = wire::source_name(self.source_type).to_string();
-        self.cast(id, source, sender);
-    }
-
-    /// Asks the service to stream `source` to the receiver `id`.
-    fn cast(&mut self, id: String, source: String, sender: &ComponentSender<Self>) {
-        // The page a browser is shown is for a stranger on the network, not for
-        // a client, so the service cannot write it: it has no locale. This does.
-        let page_text = web_page_text();
-        self.status = tr!("Connecting…");
-        self.call_with_settings(sender, move |service| async move {
-            service.cast(&id, &source, &page_text).await
-        });
-    }
-
-    /// Takes a fresh reading of the service and tells each page only what
-    /// changed for it.
-    fn apply_state(&mut self, state: ServiceState, sender: &ComponentSender<Self>) {
-        let receivers_changed = state.receivers != self.state.receivers;
-        let session_changed =
-            state.session != self.state.session || state.link_probe != self.state.link_probe;
-        let media_changed = state.media != self.state.media;
-        let searching_changed = state.status.kind != self.state.status.kind;
-        let virtual_changed = state.virtual_available != self.state.virtual_available;
-        let ndi_missing = state.status.is(StatusKind::NdiRuntimeMissing)
-            && !self.state.status.is(StatusKind::NdiRuntimeMissing);
-        let was_streaming = !self.state.session.is_idle();
-        self.state = state;
-        self.status = describe_status(&self.state.status, &self.state.session);
-        if virtual_changed {
-            self.home
-                .emit(HomeMsg::VirtualAvailable(self.state.virtual_available));
-        }
-        if searching_changed {
-            self.home.emit(HomeMsg::Searching(
-                self.state.status.is(StatusKind::Searching),
-            ));
-        }
-        if receivers_changed || session_changed {
-            self.push_devices();
-        }
-        if media_changed {
-            self.push_media_status();
-        }
-        if ndi_missing {
-            sender.oneshot_command(async {
-                AppCmd::NdiInstallOffer(crate::ndi_setup::can_install().await)
-            });
-        }
-        if was_streaming && self.state.session.is_idle() {
-            tracing::info!("the session ended");
-        }
-    }
-
-    /// Pushes the current list to every page that shows receivers.
-    fn push_devices(&mut self) {
-        let entries = self.state.entries();
-        self.home.emit(HomeMsg::Devices(entries.clone()));
-        self.home.emit(HomeMsg::Session(self.state.session_info()));
-        self.devices.emit(DevicesMsg::Devices(entries));
-        self.devices.emit(DevicesMsg::Active(
-            (!self.state.session.is_idle()).then(|| self.state.session.id.clone()),
-        ));
-        self.media
-            .emit(MediaMsg::Targets(self.state.media_receivers()));
-    }
-
-    fn push_media_status(&mut self) {
-        if !self.state.media.active {
-            self.media.emit(MediaMsg::Status(None));
-            return;
-        }
-        self.media
-            .emit(MediaMsg::Status(Some(self.state.media_status())));
-    }
-
-    /// The banner text: what is wrong that the person has not already read.
-    fn issues_summary(&self) -> String {
-        self.state
-            .issues
-            .iter()
-            .filter(|issue| !self.dismissed.contains(issue))
-            .map(|issue| friendly_reason(&issue.provider, &issue.reason))
-            .collect::<Vec<_>>()
-            .join(" · ")
     }
 }
 

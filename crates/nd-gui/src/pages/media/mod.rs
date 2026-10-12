@@ -27,6 +27,8 @@ pub struct MediaPage {
     kind: MediaKind,
     /// What the grid is showing.
     listed: Vec<MediaFile>,
+    /// A folder scan is running, so an empty grid means nothing yet.
+    scanning: bool,
     /// Files chosen, in the order they were chosen.
     chosen: Vec<MediaFile>,
     /// Files that were picked and cannot be played, with the reason.
@@ -165,14 +167,9 @@ impl Component for MediaPage {
                 add_css_class: "dim-label",
             },
 
-            gtk::ScrolledWindow {
-                set_vexpand: true,
-                set_min_content_height: 220,
-                set_margin_top: 12,
-                set_hscrollbar_policy: gtk::PolicyType::Never,
-
                 #[local_ref]
                 grid -> gtk::FlowBox {
+                    set_margin_top: 12,
                     #[watch]
                     set_sensitive: !model.playing(),
                     set_selection_mode: gtk::SelectionMode::None,
@@ -184,7 +181,6 @@ impl Component for MediaPage {
                     set_min_children_per_line: 1,
                     add_css_class: "media-grid",
                 },
-            },
 
             gtk::Box {
                 set_spacing: 8,
@@ -197,21 +193,21 @@ impl Component for MediaPage {
                     add_css_class: "heading",
                 },
                 gtk::Button {
-                    set_label: &tr!("Clear queue"),
+                    #[watch]
+                    set_label: &if model.playing() {
+                        tr!("Stop and clear queue")
+                    } else {
+                        tr!("Clear queue")
+                    },
                     connect_clicked => MediaMsg::Clear,
                 },
             },
-            gtk::ScrolledWindow {
-                set_hscrollbar_policy: gtk::PolicyType::Never,
-                set_max_content_height: 160,
-                set_propagate_natural_height: true,
+            #[name = "queue_list"]
+            gtk::ListBox {
                 #[watch]
                 set_visible: !model.chosen.is_empty(),
-                #[name = "queue_list"]
-                gtk::ListBox {
-                    set_selection_mode: gtk::SelectionMode::None,
-                    add_css_class: "boxed-list",
-                },
+                set_selection_mode: gtk::SelectionMode::None,
+                add_css_class: "boxed-list",
             },
 
             // What was refused and why. Silence here would leave a person
@@ -252,6 +248,7 @@ impl Component for MediaPage {
                 #[name = "target_chooser"]
                 gtk::DropDown {
                     set_valign: gtk::Align::Center,
+                    update_property: &[gtk::accessible::Property::Label(&tr!("Send to"))],
                     // Its contents are filled in from the receivers found, so
                     // it is built empty here.
                     connect_selected_notify[sender] => move |chooser| {
@@ -369,6 +366,7 @@ impl Component for MediaPage {
             tiles,
             kind: MediaKind::Photo,
             listed: Vec::new(),
+            scanning: false,
             chosen: Vec::new(),
             refused: Vec::new(),
             targets: Vec::new(),
@@ -486,6 +484,7 @@ impl Component for MediaPage {
             }
             MediaMsg::Scanned(generation, files) => {
                 if generation == self.scan_generation {
+                    self.scanning = false;
                     self.listed = files;
                     let mut guard = self.tiles.guard();
                     guard.clear();
@@ -621,7 +620,9 @@ impl MediaPage {
     /// What is missing before anything can be sent.
     fn destination_hint(&self) -> String {
         if self.targets.is_empty() {
-            return tr!("No device found yet. Turn your TV, projector or Chromecast on.");
+            return tr!(
+                "No device that plays files was found. Turn on a Chromecast or a Miracast TV or projector."
+            );
         }
         if self.chosen_target.is_none() && !self.chosen.is_empty() {
             return tr!("Choose which device to send to.");
@@ -636,6 +637,7 @@ impl MediaPage {
         self.scan_cancel = Default::default();
         self.scan_generation += 1;
         let generation = self.scan_generation;
+        self.scanning = true;
         let kind = self.kind;
         let cancel = self.scan_cancel.clone();
         let out = sender.input_sender().clone();
@@ -649,11 +651,18 @@ impl MediaPage {
     }
 
     fn empty_message(&self) -> String {
-        match self.kind {
-            MediaKind::Photo => tr!("No photos in your Pictures folder. Use “Select files”."),
-            MediaKind::Video => tr!("No videos in your Videos folder. Use “Select files”."),
-            MediaKind::Music => tr!("No music in your Music folder. Use “Select files”."),
+        if self.scanning {
+            return tr!("Looking for files…");
         }
+        let folder = library::user_directory(self.kind)
+            .map(|dir| dir.display().to_string())
+            .unwrap_or_default();
+        match self.kind {
+            MediaKind::Photo => tr!("No photos in {}. Use “Select files” to pick them elsewhere."),
+            MediaKind::Video => tr!("No videos in {}. Use “Select files” to pick them elsewhere."),
+            MediaKind::Music => tr!("No music in {}. Use “Select files” to pick them elsewhere."),
+        }
+        .replace("{}", &folder)
     }
 
     fn selection_summary(&self) -> String {
@@ -668,7 +677,7 @@ impl MediaPage {
         if bytes == 0 {
             return String::new();
         }
-        human_size(bytes)
+        gtk::glib::format_size(bytes).to_string()
     }
 
     fn queue_line(&self) -> String {
@@ -688,16 +697,14 @@ impl MediaPage {
             .map(format_time)
             .unwrap_or_else(|| "—".into());
         let progress = format!("{time} / {duration}");
-        let error = status.control_error.as_deref().unwrap_or_default();
-        format!(
-            "{} · {} {}/{} · {}\n{}",
-            status.title,
-            tr!("item"),
-            status.position,
-            status.total,
-            progress,
-            error
-        )
+        let position = tr!("Item {position} of {total}")
+            .replace("{position}", &status.position.to_string())
+            .replace("{total}", &status.total.to_string());
+        let line = format!("{} · {position} · {progress}", status.title);
+        match status.control_error.as_deref() {
+            Some(error) if !error.is_empty() => format!("{line}\n{error}"),
+            _ => line,
+        }
     }
 }
 
@@ -714,22 +721,6 @@ impl Drop for MediaPage {
     fn drop(&mut self) {
         self.scan_cancel
             .store(true, std::sync::atomic::Ordering::Relaxed);
-    }
-}
-
-/// A size a person can read.
-fn human_size(bytes: u64) -> String {
-    const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
-    let mut value = bytes as f64;
-    let mut unit = 0;
-    while value >= 1024.0 && unit < UNITS.len() - 1 {
-        value /= 1024.0;
-        unit += 1;
-    }
-    if unit == 0 {
-        format!("{bytes} {}", UNITS[0])
-    } else {
-        format!("{value:.1} {}", UNITS[unit])
     }
 }
 
@@ -959,21 +950,5 @@ mod tests {
         // A position past the end selects nothing rather than the last device.
         assert_eq!(target_at(&targets, 3), None);
         assert_eq!(target_at(&[], 1), None);
-    }
-
-    #[test]
-    fn sizes_are_human_readable() {
-        assert_eq!(human_size(512), "512 B");
-        assert_eq!(human_size(1024), "1.0 KB");
-        assert_eq!(human_size(47_500_000), "45.3 MB");
-        // Bytes are never shown with a decimal point: "512.0 B" is noise.
-        assert!(!human_size(999).contains('.'));
-    }
-
-    #[test]
-    fn sizes_stop_at_largest_unit() {
-        // Without the bound on `unit`, a large enough number would index past
-        // the end of the table.
-        assert!(human_size(u64::MAX).ends_with("GB"));
     }
 }

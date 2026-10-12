@@ -15,8 +15,10 @@ use nd_core::settings;
 use nd_core::sink::SinkState;
 
 use super::device_row::{DeviceRow, DeviceRowOutput, sync_rows};
-use super::{DeviceEntry, latency_hint, state_label};
-use crate::tr;
+use super::{
+    DeviceEntry, Discovery, discovery_placeholder, latency_hint, placeholder, state_label,
+};
+use crate::{tr, tr_n};
 
 /// Which protocols the list shows.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -53,6 +55,10 @@ pub struct DevicesPage {
     /// A receiver whose remembered identity the person just forgot, and how
     /// forgetting it went.
     trusted_again: Option<(String, Result<(), String>)>,
+    discovery: Discovery,
+    /// What the empty-list placeholder was built for: receivers hidden by the
+    /// filter, and the discovery state.
+    placeholder_for: Option<(usize, Discovery)>,
 }
 
 #[derive(Debug)]
@@ -61,6 +67,8 @@ pub enum DevicesMsg {
     Active(Option<String>),
     Selected(String),
     SetFilter(Filter),
+    ShowAll,
+    Discovery(Discovery),
     SetAutoDiscovery(bool),
     SyncAutoDiscovery(bool),
     Rescan,
@@ -119,12 +127,11 @@ impl Component for DevicesPage {
                     set_halign: gtk::Align::End,
                     gtk::Button {
                         set_valign: gtk::Align::Center,
-                        set_tooltip_text: Some(&tr!("Scan again")),
                         connect_clicked => DevicesMsg::Rescan,
 
                         adw::ButtonContent {
-                            set_icon_name: "view-refresh-symbolic",
-                            set_label: &tr!("Refresh"),
+                            set_icon_name: "system-search-symbolic",
+                            set_label: &tr!("Search for devices"),
                         },
                     },
 
@@ -180,6 +187,7 @@ impl Component for DevicesPage {
                             #[name = "auto_switch"]
                             gtk::Switch {
                                 set_valign: gtk::Align::Center,
+                                update_property: &[gtk::accessible::Property::Label(&tr!("Automatic discovery"))],
                                 connect_state_set[sender] => move |_, state| {
                                     sender.input(DevicesMsg::SetAutoDiscovery(state));
                                     gtk::glib::Propagation::Proceed
@@ -240,7 +248,7 @@ impl Component for DevicesPage {
 
                                 adw::ButtonContent {
                                     set_icon_name: "media-playback-stop-symbolic",
-                                    set_label: &tr!("Disconnect"),
+                                    set_label: &tr!("Stop sharing"),
                                 },
                             },
                             #[name = "trust_again"]
@@ -340,6 +348,8 @@ impl Component for DevicesPage {
             auto_discovery: settings::current().auto_discovery,
             active: None,
             trusted_again: None,
+            discovery: Discovery::Searching,
+            placeholder_for: None,
         };
 
         let device_list = model.devices.widget();
@@ -370,6 +380,8 @@ impl Component for DevicesPage {
         widgets
             .auto_switch
             .unblock_signal(&widgets.auto_discovery_handler);
+        let mut model = model;
+        model.refresh_placeholder(&sender);
 
         ComponentParts { model, widgets }
     }
@@ -408,6 +420,8 @@ impl Component for DevicesPage {
                 self.filter = filter;
                 self.apply_filter();
             }
+            DevicesMsg::ShowAll => widgets.filter_group.set_active(0),
+            DevicesMsg::Discovery(discovery) => self.discovery = discovery,
             DevicesMsg::SetAutoDiscovery(on) => {
                 if self.auto_discovery != on {
                     self.auto_discovery = on;
@@ -478,6 +492,7 @@ impl Component for DevicesPage {
                 });
             }
         }
+        self.refresh_placeholder(&sender);
         self.update_view(widgets, sender);
     }
 
@@ -502,6 +517,37 @@ impl Component for DevicesPage {
 }
 
 impl DevicesPage {
+    /// Says why the list is empty: a filter hiding receivers, or where
+    /// discovery stands.
+    fn refresh_placeholder(&mut self, sender: &ComponentSender<Self>) {
+        let hidden = self.all.len() - self.devices.len();
+        if self.placeholder_for == Some((hidden, self.discovery)) {
+            return;
+        }
+        self.placeholder_for = Some((hidden, self.discovery));
+        let placeholder = if hidden > 0 {
+            let body = tr_n!(
+                "{} receiver is hidden by the filter.",
+                "{} receivers are hidden by the filter.",
+                hidden
+            )
+            .replace("{}", &hidden.to_string());
+            let content = placeholder(&tr!("No receivers match this filter"), Some(&body));
+            let show_all = gtk::Button::builder()
+                .label(tr!("Show all"))
+                .halign(gtk::Align::Center)
+                .margin_top(6)
+                .build();
+            let input = sender.input_sender().clone();
+            show_all.connect_clicked(move |_| input.emit(DevicesMsg::ShowAll));
+            content.append(&show_all);
+            content
+        } else {
+            discovery_placeholder(self.discovery)
+        };
+        self.devices.widget().set_placeholder(Some(&placeholder));
+    }
+
     fn apply_filter(&mut self) {
         if self
             .selected
@@ -576,11 +622,12 @@ impl DevicesPage {
     }
 }
 
+/// The count under the list; an empty list explains itself instead.
 fn found_summary(count: usize) -> String {
     if count == 0 {
-        return tr!("No devices found");
+        return String::new();
     }
-    crate::tr_n!("{} device found", "{} devices found", count).replace("{}", &count.to_string())
+    tr_n!("{} device found", "{} devices found", count).replace("{}", &count.to_string())
 }
 
 #[cfg(test)]

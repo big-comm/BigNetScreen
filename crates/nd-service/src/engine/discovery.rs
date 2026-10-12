@@ -48,6 +48,15 @@ impl Engine {
                 self.refresh_status();
             }
             DiscoveryEvent::ProviderUnavailable { provider, reason } => {
+                // A computer without Wi-Fi has nothing to fix; it is worth a
+                // banner only to someone who asked for Miracast alone.
+                if provider == "wfd-p2p"
+                    && reason.contains(nd_net::p2p::NO_WIFI_ADAPTER)
+                    && self.settings.protocol != Protocol::Miracast
+                {
+                    self.issues.retain(|old| old.provider != provider);
+                    return;
+                }
                 let issue = Issue {
                     provider: provider.to_string(),
                     reason,
@@ -214,5 +223,23 @@ mod tests {
         engine.active_sink = Some(sink("a"));
         engine.discovery_event(DiscoveryEvent::Removed("a".into()));
         assert!(engine.order.contains(&"a".to_string()));
+    }
+
+    #[test]
+    fn missing_wifi_shown_for_miracast_only() {
+        let no_wifi = || DiscoveryEvent::ProviderUnavailable {
+            provider: "wfd-p2p",
+            reason: nd_core::NdError::Unsupported(format!(
+                "{}. Miracast needs one",
+                nd_net::p2p::NO_WIFI_ADAPTER
+            ))
+            .to_string(),
+        };
+        let mut engine = engine();
+        engine.discovery_event(no_wifi());
+        assert!(engine.issues.is_empty());
+        engine.settings.protocol = Protocol::Miracast;
+        engine.discovery_event(no_wifi());
+        assert_eq!(engine.issues.len(), 1);
     }
 }

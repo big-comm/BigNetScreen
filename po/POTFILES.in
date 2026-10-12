@@ -1,5 +1,6 @@
 crates/nd-gui/src/app/dialogs.rs
 crates/nd-gui/src/app/mod.rs
+crates/nd-gui/src/app/session.rs
 crates/nd-gui/src/app/wording.rs
 crates/nd-gui/src/pages/device_row.rs
 crates/nd-gui/src/pages/devices.rs

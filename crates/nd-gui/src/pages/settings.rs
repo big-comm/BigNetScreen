@@ -52,6 +52,7 @@ pub enum SettingsMsg {
     SetDeviceName(String),
     SetPort(u16),
     Reset,
+    ResetConfirmed,
     OpenSound,
 }
 
@@ -74,7 +75,7 @@ impl Component for SettingsPage {
             set_hscrollbar_policy: gtk::PolicyType::Never,
 
             adw::Clamp {
-                set_maximum_size: 1100,
+                set_maximum_size: 760,
 
                 gtk::Box {
                     set_orientation: gtk::Orientation::Vertical,
@@ -97,6 +98,9 @@ impl Component for SettingsPage {
 
                     adw::PreferencesGroup {
                         set_title: &tr!("Streaming"),
+                        set_description: Some(&tr!(
+                            "A receiver can accept less than you choose: many Chromecast models stay at 1080p and 30 FPS."
+                        )),
                         set_margin_top: 12,
 
 
@@ -124,6 +128,7 @@ impl Component for SettingsPage {
                             set_visible: model.settings.quality == Quality::Custom,
                             #[name = "custom_width"]
                             add_suffix = &gtk::SpinButton {
+                                update_property: &[gtk::accessible::Property::Label(&tr!("Width (pixels)"))],
                                 set_valign: gtk::Align::Center,
                                 set_adjustment: &dimension_adjustment(1920),
                                 set_numeric: true,
@@ -137,6 +142,7 @@ impl Component for SettingsPage {
                             set_visible: model.settings.quality == Quality::Custom,
                             #[name = "custom_height"]
                             add_suffix = &gtk::SpinButton {
+                                update_property: &[gtk::accessible::Property::Label(&tr!("Height (pixels)"))],
                                 set_valign: gtk::Align::Center,
                                 set_adjustment: &dimension_adjustment(1080),
                                 set_numeric: true,
@@ -238,6 +244,7 @@ impl Component for SettingsPage {
 
                             #[name = "mic_volume"]
                             add_suffix = &gtk::Scale {
+                                update_property: &[gtk::accessible::Property::Label(&tr!("Microphone volume"))],
                                 set_valign: gtk::Align::Center,
                                 set_width_request: 220,
                                 set_draw_value: true,
@@ -257,6 +264,25 @@ impl Component for SettingsPage {
                         set_title: &tr!("Discovery and devices"),
                         set_margin_top: 18,
 
+                        #[name = "protocol"]
+                        adw::ComboRow {
+                            set_title: &tr!("Preferred protocol"),
+                            add_prefix = &gtk::Image { set_icon_name: Some("video-display-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
+                            set_use_subtitle: true,
+                            set_tooltip_text: Some(&tr!("Which kind of receiver to look for")),
+                            set_model: Some(&string_list(&[
+                                tr!("Automatic"),
+                                tr!("Miracast only"),
+                                tr!("Local network only (Chromecast, DLNA, AirPlay)"),
+                            ])),
+                            connect_selected_notify[sender] => move |row| {
+                                sender.input(SettingsMsg::SetProtocol(match row.selected() {
+                                    1 => Protocol::Miracast,
+                                    2 => Protocol::Cast,
+                                    _ => Protocol::Auto,
+                                }));
+                            } @protocol_handler,
+                        },
                         #[name = "auto_discovery"]
                         adw::SwitchRow {
                             set_title: &tr!("Automatic discovery"),
@@ -279,31 +305,9 @@ impl Component for SettingsPage {
 
                     },
 
-                    gtk::Expander {
-                        set_label: Some(&tr!("Advanced settings")),
+                    adw::PreferencesGroup {
+                        set_title: &tr!("Advanced"),
                         set_margin_top: 18,
-                        #[wrap(Some)]
-                        set_child = &adw::PreferencesGroup {
-                            set_margin_top: 12,
-                        #[name = "protocol"]
-                        adw::ComboRow {
-                            set_title: &tr!("Preferred protocol"),
-                            add_prefix = &gtk::Image { set_icon_name: Some("video-display-symbolic"), set_pixel_size: 22, add_css_class: "settings-icon" },
-                            set_use_subtitle: true,
-                            set_tooltip_text: Some(&tr!("Which kind of receiver to look for")),
-                            set_model: Some(&string_list(&[
-                                tr!("Automatic"),
-                                tr!("Miracast only"),
-                                tr!("Local network only (Chromecast, DLNA, AirPlay)"),
-                            ])),
-                            connect_selected_notify[sender] => move |row| {
-                                sender.input(SettingsMsg::SetProtocol(match row.selected() {
-                                    1 => Protocol::Miracast,
-                                    2 => Protocol::Cast,
-                                    _ => Protocol::Auto,
-                                }));
-                            } @protocol_handler,
-                        },
                         #[name = "fps"]
                         adw::ComboRow {
                             set_title: &tr!("Frame rate"),
@@ -344,6 +348,7 @@ impl Component for SettingsPage {
 
                             #[name = "port"]
                             add_suffix = &gtk::SpinButton {
+                                update_property: &[gtk::accessible::Property::Label(&tr!("Fixed port"))],
                                 set_valign: gtk::Align::Center,
                                 set_adjustment: &gtk::Adjustment::new(
                                     0.0, 0.0, 65535.0, 1.0, 100.0, 0.0,
@@ -353,7 +358,6 @@ impl Component for SettingsPage {
                                     sender.input(SettingsMsg::SetPort(spin.value() as u16));
                                 } @port_handler,
                             },
-                        },
                         },
                     },
 
@@ -468,6 +472,25 @@ impl Component for SettingsPage {
             SettingsMsg::SetDeviceName(name) => self.settings.device_name = name,
             SettingsMsg::SetPort(port) => self.settings.port = port,
             SettingsMsg::Reset => {
+                let dialog = adw::AlertDialog::new(
+                    Some(&tr!("Restore default settings?")),
+                    Some(&tr!(
+                        "Every setting returns to its default, including this computer's name and the fixed port."
+                    )),
+                );
+                dialog.add_response("cancel", &tr!("Cancel"));
+                dialog.add_response("restore", &tr!("Restore"));
+                dialog.set_response_appearance("restore", adw::ResponseAppearance::Destructive);
+                dialog.set_default_response(Some("cancel"));
+                dialog.set_close_response("cancel");
+                let input = sender.input_sender().clone();
+                dialog.connect_response(Some("restore"), move |_, _| {
+                    input.emit(SettingsMsg::ResetConfirmed)
+                });
+                dialog.present(Some(root));
+                return;
+            }
+            SettingsMsg::ResetConfirmed => {
                 self.settings = Settings::default();
                 self.show(widgets);
             }
@@ -483,7 +506,7 @@ impl Component for SettingsPage {
     fn shutdown(&mut self, _widgets: &mut Self::Widgets, _output: relm4::Sender<Self::Output>) {
         // The window flushes asynchronously before allowing shutdown.
         if let Some(pending) = self.pending_write.take() {
-            pending.remove();
+            big_gtk_kit::source::remove(pending);
         }
     }
 }
@@ -494,7 +517,7 @@ impl SettingsPage {
     fn schedule_write(&mut self, output: relm4::Sender<SettingsOutput>) {
         settings::set_in_memory(&self.settings);
         if let Some(pending) = self.pending_write.take() {
-            pending.remove();
+            big_gtk_kit::source::remove(pending);
         }
         let slot = self.pending_write.clone();
         let id = gtk::glib::timeout_add_local_once(SAVE_DELAY, move || {

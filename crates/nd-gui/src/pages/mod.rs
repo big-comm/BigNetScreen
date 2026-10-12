@@ -17,6 +17,9 @@ mod preview;
 pub mod qr;
 pub mod settings;
 
+use relm4::gtk::prelude::*;
+use relm4::{adw, gtk};
+
 use nd_core::sink::{SinkKind, SinkState};
 
 use crate::tr;
@@ -141,7 +144,8 @@ impl DeviceEntry {
     pub fn badge_class(&self) -> &'static str {
         match self.state {
             SinkState::Streaming => "connected",
-            SinkState::Error => "warning",
+            SinkState::Error => "failed",
+            state if state.is_busy() => "busy",
             _ => "available",
         }
     }
@@ -314,6 +318,67 @@ mod tests {
         };
         assert_eq!(entry.badge(), tr!("Discovery only"));
     }
+}
+
+/// Where discovery stands, so an empty receiver list can say why it is empty.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Discovery {
+    #[default]
+    Searching,
+    Finished,
+    Off,
+    /// The sharing service is not answering; the window keeps reconnecting.
+    Unreachable,
+}
+
+/// The placeholder of an empty receiver list.
+pub fn discovery_placeholder(discovery: Discovery) -> gtk::Box {
+    let (title, body) = match discovery {
+        Discovery::Searching => (tr!("Looking for receivers…"), None),
+        Discovery::Finished => (
+            tr!("No receivers found"),
+            Some(tr!(
+                "Turn on your TV or projector and open screen mirroring, or share with a web browser."
+            )),
+        ),
+        Discovery::Off => (
+            tr!("Automatic discovery is off"),
+            Some(tr!("Choose Search for devices to look once.")),
+        ),
+        Discovery::Unreachable => (tr!("Reconnecting to the sharing service…"), None),
+    };
+    placeholder(&title, body.as_deref())
+}
+
+/// A centered heading with an optional line under it, for an empty list.
+pub fn placeholder(title: &str, body: Option<&str>) -> gtk::Box {
+    let content = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(6)
+        .margin_top(24)
+        .margin_bottom(24)
+        .margin_start(18)
+        .margin_end(18)
+        .build();
+    content.append(
+        &gtk::Label::builder()
+            .label(title)
+            .wrap(true)
+            .css_classes(["heading"])
+            .build(),
+    );
+    if let Some(body) = body {
+        content.append(
+            &gtk::Label::builder()
+                .label(body)
+                .wrap(true)
+                .max_width_chars(70)
+                .justify(gtk::Justification::Center)
+                .css_classes(["dim-label"])
+                .build(),
+        );
+    }
+    content
 }
 
 /// The width below which a page stacks its columns.

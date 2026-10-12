@@ -1,8 +1,7 @@
-//! "Ready to share": the receivers found, what to share, and what is running.
+//! "Ready to share": what is running, the receivers found, and what to share.
 //!
-//! The page answers three questions in the order a person asks them: *where can
-//! I send this*, *what am I sending*, and *what is happening now*. The right
-//! column only exists once something is running.
+//! A running session leads the page with its state, how to join it and Stop.
+//! Otherwise the page asks *where can I send this*, then *what am I sending*.
 
 use nd_core::capture::SourceType;
 use relm4::adw::{self, prelude::*};
@@ -33,6 +32,7 @@ pub struct HomePage {
     session: Option<SessionInfo>,
     audio_summary: String,
     /// The "extra screen" button, whose availability depends on the desktop.
+    first_tile: gtk::Button,
     virtual_button: gtk::Button,
     media_button: gtk::Button,
     virtual_available: bool,
@@ -47,7 +47,7 @@ pub enum HomeMsg {
     Devices(Vec<DeviceEntry>),
     /// What is streaming, if anything.
     Session(Option<SessionInfo>),
-    Searching(bool),
+    Discovery(crate::pages::Discovery),
     VirtualAvailable(bool),
     AudioSummary(String),
     AudioSettings,
@@ -130,10 +130,156 @@ impl Component for HomePage {
                     },
                 },
 
-                #[name = "columns"]
+                // What is running, above the choices that would replace it.
+                gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical,
+                    set_spacing: 14,
+                    set_margin_bottom: 14,
+                    #[watch]
+                    set_visible: model.session.is_some(),
+
+                gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical,
+                    set_spacing: 6,
+                    add_css_class: "hero-card",
+                    #[watch]
+                    set_visible: model.session.is_some(),
+
+                    gtk::Image {
+                        set_icon_name: Some("tv-symbolic"),
+                        set_pixel_size: 52,
+                        set_margin_bottom: 6,
+                    },
+                    gtk::Label {
+                        #[watch]
+                        set_label: &model.session_field(|s| crate::pages::state_label(s.state)),
+                        add_css_class: "hero-detail",
+                    },
+                    gtk::Label {
+                        #[watch]
+                        set_label: &model.session_field(|s| s.name.clone()),
+                        add_css_class: "hero-name",
+                        set_wrap: true,
+                        set_justify: gtk::Justification::Center,
+                    },
+                    gtk::Label {
+                        #[watch]
+                        set_label: &model.session_field(|s| {
+                            if s.address.is_empty() {
+                                s.protocol.clone()
+                            } else {
+                                format!("{} · {}", s.address, s.protocol)
+                            }
+                        }),
+                        add_css_class: "hero-detail",
+                    },
+                    gtk::Label {
+                        #[watch]
+                        set_label: &model.session_field(|s| s.mode.clone()),
+                        #[watch]
+                        set_visible: !model.session_field(|s| s.mode.clone()).is_empty(),
+                        add_css_class: "hero-chip",
+                        set_halign: gtk::Align::Center,
+                        set_margin_top: 4,
+                    },
+
+                    // How a receiver joins, for the sessions hosted here.
+                    gtk::Box {
+                        set_orientation: gtk::Orientation::Vertical,
+                        set_spacing: 4,
+                        set_margin_top: 12,
+                        #[watch]
+                        set_visible: model.access().is_some(),
+
+                        gtk::Label {
+                            set_label: &tr!("On the TV, phone or computer, open:"),
+                            add_css_class: "hero-detail",
+                            set_wrap: true,
+                            set_justify: gtk::Justification::Center,
+                        },
+                        gtk::Box {
+                            set_spacing: 6,
+                            set_halign: gtk::Align::Center,
+                            gtk::Label {
+                                #[watch]
+                                set_label: &model.access_field(|a| a.url.clone()),
+                                add_css_class: "access-url",
+                                set_selectable: true,
+                                set_wrap: true,
+                                set_justify: gtk::Justification::Center,
+                            },
+                            gtk::Button {
+                                set_icon_name: "edit-copy-symbolic",
+                                add_css_class: "flat",
+                                set_valign: gtk::Align::Center,
+                                set_tooltip_text: Some(&tr!("Copy the address")),
+                                connect_clicked => HomeMsg::CopyUrl,
+                            },
+                        },
+                        gtk::Label {
+                            set_label: &tr!("and enter the PIN"),
+                            add_css_class: "hero-detail",
+                            set_margin_top: 6,
+                        },
+                        gtk::Label {
+                            #[watch]
+                            set_label: &model.access_field(|a| a.pin.clone()),
+                            add_css_class: "access-pin",
+                        },
+                        gtk::Box {
+                            add_css_class: "qr-frame",
+                            set_halign: gtk::Align::Center,
+                            set_margin_top: 8,
+                            #[name = "qr_picture"]
+                            gtk::Picture {
+                                set_size_request: (168, 168),
+                                set_can_shrink: true,
+                            },
+                        },
+                    },
+                    gtk::Button {
+                        set_label: &tr!("Stop sharing"),
+                        add_css_class: "destructive-action",
+                        set_halign: gtk::Align::Center,
+                        set_margin_top: 10,
+                        connect_clicked => HomeMsg::Stop,
+                    },
+                },
+
+                gtk::Box {
+                    set_orientation: gtk::Orientation::Vertical,
+                    set_spacing: 4,
+                    add_css_class: "info-card",
+                    #[watch]
+                    set_visible: model.session.is_some(),
+
+                    gtk::Box {
+                        set_spacing: 8,
+
+                        gtk::Label {
+                            #[watch]
+                            set_label: &if model.measurable() {
+                                tr!("Network response")
+                            } else {
+                                tr!("Connection")
+                            },
+                            set_hexpand: true,
+                            set_xalign: 0.0,
+                            add_css_class: "heading",
+                        },
+                    },
+                    gtk::Label {
+                        #[watch]
+                        set_label: &model.connection_line(),
+                        set_xalign: 0.0,
+                        set_wrap: true,
+                        add_css_class: "dim-label",
+                    },
+                },
+                },
+
                 gtk::Box {
                     set_spacing: 20,
-                    add_css_class: "home-columns",
                     set_orientation: gtk::Orientation::Vertical,
 
                     gtk::Box {
@@ -146,7 +292,6 @@ impl Component for HomePage {
                             set_orientation: gtk::Orientation::Vertical,
                             set_spacing: 14,
                             add_css_class: "receivers-card",
-                            set_vexpand: true,
                             #[watch]
                             set_visible: model.step == Step::Device,
 
@@ -166,15 +311,14 @@ impl Component for HomePage {
                                     connect_clicked => HomeMsg::Rescan,
                                     adw::ButtonContent {
                                         set_icon_name: "system-search-symbolic",
-                                        set_label: &tr!("Find compatible devices"),
+                                        set_label: &tr!("Search for devices"),
                                     },
                                 },
                             },
                             #[local_ref]
                             device_list -> gtk::ListBox {
                                 set_selection_mode: gtk::SelectionMode::None,
-                                set_valign: gtk::Align::Fill,
-                                set_vexpand: true,
+                                set_valign: gtk::Align::Start,
                                 add_css_class: "boxed-list",
                                 add_css_class: "device-list",
                             },
@@ -197,14 +341,6 @@ impl Component for HomePage {
                                         set_icon_name: "go-previous-symbolic",
                                         set_label: &tr!("Back"),
                                     },
-                                },
-                                gtk::Label {
-                                    #[watch]
-                                    set_label: &model.chosen_name(),
-                                    set_xalign: 0.0,
-                                    set_hexpand: true,
-                                    set_ellipsize: gtk::pango::EllipsizeMode::End,
-                                    add_css_class: "title-2",
                                 },
                             },
 
@@ -231,146 +367,10 @@ impl Component for HomePage {
                         },
                     },
 
-                    // The right-hand column: what is running, and advice.
-                    #[name = "advice_column"]
                     gtk::Box {
                         set_orientation: gtk::Orientation::Vertical,
                         set_spacing: 14,
                         set_valign: gtk::Align::Fill,
-
-                        gtk::Box {
-                            set_orientation: gtk::Orientation::Vertical,
-                            set_spacing: 6,
-                            add_css_class: "hero-card",
-                            #[watch]
-                            set_visible: model.session.is_some(),
-
-                            gtk::Image {
-                                set_icon_name: Some("tv-symbolic"),
-                                set_pixel_size: 52,
-                                set_margin_bottom: 6,
-                            },
-                            gtk::Label {
-                                #[watch]
-                                set_label: &model.session_field(|s| s.name.clone()),
-                                add_css_class: "hero-name",
-                                set_wrap: true,
-                                set_justify: gtk::Justification::Center,
-                            },
-                            gtk::Label {
-                                #[watch]
-                                set_label: &model.session_field(|s| {
-                                    if s.address.is_empty() {
-                                        s.protocol.clone()
-                                    } else {
-                                        format!("{} · {}", s.address, s.protocol)
-                                    }
-                                }),
-                                add_css_class: "hero-detail",
-                            },
-                            gtk::Label {
-                                #[watch]
-                                set_label: &model.session_field(|s| s.mode.clone()),
-                                #[watch]
-                                set_visible: !model.session_field(|s| s.mode.clone()).is_empty(),
-                                add_css_class: "hero-chip",
-                                set_halign: gtk::Align::Center,
-                                set_margin_top: 4,
-                            },
-
-                            // How a receiver joins, for the sessions hosted here.
-                            gtk::Box {
-                                set_orientation: gtk::Orientation::Vertical,
-                                set_spacing: 4,
-                                set_margin_top: 12,
-                                #[watch]
-                                set_visible: model.access().is_some(),
-
-                                gtk::Label {
-                                    set_label: &tr!("On the TV, phone or computer, open:"),
-                                    add_css_class: "hero-detail",
-                                    set_wrap: true,
-                                    set_justify: gtk::Justification::Center,
-                                },
-                                gtk::Box {
-                                    set_spacing: 6,
-                                    set_halign: gtk::Align::Center,
-                                    gtk::Label {
-                                        #[watch]
-                                        set_label: &model.access_field(|a| a.url.clone()),
-                                        add_css_class: "access-url",
-                                        set_selectable: true,
-                                        set_wrap: true,
-                                        set_justify: gtk::Justification::Center,
-                                    },
-                                    gtk::Button {
-                                        set_icon_name: "edit-copy-symbolic",
-                                        add_css_class: "flat",
-                                        set_valign: gtk::Align::Center,
-                                        set_tooltip_text: Some(&tr!("Copy the address")),
-                                        connect_clicked => HomeMsg::CopyUrl,
-                                    },
-                                },
-                                gtk::Label {
-                                    set_label: &tr!("and enter the PIN"),
-                                    add_css_class: "hero-detail",
-                                    set_margin_top: 6,
-                                },
-                                gtk::Label {
-                                    #[watch]
-                                    set_label: &model.access_field(|a| a.pin.clone()),
-                                    add_css_class: "access-pin",
-                                },
-                                gtk::Box {
-                                    add_css_class: "qr-frame",
-                                    set_halign: gtk::Align::Center,
-                                    set_margin_top: 8,
-                                    #[name = "qr_picture"]
-                                    gtk::Picture {
-                                        set_size_request: (168, 168),
-                                        set_can_shrink: true,
-                                    },
-                                },
-                            },
-                            gtk::Button {
-                                set_label: &tr!("Disconnect"),
-                                add_css_class: "destructive-action",
-                                set_halign: gtk::Align::Center,
-                                set_margin_top: 10,
-                                connect_clicked => HomeMsg::Stop,
-                            },
-                        },
-
-                        gtk::Box {
-                            set_orientation: gtk::Orientation::Vertical,
-                            set_spacing: 4,
-                            add_css_class: "info-card",
-                            #[watch]
-                            set_visible: model.session.is_some(),
-
-                            gtk::Box {
-                                set_spacing: 8,
-
-                                gtk::Label {
-                                    #[watch]
-                                    set_label: &if model.measurable() {
-                                        tr!("Network response")
-                                    } else {
-                                        tr!("Connection")
-                                    },
-                                    set_hexpand: true,
-                                    set_xalign: 0.0,
-                                    add_css_class: "heading",
-                                },
-                            },
-                            gtk::Label {
-                                #[watch]
-                                set_label: &model.connection_line(),
-                                set_xalign: 0.0,
-                                set_wrap: true,
-                                add_css_class: "dim-label",
-                            },
-                        },
 
                         gtk::Expander {
                             set_label: Some(&tr!("Help connecting a device")),
@@ -415,7 +415,6 @@ impl Component for HomePage {
                             set_halign: gtk::Align::Start,
                             set_margin_top: 6,
                             gtk::Button {
-                                add_css_class: "suggested-action",
                                 adw::ButtonContent { set_icon_name: "video-display-symbolic", set_label: &tr!("Screen") },
                                 connect_clicked => HomeMsg::PublishWeb(SourceType::Monitor),
                             },
@@ -428,6 +427,14 @@ impl Component for HomePage {
                                 #[watch] set_sensitive: model.virtual_available,
                                 connect_clicked => HomeMsg::PublishWeb(SourceType::Virtual),
                             },
+                        },
+                        gtk::Label {
+                            set_label: &virtual_unavailable(),
+                            #[watch] set_visible: !model.virtual_available,
+                            set_xalign: 0.0,
+                            set_wrap: true,
+                            add_css_class: "caption",
+                            add_css_class: "dim-label",
                         },
                     },
                 },
@@ -451,7 +458,6 @@ impl Component for HomePage {
                             set_halign: gtk::Align::Start,
                             set_margin_top: 6,
                             gtk::Button {
-                                add_css_class: "suggested-action",
                                 adw::ButtonContent { set_icon_name: "video-display-symbolic", set_label: &tr!("Screen") },
                                 connect_clicked => HomeMsg::PublishNdi(SourceType::Monitor),
                             },
@@ -464,6 +470,14 @@ impl Component for HomePage {
                                 #[watch] set_sensitive: model.virtual_available,
                                 connect_clicked => HomeMsg::PublishNdi(SourceType::Virtual),
                             },
+                        },
+                        gtk::Label {
+                            set_label: &virtual_unavailable(),
+                            #[watch] set_visible: !model.virtual_available,
+                            set_xalign: 0.0,
+                            set_wrap: true,
+                            add_css_class: "caption",
+                            add_css_class: "dim-label",
                         },
                     },
                 },
@@ -488,9 +502,10 @@ impl Component for HomePage {
         // in the view macro because each carries a different message, and a
         // loop says that once.
         let action_grid = gtk::FlowBox::new();
+        let mut first_tile = None;
         let mut virtual_button = None;
         let mut media_button = None;
-        for (icon, colour, title, subtitle, message) in [
+        for (icon, tile, title, subtitle, message) in [
             (
                 "video-display-symbolic",
                 "screen",
@@ -508,7 +523,7 @@ impl Component for HomePage {
             (
                 "video-joined-displays-symbolic",
                 "virtual",
-                tr!("A new screen"),
+                tr!("Extra screen"),
                 tr!("An extra desktop, just for this"),
                 HomeMsg::Act(SourceType::Virtual),
             ),
@@ -520,14 +535,17 @@ impl Component for HomePage {
                 HomeMsg::SendMedia,
             ),
         ] {
-            let button = action_button(icon, colour, &title, &subtitle);
+            let button = action_button(icon, &title, &subtitle);
             let input = sender.input_sender().clone();
             let message = message.clone();
             button.connect_clicked(move |_| input.emit(message.clone()));
-            if colour == "virtual" {
+            if first_tile.is_none() {
+                first_tile = Some(button.clone());
+            }
+            if tile == "virtual" {
                 virtual_button = Some(button.clone());
             }
-            if colour == "media" {
+            if tile == "media" {
                 media_button = Some(button.clone());
             }
             action_grid.append(&button);
@@ -535,6 +553,7 @@ impl Component for HomePage {
 
         let model = HomePage {
             devices,
+            first_tile: first_tile.expect("the tiles are always built"),
             virtual_button: virtual_button.expect("the extra-screen button is always built"),
             media_button: media_button.expect("the media button is always built"),
             step: Step::Device,
@@ -547,7 +566,9 @@ impl Component for HomePage {
         model
             .devices
             .widget()
-            .set_placeholder(Some(&discovery_placeholder(true)));
+            .set_placeholder(Some(&crate::pages::discovery_placeholder(
+                crate::pages::Discovery::Searching,
+            )));
 
         let device_list = model.devices.widget();
         let action_grid = &action_grid;
@@ -556,7 +577,6 @@ impl Component for HomePage {
         let vertical = gtk::Orientation::Vertical.to_value();
         for stacked in [
             &widgets.receivers_heading,
-            &widgets.columns,
             &widgets.ndi_card,
             &widgets.ndi_buttons,
             &widgets.web_card,
@@ -564,12 +584,19 @@ impl Component for HomePage {
         ] {
             compact.add_setter(stacked, "orientation", Some(&vertical));
         }
-        compact.add_setter(
-            &widgets.advice_column,
-            "width-request",
-            Some(&(-1i32).to_value()),
-        );
         big_gtk_kit::breakpoint::add(&root, compact);
+
+        // Escape steps back from choosing what to send.
+        let keys = gtk::EventControllerKey::new();
+        let input = sender.input_sender().clone();
+        keys.connect_key_pressed(move |_, key, _, _| {
+            if key == gtk::gdk::Key::Escape {
+                input.emit(HomeMsg::Back);
+                return gtk::glib::Propagation::Stop;
+            }
+            gtk::glib::Propagation::Proceed
+        });
+        root.add_controller(keys);
 
         ComponentParts { model, widgets }
     }
@@ -581,6 +608,8 @@ impl Component for HomePage {
         sender: ComponentSender<Self>,
         _root: &Self::Root,
     ) {
+        let step = self.step;
+        let chosen = self.chosen.as_ref().map(|device| device.id.clone());
         match message {
             HomeMsg::AudioSummary(summary) => self.audio_summary = summary,
             HomeMsg::AudioSettings => {
@@ -614,22 +643,17 @@ impl Component for HomePage {
                 }
                 self.session = session;
             }
-            HomeMsg::Searching(searching) => {
+            HomeMsg::Discovery(discovery) => {
                 self.devices
                     .widget()
-                    .set_placeholder(Some(&discovery_placeholder(searching)));
+                    .set_placeholder(Some(&crate::pages::discovery_placeholder(discovery)));
             }
             HomeMsg::VirtualAvailable(available) => {
                 self.virtual_available = available;
                 // Left in place but insensitive: hiding it would leave the
                 // person wondering whether the feature exists at all.
                 self.virtual_button.set_sensitive(available);
-                let reason = (!available).then(|| {
-                    tr!(
-                        "This desktop cannot create an extra screen (it needs GNOME running \
-                         natively)"
-                    )
-                });
+                let reason = (!available).then(virtual_unavailable);
                 self.virtual_button.set_tooltip_text(reason.as_deref());
             }
             HomeMsg::Selected(id) => {
@@ -691,6 +715,23 @@ impl Component for HomePage {
                 .is_some_and(|device| device.kind.can_receive_files(&device.address)),
         );
         self.update_view(widgets, sender);
+        // The control that had focus is hidden with its step; focus moves to
+        // where the next choice is, or back to the receiver just left.
+        if self.step != step {
+            match self.step {
+                Step::Action => {
+                    self.first_tile.grab_focus();
+                }
+                Step::Device => {
+                    if let Some(index) =
+                        chosen.and_then(|id| self.devices.iter().position(|row| row.entry.id == id))
+                        && let Some(row) = self.devices.widget().row_at_index(index as i32)
+                    {
+                        row.grab_focus();
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -712,13 +753,6 @@ impl HomePage {
                 .map(|d| format!("{} · {}", d.name, d.subtitle()))
                 .unwrap_or_default(),
         }
-    }
-
-    fn chosen_name(&self) -> String {
-        self.chosen
-            .as_ref()
-            .map(|d| d.name.clone())
-            .unwrap_or_default()
     }
 
     fn session_field<F: Fn(&SessionInfo) -> String>(&self, f: F) -> String {
@@ -759,12 +793,12 @@ impl HomePage {
 }
 
 /// One thing that can be sent, as a tile button: pressing it starts sending.
-fn action_button(icon: &str, colour: &str, title: &str, subtitle: &str) -> gtk::Button {
+fn action_button(icon: &str, title: &str, subtitle: &str) -> gtk::Button {
     let image = gtk::Image::builder()
         .icon_name(icon)
         .pixel_size(32)
         .halign(gtk::Align::Start)
-        .css_classes(["share-icon", colour])
+        .css_classes(["share-icon"])
         .build();
 
     let text = gtk::Box::builder()
@@ -809,29 +843,7 @@ fn action_button(icon: &str, colour: &str, title: &str, subtitle: &str) -> gtk::
         .build()
 }
 
-fn discovery_placeholder(searching: bool) -> gtk::Box {
-    let content = gtk::Box::builder()
-        .orientation(gtk::Orientation::Vertical)
-        .spacing(8)
-        .margin_top(20)
-        .margin_bottom(20)
-        .margin_start(16)
-        .margin_end(16)
-        .build();
-    let title = gtk::Label::builder()
-        .label(if searching {
-            tr!("Looking for receivers…")
-        } else {
-            tr!("No receivers found")
-        })
-        .wrap(true)
-        .css_classes(["heading"])
-        .build();
-    content.append(&title);
-    if !searching {
-        content.append(&gtk::Label::builder()
-            .label(tr!("Turn on your TV or projector and open screen mirroring, or share with a web browser below."))
-            .wrap(true).max_width_chars(70).build());
-    }
-    content
+/// Why the extra-screen choices are greyed out.
+fn virtual_unavailable() -> String {
+    tr!("This desktop cannot create an extra screen.")
 }

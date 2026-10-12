@@ -63,7 +63,7 @@ fn layout_pages_and_breakpoints() {
     .collect();
     home.emit(home::HomeMsg::Devices(entries.clone()));
     home.emit(home::HomeMsg::VirtualAvailable(true));
-    devices.emit(devices::DevicesMsg::Devices(entries));
+    devices.emit(devices::DevicesMsg::Devices(entries.clone()));
     media.emit(media::MediaMsg::Targets(vec![(
         "1".into(),
         "Projector".into(),
@@ -104,6 +104,35 @@ fn layout_pages_and_breakpoints() {
     capture("actions-dark");
     window.set_content(Some(devices.widget()));
     capture("devices-dark");
+    devices.emit(devices::DevicesMsg::SetFilter(devices::Filter::Miracast));
+    devices.emit(devices::DevicesMsg::Devices(entries[..1].to_vec()));
+    capture("devices-filtered-dark");
+    devices.emit(devices::DevicesMsg::Devices(Vec::new()));
+    devices.emit(devices::DevicesMsg::Discovery(Discovery::Unreachable));
+    capture("devices-unreachable-dark");
+    devices.emit(devices::DevicesMsg::SetFilter(devices::Filter::All));
+    devices.emit(devices::DevicesMsg::Discovery(Discovery::Finished));
+    devices.emit(devices::DevicesMsg::Devices(entries.clone()));
+    home.emit(home::HomeMsg::Back);
+    home.emit(home::HomeMsg::Session(Some(SessionInfo {
+        id: "web".into(),
+        name: "Web browsers".into(),
+        kind: None,
+        protocol: "Web".into(),
+        address: String::new(),
+        mode: describe_mode(1920, 1080, 30, 2),
+        state: SinkState::Streaming,
+        measurable: false,
+        probe_failed: false,
+        round_trip_ms: None,
+        access: Some(nd_core::sink::SinkAccess {
+            url: "http://192.168.1.20:8080".into(),
+            pin: "4821".into(),
+        }),
+    })));
+    window.set_content(Some(home.widget()));
+    capture("home-streaming-dark");
+    home.emit(home::HomeMsg::Session(None));
     window.set_content(Some(settings.widget()));
     capture("settings-dark");
     window.set_content(Some(media.widget()));
