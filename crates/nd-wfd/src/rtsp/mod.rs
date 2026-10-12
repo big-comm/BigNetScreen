@@ -21,9 +21,9 @@ mod capabilities;
 mod message;
 
 pub use capabilities::{
-    MAX_SOURCE_SIZE, ResolutionTable, SinkCaps, WfdMode, m4_video_formats, mode_from_native,
-    parse_caps, parse_video_formats,
+    MAX_SOURCE_SIZE, ResolutionTable, SinkCaps, WfdMode, mode_from_native, parse_video_formats,
 };
+use capabilities::{m4_video_formats, parse_caps};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::time::Duration;

@@ -108,7 +108,7 @@ pub async fn run(
 }
 
 /// Starts the capture, negotiates the mode with the receiver and streams it.
-#[allow(
+#[expect(
     clippy::too_many_arguments,
     reason = "the session's own inputs, passed through once"
 )]

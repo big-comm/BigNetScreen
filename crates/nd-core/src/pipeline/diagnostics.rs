@@ -40,7 +40,7 @@ pub fn query_min_latency_ms(pipeline: &gst::Pipeline) -> Option<u64> {
 /// network or never have been sent them, and a still screen legitimately
 /// produces almost no capture buffers. Only the pair tells a quiet compositor
 /// from an encoder that cannot keep up.
-pub fn instrument_framerate(pipeline: &gst::Pipeline) {
+pub(crate) fn instrument_framerate(pipeline: &gst::Pipeline) {
     if std::env::var("BIGNETSCREEN_FPS_LOG").as_deref() != Ok("1") {
         return;
     }
@@ -126,7 +126,7 @@ struct AgeWindow {
 /// Every element gets a probe, so the step between two neighbours is the cost
 /// of that stage. The ages cover this machine only: no network transit and no
 /// receiver buffering.
-pub fn instrument_latency(pipeline: &gst::Pipeline) {
+pub(crate) fn instrument_latency(pipeline: &gst::Pipeline) {
     let mut found = 0;
     for element in pipeline.iterate_elements().into_iter().flatten() {
         let Some(pad) = element

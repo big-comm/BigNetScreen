@@ -35,16 +35,15 @@ use gstreamer as gst;
 
 use crate::{NdError, Result};
 
-pub use diagnostics::{
-    capture_memory, count_buffers, instrument_framerate, instrument_latency, query_min_latency_ms,
-};
+pub use diagnostics::{capture_memory, count_buffers, query_min_latency_ms};
+use diagnostics::{instrument_framerate, instrument_latency};
 pub use encoder::{
     ENCODER_NAME, H264Encoder, H264Profile, OPENH264_PIPELINE_LATENCY_MS, PIPELINE_LATENCY_AUTO,
     force_key_unit, set_encoder_bitrate, software_encode_threads,
 };
 pub use encoder_selection::{
     Acceleration, GpuDriver, MonitoredPipeline, best_encoder, build_monitored, encoder_candidates,
-    probe_encoders, select_encoder, working_encoder,
+    probe_encoders, working_encoder,
 };
 pub use mirror::{
     CAST_VBV_FRAMES, MIRROR_AUDIO_SINK, MIRROR_VIDEO_SINK, mirror_pipeline_description,

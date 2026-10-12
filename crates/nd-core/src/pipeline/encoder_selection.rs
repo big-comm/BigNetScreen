@@ -112,7 +112,7 @@ pub fn probe_encoders() -> Vec<H264Encoder> {
 /// The rules: discard hardware encoding when the driver is known to be
 /// problematic (`nouveau`), and never cross stacks (NVENC only on NVIDIA;
 /// VA-API does not work under NVIDIA's proprietary driver).
-pub fn select_encoder(available: &[H264Encoder], driver: GpuDriver) -> Option<H264Encoder> {
+pub(crate) fn select_encoder(available: &[H264Encoder], driver: GpuDriver) -> Option<H264Encoder> {
     available
         .iter()
         .copied()

@@ -33,7 +33,8 @@ use crate::cast::{CastChannel, LaunchedApp};
 
 mod answer;
 
-pub use answer::{Answer, AudioLimits, VideoLimits, parse_answer};
+use answer::parse_answer;
+pub use answer::{Answer, AudioLimits, VideoLimits};
 
 /// The mirroring app built into Cast devices ("Chrome Mirroring").
 pub const MIRRORING_APP_ID: &str = "0F5096E8";
@@ -239,7 +240,7 @@ impl Negotiated {
 ///
 /// The field names follow what Open Screen serialises; the receiver is picky
 /// and silently ignores a malformed offer.
-pub fn build_offer(cfg: &MirrorConfig, seq_num: i64) -> Result<(Value, Offer)> {
+pub(crate) fn build_offer(cfg: &MirrorConfig, seq_num: i64) -> Result<(Value, Offer)> {
     let mut streams = Vec::new();
     let mut json_streams = Vec::new();
 

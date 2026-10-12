@@ -238,7 +238,7 @@ impl Answer {
 }
 
 /// Parses the receiver's ANSWER.
-pub fn parse_answer(payload: &Value, seq_num: i64) -> Result<Answer> {
+pub(crate) fn parse_answer(payload: &Value, seq_num: i64) -> Result<Answer> {
     let kind = payload.get("type").and_then(Value::as_str).unwrap_or("");
     if kind != "ANSWER" {
         return Err(NdError::Protocol(format!(

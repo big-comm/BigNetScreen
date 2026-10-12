@@ -52,7 +52,12 @@ type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
 /// offset 8 of a zeroed block, XORed with the mask negotiated in the OFFER.
 /// This is Open Screen's construction (`frame_crypto.cc`); any divergence
 /// produces unreadable video with no error anywhere.
-pub fn encrypt_frame(key: &[u8; 16], iv_mask: &[u8; 16], frame_id: u32, data: &[u8]) -> Vec<u8> {
+pub(crate) fn encrypt_frame(
+    key: &[u8; 16],
+    iv_mask: &[u8; 16],
+    frame_id: u32,
+    data: &[u8],
+) -> Vec<u8> {
     let mut nonce = [0u8; 16];
     nonce[8..12].copy_from_slice(&frame_id.to_be_bytes());
     for (byte, mask) in nonce.iter_mut().zip(iv_mask.iter()) {
@@ -109,7 +114,7 @@ impl Packetizer {
     }
 
     /// Splits a frame into packets ready for the socket.
-    pub fn packetize(&mut self, frame: &Frame<'_>) -> Vec<Vec<u8>> {
+    pub(crate) fn packetize(&mut self, frame: &Frame<'_>) -> Vec<Vec<u8>> {
         let payload_limit = self.max_payload_size();
         // "At least one packet, even with no payload bytes": an empty frame
         // still has to exist in the numbering, or the receiver stalls waiting

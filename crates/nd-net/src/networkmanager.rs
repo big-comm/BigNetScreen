@@ -20,7 +20,6 @@ pub(crate) trait NetworkManager {
     #[zbus(property)]
     fn active_connections(&self) -> zbus::Result<Vec<OwnedObjectPath>>;
 
-    #[allow(clippy::type_complexity)]
     fn add_and_activate_connection2(
         &self,
         connection: HashMap<&str, HashMap<&str, Value<'_>>>,

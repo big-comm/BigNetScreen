@@ -26,17 +26,17 @@ nd-dlna.workspace = true
 nd-wfd.workspace = true
 nd-ndi.workspace = true
 nd-webrtc.workspace = true
-async-trait.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 futures.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["signal"] }
 zbus = { version = "5", default-features = false, features = ["tokio"] }
 # Already in the tree through `zbus`; named here because the wire types derive
 # from it directly.
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
+async-trait.workspace = true
 # `test-util` gives the paused clock: the idle-exit test would otherwise have
 # to wait the real grace period to prove anything.
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util"] }

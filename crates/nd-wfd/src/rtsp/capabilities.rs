@@ -194,7 +194,7 @@ impl SinkCaps {
     ///
     /// Interlaced modes are discarded: the pipeline produces progressive, and
     /// sending progressive while declaring interlaced confuses the sink.
-    pub fn best_mode(&self) -> Option<WfdMode> {
+    pub(crate) fn best_mode(&self) -> Option<WfdMode> {
         self.modes
             .iter()
             .copied()
@@ -203,7 +203,7 @@ impl SinkCaps {
     }
 
     /// The best mode that does not exceed a resolution cap.
-    pub fn best_mode_within(&self, max_width: u32, max_height: u32) -> Option<WfdMode> {
+    pub(crate) fn best_mode_within(&self, max_width: u32, max_height: u32) -> Option<WfdMode> {
         self.modes
             .iter()
             .copied()
@@ -329,7 +329,7 @@ pub fn mode_from_native(native: u8) -> Option<WfdMode> {
 }
 
 /// Builds M4's `wfd_video_formats` with a single selected mode.
-pub fn m4_video_formats(mode: &WfdMode, profile: u8, level: u8) -> String {
+pub(crate) fn m4_video_formats(mode: &WfdMode, profile: u8, level: u8) -> String {
     let bit = 1u32 << mode.index;
     let (cea, vesa, hh) = match mode.table {
         ResolutionTable::Cea => (bit, 0, 0),
@@ -347,7 +347,7 @@ pub fn m4_video_formats(mode: &WfdMode, profile: u8, level: u8) -> String {
 }
 
 /// Parses the `text/parameters` body of the M3 response.
-pub fn parse_caps(body: &str) -> SinkCaps {
+pub(crate) fn parse_caps(body: &str) -> SinkCaps {
     let mut caps = SinkCaps::default();
     for line in body.lines() {
         let Some((key, value)) = line.split_once(':') else {

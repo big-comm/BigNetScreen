@@ -20,7 +20,6 @@ gstreamer-video = "0.25"
 nd-core.workspace = true
 nd-capture.workspace = true
 nd-chromecast.workspace = true
-nd-wfd.workspace = true
 nd-ndi.workspace = true
 nd-webrtc.workspace = true
 nd-service.workspace = true
@@ -32,7 +31,7 @@ tracing-subscriber.workspace = true
 # The QR code with the page's address; only the matrix, drawn by hand into a texture.
 qrcode = { version = "0.14", default-features = false }
 futures.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["process"] }
 gettext-rs = { version = "0.8", features = ["gettext-system"] }
 relm4 = { version = "0.11", features = ["libadwaita"] }
 big-gtk-kit.workspace = true

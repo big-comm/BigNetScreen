@@ -242,7 +242,7 @@ pub async fn describe(location: &Endpoint) -> Result<String> {
 ///
 /// `arguments` is the already-built XML of the action's children: each caller
 /// has a small fixed set, built and escaped by hand.
-pub async fn soap(
+pub(crate) async fn soap(
     control: &Endpoint,
     service_type: &str,
     action: &str,

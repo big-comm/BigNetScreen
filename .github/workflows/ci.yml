@@ -102,10 +102,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # rustsec/audit-check@v2 still runs on the deprecated Node.js 20; the
-      # same RustSec check, run directly, needs no Node at all.
+      # rustsec/audit-check@v2 runs on Node.js 20, which GitHub deprecated;
+      # the same RustSec check, run directly, needs no Node.
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-audit
+          tool: cargo-audit,cargo-deny
       - name: RustSec advisories
         run: cargo audit
+      - name: Licence, duplicate and source policy (deny.toml)
+        run: cargo deny check licenses bans sources

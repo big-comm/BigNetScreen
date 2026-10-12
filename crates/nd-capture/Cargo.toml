@@ -30,8 +30,6 @@ wayland-backend = "0.3"
 wayland-scanner = "0.31"
 
 [dev-dependencies]
-# Examples only: the probes have to pick the encoder production would pick.
-nd-net.workspace = true
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 gstreamer.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

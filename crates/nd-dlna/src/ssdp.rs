@@ -60,7 +60,7 @@ pub struct Announcement {
 ///
 /// Header names are matched case-insensitively because devices genuinely
 /// disagree on the spelling.
-pub fn parse_reply(reply: &str) -> Option<Announcement> {
+pub(crate) fn parse_reply(reply: &str) -> Option<Announcement> {
     let mut lines = reply.split("\r\n");
     if !lines.next()?.starts_with("HTTP/1.1 200") {
         return None;

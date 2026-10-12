@@ -38,7 +38,6 @@ const RESTORE_RETRY_DELAY: std::time::Duration = std::time::Duration::from_milli
     default_path = "/org/gnome/Mutter/DisplayConfig"
 )]
 trait DisplayConfig {
-    #[allow(clippy::type_complexity)]
     fn get_current_state(
         &self,
     ) -> zbus::Result<(

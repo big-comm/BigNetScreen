@@ -18,7 +18,7 @@ gstreamer.workspace = true
 # `media::tv_frame`: a file's picture size, read from its headers.
 gstreamer-pbutils = "0.25"
 # `radio`: radio silence shared between discovery and streaming.
-tokio.workspace = true
+tokio = { workspace = true, features = ["process"] }
 # `stream_server`: handing a live TCP socket to `multisocketsink`.
 # Media URLs use GLib's native URI parser, available since 2.66.
 gio = { version = "0.22", features = ["v2_66"] }

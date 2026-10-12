@@ -69,7 +69,12 @@ impl SenderStats {
 }
 
 /// Builds a *sender report* for the given stream.
-pub fn build_sender_report(ssrc: u32, ntp: u64, rtp_timestamp: u32, stats: SenderStats) -> Vec<u8> {
+pub(crate) fn build_sender_report(
+    ssrc: u32,
+    ntp: u64,
+    rtp_timestamp: u32,
+    stats: SenderStats,
+) -> Vec<u8> {
     let mut packet = Vec::with_capacity(SENDER_REPORT_SIZE);
 
     packet.push(RTCP_FIRST_BYTE);
@@ -191,7 +196,7 @@ fn classify_block(block: &[u8]) -> ReceiverPacket {
 
 /// Whether the datagram carries a picture-loss request from `receiver_ssrc`
 /// about `sender_ssrc`: arriving on the session's socket is not enough.
-pub fn picture_loss_for(packet: &[u8], receiver_ssrc: u32, sender_ssrc: u32) -> bool {
+pub(crate) fn picture_loss_for(packet: &[u8], receiver_ssrc: u32, sender_ssrc: u32) -> bool {
     validated_blocks(packet).is_some_and(|blocks| {
         blocks.into_iter().any(|block| {
             classify_block(block) == ReceiverPacket::PictureLossIndication
@@ -260,7 +265,7 @@ pub struct CastFeedback {
 /// Every Cast feedback block in a datagram: a compound packet can carry one
 /// per negotiated track. The receiver sends these many times a second while
 /// something is missing, and waits for the resend.
-pub fn parse_cast_feedbacks(packet: &[u8]) -> Vec<CastFeedback> {
+pub(crate) fn parse_cast_feedbacks(packet: &[u8]) -> Vec<CastFeedback> {
     let Some(blocks) = validated_blocks(packet) else {
         return Vec::new();
     };

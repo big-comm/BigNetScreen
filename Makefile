@@ -20,7 +20,7 @@ CTL     ?= $(CARGO_TARGET_DIR)/release/bignetscreenctl
 LANGS := $(shell cat po/LINGUAS 2>/dev/null)
 MOFILES := $(patsubst %,build/locale/%/LC_MESSAGES/bignetscreen.mo,$(LANGS))
 
-.PHONY: all build locale install uninstall check clippy fmt test clean pot run
+.PHONY: all build locale install uninstall check clippy fmt test project clean pot run
 
 all: build locale
 
@@ -72,7 +72,11 @@ uninstall:
 		rm -f "$(LOCALEDIR)/$$lang/LC_MESSAGES/bignetscreen.mo"; \
 	done
 
-check: fmt clippy test
+check: fmt clippy test project
+
+# Documentation links, release metadata and source hygiene, without building.
+project:
+	python3 scripts/check-project.py
 
 fmt:
 	$(CARGO) fmt --all -- --check
