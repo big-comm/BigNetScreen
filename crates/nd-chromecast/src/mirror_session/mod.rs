@@ -122,7 +122,7 @@ async fn mirror(
     status: &SinkStatus,
     cancel: &mut tokio::sync::watch::Receiver<bool>,
 ) -> Result<()> {
-    let mut cfg = mirror_config(size).await?;
+    let mut cfg = mirror_config(video, size).await?;
     if *cancel.borrow() {
         return Ok(());
     }
@@ -239,7 +239,7 @@ async fn negotiate_mode(
 
 /// The mode to offer before the receiver has spoken, with an encoder proven
 /// to start at it.
-async fn mirror_config(size: (u32, u32)) -> Result<StreamConfig> {
+async fn mirror_config(video: &pipeline::VideoSource, size: (u32, u32)) -> Result<StreamConfig> {
     let (width, height) = StreamConfig::fit_within(
         size,
         StreamConfig::preferred_or(pipeline::CHROMECAST_MAX_RESOLUTION),
@@ -249,7 +249,7 @@ async fn mirror_config(size: (u32, u32)) -> Result<StreamConfig> {
         height,
         // No frame rate to negotiate against: the preference is the whole
         // answer, capped at what H.264 mirroring receivers accept.
-        fps: StreamConfig::capped_fps(60),
+        fps: StreamConfig::fps_for(video, 60).await,
         // A whole-screen change, such as switching a browser tab, otherwise
         // becomes one enormous frame: hundreds of datagrams the pacer lets out
         // a burst at a time, and the update shows only when the last arrives.
@@ -262,7 +262,13 @@ async fn mirror_config(size: (u32, u32)) -> Result<StreamConfig> {
         // Google documents H.264 High for Cast playback; mirroring
         // interoperability across receivers still needs validation.
         profile: pipeline::H264Profile::High,
-        audio: pipeline::AudioSource::detect(),
+        // A file's sound comes from its own decoder; the computer's would be
+        // silent, or another application.
+        audio: if video.is_media() {
+            pipeline::AudioSource::MediaFile
+        } else {
+            pipeline::AudioSource::detect()
+        },
         ..Default::default()
     };
     // Chosen before the receiver has spoken, because the pipeline has to exist

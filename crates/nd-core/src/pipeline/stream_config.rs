@@ -166,6 +166,22 @@ impl StreamConfig {
         }
     }
 
+    /// The frame rate to send `video` at: [`Self::capped_fps`], and a file no
+    /// faster than it plays, since a repeated frame costs a conversion and an
+    /// encode and shows nothing new. Reads a file's headers.
+    pub async fn fps_for(video: &VideoSource, negotiated: u32) -> u32 {
+        let fps = Self::capped_fps(negotiated);
+        let VideoSource::Media { source, .. } = video else {
+            return fps;
+        };
+        let source = source.clone();
+        tokio::task::spawn_blocking(move || crate::media::frame_rate(&source))
+            .await
+            .ok()
+            .flatten()
+            .map_or(fps, |rate| fps.min(rate))
+    }
+
     /// The frame rate to use, given what the link negotiated.
     ///
     /// A preference can lower it but never raise a link that agreed on less.

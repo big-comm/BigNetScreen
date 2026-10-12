@@ -130,6 +130,18 @@ fn picture_size(source: &MediaSource) -> Option<(u32, u32)> {
     Some((width, video.height())).filter(|&(w, h)| w > 0 && h > 0)
 }
 
+/// How many pictures a second the file shows, rounded up; `None` for a
+/// still picture, sound alone or a file that could not be read. Blocking.
+pub fn frame_rate(source: &MediaSource) -> Option<u32> {
+    let video = discover(source)?.video_streams().into_iter().next()?;
+    let rate = video.framerate();
+    let (numer, denom) = (
+        u32::try_from(rate.numer()).ok().filter(|n| *n > 0)?,
+        u32::try_from(rate.denom()).ok().filter(|d| *d > 0)?,
+    );
+    Some(numer.div_ceil(denom))
+}
+
 /// How long the file plays, read from its headers. Blocking.
 pub fn duration(source: &MediaSource) -> Option<f64> {
     discover(source)?
@@ -524,7 +536,7 @@ mod tests {
     }
 
     #[test]
-    fn cast_plays_only_its_codecs() {
+    fn file_streams_are_read() {
         crate::pipeline::init().unwrap();
         let dir = std::env::temp_dir();
         let played = dir.join(format!("bns-codecs-vp8-{}.webm", std::process::id()));
@@ -550,6 +562,8 @@ mod tests {
             cast_plays_streams(&MediaSource::File(dir.join("bns-missing.webm"))),
             None
         );
+        // Ten frames a second, as the fixture was written.
+        assert_eq!(frame_rate(&MediaSource::File(played.clone())), Some(10));
         std::fs::remove_file(played).unwrap();
         std::fs::remove_file(unplayed).unwrap();
     }

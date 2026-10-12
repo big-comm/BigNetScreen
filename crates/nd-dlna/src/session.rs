@@ -116,7 +116,7 @@ async fn stream(
         width,
         height,
         // An encoding target, not a frame rate negotiated with the TV.
-        fps: StreamConfig::capped_fps(60),
+        fps: StreamConfig::fps_for(&source.video_source(), 60).await,
         audio: source.audio_source(),
         ..Default::default()
     };
