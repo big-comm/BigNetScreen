@@ -25,13 +25,13 @@ use tokio::net::{TcpListener, TcpStream};
 
 use nd_core::{NdError, Result};
 
-use nd_core::stream_server::{
-    local_ip_towards, random_token, read_request, request_line, write_bounded,
-};
+use nd_core::stream_server::{local_ip_towards, read_request, request_line, write_bounded};
 
 /// Copy buffer. Large enough that a film is not sent in tiny writes, small
 /// enough not to hold a megabyte per connection.
 const CHUNK: usize = 64 * 1024;
+/// Pause after a failed accept: out of descriptors, it fails again at once.
+const ACCEPT_RETRY: Duration = Duration::from_millis(100);
 
 pub use nd_core::media::MediaKind;
 
@@ -177,7 +177,7 @@ impl FileServer {
         let address = listener
             .local_addr()
             .map_err(|e| NdError::Network(e.to_string()))?;
-        let token = random_token()?;
+        let token = nd_core::secret::random_token()?;
         tracing::info!(%address, count = files.len(), "serving media files");
         let files = Arc::new(files);
 
@@ -185,17 +185,28 @@ impl FileServer {
             let token = token.clone();
             async move {
                 let mut clients = tokio::task::JoinSet::new();
+                let mut refused_any = false;
                 loop {
                     let accepted = tokio::select! {
                         result = listener.accept(), if clients.len() < 16 => result,
                         _ = clients.join_next(), if !clients.is_empty() => continue,
                     };
-                    let Ok((stream, peer)) = accepted else {
-                        break;
+                    let (stream, peer) = match accepted {
+                        Ok(pair) => pair,
+                        Err(err) => {
+                            tracing::warn!(%err, "failed to accept a connection");
+                            tokio::time::sleep(ACCEPT_RETRY).await;
+                            continue;
+                        }
                     };
-                    // Only the receiver this session serves.
+                    // Only the receiver this session serves. Logged once at
+                    // warning level, so a LAN peer cannot flood the journal.
                     if peer.ip() != receiver {
-                        tracing::warn!(%peer, "a request from outside the session was refused");
+                        if std::mem::replace(&mut refused_any, true) {
+                            tracing::debug!(%peer, "a request from outside the session was refused");
+                        } else {
+                            tracing::warn!(%peer, "a request from outside the session was refused");
+                        }
                         continue;
                     }
                     let files = files.clone();
@@ -354,9 +365,7 @@ fn parse_target(target: &str, token: &str) -> Option<usize> {
     let path = target.split('?').next().unwrap_or(target);
     let rest = path.strip_prefix('/')?;
     let (given, index) = rest.split_once('/')?;
-    // Plain comparison: the token is 128 bits of one-shot randomness, not a
-    // password to be attacked over many attempts.
-    if given != token {
+    if !nd_core::secret::same_secret(given, token) {
         return None;
     }
     index.parse().ok()

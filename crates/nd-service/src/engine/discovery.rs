@@ -14,7 +14,7 @@ use nd_core::settings::Protocol;
 use nd_wfd::WfdP2pProvider;
 
 use super::{EMPTY_HINT_AFTER, Engine, Event};
-use crate::wire::{Issue, Status};
+use crate::wire::{Issue, Status, StatusKind};
 
 impl Engine {
     pub(super) fn discovery_event(&mut self, event: DiscoveryEvent) {
@@ -79,8 +79,11 @@ impl Engine {
     }
 
     pub(super) fn rescan(&mut self) {
-        if matches!(self.status.kind.as_str(), "error" | "ndi-runtime-missing") {
-            self.status = Status::of("idle");
+        if matches!(
+            self.status.kind(),
+            Some(StatusKind::Error | StatusKind::NdiRuntimeMissing)
+        ) {
+            self.status = Status::of(StatusKind::Idle);
         }
         self.abort_discovery();
         self.issues.clear();

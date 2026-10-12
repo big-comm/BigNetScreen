@@ -278,11 +278,14 @@ impl Component for DevicesPage {
 
                             adw::ActionRow {
                                 set_title: &tr!("Protocol"),
+                                // Receiver names and errors come from the network.
+                                set_use_markup: false,
                                 #[watch]
                                 set_subtitle: &model.field(|d| d.protocol.clone()),
                             },
                             adw::ActionRow {
                                 set_title: &tr!("Address"),
+                                set_use_markup: false,
                                 #[watch]
                                 set_subtitle: &model.field(|d| {
                                     if d.address.is_empty() {
@@ -294,11 +297,13 @@ impl Component for DevicesPage {
                             },
                             adw::ActionRow {
                                 set_title: &tr!("Status"),
+                                set_use_markup: false,
                                 #[watch]
                                 set_subtitle: &model.status_line(),
                             },
                             adw::ActionRow {
                                 set_title: &tr!("Streaming at"),
+                                set_use_markup: false,
                                 #[watch]
                                 set_subtitle: &model.field(|d| d.mode.clone()),
                                 // Only while there is a session: this is what

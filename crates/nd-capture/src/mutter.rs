@@ -235,7 +235,9 @@ impl MutterBackend {
         match recorded {
             Ok(node_id) => Ok((session_path, node_id)),
             Err(err) => {
-                let _ = session.stop().await;
+                if let Err(stop) = session.stop().await {
+                    tracing::warn!(err = %stop, "the failed Mutter session did not stop");
+                }
                 Err(err)
             }
         }
@@ -536,8 +538,10 @@ impl CaptureBackend for MutterBackend {
         }
         self.stop().await?;
         let started = self.open(source_type).await;
-        if started.is_err() {
-            let _ = self.stop().await;
+        if started.is_err()
+            && let Err(err) = self.stop().await
+        {
+            tracing::warn!(%err, "the failed Mutter capture did not close");
         }
         started
     }
@@ -554,21 +558,25 @@ impl CaptureBackend for MutterBackend {
         }
         if let Ok(builder) = ScreenCastSessionProxy::builder(&active.conn).path(active.session)
             && let Ok(session) = builder.build().await
+            && let Err(err) = session.stop().await
         {
-            let _ = session.stop().await;
+            tracing::warn!(%err, "the Mutter recording session did not stop");
         }
 
         // The keep-alive pipeline and the virtual session go last: dropping
         // them first would remove the screen out from under the session that
         // was recording it.
-        if let Some(keep_alive) = active.keep_alive {
-            let _ = keep_alive.set_state(gstreamer::State::Null);
+        if let Some(keep_alive) = active.keep_alive
+            && let Err(err) = keep_alive.set_state(gstreamer::State::Null)
+        {
+            tracing::warn!(%err, "the virtual screen keep-alive did not stop");
         }
         if let Some(virtual_session) = active.virtual_session
             && let Ok(builder) = ScreenCastSessionProxy::builder(&active.conn).path(virtual_session)
             && let Ok(proxy) = builder.build().await
+            && let Err(err) = proxy.stop().await
         {
-            let _ = proxy.stop().await;
+            tracing::warn!(%err, "the virtual screen session did not stop");
         }
 
         // Removing the monitor changes the set again, so Mutter regenerates a

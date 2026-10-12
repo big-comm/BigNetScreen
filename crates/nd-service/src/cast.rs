@@ -79,7 +79,9 @@ pub async fn run(
         stream_until_cancelled(&sink, source, &mut cancel).await
     }
     .await;
-    let _ = backend.stop().await;
+    if let Err(err) = backend.stop().await {
+        tracing::warn!(%err, "the capture session did not close");
+    }
     match result {
         Ok(()) => Outcome::ok(),
         Err(error) => Outcome::failed(error),
@@ -99,9 +101,9 @@ async fn ndi_ready(cancel: &mut watch::Receiver<bool>) -> Result<bool, Outcome> 
         Some(nd_ndi::RuntimeCheck::Ready { .. }) => Ok(true),
         // Installing it again would change nothing, so this is a plain failure
         // rather than the offer to install.
-        Some(nd_ndi::RuntimeCheck::CpuUnsupported { .. }) => {
-            Err(Outcome::failed("ndi-cpu-unsupported".into()))
-        }
+        Some(nd_ndi::RuntimeCheck::CpuUnsupported { .. }) => Err(Outcome::failed(
+            crate::wire::refusal::NDI_CPU_UNSUPPORTED.into(),
+        )),
         Some(nd_ndi::RuntimeCheck::Missing) | None => Err(Outcome {
             error: None,
             ndi_runtime_unavailable: true,

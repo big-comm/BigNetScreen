@@ -15,7 +15,7 @@ use relm4::prelude::*;
 use nd_chromecast::media::MediaStatus;
 use nd_core::media::PlaybackState;
 use nd_service::dbus::ServiceProxy;
-use nd_service::wire;
+use nd_service::wire::{self, StatusKind};
 
 use super::{AppCmd, AppModel};
 use crate::pages::{DeviceEntry, SessionInfo};
@@ -38,7 +38,7 @@ impl Default for ServiceState {
             receivers: Vec::new(),
             session: wire::Session::idle(),
             link_probe: "pending".into(),
-            status: wire::Status::of("searching"),
+            status: wire::Status::of(StatusKind::Searching),
             issues: Vec::new(),
             media: wire::Media::idle(),
             virtual_available: false,

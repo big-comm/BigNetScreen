@@ -22,7 +22,6 @@
 //! [Open Screen Library](https://chromium.googlesource.com/openscreen/+/HEAD/cast/streaming/),
 //! Google's own open source, which is the reference used here.
 
-use std::io::Read;
 use std::net::IpAddr;
 use std::time::Duration;
 
@@ -132,9 +131,7 @@ impl std::fmt::Debug for StreamKeys {
 
 pub(crate) fn random_bytes() -> Result<[u8; 16]> {
     let mut bytes = [0u8; 16];
-    std::fs::File::open("/dev/urandom")
-        .and_then(|mut f| f.read_exact(&mut bytes))
-        .map_err(|e| NdError::Network(format!("could not generate a key: {e}")))?;
+    nd_core::secret::random_bytes(&mut bytes)?;
     Ok(bytes)
 }
 

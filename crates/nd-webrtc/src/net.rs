@@ -1,6 +1,5 @@
 //! Addresses, ports and secrets for a published session.
 
-use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 
 use nd_core::{NdError, Result};
@@ -77,27 +76,13 @@ pub async fn bind_front_door(ip: IpAddr) -> Result<tokio::net::TcpListener> {
     )))
 }
 
-fn random_bytes(buf: &mut [u8]) -> Result<()> {
-    std::fs::File::open("/dev/urandom")
-        .and_then(|mut f| f.read_exact(buf))
-        .map_err(|e| NdError::Network(format!("could not generate a session secret: {e}")))
-}
-
-/// A random 128-bit token in hexadecimal: what the page holds once the PIN
-/// has been accepted, and what every media request must carry.
-pub fn random_token() -> Result<String> {
-    let mut bytes = [0u8; 16];
-    random_bytes(&mut bytes)?;
-    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
-}
-
 /// A four-digit PIN, uniformly distributed.
 pub fn random_pin() -> Result<String> {
     // Rejection sampling keeps every PIN equally likely: a plain modulo of a
     // 16-bit value would favour the low ones.
     loop {
         let mut bytes = [0u8; 2];
-        random_bytes(&mut bytes)?;
+        nd_core::secret::random_bytes(&mut bytes)?;
         let value = u16::from_le_bytes(bytes);
         if value < 60_000 {
             return Ok(format!("{:04}", value % 10_000));
@@ -116,14 +101,6 @@ mod tests {
             assert_eq!(pin.len(), 4, "{pin}");
             assert!(pin.bytes().all(|b| b.is_ascii_digit()), "{pin}");
         }
-    }
-
-    #[test]
-    fn tokens_are_128_bits_of_hex() {
-        let token = random_token().unwrap();
-        assert_eq!(token.len(), 32);
-        assert!(token.bytes().all(|b| b.is_ascii_hexdigit()));
-        assert_ne!(token, random_token().unwrap());
     }
 
     #[test]

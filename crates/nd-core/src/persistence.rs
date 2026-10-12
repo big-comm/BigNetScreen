@@ -7,7 +7,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 pub fn write_private(path: &Path, contents: &[u8]) -> std::io::Result<()> {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let parent = path.parent().ok_or(std::io::ErrorKind::InvalidInput)?;
-    std::fs::create_dir_all(parent)?;
+    let mut dir = std::fs::DirBuilder::new();
+    dir.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        dir.mode(0o700);
+    }
+    dir.create(parent)?;
     let temporary = parent.join(format!(
         ".bignetscreen-{}-{}.tmp",
         std::process::id(),
@@ -49,6 +56,10 @@ mod tests {
             assert_eq!(
                 std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
                 0o600
+            );
+            assert_eq!(
+                std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
+                0o700
             );
         }
         std::fs::remove_dir_all(dir).unwrap();

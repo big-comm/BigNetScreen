@@ -26,9 +26,12 @@ pub(super) fn inspect_paths(paths: Vec<PathBuf>) -> (Vec<MediaFile>, Vec<String>
                 .flatten()
                 .map(|entry| entry.path())
                 .filter(|path| path.is_file())
-                .take(nd_core::media::MAX_FILES + 1)
+                .take(64 * nd_core::media::MAX_FILES)
                 .collect();
+            // Sorted before the queue limit applies, so a large folder
+            // contributes its first files by name rather than arbitrary ones.
             paths.sort();
+            paths.truncate(nd_core::media::MAX_FILES + 1);
             paths
         } else {
             vec![path]

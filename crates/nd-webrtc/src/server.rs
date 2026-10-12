@@ -16,7 +16,8 @@
 //! trust cannot be had for a private address. The token in the query string
 //! is the same barrier the Chromecast path uses.
 
-use std::net::SocketAddr;
+use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -29,14 +30,22 @@ use hyper_util::rt::{TokioIo, TokioTimer};
 use tokio::net::{TcpListener, TcpStream};
 
 use nd_core::Result;
+use nd_core::secret::same_secret;
 
 /// Cap on any request body (an SDP offer is a few kilobytes).
 const MAX_BODY_BYTES: usize = 64 * 1024;
 const MAX_CLIENTS: usize = 32;
 const REQUEST_READ_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
-/// Wrong PINs tolerated before the door is locked.
+/// Wrong PINs tolerated from one address before it is locked out.
 const PIN_ATTEMPTS: u32 = 5;
+/// Wrong PINs tolerated from all addresses together before the door locks
+/// for everyone: per-address lockouts alone let many addresses guess in
+/// parallel, and one address cannot reach this by itself.
+const PIN_ATTEMPTS_ALL: u32 = 4 * PIN_ATTEMPTS;
+/// Addresses whose attempts are remembered; past this, addresses that are
+/// not locked out are forgotten, and the shared limit still applies.
+const MAX_TRACKED_PEERS: usize = 256;
 /// How long the door stays locked the first time; each later lockout in the
 /// same publication lasts twice the one before, up to [`PIN_LOCKOUT_MAX`].
 const PIN_LOCKOUT: Duration = Duration::from_secs(30);
@@ -71,9 +80,43 @@ struct PinGuard {
     last_lockout: Option<Duration>,
 }
 
+impl PinGuard {
+    fn locked(&self, now: Instant) -> bool {
+        self.locked_until.is_some_and(|until| now < until)
+    }
+
+    /// Counts a wrong PIN; `true` when it locks this guard.
+    fn fail(&mut self, limit: u32, now: Instant) -> bool {
+        self.failures += 1;
+        if self.failures < limit {
+            return false;
+        }
+        let lockout = self
+            .last_lockout
+            .map_or(PIN_LOCKOUT, |last| (last * 2).min(PIN_LOCKOUT_MAX));
+        self.failures = 0;
+        self.last_lockout = Some(lockout);
+        self.locked_until = Some(now + lockout);
+        true
+    }
+}
+
+/// Wrong-PIN accounting per address, plus one shared limit.
+#[derive(Debug, Default)]
+struct PinGuards {
+    all: PinGuard,
+    peers: HashMap<IpAddr, PinGuard>,
+}
+
+impl PinGuards {
+    fn locked(&self, peer: IpAddr, now: Instant) -> bool {
+        self.all.locked(now) || self.peers.get(&peer).is_some_and(|guard| guard.locked(now))
+    }
+}
+
 struct Shared {
     config: FrontDoorConfig,
-    guard: Mutex<PinGuard>,
+    guards: Mutex<PinGuards>,
 }
 
 /// A running front door. Dropping it stops accepting connections.
@@ -103,7 +146,7 @@ pub fn serve(listener: TcpListener, config: FrontDoorConfig) -> Result<FrontDoor
     let (stop, mut stopped) = tokio::sync::watch::channel(false);
     let shared = Arc::new(Shared {
         config,
-        guard: Mutex::new(PinGuard::default()),
+        guards: Mutex::new(PinGuards::default()),
     });
     tokio::spawn(async move {
         // Dropping the front door must close existing HTTP sessions too, not
@@ -181,17 +224,6 @@ fn carries_token(request: &Request<Incoming>, token: &str) -> bool {
         .is_some_and(|guess| same_secret(guess, token))
 }
 
-/// Compares a guess with a secret without stopping at the first difference,
-/// so how long a wrong guess takes does not say how much of it was right.
-/// The length is not secret: tokens and PINs have fixed sizes.
-fn same_secret(guess: &str, secret: &str) -> bool {
-    let difference = guess
-        .bytes()
-        .zip(secret.bytes())
-        .fold(0, |difference, (a, b)| difference | (a ^ b));
-    guess.len() == secret.len() && std::hint::black_box(difference) == 0
-}
-
 async fn read_body(request: Request<Incoming>) -> Option<Bytes> {
     let body = request.into_body();
     let limited = http_body_util::Limited::new(body, MAX_BODY_BYTES);
@@ -249,16 +281,13 @@ async fn handle(
 }
 
 async fn check_pin(shared: &Shared, peer: SocketAddr, request: Request<Incoming>) -> Reply {
-    {
-        let guard = shared
-            .guard
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(until) = guard.locked_until
-            && Instant::now() < until
-        {
-            return reply(StatusCode::TOO_MANY_REQUESTS, "");
-        }
+    let locked = shared
+        .guards
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .locked(peer.ip(), Instant::now());
+    if locked {
+        return reply(StatusCode::TOO_MANY_REQUESTS, "");
     }
     let Some(body) = read_body(request).await else {
         return reply(StatusCode::BAD_REQUEST, "");
@@ -266,13 +295,19 @@ async fn check_pin(shared: &Shared, peer: SocketAddr, request: Request<Incoming>
     // Only surrounding whitespace is ignored. Do not transform arbitrary
     // attacker-controlled text into a valid PIN by discarding its characters.
     let attempt = std::str::from_utf8(&body).unwrap_or_default().trim();
-    let mut guard = shared
-        .guard
+    let mut guards = shared
+        .guards
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     // Checked again after the body read, under the lock that records the
     // attempt, so parallel slow POSTs cannot slip past a lockout.
-    let status = record_pin_attempt(&mut guard, attempt, &shared.config.pin, Instant::now());
+    let status = record_pin_attempt(
+        &mut guards,
+        peer.ip(),
+        attempt,
+        &shared.config.pin,
+        Instant::now(),
+    );
     if status == StatusCode::OK {
         tracing::info!(%peer, "receiver accepted with the PIN");
         let mut response = reply(status, shared.config.token.clone());
@@ -287,29 +322,35 @@ async fn check_pin(shared: &Shared, peer: SocketAddr, request: Request<Incoming>
 }
 
 fn record_pin_attempt(
-    guard: &mut PinGuard,
+    guards: &mut PinGuards,
+    peer: IpAddr,
     attempt: &str,
     expected: &str,
     now: Instant,
 ) -> StatusCode {
-    if guard.locked_until.is_some_and(|until| now < until) {
+    if guards.locked(peer, now) {
         return StatusCode::TOO_MANY_REQUESTS;
     }
     if same_secret(attempt, expected) {
-        guard.failures = 0;
+        if let Some(guard) = guards.peers.get_mut(&peer) {
+            guard.failures = 0;
+        }
         return StatusCode::OK;
     }
-    guard.failures += 1;
-    if guard.failures >= PIN_ATTEMPTS {
-        let lockout = guard
-            .last_lockout
-            .map_or(PIN_LOCKOUT, |last| (last * 2).min(PIN_LOCKOUT_MAX));
-        guard.failures = 0;
-        guard.last_lockout = Some(lockout);
-        guard.locked_until = Some(now + lockout);
-        return StatusCode::TOO_MANY_REQUESTS;
+    if guards.peers.len() >= MAX_TRACKED_PEERS && !guards.peers.contains_key(&peer) {
+        guards.peers.retain(|_, guard| guard.locked(now));
     }
-    StatusCode::FORBIDDEN
+    let peer_locked = guards
+        .peers
+        .entry(peer)
+        .or_default()
+        .fail(PIN_ATTEMPTS, now);
+    let all_locked = guards.all.fail(PIN_ATTEMPTS_ALL, now);
+    if peer_locked || all_locked {
+        StatusCode::TOO_MANY_REQUESTS
+    } else {
+        StatusCode::FORBIDDEN
+    }
 }
 
 /// Forwards one request to the WHEP element on the loopback interface.
@@ -560,59 +601,88 @@ mod tests {
             .unwrap()
             .port()
     }
+    const PEER: IpAddr = IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, 20));
+
+    fn peer(last: u8) -> IpAddr {
+        IpAddr::V4(std::net::Ipv4Addr::new(192, 168, 1, last))
+    }
+
     #[test]
     fn parallel_attempt_respects_lockout() {
         let now = Instant::now();
-        let mut guard = PinGuard::default();
+        let mut guards = PinGuards::default();
         // Bodies whose reads started before the lockout.
         for _ in 0..PIN_ATTEMPTS {
-            record_pin_attempt(&mut guard, "0000", "1234", now);
+            record_pin_attempt(&mut guards, PEER, "0000", "1234", now);
         }
         for _ in 0..100 {
             assert_eq!(
-                record_pin_attempt(&mut guard, "1234", "1234", now),
+                record_pin_attempt(&mut guards, PEER, "1234", "1234", now),
                 StatusCode::TOO_MANY_REQUESTS
             );
         }
         assert_eq!(
-            record_pin_attempt(&mut guard, "1234", "1234", now + PIN_LOCKOUT),
+            record_pin_attempt(&mut guards, PEER, "1234", "1234", now + PIN_LOCKOUT),
             StatusCode::OK
+        );
+    }
+
+    #[test]
+    fn guesser_does_not_lock_others() {
+        let now = Instant::now();
+        let mut guards = PinGuards::default();
+        for _ in 0..PIN_ATTEMPTS {
+            record_pin_attempt(&mut guards, peer(66), "0000", "1234", now);
+        }
+        assert_eq!(
+            record_pin_attempt(&mut guards, peer(66), "1234", "1234", now),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+        assert_eq!(
+            record_pin_attempt(&mut guards, PEER, "1234", "1234", now),
+            StatusCode::OK
+        );
+    }
+
+    #[test]
+    fn many_guessers_lock_everyone() {
+        let now = Instant::now();
+        let mut guards = PinGuards::default();
+        for attempt in 0..PIN_ATTEMPTS_ALL {
+            let from = peer(100 + (attempt / (PIN_ATTEMPTS - 1)) as u8);
+            record_pin_attempt(&mut guards, from, "0000", "1234", now);
+        }
+        assert_eq!(
+            record_pin_attempt(&mut guards, PEER, "1234", "1234", now),
+            StatusCode::TOO_MANY_REQUESTS
         );
     }
 
     #[test]
     fn lockout_doubles_up_to_ceiling() {
         let mut now = Instant::now();
-        let mut guard = PinGuard::default();
-        let lock = |guard: &mut PinGuard, now: Instant| {
+        let mut guards = PinGuards::default();
+        let lock = |guards: &mut PinGuards, now: Instant| {
             for _ in 0..PIN_ATTEMPTS {
-                record_pin_attempt(guard, "0000", "1234", now);
+                record_pin_attempt(guards, PEER, "0000", "1234", now);
             }
-            guard.locked_until.unwrap() - now
+            guards.peers[&PEER].locked_until.unwrap() - now
         };
-        assert_eq!(lock(&mut guard, now), PIN_LOCKOUT);
+        assert_eq!(lock(&mut guards, now), PIN_LOCKOUT);
         now += PIN_LOCKOUT;
-        assert_eq!(lock(&mut guard, now), PIN_LOCKOUT * 2);
+        assert_eq!(lock(&mut guards, now), PIN_LOCKOUT * 2);
         now += PIN_LOCKOUT * 2;
         // Someone else joining does not hand an attacker short lockouts again.
         assert_eq!(
-            record_pin_attempt(&mut guard, "1234", "1234", now),
+            record_pin_attempt(&mut guards, PEER, "1234", "1234", now),
             StatusCode::OK
         );
-        assert_eq!(lock(&mut guard, now), PIN_LOCKOUT * 4);
+        assert_eq!(lock(&mut guards, now), PIN_LOCKOUT * 4);
         for _ in 0..20 {
             now += PIN_LOCKOUT_MAX;
-            lock(&mut guard, now);
+            lock(&mut guards, now);
         }
-        assert_eq!(lock(&mut guard, now + PIN_LOCKOUT_MAX), PIN_LOCKOUT_MAX);
-    }
-
-    #[test]
-    fn secrets_match_only_in_full() {
-        assert!(same_secret("feedface", "feedface"));
-        for guess in ["feedfacf", "feedfac", "feedface0", "", "Feedface"] {
-            assert!(!same_secret(guess, "feedface"), "{guess}");
-        }
+        assert_eq!(lock(&mut guards, now + PIN_LOCKOUT_MAX), PIN_LOCKOUT_MAX);
     }
 
     #[tokio::test]

@@ -280,7 +280,7 @@ impl Session {
         // Where the receivers come to, and what lets them in.
         let ip = net::lan_ip()?;
         let whep_port = net::free_loopback_port()?;
-        let token = net::random_token()?;
+        let token = nd_core::secret::random_token()?;
         let pin = net::random_pin()?;
         let listener = net::bind_front_door(ip).await?;
         let door = server::serve(

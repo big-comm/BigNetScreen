@@ -135,8 +135,7 @@ pub struct Issue {
 /// can read a struct, and only some can take a variant apart.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type, Value, OwnedValue)]
 pub struct Status {
-    /// `searching`, `found`, `empty`, `discovery-off`, `connecting`,
-    /// `streaming`, `sending`, `stopping`, `error`.
+    /// A [`StatusKind`] name.
     pub kind: String,
     /// How many receivers are known, for `found`.
     pub count: u32,
@@ -146,10 +145,82 @@ pub struct Status {
     pub detail: String,
 }
 
+/// The values of [`Status::kind`]. The names are the D-Bus contract.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StatusKind {
+    Idle,
+    Searching,
+    Found,
+    Empty,
+    DiscoveryOff,
+    Connecting,
+    Streaming,
+    Sending,
+    Stopping,
+    Error,
+    NdiRuntimeMissing,
+}
+
+impl StatusKind {
+    const ALL: [Self; 11] = [
+        Self::Idle,
+        Self::Searching,
+        Self::Found,
+        Self::Empty,
+        Self::DiscoveryOff,
+        Self::Connecting,
+        Self::Streaming,
+        Self::Sending,
+        Self::Stopping,
+        Self::Error,
+        Self::NdiRuntimeMissing,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Searching => "searching",
+            Self::Found => "found",
+            Self::Empty => "empty",
+            Self::DiscoveryOff => "discovery-off",
+            Self::Connecting => "connecting",
+            Self::Streaming => "streaming",
+            Self::Sending => "sending",
+            Self::Stopping => "stopping",
+            Self::Error => "error",
+            Self::NdiRuntimeMissing => "ndi-runtime-missing",
+        }
+    }
+}
+
+/// Why the service refused or ended a request: the last `: `-separated part
+/// of the error it returns, for clients to put into words.
+pub mod refusal {
+    pub const STREAM_RUNNING: &str = "a stream is already running";
+    pub const UNKNOWN_RECEIVER: &str = "unknown-receiver";
+    pub const NOT_CASTABLE: &str = "not-castable";
+    pub const NDI_UNAVAILABLE: &str = "ndi-unavailable";
+    pub const NDI_CPU_UNSUPPORTED: &str = "ndi-cpu-unsupported";
+    pub const WEBRTC_UNAVAILABLE: &str = "webrtc-unavailable";
+    /// Appears in every error about creating or removing the sound card.
+    pub const SOUND_CARD: &str = "virtual sound card";
+}
+
 impl Status {
-    pub fn of(kind: &str) -> Self {
+    /// `None` for a kind from a newer service.
+    pub fn kind(&self) -> Option<StatusKind> {
+        StatusKind::ALL
+            .into_iter()
+            .find(|kind| kind.name() == self.kind)
+    }
+
+    pub fn is(&self, kind: StatusKind) -> bool {
+        self.kind == kind.name()
+    }
+
+    pub fn of(kind: StatusKind) -> Self {
         Self {
-            kind: kind.to_string(),
+            kind: kind.name().to_string(),
             count: 0,
             display_name: String::new(),
             detail: String::new(),
@@ -159,11 +230,11 @@ impl Status {
     pub fn found(count: u32) -> Self {
         Self {
             count,
-            ..Self::of("found")
+            ..Self::of(StatusKind::Found)
         }
     }
 
-    pub fn about(kind: &str, display_name: String) -> Self {
+    pub fn about(kind: StatusKind, display_name: String) -> Self {
         Self {
             display_name,
             ..Self::of(kind)
@@ -173,7 +244,7 @@ impl Status {
     pub fn error(detail: String) -> Self {
         Self {
             detail,
-            ..Self::of("error")
+            ..Self::of(StatusKind::Error)
         }
     }
 }

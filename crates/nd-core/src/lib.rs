@@ -22,6 +22,7 @@ pub mod persistence;
 pub mod pipeline;
 pub mod provider;
 pub mod radio;
+pub mod secret;
 pub mod settings;
 pub mod sink;
 pub mod stream_server;

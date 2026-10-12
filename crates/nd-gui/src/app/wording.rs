@@ -6,29 +6,29 @@
 //! turn them into sentences.
 
 use nd_core::settings::Settings;
-use nd_service::wire;
+use nd_service::wire::{self, StatusKind, refusal};
 
 use crate::{tr, tr_n};
 
 /// The status line under the window title. A kind this build has no sentence
 /// for is shown as its tag rather than as an empty line.
 pub(super) fn describe_status(status: &wire::Status, session: &wire::Session) -> String {
-    match status.kind.as_str() {
-        "searching" => tr!("Searching…"),
-        "found" => tr_n!(
+    match status.kind() {
+        Some(StatusKind::Searching) => tr!("Searching…"),
+        Some(StatusKind::Found) => tr_n!(
             "{} receiver found",
             "{} receivers found",
             status.count as usize
         )
         .replace("{}", &status.count.to_string()),
-        "empty" => tr!("No receivers found"),
-        "discovery-off" => tr!("Automatic discovery is off"),
-        "connecting" => format!("{} · {}", status.display_name, tr!("Connecting…")),
-        "stopping" => tr!("Stopping…"),
-        "sending" => tr!("Sending files…"),
-        "ndi-runtime-missing" => tr!("NDI runtime required"),
-        "error" => describe_refusal(&status.detail),
-        "streaming" => {
+        Some(StatusKind::Empty) => tr!("No receivers found"),
+        Some(StatusKind::DiscoveryOff) => tr!("Automatic discovery is off"),
+        Some(StatusKind::Connecting) => format!("{} · {}", status.display_name, tr!("Connecting…")),
+        Some(StatusKind::Stopping) => tr!("Stopping…"),
+        Some(StatusKind::Sending) => tr!("Sending files…"),
+        Some(StatusKind::NdiRuntimeMissing) => tr!("NDI runtime required"),
+        Some(StatusKind::Error) => describe_refusal(&status.detail),
+        Some(StatusKind::Streaming) => {
             if session.width > 0 {
                 format!(
                     "{} · {} × {} · {} Hz",
@@ -38,7 +38,7 @@ pub(super) fn describe_status(status: &wire::Status, session: &wire::Session) ->
                 format!("{} · {}", status.display_name, tr!("Connected"))
             }
         }
-        _ => status.kind.clone(),
+        Some(StatusKind::Idle) | None => status.kind.clone(),
     }
 }
 
@@ -51,7 +51,7 @@ pub(super) fn describe_refusal(reason: &str) -> String {
     if reason.is_empty() {
         return String::new();
     }
-    if reason.contains("virtual sound card") {
+    if reason.contains(refusal::SOUND_CARD) {
         return tr!(
             "Could not prepare the BigNetScreen sound output. Check the audio options in Settings and try again."
         );
@@ -61,14 +61,17 @@ pub(super) fn describe_refusal(reason: &str) -> String {
     }
     let tail = reason.rsplit(": ").next().unwrap_or(reason);
     match tail {
-        "unknown-receiver" => tr!("That device is no longer available"),
-        "not-castable" => tr!("shows up in discovery only"),
-        "ndi-unavailable" => tr!("NDI unavailable. See the NDI setup guide."),
-        "webrtc-unavailable" => tr!(
+        refusal::UNKNOWN_RECEIVER => tr!("That device is no longer available"),
+        refusal::NOT_CASTABLE => tr!("shows up in discovery only"),
+        refusal::NDI_UNAVAILABLE => tr!("NDI unavailable. See the NDI setup guide."),
+        refusal::NDI_CPU_UNSUPPORTED => tr!(
+            "The NDI runtime does not support this processor, so installing it again will not help."
+        ),
+        refusal::WEBRTC_UNAVAILABLE => tr!(
             "Sharing with a web browser needs GStreamer's WebRTC plugins, which this system \
              does not have."
         ),
-        "a stream is already running" => tr!("A stream is already running"),
+        refusal::STREAM_RUNNING => tr!("A stream is already running"),
         nd_chromecast::identity::IDENTITY_CHANGED => tr!(
             "This receiver did not prove it is the same device used before, so the screen was \
              not sent. Someone on the network may be impersonating it."
@@ -94,7 +97,6 @@ pub(super) fn audio_summary(settings: &Settings) -> String {
 }
 
 /// Turns a provider's untranslated error into something a person can act on.
-/// The Miracast cases match substrings of the errors in `nd_net::p2p`.
 pub(super) fn friendly_reason(provider: &str, reason: &str) -> String {
     if provider == "wfd-p2p" {
         if nd_capture::is_sandboxed() {
@@ -104,13 +106,13 @@ pub(super) fn friendly_reason(provider: &str, reason: &str) -> String {
         }
         // Checked before the Wi-Fi Direct case: a computer with no Wi-Fi
         // adapter has no card to blame.
-        if reason.contains("no Wi-Fi adapter") {
+        if reason.contains(nd_net::p2p::NO_WIFI_ADAPTER) {
             return tr!(
                 "Miracast needs a Wi-Fi adapter, and this computer has none. Casting over \
                  the network still works."
             );
         }
-        if reason.contains("Wi-Fi P2P") || reason.contains("Wi-Fi Direct") {
+        if reason.contains(nd_net::p2p::NO_P2P_DEVICE) {
             return tr!("Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct");
         }
         return tr!(
@@ -160,7 +162,10 @@ mod tests {
     use super::*;
 
     fn status(kind: &str) -> wire::Status {
-        wire::Status::of(kind)
+        wire::Status {
+            kind: kind.into(),
+            ..wire::Status::of(StatusKind::Idle)
+        }
     }
 
     #[test]

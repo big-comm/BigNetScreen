@@ -26,7 +26,7 @@ use nd_core::provider::DiscoveryEvent;
 use nd_core::settings::{self, Settings};
 use nd_core::sink::{Sink, SinkState};
 
-use crate::wire::{self, Issue, Receiver, Status};
+use crate::wire::{self, Issue, Receiver, Status, StatusKind};
 
 mod discovery;
 mod session;
@@ -36,6 +36,9 @@ pub use snapshot::{MediaOwner, Snapshot};
 
 /// After this long with no receiver, the service stops saying "searching".
 const EMPTY_HINT_AFTER: Duration = Duration::from_secs(12);
+/// The prefix of every failure to change the virtual sound card, so a later
+/// settings change knows to try again.
+const SOUND_CARD_FAILED: &str = "could not change the virtual sound card";
 /// How often receiver state is re-read and republished.
 const STATE_POLL: Duration = Duration::from_millis(400);
 /// How long between measurements of the link.
@@ -233,9 +236,9 @@ impl Engine {
             probing: false,
             operation_generation: 0,
             status: if settings.auto_discovery {
-                Status::of("searching")
+                Status::of(StatusKind::Searching)
             } else {
-                Status::of("discovery-off")
+                Status::of(StatusKind::DiscoveryOff)
             },
             settings,
             audio_pending,
@@ -408,11 +411,8 @@ impl Engine {
             != (self.settings.virtual_audio && self.settings.system_audio);
         self.settings = new;
         settings::set_in_memory(&self.settings);
-        let retry_audio = self.status.kind == "error"
-            && self
-                .status
-                .detail
-                .starts_with("could not change the virtual sound card:");
+        let retry_audio =
+            self.status.is(StatusKind::Error) && self.status.detail.starts_with(SOUND_CARD_FAILED);
         self.audio_pending |= card_changed || retry_audio;
         // The receiver list a client is showing is the result of the old
         // protocol choice, so discovery restarts now.
@@ -427,7 +427,7 @@ impl Engine {
         if let Err(err) = &result {
             self.status = Status::error(err.clone());
         } else if retry_audio && !self.audio_pending {
-            self.status = Status::of("idle");
+            self.status = Status::of(StatusKind::Idle);
             self.refresh_status();
         }
         result
@@ -442,7 +442,7 @@ impl Engine {
         files: Vec<MediaItem>,
         start: nd_core::media::PlaybackStart,
     ) -> Result<String, String> {
-        let id = nd_core::stream_server::random_token().map_err(|err| err.to_string())?;
+        let id = nd_core::secret::random_token().map_err(|err| err.to_string())?;
         self.send_media(target.clone(), files, Some(start))?;
         self.media_owner = Some(MediaOwner {
             id: id.clone(),
@@ -462,7 +462,7 @@ impl Engine {
         } else {
             nd_core::virtual_sink::remove().await
         };
-        result.map_err(|err| format!("could not change the virtual sound card: {err}"))
+        result.map_err(|err| format!("{SOUND_CARD_FAILED}: {err}"))
     }
 
     fn event(&mut self, event: Event) {
@@ -522,11 +522,11 @@ impl Engine {
                 self.status = Status::error(err);
             }
             None if ndi_runtime_unavailable => {
-                self.status = Status::of("ndi-runtime-missing");
+                self.status = Status::of(StatusKind::NdiRuntimeMissing);
             }
             None => {
                 tracing::info!(%id, "cast session ended");
-                self.status = Status::of("idle");
+                self.status = Status::of(StatusKind::Idle);
                 self.refresh_status();
             }
         }
@@ -534,8 +534,8 @@ impl Engine {
 
     fn refresh_status(&mut self) {
         if matches!(
-            self.status.kind.as_str(),
-            "error" | "ndi-runtime-missing" | "stopping"
+            self.status.kind(),
+            Some(StatusKind::Error | StatusKind::NdiRuntimeMissing | StatusKind::Stopping)
         ) {
             return;
         }
@@ -548,24 +548,24 @@ impl Engine {
         // fetched a byte of it.
         if let Some(sink) = &self.active_sink {
             let kind = match sink.state() {
-                SinkState::Streaming => "streaming",
-                _ => "connecting",
+                SinkState::Streaming => StatusKind::Streaming,
+                _ => StatusKind::Connecting,
             };
             self.status = Status::about(kind, sink.info().display_name);
             return;
         }
         if self.media_session.is_some() {
-            self.status = Status::of("sending");
+            self.status = Status::of(StatusKind::Sending);
             return;
         }
         if !self.settings.auto_discovery && self.registry.is_empty() {
-            self.status = Status::of("discovery-off");
+            self.status = Status::of(StatusKind::DiscoveryOff);
             return;
         }
         let count = self.registry.len() as u32;
         self.status = match (count, self.searching) {
-            (0, true) => Status::of("searching"),
-            (0, false) => Status::of("empty"),
+            (0, true) => Status::of(StatusKind::Searching),
+            (0, false) => Status::of(StatusKind::Empty),
             (count, _) => Status::found(count),
         };
     }
@@ -579,7 +579,7 @@ impl Engine {
             cancel.send_replace(true);
         }
         if self.active_sink.is_none() && self.media_session.is_none() {
-            self.status = Status::of("idle");
+            self.status = Status::of(StatusKind::Idle);
             self.refresh_status();
             return;
         }
@@ -593,7 +593,7 @@ impl Engine {
         // receiver that never got a STOP keeps the session and refuses the
         // next connection.
         tracing::info!(id = ?self.active_cast, "stopping: cancelling the capture");
-        self.status = Status::of("stopping");
+        self.status = Status::of(StatusKind::Stopping);
     }
 
     fn control_player(
@@ -712,7 +712,7 @@ mod tests {
         engine.settings.auto_discovery = true;
         engine.searching = false;
         engine.refresh_status();
-        assert_eq!(engine.status.kind, "empty");
+        assert!(engine.status.is(StatusKind::Empty));
 
         engine.registry.insert("a".into(), sink("a"));
         engine.refresh_status();
@@ -722,11 +722,11 @@ mod tests {
         // announce a picture no receiver has fetched a byte of.
         engine.active_sink = Some(sink("a"));
         engine.refresh_status();
-        assert_eq!(engine.status.kind, "connecting");
+        assert!(engine.status.is(StatusKind::Connecting));
 
         engine.active_sink = Some(streaming_sink("a"));
         engine.refresh_status();
-        assert_eq!(engine.status.kind, "streaming");
+        assert!(engine.status.is(StatusKind::Streaming));
     }
 
     #[test]
@@ -735,7 +735,7 @@ mod tests {
         engine.settings.auto_discovery = false;
         engine.searching = false;
         engine.refresh_status();
-        assert_eq!(engine.status.kind, "discovery-off");
+        assert!(engine.status.is(StatusKind::DiscoveryOff));
     }
 
     #[test]
@@ -764,7 +764,7 @@ mod tests {
         engine.stop_everything();
         engine.refresh_status();
         engine.discovery_event(DiscoveryEvent::Added(sink("b")));
-        assert_eq!(engine.status.kind, "stopping");
+        assert!(engine.status.is(StatusKind::Stopping));
         engine.event(Event::CastFinished {
             id: "a".into(),
             error: None,

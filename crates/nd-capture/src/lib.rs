@@ -87,12 +87,6 @@ fn store_restore_token(source_type: SourceType, token: &str) {
     let Some(path) = restore_token_path(source_type) else {
         return;
     };
-    if let Some(dir) = path.parent()
-        && let Err(err) = std::fs::create_dir_all(dir)
-    {
-        tracing::warn!(%err, "could not create the token directory");
-        return;
-    }
     if let Err(err) = nd_core::persistence::write_private(&path, token.as_bytes()) {
         tracing::warn!(%err, "could not save the restore token");
         return;
@@ -274,8 +268,10 @@ impl CaptureBackend for PortalBackend {
         // A session left open stays in the compositor until the app exits.
         self.stop().await?;
         let started = self.open(&proxy, source_type).await;
-        if started.is_err() {
-            let _ = self.stop().await;
+        if started.is_err()
+            && let Err(err) = self.stop().await
+        {
+            tracing::warn!(%err, "the failed portal capture did not close");
         }
         started
     }
@@ -362,7 +358,9 @@ impl CaptureBackend for MutterWithPortalFallback {
 
     async fn stop(&self) -> Result<()> {
         // Stopping both is safe: `stop` without `start` is a no-op on either side.
-        let _ = self.mutter.stop().await;
+        if let Err(err) = self.mutter.stop().await {
+            tracing::warn!(%err, "the Mutter capture did not close");
+        }
         self.portal.stop().await
     }
 }

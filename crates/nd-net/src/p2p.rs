@@ -111,6 +111,11 @@ fn err<E: std::fmt::Display>(e: E) -> NdError {
     NdError::Network(e.to_string())
 }
 
+/// How the error for a computer without Wi-Fi begins; clients match it.
+pub const NO_WIFI_ADAPTER: &str = "no Wi-Fi adapter on this computer";
+/// How the error for Wi-Fi without a P2P device begins; clients match it.
+pub const NO_P2P_DEVICE: &str = "no Wi-Fi P2P device in NetworkManager";
+
 /// Why there is no Wi-Fi P2P device, in terms of what the person can do.
 fn missing_p2p_device(has_wifi: bool) -> NdError {
     // Without any Wi-Fi the usual advice (card, driver, backend) is wrong,
@@ -118,21 +123,19 @@ fn missing_p2p_device(has_wifi: bool) -> NdError {
     // three causes cannot be told apart from here and call for different
     // actions, so all three are named.
     if !has_wifi {
-        return NdError::Unsupported(
-            "no Wi-Fi adapter on this computer. Miracast is a direct radio link \
-             between the two devices, so it needs one — casting over the network \
-             (Chromecast) works without it"
-                .into(),
-        );
+        return NdError::Unsupported(format!(
+            "{NO_WIFI_ADAPTER}. Miracast is a direct radio link between the two \
+             devices, so it needs one; casting over the network (Chromecast) works \
+             without it"
+        ));
     }
 
-    NdError::Unsupported(
-        "no Wi-Fi P2P device in NetworkManager. Either this Wi-Fi card does not \
-         support Wi-Fi Direct, or the driver does not expose it, or NetworkManager \
-         is running with the `iwd` backend, which has no P2P support — `nmcli device` \
-         should list a `p2p-dev-*` device alongside the Wi-Fi one"
-            .into(),
-    )
+    NdError::Unsupported(format!(
+        "{NO_P2P_DEVICE}. Either this Wi-Fi card does not support Wi-Fi Direct, or \
+         the driver does not expose it, or NetworkManager is running with the `iwd` \
+         backend, which has no P2P support; `nmcli device` should list a `p2p-dev-*` \
+         device alongside the Wi-Fi one"
+    ))
 }
 
 /// Has the D-Bus object ceased to exist?

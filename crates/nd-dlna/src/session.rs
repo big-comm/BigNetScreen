@@ -490,7 +490,9 @@ async fn until_renderer_stops(
                 if std::mem::take(&mut paused_by_renderer) {
                     paused_here.store(false, Ordering::SeqCst);
                     tracing::info!("the renderer resumed; resuming the file");
-                    let _ = file_pipeline.set_state(gst::State::Playing);
+                    if let Err(err) = file_pipeline.set_state(gst::State::Playing) {
+                        tracing::warn!(%err, "the file did not resume");
+                    }
                 }
                 continue;
             }
@@ -500,7 +502,9 @@ async fn until_renderer_stops(
                 paused_by_renderer = true;
                 paused_here.store(true, Ordering::SeqCst);
                 tracing::info!("the renderer paused; holding the file");
-                let _ = file_pipeline.set_state(gst::State::Paused);
+                if let Err(err) = file_pipeline.set_state(gst::State::Paused) {
+                    tracing::warn!(%err, "the file did not pause");
+                }
                 idle_polls = 0;
                 continue;
             }

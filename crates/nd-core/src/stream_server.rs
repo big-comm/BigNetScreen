@@ -18,7 +18,6 @@
 //! that receiver.
 
 use std::collections::HashMap;
-use std::io::Read;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::os::fd::{AsRawFd, RawFd};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -108,18 +107,6 @@ fn net_err<E: std::fmt::Display>(e: E) -> NdError {
     NdError::Network(e.to_string())
 }
 
-/// Generates a random 128-bit token in hexadecimal.
-///
-/// Reads from `/dev/urandom` so as not to drag in another dependency for the
-/// sake of 16 bytes.
-pub fn random_token() -> Result<String> {
-    let mut bytes = [0u8; 16];
-    std::fs::File::open("/dev/urandom")
-        .and_then(|mut f| f.read_exact(&mut bytes))
-        .map_err(|e| NdError::Network(format!("could not generate the session token: {e}")))?;
-    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
-}
-
 /// Finds the local IP of the interface that reaches `peer`.
 ///
 /// A "connected" UDP socket sends nothing, but it makes the kernel pick the
@@ -179,7 +166,7 @@ fn triage(request: &str, expected_path: &str, allowed: IpAddr, from: IpAddr) -> 
 
     // Do not reveal whether an incorrect path names a protected resource.
     // The live listener independently rejects a foreign IP before reading.
-    if path != expected_path {
+    if !crate::secret::same_secret(path, expected_path) {
         return Verdict::NotFound;
     }
 
@@ -372,7 +359,7 @@ impl StreamServer {
             .await
             .map_err(net_err)?;
         let local_addr = listener.local_addr().map_err(net_err)?;
-        let path = format!("/{}", random_token()?);
+        let path = format!("/{}", crate::secret::random_token()?);
 
         tracing::info!(%local_addr, %receiver, "stream server listening");
         Ok(Self {
@@ -472,6 +459,8 @@ impl StreamServer {
                 Ok(pair) => pair,
                 Err(err) => {
                     tracing::warn!(%err, "failed to accept a connection");
+                    // EMFILE fails again at once; do not spin on it.
+                    tokio::time::sleep(Duration::from_millis(100)).await;
                     continue;
                 }
             };
@@ -581,15 +570,20 @@ fn watch_clients(
 ) -> tokio::sync::watch::Receiver<bool> {
     let (slow_client, slow_client_rx) = tokio::sync::watch::channel(false);
     sink.connect("client-removed", false, move |values| {
-        let status = gst::glib::EnumValue::from_value(&values[2]).map(|(_, status)| status.nick());
+        // A panic would unwind into C, so even the element's own signature
+        // is read without indexing.
+        let status = values
+            .get(2)
+            .and_then(gst::glib::EnumValue::from_value)
+            .map(|(_, status)| status.nick());
         if status == Some("slow") {
             slow_client.send_replace(true);
         }
         // Still answerable here, before the client is gone: whether a receiver
         // that left got any of the stream tells a refused stream from a starved one.
-        if let (Ok(sink), Ok(socket)) = (
-            values[0].get::<gst::Element>(),
-            values[1].get::<gio::Socket>(),
+        if let (Some(Ok(sink)), Some(Ok(socket))) = (
+            values.first().map(|value| value.get::<gst::Element>()),
+            values.get(1).map(|value| value.get::<gio::Socket>()),
         ) {
             let mut attendance = lock(&attendance);
             if let Some(since) = attendance.open.remove(&socket.as_raw_fd()) {
@@ -614,7 +608,7 @@ fn watch_clients(
     // closing it. Closing it here rather than in each caller means no
     // protocol can leak a descriptor per disconnect.
     sink.connect("client-socket-removed", false, |values| {
-        if let Ok(socket) = values[1].get::<gio::Socket>() {
+        if let Some(Ok(socket)) = values.get(1).map(|value| value.get::<gio::Socket>()) {
             let _ = socket.close();
         }
         tracing::info!("the receiver disconnected from the stream");
@@ -644,8 +638,10 @@ fn hand_socket_to_sink(stream: TcpStream, sink: &gst::Element) -> Result<()> {
 
     let socket = gio::Socket::from_fd(std::os::fd::OwnedFd::from(std_stream))
         .map_err(|e| NdError::Network(format!("gio::Socket: {e}")))?;
-    // SOL_SOCKET/SO_SNDBUF on Linux. Without it the queue limit is not ours.
-    if let Err(err) = socket.set_option(1, 7, SEND_BUFFER_BYTES) {
+    // Linux's SOL_SOCKET and SO_SNDBUF. Without it the queue limit is not ours.
+    const SOL_SOCKET: i32 = 1;
+    const SO_SNDBUF: i32 = 7;
+    if let Err(err) = socket.set_option(SOL_SOCKET, SO_SNDBUF, SEND_BUFFER_BYTES) {
         tracing::warn!(%err, "the stream socket keeps the kernel's send buffer");
     }
 
@@ -663,15 +659,6 @@ mod tests {
 
     fn get(path: &str) -> String {
         format!("GET {path} HTTP/1.1\r\nHost: x\r\n\r\n")
-    }
-
-    #[test]
-    fn token_is_128_bits_of_hex() {
-        let token = random_token().expect("/dev/urandom");
-        assert_eq!(token.len(), 32);
-        assert!(token.chars().all(|c| c.is_ascii_hexdigit()));
-        // Two tokens in a row must not coincide.
-        assert_ne!(token, random_token().unwrap());
     }
 
     #[test]

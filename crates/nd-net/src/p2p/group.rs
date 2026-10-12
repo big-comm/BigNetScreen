@@ -385,11 +385,12 @@ fn current_username() -> Option<String> {
 
 /// `getuid(2)` without pulling the `libc` crate into the dependency graph.
 fn current_uid() -> u32 {
+    // SAFETY: getuid takes no arguments, touches no memory and cannot fail,
+    // so declaring it safe holds for every call.
     unsafe extern "C" {
-        fn getuid() -> u32;
+        safe fn getuid() -> u32;
     }
-    // SAFETY: getuid takes no arguments, touches no memory and cannot fail.
-    unsafe { getuid() }
+    getuid()
 }
 
 #[cfg(test)]

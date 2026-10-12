@@ -69,7 +69,8 @@ fn js_string(text: &str) -> String {
 }
 
 /// Renders the page. Every text is escaped for where it lands: `{{key}}` in
-/// the markup, `{{js:key}}` as a string literal in the script.
+/// the markup, `{{js:key}}` as a string literal in the script. One pass over
+/// the template, so a text that contains a placeholder stays text.
 pub fn render(text: &PageText) -> String {
     let texts = [
         ("title", &text.title),
@@ -82,12 +83,27 @@ pub fn render(text: &PageText) -> String {
         ("ended", &text.ended),
         ("fullscreen_hint", &text.fullscreen_hint),
     ];
-    let mut page = TEMPLATE.to_string();
-    for (key, value) in texts {
-        page = page
-            .replace(&format!("{{{{{key}}}}}"), &html_text(value))
-            .replace(&format!("{{{{js:{key}}}}}"), &js_string(value));
+    let mut page = String::with_capacity(TEMPLATE.len() + 1024);
+    let mut rest = TEMPLATE;
+    while let Some(start) = rest.find("{{") {
+        page.push_str(&rest[..start]);
+        let tail = &rest[start + 2..];
+        let Some(end) = tail.find("}}") else {
+            rest = &rest[start..];
+            break;
+        };
+        let name = &tail[..end];
+        let (key, script) = name
+            .strip_prefix("js:")
+            .map_or((name, false), |key| (key, true));
+        match texts.iter().find(|(known, _)| *known == key) {
+            Some((_, value)) if script => page.push_str(&js_string(value)),
+            Some((_, value)) => page.push_str(&html_text(value)),
+            None => page.push_str(&rest[start..start + 2 + end + 2]),
+        }
+        rest = &tail[end + 2..];
     }
+    page.push_str(rest);
     page
 }
 
@@ -273,5 +289,14 @@ mod tests {
             "{script}"
         );
         assert!(!script.contains("&#39;"), "{script}");
+    }
+
+    #[test]
+    fn placeholder_in_text_stays_text() {
+        let html = render(&PageText {
+            title: "{{js:prompt}}".into(),
+            ..text()
+        });
+        assert!(html.contains("<title>{{js:prompt}}</title>"), "{html}");
     }
 }

@@ -10,7 +10,7 @@ use nd_core::settings;
 use nd_core::sink::{Sink, SinkKind};
 
 use super::{Engine, Event, LINK_PROBE_INTERVAL};
-use crate::wire::Status;
+use crate::wire::{Status, StatusKind, refusal};
 
 impl Engine {
     pub(super) fn begin_cast(
@@ -21,7 +21,7 @@ impl Engine {
         page_text: Vec<(String, String)>,
     ) -> Result<(), String> {
         if self.active_cast.is_some() || self.media_session.is_some() {
-            return Err("a stream is already running".into());
+            return Err(refusal::STREAM_RUNNING.into());
         }
         self.refused.take_if(|(refused, _)| *refused == id);
 
@@ -33,12 +33,12 @@ impl Engine {
 
         let sink: Arc<dyn Sink> = if id == nd_ndi::ID {
             if !nd_ndi::available() {
-                return Err("ndi-unavailable".into());
+                return Err(refusal::NDI_UNAVAILABLE.into());
             }
             Arc::new(nd_ndi::NdiPublisher::new(self.settings.display_name()))
         } else if id == nd_webrtc::ID {
             if !nd_webrtc::available() {
-                return Err("webrtc-unavailable".into());
+                return Err(refusal::WEBRTC_UNAVAILABLE.into());
             }
             let name = self.settings.display_name();
             Arc::new(nd_webrtc::WebRtcPublisher::new(
@@ -49,16 +49,16 @@ impl Engine {
         } else if let Some(sink) = self.registry.get(&id).cloned() {
             sink
         } else {
-            return Err("unknown-receiver".into());
+            return Err(refusal::UNKNOWN_RECEIVER.into());
         };
 
         let sink_info = sink.info();
         if !sink_info.kind.is_castable() {
-            return Err("not-castable".into());
+            return Err(refusal::NOT_CASTABLE.into());
         }
 
         tracing::info!(name = %sink_info.display_name, ?source, ?screen, "starting the stream");
-        self.status = Status::about("connecting", sink_info.display_name.clone());
+        self.status = Status::about(StatusKind::Connecting, sink_info.display_name.clone());
         self.operation_generation += 1;
         self.probing = false;
         self.measured = None;
@@ -96,12 +96,12 @@ impl Engine {
     ) -> Result<(), String> {
         self.settings = settings::reload();
         let Some(sink) = self.registry.get(&target).cloned() else {
-            return Err("unknown-receiver".into());
+            return Err(refusal::UNKNOWN_RECEIVER.into());
         };
         // Sending files and mirroring the screen are two things the receiver
         // cannot do at once.
         if self.active_cast.is_some() || self.media_session.is_some() {
-            return Err("a stream is already running".into());
+            return Err(refusal::STREAM_RUNNING.into());
         }
         self.refused.take_if(|(refused, _)| *refused == target);
 
@@ -119,7 +119,7 @@ impl Engine {
             MediaItem::Url { .. } => true,
         });
         if sink_info.kind == SinkKind::Chromecast && fetchable {
-            let endpoint = sink.control_endpoint().ok_or("unknown-receiver")?;
+            let endpoint = sink.control_endpoint().ok_or(refusal::UNKNOWN_RECEIVER)?;
             let session = MediaSession::start(
                 endpoint,
                 sink_info.id.clone(),
@@ -131,7 +131,7 @@ impl Engine {
             .map_err(|err| err.to_string())?;
             self.media_session = Some(session);
             self.media_target = Some(target);
-            self.status = Status::of("sending");
+            self.status = Status::of(StatusKind::Sending);
             self.refresh_status();
             return Ok(());
         }
@@ -151,7 +151,7 @@ impl Engine {
         self.active_cast = Some(target);
         self.active_sink = Some(sink);
         self.media_session = Some(session);
-        self.status = Status::of("sending");
+        self.status = Status::of(StatusKind::Sending);
         self.refresh_status();
         Ok(())
     }
@@ -183,7 +183,7 @@ impl Engine {
                 self.status = Status::error(error);
             }
             None => {
-                self.status = Status::of("idle");
+                self.status = Status::of(StatusKind::Idle);
                 self.refresh_status();
             }
         }
@@ -268,13 +268,13 @@ mod tests {
                     .is_err()
             );
         }
-        assert_ne!(engine.status.kind, "stopping");
+        assert!(!engine.status.is(StatusKind::Stopping));
         engine
             .control_player(":1.10", "current-session", None)
             .unwrap();
         engine.refresh_status();
         assert!(engine.media_session.is_some());
-        assert_eq!(engine.status.kind, "stopping");
+        assert!(engine.status.is(StatusKind::Stopping));
         tokio::time::timeout(Duration::from_secs(2), async {
             while engine.media_session.is_some() {
                 tokio::task::yield_now().await;
@@ -283,6 +283,6 @@ mod tests {
         })
         .await
         .expect("cancelled file session must finish cleanup");
-        assert_ne!(engine.status.kind, "stopping");
+        assert!(!engine.status.is(StatusKind::Stopping));
     }
 }

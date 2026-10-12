@@ -306,7 +306,9 @@ pub fn control_url(description: &str, wanted: &str) -> Option<String> {
     None
 }
 
-/// Escapes text for an XML attribute or element body.
+/// Escapes text for an XML attribute or element body. Characters XML 1.0
+/// forbids are dropped: one in a file name would make the renderer refuse
+/// the whole document.
 pub fn escape(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
@@ -316,6 +318,8 @@ pub fn escape(text: &str) -> String {
             '>' => out.push_str("&gt;"),
             '"' => out.push_str("&quot;"),
             '\'' => out.push_str("&apos;"),
+            '\t' | '\n' | '\r' => out.push(c),
+            c if c.is_control() || matches!(c, '\u{fffe}' | '\u{ffff}') => {}
             _ => out.push(c),
         }
     }
@@ -488,5 +492,10 @@ mod tests {
             escape(r#"<a href="x">&'"#),
             "&lt;a href=&quot;x&quot;&gt;&amp;&apos;"
         );
+    }
+
+    #[test]
+    fn xml_illegal_characters_dropped() {
+        assert_eq!(escape("a\u{1}b\tc\u{ffff}"), "ab\tc");
     }
 }

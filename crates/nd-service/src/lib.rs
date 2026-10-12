@@ -41,11 +41,14 @@ pub const OBJECT_PATH: &str = "/br/com/biglinux/BigNetScreen";
 /// wording: the service has no catalogue and no locale worth trusting, and a
 /// client that cares passes its own strings.
 pub fn web_page_text(title: String, overrides: &[(String, String)]) -> nd_webrtc::PageText {
+    // The texts arrive over D-Bus from any client; a sentence fits well
+    // within this.
+    const MAX_CHARS: usize = 400;
     let pick = |key: &str, fallback: &str| -> String {
         overrides
             .iter()
             .find(|(name, _)| name == key)
-            .map(|(_, value)| value.clone())
+            .map(|(_, value)| value.chars().take(MAX_CHARS).collect())
             .unwrap_or_else(|| fallback.to_string())
     };
     nd_webrtc::PageText {

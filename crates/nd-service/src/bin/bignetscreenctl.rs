@@ -12,6 +12,7 @@ use std::process::ExitCode;
 use futures::StreamExt;
 
 use nd_service::dbus::ServiceProxy;
+use nd_service::wire::StatusKind;
 
 const USAGE: &str = "\
 bignetscreenctl — share a screen from the command line
@@ -136,17 +137,17 @@ async fn run(args: &[String]) -> Result<(), String> {
 async fn describe(service: &ServiceProxy<'_>) -> Result<String, String> {
     let status = service.status().await.map_err(bus)?;
     let session = service.session().await.map_err(bus)?;
-    let line = match status.kind.as_str() {
-        "searching" => "searching for receivers".to_string(),
-        "found" => format!("{} receiver(s) found", status.count),
-        "empty" => "no receivers found".to_string(),
-        "discovery-off" => "automatic discovery is off".to_string(),
-        "connecting" => format!("connecting to {}", status.display_name),
-        "stopping" => "stopping".to_string(),
-        "sending" => "sending files".to_string(),
-        "ndi-runtime-missing" => "the NDI runtime is not installed".to_string(),
-        "error" => format!("error: {}", status.detail),
-        "streaming" => {
+    let line = match status.kind() {
+        Some(StatusKind::Searching) => "searching for receivers".to_string(),
+        Some(StatusKind::Found) => format!("{} receiver(s) found", status.count),
+        Some(StatusKind::Empty) => "no receivers found".to_string(),
+        Some(StatusKind::DiscoveryOff) => "automatic discovery is off".to_string(),
+        Some(StatusKind::Connecting) => format!("connecting to {}", status.display_name),
+        Some(StatusKind::Stopping) => "stopping".to_string(),
+        Some(StatusKind::Sending) => "sending files".to_string(),
+        Some(StatusKind::NdiRuntimeMissing) => "the NDI runtime is not installed".to_string(),
+        Some(StatusKind::Error) => format!("error: {}", status.detail),
+        Some(StatusKind::Streaming) => {
             let mut line = format!(
                 "sharing the {} with {}",
                 session.source, status.display_name
@@ -165,7 +166,7 @@ async fn describe(service: &ServiceProxy<'_>) -> Result<String, String> {
             }
             line
         }
-        other => other.to_string(),
+        Some(StatusKind::Idle) | None => status.kind.clone(),
     };
     Ok(line)
 }

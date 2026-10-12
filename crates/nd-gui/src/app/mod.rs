@@ -28,7 +28,7 @@ use nd_chromecast::file_server::MediaFile;
 use nd_core::capture::SourceType;
 use nd_core::settings::{self, Settings};
 use nd_service::dbus::ServiceProxy;
-use nd_service::wire;
+use nd_service::wire::{self, StatusKind};
 
 use crate::pages::Page;
 use crate::pages::devices::{DevicesMsg, DevicesOutput, DevicesPage};
@@ -279,7 +279,9 @@ impl Component for AppModel {
                     set_content = &gtk::Box {
                         set_orientation: gtk::Orientation::Vertical,
 
+                        // Both banners can carry text from the service.
                         adw::Banner {
+                            set_use_markup: false,
                             #[watch]
                             set_revealed: !model.issues_summary().is_empty(),
                             #[watch]
@@ -289,8 +291,9 @@ impl Component for AppModel {
                         },
 
                         adw::Banner {
+                            set_use_markup: false,
                             #[watch]
-                            set_revealed: model.failure.is_some() || model.state.status.kind == "error",
+                            set_revealed: model.failure.is_some() || model.state.status.is(StatusKind::Error),
                             #[watch]
                             set_title: &describe_refusal(model.failure.as_deref().unwrap_or(&model.state.status.detail)),
                             set_button_label: Some(&tr!("Details")),
@@ -507,26 +510,17 @@ impl Component for AppModel {
                 }
             }
             AppMsg::Cast(id) => self.begin_cast(id, &sender),
+            // The service checks the plugins and refuses with a reason the
+            // status line explains.
             AppMsg::PublishNdi(source) => {
-                if self.ndi_installing.get() {
-                    return;
-                } else if !nd_ndi::available() {
-                    self.status = tr!("NDI unavailable. See the NDI setup guide.");
-                } else {
+                if !self.ndi_installing.get() {
                     self.source_type = source;
                     self.begin_cast(nd_ndi::ID.into(), &sender);
                 }
             }
             AppMsg::PublishWeb(source) => {
-                if !nd_webrtc::available() {
-                    self.status = tr!(
-                        "Sharing with a web browser needs GStreamer's WebRTC plugins, which \
-                         this system does not have."
-                    );
-                } else {
-                    self.source_type = source;
-                    self.begin_cast(nd_webrtc::ID.into(), &sender);
-                }
+                self.source_type = source;
+                self.begin_cast(nd_webrtc::ID.into(), &sender);
             }
             AppMsg::InstallNdi => {
                 if self.ndi_installing.get() {
@@ -689,7 +683,7 @@ impl Component for AppModel {
                 dialogs::ndi_install_result(root, result);
             }
             AppCmd::NdiInstallOffer(can_install) => {
-                if self.state.status.kind == "ndi-runtime-missing" {
+                if self.state.status.is(StatusKind::NdiRuntimeMissing) {
                     dialogs::ndi_install_offer(root, can_install, sender.input_sender().clone());
                 }
             }
@@ -820,8 +814,8 @@ impl AppModel {
         let media_changed = state.media != self.state.media;
         let searching_changed = state.status.kind != self.state.status.kind;
         let virtual_changed = state.virtual_available != self.state.virtual_available;
-        let ndi_missing = state.status.kind == "ndi-runtime-missing"
-            && self.state.status.kind != "ndi-runtime-missing";
+        let ndi_missing = state.status.is(StatusKind::NdiRuntimeMissing)
+            && !self.state.status.is(StatusKind::NdiRuntimeMissing);
         let was_streaming = !self.state.session.is_idle();
         self.state = state;
         self.status = describe_status(&self.state.status, &self.state.session);
@@ -830,8 +824,9 @@ impl AppModel {
                 .emit(HomeMsg::VirtualAvailable(self.state.virtual_available));
         }
         if searching_changed {
-            self.home
-                .emit(HomeMsg::Searching(self.state.status.kind == "searching"));
+            self.home.emit(HomeMsg::Searching(
+                self.state.status.is(StatusKind::Searching),
+            ));
         }
         if receivers_changed || session_changed {
             self.push_devices();

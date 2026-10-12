@@ -5,7 +5,7 @@ use nd_core::settings::Settings;
 use nd_core::sink::SinkState;
 
 use super::{Engine, source_name};
-use crate::wire::{self, Issue, Media, Receiver, Session, Status};
+use crate::wire::{self, Issue, Media, Receiver, Session, Status, StatusKind};
 
 /// Everything a client needs to draw, in one value.
 #[derive(Clone, Debug, PartialEq)]
@@ -34,9 +34,9 @@ impl Snapshot {
             session: Session::idle(),
             link_probe: "pending".into(),
             status: Status::of(if settings.auto_discovery {
-                "searching"
+                StatusKind::Searching
             } else {
-                "discovery-off"
+                StatusKind::DiscoveryOff
             }),
             issues: Vec::new(),
             media: Media::idle(),
