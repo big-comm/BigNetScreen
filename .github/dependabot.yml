@@ -22,6 +22,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Its ref names the Rust release, which follows rust-version in Cargo.toml.
+      - dependency-name: dtolnay/rust-toolchain
     groups:
       actions:
         patterns: ["*"]
