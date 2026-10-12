@@ -68,6 +68,9 @@ const GROUP_STATE_POLL: Duration = Duration::from_millis(500);
 const DEVICE_TYPE_WIFI: u32 = 2;
 /// `NM_DEVICE_TYPE_WIFI_P2P`.
 const DEVICE_TYPE_WIFI_P2P: u32 = 30;
+/// `NM_DEVICE_STATE_DISCONNECTED`: below it the device is unmanaged or
+/// unavailable.
+const DEVICE_STATE_DISCONNECTED: u32 = 30;
 
 /// wpa_supplicant's global interface.
 ///
@@ -198,6 +201,7 @@ impl P2pDevice {
         // Telling "no wireless hardware" from "wireless that cannot do Wi-Fi
         // Direct" needs to know whether an ordinary Wi-Fi device exists.
         let mut has_wifi = false;
+        let mut unavailable = false;
 
         for dev in devices {
             let device = DeviceProxy::builder(&conn)
@@ -210,6 +214,16 @@ impl P2pDevice {
             let kind = device.device_type().await.unwrap_or(0);
             if kind == DEVICE_TYPE_WIFI {
                 has_wifi = true;
+            }
+            // A P2P device whose radio NetworkManager does not manage, or that
+            // has no supplicant behind it, cannot search: with two adapters it
+            // may be listed before the one that can.
+            if kind == DEVICE_TYPE_WIFI_P2P
+                && device.state().await.unwrap_or(0) < DEVICE_STATE_DISCONNECTED
+            {
+                tracing::info!(path = %dev, "skipping a Wi-Fi P2P device that is not available");
+                unavailable = true;
+                continue;
             }
             if kind == DEVICE_TYPE_WIFI_P2P {
                 let p2p = WifiP2pProxy::builder(&conn)
@@ -234,6 +248,13 @@ impl P2pDevice {
             }
         }
 
+        // Wi-Fi switched off comes back without anything being installed, so
+        // it stays a retryable failure.
+        if unavailable {
+            return Err(NdError::Network(
+                "the Wi-Fi Direct device is not available; check that Wi-Fi is on".into(),
+            ));
+        }
         Err(missing_p2p_device(has_wifi))
     }
 

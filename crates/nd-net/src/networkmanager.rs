@@ -48,6 +48,9 @@ pub(crate) trait Device {
 
     #[zbus(property)]
     fn interface(&self) -> zbus::Result<String>;
+
+    #[zbus(property)]
+    fn state(&self) -> zbus::Result<u32>;
 }
 
 #[zbus::proxy(
