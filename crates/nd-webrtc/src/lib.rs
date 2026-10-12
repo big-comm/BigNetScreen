@@ -358,8 +358,8 @@ fn count_consumers(sink: &gst::Element) -> Arc<AtomicU32> {
             if joining {
                 connected.fetch_add(1, Ordering::Relaxed);
             } else {
-                let _ = connected.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
-                    Some(n.saturating_sub(1))
+                connected.update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+                    n.saturating_sub(1)
                 });
             }
             None
