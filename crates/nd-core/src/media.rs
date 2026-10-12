@@ -451,15 +451,19 @@ mod tests {
 
     /// A receiver for the WFD RTP stream, fed through the `wire` appsrc and
     /// decoding into the `video` and `audio` fakesinks.
+    ///
+    /// The sinks do not preroll: the jitter buffer releases nothing before
+    /// PLAYING, so a preroll that its first packets cannot complete would
+    /// hold the pipeline in PAUSED.
     fn ts_receiver() -> gst::Pipeline {
         let receiver = gst::parse::launch(
             "appsrc name=wire is-live=true do-timestamp=true format=time \
              caps=\"application/x-rtp,media=video,clock-rate=90000,encoding-name=MP2T,payload=33\" \
              ! rtpjitterbuffer latency=30 ! rtpmp2tdepay ! tsdemux name=demux \
              queue name=video-input ! h264parse ! avdec_h264 max-threads=2 \
-             ! fakesink name=video sync=false signal-handoffs=true \
+             ! fakesink name=video sync=false async=false signal-handoffs=true \
              queue name=audio-input ! aacparse ! avdec_aac \
-             ! fakesink name=audio sync=false signal-handoffs=true",
+             ! fakesink name=audio sync=false async=false signal-handoffs=true",
         )
         .unwrap()
         .downcast::<gst::Pipeline>()
