@@ -60,8 +60,6 @@ pub enum MediaMsg {
     Cancel,
     /// The receivers that can play a file: (id, name).
     Targets(Vec<(String, String)>),
-    /// Select this receiver (chosen on the devices page).
-    Choose(String),
     /// A destination was picked in the list, by position.
     TargetPicked(usize),
     Status(Option<MediaStatus>),
@@ -98,25 +96,6 @@ impl Component for MediaPage {
             set_orientation: gtk::Orientation::Vertical,
             set_margin_all: 24,
             set_spacing: 6,
-
-            gtk::Box {
-                add_css_class: "page-heading",
-                set_spacing: 18,
-                gtk::Image {
-                    #[watch]
-                    set_icon_name: Some(match model.kind {
-                        MediaKind::Photo => "folder-pictures-symbolic",
-                        MediaKind::Video => "folder-videos-symbolic",
-                        MediaKind::Music => "audio-x-generic-symbolic",
-                    }),
-                    set_pixel_size: 32, add_css_class: "page-icon", set_valign: gtk::Align::Center,
-                },
-                gtk::Box {
-                    set_orientation: gtk::Orientation::Vertical, set_valign: gtk::Align::Center, set_spacing: 6,
-                    gtk::Label { set_label: &tr!("Share media"), set_xalign: 0.0, add_css_class: "page-title" },
-                    gtk::Label { set_label: &tr!("Pick files and choose where to play them."), set_xalign: 0.0, set_wrap: true, add_css_class: "page-subtitle" },
-                },
-            },
 
             #[name = "toolbar"]
             gtk::Box {
@@ -521,12 +500,6 @@ impl Component for MediaPage {
                     {
                         self.chosen_target = None;
                     }
-                    self.fill_chooser(widgets);
-                }
-            }
-            MediaMsg::Choose(id) => {
-                if self.targets.iter().any(|(listed, _)| *listed == id) {
-                    self.chosen_target = Some(id);
                     self.fill_chooser(widgets);
                 }
             }

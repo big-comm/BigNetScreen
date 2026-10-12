@@ -1,4 +1,4 @@
-//! One receiver as a list row, shared by the home and devices pages.
+//! One receiver as a list row, with the action it offers.
 
 use nd_core::sink::SinkState;
 use relm4::adw::{self, prelude::*};
@@ -16,11 +16,14 @@ pub struct DeviceRow {
 #[derive(Debug)]
 pub enum DeviceRowMsg {
     Update(DeviceEntry),
+    /// The row's button was pressed.
+    Act,
 }
 
 #[derive(Debug)]
 pub enum DeviceRowOutput {
-    Activated(String),
+    Cast(String),
+    TrustAgain(String),
 }
 
 #[relm4::factory(pub)]
@@ -39,9 +42,6 @@ impl FactoryComponent for DeviceRow {
             set_title: &self.entry.name,
             #[watch]
             set_subtitle: &self.subtitle(),
-            #[watch]
-            set_activatable: self.entry.castable && !self.entry.state.is_busy(),
-
             add_prefix = &gtk::Image {
                 #[watch]
                 set_icon_name: Some(self.entry.icon()),
@@ -50,7 +50,6 @@ impl FactoryComponent for DeviceRow {
             },
 
             add_suffix = &gtk::Label {
-                add_css_class: "badge",
                 // Centred rather than filled: without this the label takes the
                 // whole height of the row and the pill touches the separators.
                 set_valign: gtk::Align::Center,
@@ -59,7 +58,9 @@ impl FactoryComponent for DeviceRow {
                 set_label: &self.entry.badge(),
                 #[watch]
                 set_css_classes: &["badge", if self.entry.castable { self.entry.badge_class() } else { "discovery-only" }],
-
+                // Only where it says more than the button beside it.
+                #[watch]
+                set_visible: self.action().is_none(),
             },
 
             add_suffix = &adw::Spinner {
@@ -67,15 +68,30 @@ impl FactoryComponent for DeviceRow {
                 set_visible: self.entry.state.is_busy(),
             },
 
-            add_suffix = &gtk::Image {
-                set_icon_name: Some("go-next-symbolic"),
-                add_css_class: "dim-label",
+            add_suffix = &gtk::Button {
+                set_valign: gtk::Align::Center,
                 #[watch]
-                set_visible: self.entry.castable && !self.entry.state.is_busy(),
-            },
-
-            connect_activated[sender, id = self.entry.id.clone()] => move |_| {
-                sender.output(DeviceRowOutput::Activated(id.clone())).ok();
+                set_visible: self.action().is_some(),
+                // A label child, so the accessible name below is the one read:
+                // `set_label` would name the button after its text.
+                #[wrap(Some)]
+                set_child = &gtk::Label {
+                    #[watch]
+                    set_label: &match self.action() {
+                        Some(RowAction::TrustAgain) => tr!("Trust again"),
+                        _ => tr!("Share"),
+                    },
+                },
+                #[watch]
+                set_tooltip_text: (self.action() == Some(RowAction::TrustAgain)).then(|| tr!(
+                    "Forget the device remembered for this receiver and trust the one that answers next"
+                )).as_deref(),
+                #[watch]
+                update_property: &[gtk::accessible::Property::Label(&match self.action() {
+                    Some(RowAction::TrustAgain) => tr!("Trust {} again"),
+                    _ => tr!("Share to {}"),
+                }.replace("{}", &self.entry.name))],
+                connect_clicked => DeviceRowMsg::Act,
             },
         }
     }
@@ -84,26 +100,58 @@ impl FactoryComponent for DeviceRow {
         Self { entry }
     }
 
-    fn update(&mut self, message: Self::Input, _sender: FactorySender<Self>) {
+    fn update(&mut self, message: Self::Input, sender: FactorySender<Self>) {
         match message {
             DeviceRowMsg::Update(entry) => self.entry = entry,
+            DeviceRowMsg::Act => {
+                let id = self.entry.id.clone();
+                let output = match self.action() {
+                    Some(RowAction::Cast) => DeviceRowOutput::Cast(id),
+                    Some(RowAction::TrustAgain) => DeviceRowOutput::TrustAgain(id),
+                    None => return,
+                };
+                sender.output(output).ok();
+            }
         }
     }
 }
 
+/// What the row's button does.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RowAction {
+    Cast,
+    TrustAgain,
+}
+
+/// The receiver was refused for proving another identity.
+pub fn identity_refused(entry: &DeviceEntry) -> bool {
+    entry.state == SinkState::Error
+        && entry
+            .detail
+            .ends_with(nd_chromecast::identity::IDENTITY_CHANGED)
+}
+
 impl DeviceRow {
+    fn action(&self) -> Option<RowAction> {
+        if identity_refused(&self.entry) {
+            Some(RowAction::TrustAgain)
+        } else if self.entry.castable
+            && !self.entry.state.is_busy()
+            && self.entry.state != SinkState::Streaming
+        {
+            Some(RowAction::Cast)
+        } else {
+            None
+        }
+    }
+
     /// Protocol, address, and what the receiver is doing or why it failed, when
     /// known.
     fn subtitle(&self) -> String {
         if self.entry.kind == nd_core::sink::SinkKind::AirPlay {
             return tr!("This device is visible, but AirPlay sharing is not supported.");
         }
-        if self.entry.state == SinkState::Error
-            && self
-                .entry
-                .detail
-                .ends_with(nd_chromecast::identity::IDENTITY_CHANGED)
-        {
+        if identity_refused(&self.entry) {
             return tr!("Did not prove it is the same device used before");
         }
         if self.entry.state == SinkState::Error && !self.entry.detail.is_empty() {

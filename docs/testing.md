@@ -22,7 +22,7 @@ The Cast HTTP integration test runs a real GStreamer encoder and muxer and downl
 
 Graphical tests are ignored by default because they need a display. Run only the relevant ones, with a timeout, in a private graphical session with its own D-Bus: some ignored tests use the host firewall, P2P or NDI hardware. Inspect representative wide and compact states and closure while cleanup is pending.
 
-The layout harness renders every page and breakpoint through GTK's Broadway backend and captures each state from a headless browser. Use one new, empty directory for both halves; the script needs the Python Playwright package and stops after the last state, `settings-compact`:
+The layout harness renders each part of the window and its breakpoints through GTK's Broadway backend and captures each state from a headless browser. Use one new, empty directory for both halves; the script needs the Python Playwright package and stops after the last state, `settings-compact`:
 
 ```sh
 gtk4-broadwayd -a 127.0.0.1 -p 19091 :91 &
@@ -32,10 +32,11 @@ BIGNETSCREEN_LAYOUT_DIR="$dir" \
 cargo test -p nd-gui --locked layout_pages_and_breakpoints -- --ignored --nocapture
 ```
 
-For window teardown, run `navigation_tree_finalizes_after_window_close` with
+For window teardown, run `window_tree_finalizes_after_close` with
 `--ignored --nocapture` in a private graphical session. The test opens the real
-root component, exercises navigation, destroys the window and requires its panel
-to finalize through a qdata destructor. `BIGNETSCREEN_LEAK_CYCLES=25` raises the
+root component, shows the options panel, opens one of its cards and the
+settings dialog, destroys the window and requires its tree to finalize through
+a qdata destructor. `BIGNETSCREEN_LEAK_CYCLES=25` raises the
 default five cycles for profiling. Keep handlers on descendants weak toward
 their ancestors: Relm4's generated widget tree hides that ownership from a
 source-only leak lint.

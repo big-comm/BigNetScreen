@@ -1,5 +1,5 @@
-//! The window: a sidebar, a page for each thing the application does, and the
-//! state that outlives any one of them.
+//! The window: the choices made before sharing on the left, where to share on
+//! the right, and the state that outlives either.
 //!
 //! The window is a client of the session service ([`service_link`]): it asks for
 //! actions over D-Bus and draws what the service publishes. Closing it stops
@@ -28,29 +28,30 @@ use relm4::prelude::*;
 use nd_chromecast::file_server::MediaFile;
 use nd_core::capture::SourceType;
 use nd_core::settings::{self, Settings};
-use nd_core::sink::SinkState;
 use nd_service::dbus::ServiceProxy;
 use nd_service::wire::{self, StatusKind};
 
-use crate::pages::devices::{DevicesMsg, DevicesOutput, DevicesPage};
-use crate::pages::home::{HomeMsg, HomeOutput, HomePage};
+use crate::pages::Discovery;
 use crate::pages::media::{MediaMsg, MediaOutput, MediaPage};
+use crate::pages::options::{OptionsMsg, OptionsOutput, OptionsPanel, Share};
 use crate::pages::settings::{SettingsMsg, SettingsOutput, SettingsPage};
-use crate::pages::{Discovery, Page};
+use crate::pages::share::{ShareMsg, ShareOutput, SharePage};
 use crate::tr;
 use service_link::{Connection, ServiceState, follow_the_service};
 use wording::{
-    SAVE_FAILED, audio_summary, describe_refusal, describe_status, friendly_reason, known_refusal,
-    web_page_text,
+    SAVE_FAILED, describe_refusal, describe_status, friendly_reason, known_refusal, web_page_text,
 };
 
 pub struct AppModel {
-    home: Controller<HomePage>,
-    devices: Controller<DevicesPage>,
+    options: Controller<OptionsPanel>,
+    share_page: Controller<SharePage>,
     media: Controller<MediaPage>,
     settings_page: Controller<SettingsPage>,
+    /// Holds the settings page; kept to be presented again.
+    settings_dialog: adw::Dialog,
 
-    page: Page,
+    /// What is shared, as chosen in the sidebar.
+    share: Share,
     /// The session service, once it has answered. `None` while connecting, or
     /// after it could not be reached, which shows as a banner.
     service: Option<ServiceProxy<'static>>,
@@ -67,7 +68,8 @@ pub struct AppModel {
     /// Issues the person has dismissed, so the banner does not come back for
     /// something they have already read.
     dismissed: Vec<wire::Issue>,
-    /// What will be captured when a receiver is picked.
+    /// What will be captured when a receiver is picked: the last screen
+    /// choice, kept while files are chosen.
     source_type: SourceType,
     ndi_installing: Rc<Cell<bool>>,
     ndi_install_dialog: Option<adw::AlertDialog>,
@@ -78,13 +80,17 @@ pub struct AppModel {
 #[derive(Debug)]
 pub enum AppMsg {
     CloseRequested,
-    Navigate(Page),
-    PublishNdi(SourceType),
+    /// What to share was chosen in the sidebar.
+    Share(Share),
+    /// Settings changed in the sidebar.
+    OptionsChanged(Settings),
+    ShowSettings,
+    PublishNdi,
     /// Share to web browsers on the network.
-    PublishWeb(SourceType),
+    PublishWeb,
     InstallNdi,
-    /// Start streaming this to this receiver, in one step.
-    CastWith(String, SourceType),
+    /// Start streaming the chosen source to this receiver.
+    Cast(String),
     /// Stream the screen with this connector to this receiver.
     CastOnScreen(String, String),
     Stop,
@@ -94,15 +100,12 @@ pub enum AppMsg {
     DismissIssues,
     ShowIssues,
     ShowFailure,
-    SetAutoDiscovery(bool),
     SettingsChanged(Settings),
     SettingsSaved(Result<(), String>),
     /// Send these files to the receiver with this id.
     SendMedia(Vec<MediaFile>, String),
     CancelMedia,
     ControlMedia(nd_core::media::MediaCommand),
-    /// Send files to this receiver (from the devices page).
-    MediaTarget(String),
     About,
 }
 
@@ -139,152 +142,66 @@ impl Component for AppModel {
         adw::ApplicationWindow {
             set_title: Some("BigNetScreen"),
             add_css_class: "bns-window",
-            set_default_width: 1280,
-            set_default_height: 860,
+            set_default_width: 1180,
+            set_default_height: 800,
             set_width_request: 480,
             set_height_request: 480,
 
             #[name = "split"]
             adw::OverlaySplitView {
-                set_max_sidebar_width: 270.0,
-                set_min_sidebar_width: 250.0,
-                set_collapsed: false,
-                set_show_sidebar: true,
+                set_min_sidebar_width: 300.0,
+                set_max_sidebar_width: 360.0,
+                set_sidebar_width_fraction: 0.32,
 
                 #[wrap(Some)]
-                // The sidebar has no header bar, so its top would not drag the
-                // window; the `WindowHandle` around the identity block does.
-                set_sidebar = &gtk::Box {
+                set_sidebar = &adw::ToolbarView {
                     add_css_class: "bns-sidebar",
-                    set_orientation: gtk::Orientation::Vertical,
-
-                    gtk::WindowHandle {
-                        gtk::Box {
-                            set_spacing: 10,
-                            add_css_class: "app-identity",
-
-                            gtk::Image {
-                                set_icon_name: Some("tv-symbolic"),
-                                set_pixel_size: 22,
-                                add_css_class: "app-mark",
-                            },
-                            gtk::Box {
-                                set_orientation: gtk::Orientation::Vertical,
-                                set_valign: gtk::Align::Center,
-
-                                gtk::Label {
-                                    set_label: "BigNetScreen",
-                                    set_xalign: 0.0,
-                                    add_css_class: "title",
-                                },
-                                gtk::Label {
-                                    set_label: &tr!("Share your screen wirelessly"),
-                                    set_xalign: 0.0,
-                                    add_css_class: "subtitle",
-                                },
-                            },
+                    add_top_bar = &adw::HeaderBar {
+                        #[wrap(Some)]
+                        set_title_widget = &adw::WindowTitle {
+                            set_title: "BigNetScreen",
                         },
                     },
-
-                    #[name = "nav"]
-                        gtk::ListBox {
-                            set_margin_all: 8,
-                            add_css_class: "navigation-sidebar",
-                            connect_row_selected[sender] => move |_, row| {
-                                if let Some(page) = row
-                                    .and_then(|row| usize::try_from(row.index()).ok())
-                                    .and_then(|index| Page::all().get(index).copied())
-                                {
-                                    sender.input(AppMsg::Navigate(page));
-                                }
-                            },
-                        },
-
-                        gtk::Box { set_vexpand: true },
-
-                        // What is connected, at the foot of the sidebar.
-                        gtk::Box {
-                            set_orientation: gtk::Orientation::Vertical,
-                            add_css_class: "connected-card",
-                            #[watch]
-                            set_visible: !model.state.session.is_idle(),
-
-                            gtk::Box {
-                                set_spacing: 6,
-
-                                gtk::Label {
-                                    #[watch]
-                                    set_label: &model.session_state_label(),
-                                    set_hexpand: true,
-                                    set_xalign: 0.0,
-                                    add_css_class: "caption",
-                                },
-                                gtk::Image {
-                                    set_icon_name: Some("media-record-symbolic"),
-                                    set_pixel_size: 10,
-                                    add_css_class: "live-dot",
-                                    #[watch]
-                                    set_visible: model.is_streaming(),
-                                },
-                            },
-                            gtk::Label {
-                                #[watch]
-                                set_label: &model.state.session.display_name,
-                                set_xalign: 0.0,
-                                set_ellipsize: gtk::pango::EllipsizeMode::End,
-                                add_css_class: "heading",
-                            },
-                            gtk::Label {
-                                #[watch]
-                                set_label: &model.state.session.address,
-                                set_xalign: 0.0,
-                                add_css_class: "dim-label",
-                            },
-                        },
-
-                        gtk::Box {
-                            set_spacing: 12,
-                            add_css_class: "sidebar-footer",
-
-                            gtk::Button {
-                                set_icon_name: "help-about-symbolic",
-                                set_tooltip_text: Some(&tr!("About BigNetScreen")),
-                                connect_clicked => AppMsg::About,
-                            },
-                            gtk::Box {
-                                set_orientation: gtk::Orientation::Vertical,
-                                set_valign: gtk::Align::Center,
-                                gtk::Label { set_label: "BigNetScreen", set_xalign: 0.0, add_css_class: "dim-label" },
-                                gtk::Label { set_label: crate::APP_VERSION, set_xalign: 0.0, add_css_class: "caption", add_css_class: "dim-label" },
-                            },
-                        },
+                    #[wrap(Some)]
+                    set_content = model.options.widget(),
                 },
 
                 #[wrap(Some)]
                 set_content = &adw::ToolbarView {
                     add_top_bar = &adw::HeaderBar {
-                        add_css_class: "flat",
-
-                        #[name = "navigation_button"]
+                        #[name = "sidebar_button"]
                         pack_start = &gtk::Button {
                             set_icon_name: "sidebar-show-symbolic",
-                            set_tooltip_text: Some(&tr!("Show navigation")),
+                            set_tooltip_text: Some(&tr!("Show the options")),
                             set_visible: false,
                         },
 
                         #[wrap(Some)]
-                        // Each page carries its own heading, so the bar says
-                        // what the service is doing.
                         set_title_widget = &adw::WindowTitle {
                             #[watch]
                             set_title: &model.status,
                         },
 
+                        pack_end = &gtk::MenuButton {
+                            set_icon_name: "open-menu-symbolic",
+                            set_tooltip_text: Some(&tr!("Main menu")),
+                            set_primary: true,
+                            set_menu_model: Some(&main_menu()),
+                        },
+                        pack_end = &gtk::Button {
+                            set_tooltip_text: Some(&tr!("Search for devices again (F5)")),
+                            connect_clicked => AppMsg::Rescan,
+                            adw::ButtonContent {
+                                set_icon_name: "view-refresh-symbolic",
+                                set_label: &tr!("Search"),
+                            },
+                        },
+                        // The session card is on the share side only.
                         pack_end = &gtk::Button {
                             set_label: &tr!("Stop sharing"),
                             add_css_class: "destructive-action",
                             #[watch]
-                            set_visible: model.is_busy(),
+                            set_visible: model.share == Share::Files && !model.state.session.is_idle(),
                             #[watch]
                             set_sensitive: !model.state.status.is(StatusKind::Stopping),
                             connect_clicked => AppMsg::Stop,
@@ -319,11 +236,11 @@ impl Component for AppModel {
                         #[name = "stack"]
                         gtk::Stack {
                             set_vexpand: true,
-                            // The visible page is set from `update_with_view`
-                            // rather than watched here: the pages are added to
-                            // the stack after this view is built, so a watch
-                            // would fire once against an empty stack.
                             set_transition_type: gtk::StackTransitionType::Crossfade,
+                            add_named: (model.share_page.widget(), Some("share")),
+                            add_named: (model.media.widget(), Some("media")),
+                            #[watch]
+                            set_visible_child_name: if model.share == Share::Files { "media" } else { "share" },
                         },
                     },
                 },
@@ -338,27 +255,19 @@ impl Component for AppModel {
     ) -> ComponentParts<Self> {
         let current = settings::current();
 
-        let home = HomePage::builder()
+        let options = OptionsPanel::builder()
             .launch(())
             .forward(sender.input_sender(), |output| match output {
-                // The home page names both halves of the decision in one
-                // message: who receives, and what they receive.
-                HomeOutput::PublishNdi(source) => AppMsg::PublishNdi(source),
-                HomeOutput::PublishWeb(source) => AppMsg::PublishWeb(source),
-                HomeOutput::Cast { id, source } => AppMsg::CastWith(id, source),
-                HomeOutput::SendMedia(id) => AppMsg::MediaTarget(id),
-                HomeOutput::Stop => AppMsg::Stop,
-                HomeOutput::Rescan => AppMsg::Rescan,
-                HomeOutput::AudioSettings => AppMsg::Navigate(Page::Settings),
+                OptionsOutput::Share(share) => AppMsg::Share(share),
+                OptionsOutput::Settings(settings) => AppMsg::OptionsChanged(settings),
             });
-        let devices = DevicesPage::builder()
+        let share_page = SharePage::builder()
             .launch(())
             .forward(sender.input_sender(), |output| match output {
-                DevicesOutput::Cast(id) => AppMsg::CastWith(id, SourceType::Monitor),
-                DevicesOutput::Stop => AppMsg::Stop,
-                DevicesOutput::Rescan => AppMsg::Rescan,
-                DevicesOutput::AutoDiscovery(on) => AppMsg::SetAutoDiscovery(on),
-                DevicesOutput::SendMedia(id) => AppMsg::MediaTarget(id),
+                ShareOutput::Cast(id) => AppMsg::Cast(id),
+                ShareOutput::Web => AppMsg::PublishWeb,
+                ShareOutput::Ndi => AppMsg::PublishNdi,
+                ShareOutput::Stop => AppMsg::Stop,
             });
         let media = MediaPage::builder()
             .launch(())
@@ -374,17 +283,26 @@ impl Component for AppModel {
                 SettingsOutput::Saved(result) => AppMsg::SettingsSaved(result),
             },
         );
+        let settings_view = adw::ToolbarView::new();
+        settings_view.add_top_bar(&adw::HeaderBar::new());
+        settings_view.set_content(Some(settings_page.widget()));
+        let settings_dialog = adw::Dialog::builder()
+            .title(tr!("Settings"))
+            .content_width(560)
+            .child(&settings_view)
+            .build();
 
         let model = AppModel {
             failure: None,
             switch_to: None,
             pending_cast: None,
             settings_changed: false,
-            home,
-            devices,
+            options,
+            share_page,
             media,
             settings_page,
-            page: Page::Home,
+            settings_dialog,
+            share: Share::Screen,
             service: None,
             state: ServiceState::default(),
             status: tr!("Connecting…"),
@@ -397,22 +315,28 @@ impl Component for AppModel {
 
         let widgets = view_output!();
         let compact = adw::Breakpoint::new(
-            adw::BreakpointCondition::parse("max-width: 1000px").expect("valid breakpoint"),
+            adw::BreakpointCondition::parse("max-width: 860px").expect("valid breakpoint"),
         );
         compact.add_setter(&widgets.split, "collapsed", Some(&true.to_value()));
         compact.add_setter(&widgets.split, "show-sidebar", Some(&false.to_value()));
-        compact.add_setter(
-            &widgets.navigation_button,
-            "visible",
-            Some(&true.to_value()),
-        );
+        compact.add_setter(&widgets.sidebar_button, "visible", Some(&true.to_value()));
         big_gtk_kit::breakpoint::add(&root, compact);
         let split = widgets.split.downgrade();
-        widgets.navigation_button.connect_clicked(move |_| {
+        widgets.sidebar_button.connect_clicked(move |_| {
             if let Some(split) = split.upgrade() {
                 split.set_show_sidebar(true);
             }
         });
+
+        for (name, message) in [
+            ("settings", (|| AppMsg::ShowSettings) as fn() -> AppMsg),
+            ("about", || AppMsg::About),
+        ] {
+            let action = gtk::gio::SimpleAction::new(name, None);
+            let input = sender.input_sender().clone();
+            action.connect_activate(move |_, _| input.emit(message()));
+            root.add_action(&action);
+        }
 
         let ndi_installing = model.ndi_installing.clone();
         let allow_close = model.allow_close.clone();
@@ -455,7 +379,7 @@ impl Component for AppModel {
             }),
         );
         add("F5", emit(|| AppMsg::Rescan));
-        add("<Control>comma", emit(|| AppMsg::Navigate(Page::Settings)));
+        add("<Control>comma", emit(|| AppMsg::ShowSettings));
         root.add_controller(shortcuts);
 
         let mapped = std::cell::Cell::new(false);
@@ -486,38 +410,11 @@ impl Component for AppModel {
             }
         });
 
-        // The sidebar rows follow `Page::all()`: the selection handler maps a
-        // row index straight onto that array.
-        for page in Page::all() {
-            let row = adw::ActionRow::builder().title(page.title()).build();
-            row.add_prefix(&gtk::Image::from_icon_name(page.icon()));
-            widgets.nav.append(&row);
-            let content: &gtk::Widget = match page {
-                Page::Home => model.home.widget().upcast_ref(),
-                Page::Devices => model.devices.widget().upcast_ref(),
-                Page::Media => model.media.widget().upcast_ref(),
-                Page::Settings => model.settings_page.widget().upcast_ref(),
-            };
-            widgets.stack.add_named(content, Some(page.id()));
-        }
-        if let Some(row) = widgets.nav.row_at_index(0) {
-            widgets.nav.select_row(Some(&row));
-        }
-
-        // The pages are added after the view is built, so the first pass of
-        // `set_visible_child_name` ran against an empty stack. Setting it here
-        // keeps the window from opening blank, and GTK from warning that
-        // "home" does not exist.
-        widgets.stack.set_visible_child_name(model.page.id());
-
         model.push_discovery(if current.auto_discovery {
             Discovery::Searching
         } else {
             Discovery::Off
         });
-        model
-            .home
-            .emit(HomeMsg::AudioSummary(audio_summary(&current)));
         follow_the_service(&sender);
 
         ComponentParts { model, widgets }
@@ -556,24 +453,27 @@ impl Component for AppModel {
                     AppCmd::PreferencesFlushed(result)
                 });
             }
-            AppMsg::Navigate(page) => {
-                self.page = page;
+            AppMsg::Share(share) => {
+                self.share = share;
+                if let Some(source) = share.source() {
+                    self.source_type = source;
+                }
                 if widgets.split.is_collapsed() {
                     widgets.split.set_show_sidebar(false);
                 }
             }
+            AppMsg::OptionsChanged(settings) => {
+                self.settings_page.emit(SettingsMsg::Replace(settings));
+            }
+            AppMsg::ShowSettings => self.settings_dialog.present(Some(root)),
             // The service checks the plugins and refuses with a reason the
             // status line explains.
-            AppMsg::PublishNdi(source) => {
+            AppMsg::PublishNdi => {
                 if !self.ndi_installing.get() {
-                    self.source_type = source;
                     self.begin_cast(nd_ndi::ID.into(), &sender);
                 }
             }
-            AppMsg::PublishWeb(source) => {
-                self.source_type = source;
-                self.begin_cast(nd_webrtc::ID.into(), &sender);
-            }
+            AppMsg::PublishWeb => self.begin_cast(nd_webrtc::ID.into(), &sender),
             AppMsg::InstallNdi => {
                 if self.ndi_installing.get() {
                     return;
@@ -584,9 +484,8 @@ impl Component for AppModel {
                     AppCmd::NdiInstalled(crate::ndi_setup::install().await)
                 });
             }
-            AppMsg::CastWith(id, source) => {
-                self.source_type = source;
-                tracing::info!(?source, "capture source chosen");
+            AppMsg::Cast(id) => {
+                tracing::info!(source = ?self.source_type, "capture source chosen");
                 self.begin_cast(id, &sender);
             }
             AppMsg::CastOnScreen(id, screen) => {
@@ -623,15 +522,10 @@ impl Component for AppModel {
                     dialogs::failure(root, &summary, detail, sender.input_sender().clone());
                 }
             }
-            AppMsg::SetAutoDiscovery(on) => {
-                self.settings_page.emit(SettingsMsg::SyncAutoDiscovery(on));
-            }
             AppMsg::SettingsChanged(new) => {
                 self.settings_changed = true;
                 self.failure = None;
-                self.home.emit(HomeMsg::AudioSummary(audio_summary(&new)));
-                self.devices
-                    .emit(DevicesMsg::SyncAutoDiscovery(new.auto_discovery));
+                self.options.emit(OptionsMsg::Settings(new));
             }
             AppMsg::SettingsSaved(result) => match result {
                 Ok(()) => self.call(
@@ -643,12 +537,6 @@ impl Component for AppModel {
                     self.status = tr!("Could not save settings");
                 }
             },
-            AppMsg::MediaTarget(id) => {
-                // Chosen on the devices page: the media page opens with that
-                // receiver already selected, because the person just said so.
-                self.media.emit(MediaMsg::Choose(id));
-                self.page = Page::Media;
-            }
             AppMsg::SendMedia(files, target) => {
                 let paths: Vec<String> = files
                     .iter()
@@ -680,22 +568,6 @@ impl Component for AppModel {
                 });
             }
             AppMsg::About => dialogs::about(root),
-        }
-
-        // The page the model says is current.
-        widgets.stack.set_visible_child_name(self.page.id());
-
-        // A page can also be reached without touching the sidebar: "Media" on
-        // the home page, or "Send media" on a device. The highlight has to
-        // follow, or it points at the page the person just left.
-        let index = Page::all()
-            .iter()
-            .position(|page| *page == self.page)
-            .unwrap_or(0) as i32;
-        if widgets.nav.selected_row().map(|row| row.index()) != Some(index)
-            && let Some(row) = widgets.nav.row_at_index(index)
-        {
-            widgets.nav.select_row(Some(&row));
         }
 
         self.update_view(widgets, sender);
@@ -759,7 +631,7 @@ impl Component for AppModel {
                 self.service = None;
                 self.state = ServiceState::default();
                 self.push_discovery(Discovery::Unreachable);
-                self.home.emit(HomeMsg::VirtualAvailable(false));
+                self.options.emit(OptionsMsg::VirtualAvailable(false));
                 self.push_devices();
                 self.push_media_status();
                 self.status = tr!("Reconnecting to the sharing service…");
@@ -784,6 +656,14 @@ impl Component for AppModel {
 
         self.update_view(widgets, sender);
     }
+}
+
+/// The window's menu, flat: GTK leaks unmerged menu sections.
+fn main_menu() -> gtk::gio::Menu {
+    let menu = gtk::gio::Menu::new();
+    menu.append(Some(&tr!("Settings")), Some("win.settings"));
+    menu.append(Some(&tr!("About BigNetScreen")), Some("win.about"));
+    menu
 }
 
 #[cfg(test)]
@@ -848,7 +728,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires an isolated GTK session"]
-    fn navigation_tree_finalizes_after_window_close() {
+    fn window_tree_finalizes_after_close() {
         adw::init().unwrap();
         let finalized = std::rc::Rc::new(std::cell::Cell::new(0));
         struct Finalized(std::rc::Rc<std::cell::Cell<usize>>);
@@ -874,13 +754,17 @@ mod tests {
             controller.widget().present();
             context.block_on(gtk::glib::timeout_future(Duration::from_millis(100)));
             controller.widgets().split.set_show_sidebar(false);
-            controller.widgets().navigation_button.emit_clicked();
+            controller.widgets().sidebar_button.emit_clicked();
             assert!(controller.widgets().split.shows_sidebar());
+            // A card of the sidebar and the settings dialog, each opened once.
+            controller.model().options.emit(OptionsMsg::Open(0));
+            controller.emit(AppMsg::ShowSettings);
+            context.block_on(gtk::glib::timeout_future(Duration::from_millis(100)));
             controller.widget().destroy();
             drop(controller);
             context.block_on(gtk::glib::timeout_future(Duration::from_millis(100)));
-            assert_eq!(finalized.get(), cycle, "navigation panel did not finalize");
+            assert_eq!(finalized.get(), cycle, "window tree did not finalize");
         }
-        println!("navigation census: new={cycles}, fin={}", finalized.get());
+        println!("window census: new={cycles}, fin={}", finalized.get());
     }
 }

@@ -27,16 +27,8 @@ fn layout_pages_and_breakpoints() {
         &css,
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
-    let searches = std::rc::Rc::new(std::cell::Cell::new(0));
-    let observed_searches = searches.clone();
-    let home = home::HomePage::builder()
-        .launch(())
-        .connect_receiver(move |_, output| {
-            if matches!(output, home::HomeOutput::Rescan) {
-                observed_searches.set(observed_searches.get() + 1);
-            }
-        });
-    let devices = devices::DevicesPage::builder().launch(()).detach();
+    let options = options::OptionsPanel::builder().launch(()).detach();
+    let share = share::SharePage::builder().launch(()).detach();
     let media = media::MediaPage::builder().launch(()).detach();
     let settings = settings::SettingsPage::builder().launch(()).detach();
     let entries: Vec<_> = [
@@ -61,9 +53,8 @@ fn layout_pages_and_breakpoints() {
         mode: String::new(),
     })
     .collect();
-    home.emit(home::HomeMsg::Devices(entries.clone()));
-    home.emit(home::HomeMsg::VirtualAvailable(true));
-    devices.emit(devices::DevicesMsg::Devices(entries.clone()));
+    share.emit(share::ShareMsg::Devices(entries.clone()));
+    options.emit(options::OptionsMsg::VirtualAvailable(false));
     media.emit(media::MediaMsg::Targets(vec![(
         "1".into(),
         "Projector".into(),
@@ -89,32 +80,21 @@ fn layout_pages_and_breakpoints() {
         }
         panic!("screenshot client timed out for {name}");
     };
-    home.widgets().find_devices.emit_clicked();
-    flush(100);
-    assert_eq!(
-        searches.get(),
-        1,
-        "search button must request discovery once"
-    );
+    let split = adw::OverlaySplitView::builder()
+        .sidebar(options.widget())
+        .content(share.widget())
+        .min_sidebar_width(300.0)
+        .build();
     adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
-    window.set_content(Some(home.widget()));
+    window.set_content(Some(&split));
     window.present();
-    capture("home-dark");
-    home.emit(home::HomeMsg::Selected("1".into()));
-    capture("actions-dark");
-    window.set_content(Some(devices.widget()));
-    capture("devices-dark");
-    devices.emit(devices::DevicesMsg::SetFilter(devices::Filter::Miracast));
-    devices.emit(devices::DevicesMsg::Devices(entries[..1].to_vec()));
-    capture("devices-filtered-dark");
-    devices.emit(devices::DevicesMsg::Devices(Vec::new()));
-    devices.emit(devices::DevicesMsg::Discovery(Discovery::Unreachable));
-    capture("devices-unreachable-dark");
-    devices.emit(devices::DevicesMsg::SetFilter(devices::Filter::All));
-    devices.emit(devices::DevicesMsg::Discovery(Discovery::Finished));
-    devices.emit(devices::DevicesMsg::Devices(entries.clone()));
-    home.emit(home::HomeMsg::Back);
-    home.emit(home::HomeMsg::Session(Some(SessionInfo {
+    capture("share-dark");
+    share.emit(share::ShareMsg::Devices(Vec::new()));
+    share.emit(share::ShareMsg::Discovery(Discovery::Unreachable));
+    capture("share-unreachable-dark");
+    share.emit(share::ShareMsg::Discovery(Discovery::Finished));
+    share.emit(share::ShareMsg::Devices(entries.clone()));
+    share.emit(share::ShareMsg::Session(Some(SessionInfo {
         id: "web".into(),
         name: "Web browsers".into(),
         kind: None,
@@ -130,9 +110,11 @@ fn layout_pages_and_breakpoints() {
             pin: "4821".into(),
         }),
     })));
-    window.set_content(Some(home.widget()));
-    capture("home-streaming-dark");
-    home.emit(home::HomeMsg::Session(None));
+    capture("share-streaming-dark");
+    share.emit(share::ShareMsg::Session(None));
+    options.emit(options::OptionsMsg::Open(3));
+    capture("quality-card-dark");
+    split.set_content(None::<&gtk::Widget>);
     window.set_content(Some(settings.widget()));
     capture("settings-dark");
     window.set_content(Some(media.widget()));
@@ -152,10 +134,8 @@ fn layout_pages_and_breakpoints() {
     capture("music-light");
     window.set_default_size(480, 700);
     capture("music-compact");
-    window.set_content(Some(home.widget()));
-    capture("actions-compact");
-    window.set_content(Some(devices.widget()));
-    capture("devices-compact");
+    window.set_content(Some(share.widget()));
+    capture("share-compact");
     window.set_content(Some(settings.widget()));
     capture("settings-compact");
     window.close();

@@ -10,7 +10,6 @@ use relm4::gtk;
 use nd_service::wire;
 
 use super::AppMsg;
-use crate::pages::Page;
 use crate::tr;
 
 /// The provider failures behind the banner, in words and as the technical
@@ -120,7 +119,7 @@ pub(super) fn failure(
     add_detail(root, &dialog, detail);
     dialog.add_response("settings", &tr!("Settings"));
     dialog.connect_response(Some("settings"), move |_, _| {
-        input.emit(AppMsg::Navigate(Page::Settings))
+        input.emit(AppMsg::ShowSettings)
     });
     dialog.present(Some(root));
 }

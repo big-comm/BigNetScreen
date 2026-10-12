@@ -4,35 +4,14 @@
 use super::*;
 
 impl AppModel {
-    /// Is anything running that the Stop button should end?
+    /// Tells the receiver list where discovery stands.
     pub(super) fn push_discovery(&self, discovery: Discovery) {
-        self.home.emit(HomeMsg::Discovery(discovery));
-        self.devices.emit(DevicesMsg::Discovery(discovery));
+        self.share_page.emit(ShareMsg::Discovery(discovery));
     }
 
+    /// Is anything running that the Stop button should end?
     pub(super) fn is_busy(&self) -> bool {
         !self.state.session.is_idle() || self.state.media.active
-    }
-
-    pub(super) fn session_state(&self) -> SinkState {
-        wire::state_from_name(&self.state.session.state).unwrap_or(SinkState::Connecting)
-    }
-
-    pub(super) fn is_streaming(&self) -> bool {
-        self.session_state() == SinkState::Streaming && !self.state.status.is(StatusKind::Stopping)
-    }
-
-    /// What the sidebar card says the session is doing.
-    pub(super) fn session_state_label(&self) -> String {
-        if self.state.status.is(StatusKind::Stopping) {
-            return tr!("Stopping…");
-        }
-        match self.session_state() {
-            SinkState::Streaming => tr!("Sharing with"),
-            // A session the receiver has not started on yet.
-            SinkState::Disconnected => tr!("Connecting…"),
-            state => crate::pages::state_label(state),
-        }
     }
 
     /// Calls the service, turning a refusal into something the window can say.
@@ -79,7 +58,7 @@ impl AppModel {
         if self.is_busy() {
             self.switch_to = Some(id);
             if let Some(root) = self
-                .home
+                .share_page
                 .widget()
                 .root()
                 .and_downcast::<adw::ApplicationWindow>()
@@ -131,8 +110,8 @@ impl AppModel {
         self.state = state;
         self.status = describe_status(&self.state.status, &self.state.session);
         if virtual_changed {
-            self.home
-                .emit(HomeMsg::VirtualAvailable(self.state.virtual_available));
+            self.options
+                .emit(OptionsMsg::VirtualAvailable(self.state.virtual_available));
         }
         // The status line changes without focus moving, so a screen reader
         // is told about the moments that matter.
@@ -141,7 +120,7 @@ impl AppModel {
                 self.state.status.kind(),
                 Some(StatusKind::Connecting | StatusKind::Streaming | StatusKind::Error)
             )
-            && let Some(window) = self.home.widget().root()
+            && let Some(window) = self.share_page.widget().root()
         {
             window.announce(&self.status, gtk::AccessibleAnnouncementPriority::Medium);
         }
@@ -178,15 +157,12 @@ impl AppModel {
         }
     }
 
-    /// Pushes the current list to every page that shows receivers.
+    /// Pushes the receivers and the session to the parts that show them.
     pub(super) fn push_devices(&mut self) {
-        let entries = self.state.entries();
-        self.home.emit(HomeMsg::Devices(entries.clone()));
-        self.home.emit(HomeMsg::Session(self.state.session_info()));
-        self.devices.emit(DevicesMsg::Devices(entries));
-        self.devices.emit(DevicesMsg::Active(
-            (!self.state.session.is_idle()).then(|| self.state.session.id.clone()),
-        ));
+        self.share_page
+            .emit(ShareMsg::Devices(self.state.entries()));
+        self.share_page
+            .emit(ShareMsg::Session(self.state.session_info()));
         self.media
             .emit(MediaMsg::Targets(self.state.media_receivers()));
     }

@@ -3,12 +3,12 @@ crates/nd-gui/src/app/mod.rs
 crates/nd-gui/src/app/session.rs
 crates/nd-gui/src/app/wording.rs
 crates/nd-gui/src/pages/device_row.rs
-crates/nd-gui/src/pages/devices.rs
-crates/nd-gui/src/pages/home.rs
 crates/nd-gui/src/pages/media/library.rs
 crates/nd-gui/src/pages/media/mod.rs
 crates/nd-gui/src/pages/media/queue.rs
 crates/nd-gui/src/pages/mod.rs
+crates/nd-gui/src/pages/options.rs
 crates/nd-gui/src/pages/settings.rs
+crates/nd-gui/src/pages/share.rs
 data/br.com.biglinux.BigNetScreen.desktop
 data/br.com.biglinux.BigNetScreen.metainfo.xml

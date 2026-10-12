@@ -5,7 +5,6 @@
 //! crosses the bus: the service publishes kinds and tags, and these functions
 //! turn them into sentences.
 
-use nd_core::settings::Settings;
 use nd_service::wire::{self, StatusKind, refusal};
 
 use crate::{tr, tr_n};
@@ -62,7 +61,7 @@ pub(super) fn describe_refusal(reason: &str) -> String {
 pub(super) fn known_refusal(reason: &str) -> Option<String> {
     if reason.contains(refusal::SOUND_CARD) {
         return Some(tr!(
-            "Could not prepare the BigNetScreen sound output. Check the audio options in Settings and try again."
+            "Could not prepare the BigNetScreen sound output. Check the Sound option and try again."
         ));
     }
     if reason.starts_with(SAVE_FAILED) {
@@ -90,27 +89,11 @@ pub(super) fn known_refusal(reason: &str) -> Option<String> {
         nd_chromecast::identity::IDENTITY_CHANGED => tr!(
             "This receiver did not prove it is the same device used before, so the screen was \
              not sent. Someone on the network may be impersonating it. If you replaced or reset \
-             the device, open it in Devices and choose Trust again."
+             the device, choose Trust again on its row."
         ),
         _ => return None,
     };
     Some(sentence)
-}
-
-pub(super) fn audio_summary(settings: &Settings) -> String {
-    let sound = if !settings.system_audio {
-        tr!("System audio off")
-    } else if settings.virtual_audio {
-        tr!("Only applications routed to BigNetScreen")
-    } else {
-        tr!("All system audio")
-    };
-    let microphone = if settings.microphone {
-        tr!("Microphone on")
-    } else {
-        tr!("Microphone off")
-    };
-    format!("{sound} · {microphone}")
 }
 
 /// Turns a provider's untranslated error into something a person can act on.

@@ -1,21 +1,21 @@
-//! The application's pages, and the little that is shared between them.
+//! The parts of the window, and the little that is shared between them.
 //!
-//! Each page is a relm4 component of its own. The root component ([`crate::app`])
-//! owns the state that outlives any single page (the receivers found, the
-//! running session, the preferences) and hands each page the part it shows.
-//! Pages never reach back into that state: they emit an output and the root
+//! Each part is a relm4 component of its own. The root component ([`crate::app`])
+//! owns the state that outlives any single part (the receivers found, the
+//! running session, the preferences) and hands each the piece it shows.
+//! Parts never reach back into that state: they emit an output and the root
 //! decides what it means.
 //!
 //! So there is one place where a cast starts and one place that knows whether
 //! a stream is running, and no page holds a stale copy of that answer.
 
 mod device_row;
-pub mod devices;
-pub mod home;
 pub mod media;
+pub mod options;
 mod preview;
 pub mod qr;
 pub mod settings;
+pub mod share;
 
 use relm4::gtk::prelude::*;
 use relm4::{adw, gtk};
@@ -24,53 +24,7 @@ use nd_core::sink::{SinkKind, SinkState};
 
 use crate::tr;
 
-/// Which page the window is showing.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Page {
-    #[default]
-    Home,
-    Devices,
-    Media,
-    Settings,
-}
-
-impl Page {
-    /// The name of the page in the widget stack.
-    pub fn id(self) -> &'static str {
-        match self {
-            Page::Home => "home",
-            Page::Devices => "devices",
-            Page::Media => "media",
-            Page::Settings => "settings",
-        }
-    }
-
-    /// The label in the sidebar.
-    pub fn title(self) -> String {
-        match self {
-            Page::Home => tr!("Home"),
-            Page::Devices => tr!("Devices"),
-            Page::Media => tr!("Media"),
-            Page::Settings => tr!("Settings"),
-        }
-    }
-
-    pub fn icon(self) -> &'static str {
-        match self {
-            Page::Home => "go-home-symbolic",
-            Page::Devices => "video-display-symbolic",
-            Page::Media => "folder-videos-symbolic",
-            Page::Settings => "emblem-system-symbolic",
-        }
-    }
-
-    /// The pages in the order the sidebar lists them.
-    pub fn all() -> [Page; 4] {
-        [Page::Home, Page::Devices, Page::Media, Page::Settings]
-    }
-}
-
-/// One receiver, as the pages show it: a snapshot of what the service
+/// One receiver, as the window shows it: a snapshot of what the service
 /// publishes, so pages can only ask the root component to act on it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeviceEntry {
@@ -266,24 +220,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn page_names_are_unique() {
-        // The stack addresses pages by string and the sidebar by position in
-        // `all()`. A duplicate id would show one page while the sidebar
-        // highlighted another, with nothing failing to build.
-        let ids: std::collections::HashSet<&str> = Page::all().iter().map(|p| p.id()).collect();
-        assert_eq!(ids.len(), Page::all().len());
-    }
-
-    #[test]
-    fn the_sidebar_lists_every_page() {
-        // The sidebar maps a row index straight onto `all()`, so a page missing
-        // from it would be unreachable.
-        for page in [Page::Home, Page::Devices, Page::Media, Page::Settings] {
-            assert!(Page::all().contains(&page), "{page:?} has no way in");
-        }
-    }
-
-    #[test]
     fn addressless_receiver_reads_well() {
         // Miracast before the group is formed has no address to show. The
         // subtitle must not come out as "Miracast · ".
@@ -343,7 +279,7 @@ pub fn discovery_placeholder(discovery: Discovery) -> gtk::Box {
         ),
         Discovery::Off => (
             tr!("Automatic discovery is off"),
-            Some(tr!("Choose Search for devices to look once.")),
+            Some(tr!("Choose Search to look once.")),
         ),
         Discovery::Unreachable => (tr!("Reconnecting to the sharing service…"), None),
     };

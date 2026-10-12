@@ -1,44 +1,5 @@
 /* Desktop colors and accent; no application palette overrides. */
-.app-identity { padding: 24px 18px 22px; }
-.app-identity .title { font-size: 1.15rem; font-weight: 800; }
-.app-identity .subtitle { font-size: 0.8rem; opacity: 0.65; }
-.app-mark {
-  background: linear-gradient(135deg, @accent_bg_color, shade(@accent_bg_color, 0.8));
-  border-radius: 14px;
-  min-width: 46px;
-  min-height: 46px;
-  color: @accent_fg_color;
-}
-.bns-sidebar { background: linear-gradient(155deg, alpha(@accent_bg_color, 0.06), transparent); }
-.navigation-sidebar > row { min-height: 54px; border-radius: 12px; margin: 4px 2px; }
-.navigation-sidebar > row:selected {
-  background-color: alpha(@accent_bg_color, 0.22);
-  box-shadow: inset 0 0 0 1px alpha(@accent_color, 0.3);
-}
-.navigation-sidebar > row image { -gtk-icon-size: 22px; margin-right: 8px; }
-.navigation-sidebar:dir(rtl) > row image { margin-right: 0; margin-left: 8px; }
-.sidebar-footer { padding: 16px; }
-.sidebar-footer button { min-width: 32px; min-height: 32px; border-radius: 12px; }
-.connected-card {
-  background-color: alpha(currentColor, 0.05);
-  border: 1px solid alpha(currentColor, 0.1);
-  border-radius: 12px;
-  padding: 10px 12px;
-  margin: 6px;
-}
-.connected-card .caption { font-size: 0.78rem; opacity: 0.65; }
-.live-dot { color: @success_color; }
 
-.page-heading { margin-bottom: 20px; }
-.page-title { font-size: 1.9rem; font-weight: 800; }
-.page-subtitle { font-size: 1.02rem; opacity: 0.72; }
-.page-icon {
-  min-width: 66px;
-  min-height: 66px;
-  border-radius: 19px;
-  background: linear-gradient(140deg, @accent_bg_color, shade(@accent_bg_color, 0.8));
-  color: @accent_fg_color;
-}
 .info-card {
   padding: 20px;
   border: 1px solid alpha(currentColor, 0.12);
@@ -69,20 +30,6 @@
 .badge.busy { background-color: alpha(@accent_bg_color, 0.18); color: @accent_color; }
 .badge.connected { background-color: alpha(@success_color, 0.15); color: @success_color; }
 .badge.failed { background-color: alpha(@error_color, 0.15); color: @error_color; }
-.share-icon {
-  border-radius: 18px;
-  min-width: 68px;
-  min-height: 68px;
-  color: @accent_fg_color;
-  background: linear-gradient(135deg, @accent_bg_color, shade(@accent_bg_color, 0.8));
-}
-.action-tile { border-radius: 14px; padding: 16px; min-height: 96px; background-color: alpha(currentColor, 0.05); border: 1px solid alpha(currentColor, 0.08); }
-.action-tile:hover { background-color: alpha(currentColor, 0.09); }
-.action-tile .heading { font-size: 1.22rem; }
-.action-tile .caption { font-size: 1rem; }
-.tile-arrow { border-radius: 50%; min-width: 32px; min-height: 32px; background-color: alpha(currentColor, 0.08); }
-.ndi-card { margin-top: 20px; }
-.ndi-card button { padding: 10px 18px; }
 
 .media-toolbar { margin-bottom: 10px; }
 .media-toolbar button, .media-toolbar toggle { min-height: 34px; }
@@ -110,11 +57,29 @@
 .settings-icon { min-width: 42px; min-height: 42px; border-radius: 12px; background-color: alpha(currentColor, 0.06); }
 
 /* Home: destinations first, then browser and NDI sharing. */
-.home-page .page-heading { margin-top: 0; margin-bottom: 16px; }
-.receivers-card { padding: 16px; border: 1px solid alpha(currentColor, 0.12); border-radius: 16px; background-color: alpha(currentColor, 0.025); }
-.receivers-card > box { margin: 0 8px; }
-.receiver-count { padding: 3px 11px; border-radius: 999px; background-color: alpha(currentColor, 0.07); }
-.receivers-card .device-row { padding: 4px 8px; }
-.receivers-card .device-icon { min-width: 34px; min-height: 40px; background: none; }
-.home-page .ndi-card { margin-top: 8px; padding: 16px; }
-.home-page .ndi-card button { min-width: 96px; min-height: 32px; padding: 8px 16px; border-radius: 12px; }
+
+/* Sidebar options: a round badge, the name and the value, opening a card. */
+.bns-sidebar { background-color: @sidebar_bg_color; }
+.options-list { background: none; }
+.options-list > row.option-row { padding: 6px 12px; min-height: 48px; border-radius: 13px; margin: 2px 0; }
+.options-list > row.option-row:hover { background-color: alpha(currentColor, 0.06); }
+.option-badge { min-width: 32px; min-height: 32px; border-radius: 999px; background-color: alpha(currentColor, 0.08); }
+.option-row.applied .option-badge { background-color: @accent_bg_color; color: @accent_fg_color; }
+.option-title { font-weight: 600; }
+.option-value { opacity: 0.75; }
+.option-row.applied .option-value { color: @accent_color; font-weight: bold; opacity: 1; }
+.option-card > contents { padding: 14px; border-radius: 12px; }
+.card-description { opacity: 0.75; }
+/* A card's choices are tiles; the picked one is tinted and outlined. The
+   radio stays for screen readers and the keyboard, out of sight. */
+checkbutton.option { min-height: 24px; padding: 10px 12px; border-radius: 10px; box-shadow: inset 0 0 0 1px alpha(currentColor, 0.18); }
+checkbutton.option > radio { opacity: 0; min-width: 0; min-height: 0; margin: 0; padding: 0; border: none; -gtk-icon-size: 0; }
+checkbutton.option:hover { background-color: alpha(currentColor, 0.06); }
+checkbutton.option:checked { background-color: alpha(@accent_bg_color, 0.12); box-shadow: inset 0 0 0 2px alpha(@accent_bg_color, 0.7); }
+checkbutton.option:checked .option-name { font-weight: 600; }
+checkbutton.option:focus-visible { outline: 2px solid @accent_color; outline-offset: 2px; }
+checkbutton.option:disabled { opacity: 0.5; }
+.option-detail { font-size: 0.9em; opacity: 0.75; }
+/* A row that does not apply dims its name and badge, not its reason. */
+.option-row:disabled .option-title, .option-row:disabled .option-badge { opacity: 0.45; }
+.option-row:disabled .option-reason { opacity: 0.75; }

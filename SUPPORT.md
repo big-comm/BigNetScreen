@@ -12,7 +12,7 @@ A missing GStreamer factory is a dependency problem. WebRTC needs `whepserversin
 
 ## A Cast receiver "did not prove it is the same device"
 
-BigNetScreen remembers the device key each Cast receiver proves the first time it is used, and refuses to send the screen when a later connection proves another key or none. Treat it first as someone on the network impersonating the receiver. If the receiver was really replaced and nobody else is on the network, choose **Trust again** on that receiver in **Devices**; the device that answers next is remembered in its place. Deleting `$XDG_DATA_HOME/bignetscreen/cast-receivers` (usually `~/.local/share/bignetscreen/cast-receivers`) forgets every receiver at once.
+BigNetScreen remembers the device key each Cast receiver proves the first time it is used, and refuses to send the screen when a later connection proves another key or none. Treat it first as someone on the network impersonating the receiver. If the receiver was really replaced and nobody else is on the network, choose **Trust again** on that receiver's row; the device that answers next is remembered in its place. Deleting `$XDG_DATA_HOME/bignetscreen/cast-receivers` (usually `~/.local/share/bignetscreen/cast-receivers`) forgets every receiver at once.
 
 ## Safe diagnostic commands
 
