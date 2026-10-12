@@ -518,8 +518,8 @@ mod tests {
     #[test]
     fn scan_stops_at_first_slice() {
         // AUD, IDR slice, then a slice payload that resembles a start code.
-        let data = [0, 0, 0, 1, 9, 0x10, 0, 0, 1, 0x65, 0xaa, 0, 0, 1, 0x67];
-        assert_eq!(start_codes(&data), [(0, 4), (6, 9)]);
+        let access_unit = [0, 0, 0, 1, 9, 0x10, 0, 0, 1, 0x65, 0xaa, 0, 0, 1, 0x67];
+        assert_eq!(start_codes(&access_unit), [(0, 4), (6, 9)]);
     }
 
     #[test]
