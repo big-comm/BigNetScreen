@@ -59,7 +59,7 @@ jobs:
       - name: System dependencies
         run: pacman -Syu --noconfirm --needed base-devel git gtk4 libadwaita gstreamer gst-plugins-base pipewire gettext
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.98.1
+      - uses: dtolnay/rust-toolchain@1.120.0
       - run: cargo check --workspace --all-targets --locked
 
   data:
