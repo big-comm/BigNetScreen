@@ -20,9 +20,8 @@ use crate::tr;
 
 /// How long the controls have to settle before the file is written.
 ///
-/// A slider emits dozens of values per second and each write ends in an
-/// `fsync`; doing that on the GTK thread stutters the window while dragging.
-/// In memory the change is immediate, only the disk waits.
+/// A slider emits dozens of values per second, and a file write for each is
+/// wasted work. In memory the change is immediate, only the disk waits.
 const SAVE_DELAY: std::time::Duration = std::time::Duration::from_millis(400);
 
 pub struct SettingsPage {

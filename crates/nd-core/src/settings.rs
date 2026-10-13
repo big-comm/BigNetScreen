@@ -412,8 +412,8 @@ pub fn set(settings: Settings) -> std::io::Result<()> {
 /// Applies new settings to the running process without touching the disk.
 ///
 /// For callers that write on their own schedule: the preferences page
-/// coalesces a slider's stream of values into one [`persist`] instead of an
-/// `fsync` per pixel of movement. [`set`] does both at once.
+/// coalesces a slider's stream of values into one [`persist`] instead of a
+/// write per pixel of movement. [`set`] does both at once.
 pub fn set_in_memory(settings: &Settings) {
     crate::latency::set(settings.latency);
     if let Ok(mut guard) = CURRENT.write() {

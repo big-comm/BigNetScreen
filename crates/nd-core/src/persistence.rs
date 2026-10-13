@@ -28,6 +28,11 @@ pub fn app_dir(base: BaseDir) -> Option<PathBuf> {
         .map(|dir| dir.join("bignetscreen"))
 }
 
+/// Replaces `path` with `contents`, readable by its owner only.
+///
+/// Everything written here is program state (settings, a portal token,
+/// remembered receivers, firewall leases): the rename keeps the file whole,
+/// and a power cut costs at most the last change, so nothing is synced.
 pub fn write_private(path: &Path, contents: &[u8]) -> std::io::Result<()> {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let parent = path.parent().ok_or(std::io::ErrorKind::InvalidInput)?;
@@ -54,9 +59,7 @@ pub fn write_private(path: &Path, contents: &[u8]) -> std::io::Result<()> {
     let mut file = options.open(&temporary)?;
     let result = (|| {
         file.write_all(contents)?;
-        file.sync_all()?;
-        std::fs::rename(&temporary, path)?;
-        std::fs::File::open(parent)?.sync_all()
+        std::fs::rename(&temporary, path)
     })();
     if result.is_err() {
         let _ = std::fs::remove_file(temporary);

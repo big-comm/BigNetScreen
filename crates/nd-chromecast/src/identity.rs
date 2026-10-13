@@ -96,8 +96,8 @@ fn read_store(path: &Path) -> Result<String> {
 
 fn check_in(path: &Path, receiver: &str, device_key: Option<&[u8]>) -> Result<()> {
     // Only remembering a new key writes. The store is replaced atomically, so
-    // a check reads it without waiting behind another receiver's write and
-    // its fsync; a write takes the lock and decides again on a fresh read.
+    // a check reads it without waiting behind another receiver's write; a
+    // write takes the lock and decides again on a fresh read.
     if remembered(&read_store(path)?, receiver, device_key)?.is_none() {
         return Ok(());
     }

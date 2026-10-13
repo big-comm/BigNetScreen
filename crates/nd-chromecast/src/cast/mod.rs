@@ -174,7 +174,7 @@ impl CastChannel {
     pub async fn connect_to(ip: IpAddr, port: u16, receiver: &str) -> Result<Self> {
         let mut stream = open_tls(ip, port).await?;
         let device_key = authenticate_device(&mut stream).await?;
-        // Remembering a key fsyncs the store, which can stall a worker thread.
+        // Remembering a key writes the store: blocking file I/O.
         let receiver = receiver.to_owned();
         tokio::task::spawn_blocking(move || {
             crate::identity::check_and_remember(&receiver, device_key.as_deref())
