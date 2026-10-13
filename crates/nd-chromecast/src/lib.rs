@@ -323,6 +323,7 @@ impl Sink for MdnsSink {
             self.port,
             &self.info.id,
             video,
+            source.media.as_ref(),
             size,
             &self.status,
             cancel.clone(),

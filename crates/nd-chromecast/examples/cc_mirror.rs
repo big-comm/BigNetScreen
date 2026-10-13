@@ -94,6 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         nd_chromecast::cast::PORT,
         &ip.to_string(),
         video,
+        None,
         size,
         &status,
         cancel_rx,

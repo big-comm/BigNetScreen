@@ -55,6 +55,10 @@ pub fn is_unsupported(err: &NdError) -> bool {
 }
 
 /// Runs a mirroring session until cancellation or end of stream.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the session's own inputs, passed through once"
+)]
 pub async fn run(
     receiver_ip: IpAddr,
     // The control port the receiver announced over mDNS.
@@ -62,6 +66,8 @@ pub async fn run(
     // The discovery identity its device key is remembered under.
     receiver: &str,
     video: pipeline::VideoSource,
+    // A file played in place of the screen: its controls and where it starts.
+    media: Option<&nd_core::capture::MediaPlayback>,
     size: (u32, u32),
     status: &SinkStatus,
     mut cancel: tokio::sync::watch::Receiver<bool>,
@@ -98,6 +104,7 @@ pub async fn run(
             receiver_ip,
             receiver_port,
             &video,
+            media,
             size,
             status,
             &mut cancel,
@@ -118,6 +125,7 @@ async fn mirror(
     receiver_ip: IpAddr,
     receiver_port: u16,
     video: &pipeline::VideoSource,
+    media: Option<&nd_core::capture::MediaPlayback>,
     size: (u32, u32),
     status: &SinkStatus,
     cancel: &mut tokio::sync::watch::Receiver<bool>,
@@ -128,6 +136,23 @@ async fn mirror(
     }
 
     let (gst_pipeline, events, _capture) = start_capture(&cfg, video, size)?;
+    // A played file answers position, pause and seek through its control,
+    // and starts where the player left it, as on a DLNA television.
+    if let Some(control) = media.and_then(|media| media.control.as_ref()) {
+        control.attach(&gst_pipeline);
+        if let Some(start) = media.and_then(|media| media.start) {
+            let control = control.clone();
+            let mut prepare = tokio::task::spawn_blocking(move || control.prepare(start));
+            tokio::select! {
+                result = &mut prepare => result.map_err(|err| NdError::Gst(err.to_string()))??,
+                _ = cancel.changed() => {
+                    let _ = gst_pipeline.set_state(gst::State::Null);
+                    let _ = prepare.await;
+                    return Ok(());
+                }
+            }
+        }
+    }
     adopt_capture_size(&mut cfg, &gst_pipeline).await;
 
     let Some(session) =
