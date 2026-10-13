@@ -154,6 +154,8 @@ pub(super) struct StreamSender {
     /// two sends (a late sender thread).
     pub(super) flow: FlowWatch,
     pub(super) clock_origin: SystemTime,
+    /// The pipeline's base time when streaming began; see [`Self::session_time`].
+    pub(super) base_origin: gst::ClockTime,
     pipeline: gst::Pipeline,
     last_report: Option<Instant>,
     has_media: bool,
@@ -212,12 +214,25 @@ impl StreamSender {
             stats: SenderStats::default(),
             flow: FlowWatch::default(),
             clock_origin: SystemTime::UNIX_EPOCH,
+            base_origin: gst::ClockTime::ZERO,
             pipeline: pipeline.clone(),
             last_report: None,
             has_media: false,
             rtcp_enabled: rtcp_enabled(),
             last_probe: Instant::now(),
         })
+    }
+
+    /// A running time on the session's timeline. A flushing seek restarts the
+    /// running time at zero and moves the base time on by as much, so the sum
+    /// keeps going forward and the receiver never sees time run backwards.
+    fn session_time(&self, running: gst::ClockTime) -> gst::ClockTime {
+        let moved = self
+            .pipeline
+            .base_time()
+            .unwrap_or(gst::ClockTime::ZERO)
+            .saturating_sub(self.base_origin);
+        running + moved
     }
 
     /// Pulls one frame and sends it. `Ok(false)` when the stream has ended.
@@ -237,7 +252,7 @@ impl StreamSender {
         let buffer = sample
             .buffer()
             .ok_or_else(|| NdError::Gst("encoded Cast sample has no buffer".into()))?;
-        let pts = sample_running_time(&sample)?;
+        let pts = self.session_time(sample_running_time(&sample)?);
 
         let has_room = {
             let window = self
@@ -504,6 +519,7 @@ impl StreamSender {
         let Some(running) = self.pipeline.current_running_time() else {
             return;
         };
+        let running = self.session_time(running);
         // NTP and RTP describe the same instant: NTP is anchored once to the
         // pipeline clock, so a wall-clock step cannot move it against RTP.
         let Some(now) = self

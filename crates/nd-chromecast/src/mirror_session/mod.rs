@@ -535,6 +535,7 @@ async fn stream(
 
     for (mut sender, nacks) in senders.into_iter().zip(inboxes) {
         sender.clock_origin = clock_origin;
+        sender.base_origin = gst_pipeline.base_time().unwrap_or(gst::ClockTime::ZERO);
         let video = sender
             .is_video()
             .then(|| VideoControl::new(&gst_pipeline, cfg.encoder, cfg.bitrate_kbps));

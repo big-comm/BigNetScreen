@@ -15,7 +15,7 @@ use nd_core::capture::{CaptureSource, MediaPlayback};
 use nd_core::media::{
     FilePlaybackControl, MediaCommand, PlaybackStart, PlaybackState, seek_target,
 };
-use nd_core::sink::Sink;
+use nd_core::sink::{Sink, SinkKind};
 use nd_dlna::renderer::Renderer;
 
 use super::{MediaItem, PHOTO_SECONDS, Queue, Shared, next_command};
@@ -231,8 +231,11 @@ impl<'a> DecodedQueue<'a> {
         // A jump inside a stream that is already live sends the receiver
         // timestamps that run backwards or leap, and some receivers then
         // drop the stream. Starting the item again from there works as any
-        // start does.
-        if let Some(restart) = seek_restart(command, &item.control.state(), self.start) {
+        // start does. Cast mirroring keeps its own timeline across a jump,
+        // and starting again would close the receiver's app.
+        if self.sink.info().kind != SinkKind::Chromecast
+            && let Some(restart) = seek_restart(command, &item.control.state(), self.start)
+        {
             return Some(restart);
         }
         let control = item.control.clone();
