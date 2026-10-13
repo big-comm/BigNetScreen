@@ -166,6 +166,8 @@ pub fn serve(listener: TcpListener, config: FrontDoorConfig) -> Result<FrontDoor
                 Ok(pair) => pair,
                 Err(err) => {
                     tracing::debug!(%err, "front door accept failed");
+                    // Out of descriptors, accept fails again at once.
+                    tokio::time::sleep(Duration::from_millis(100)).await;
                     continue;
                 }
             };
