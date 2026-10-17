@@ -18,9 +18,10 @@
 //! falling back to a node id that PipeWire may have reused.
 //!
 //! A monitor capture asks the portal to persist its authorization and keeps
-//! the returned restore token, so later casts start with no dialog. The
-//! token lives in `$XDG_DATA_HOME/bignetscreen/restore-token-<kind>`, private
-//! to the user.
+//! the returned restore token, so later casts start with no dialog. With
+//! several monitors, where the compositor reports them, the portal asks every
+//! time. The token lives in `$XDG_DATA_HOME/bignetscreen/restore-token-<kind>`,
+//! private to the user.
 
 pub mod display_config;
 pub mod kwin;
@@ -48,12 +49,27 @@ fn cap_err<E: std::fmt::Display>(e: E) -> NdError {
 
 /// Does a selection of this kind keep its authorisation between casts?
 ///
-/// Sharing "the whole screen" means the same screen every time, so asking again
-/// on each cast is noise. Sharing "a window" is a choice, and it is usually a
-/// different one: restoring it skipped the picker and silently cast the window
-/// from the previous run.
-fn restores_selection(source_type: SourceType) -> bool {
-    source_type != SourceType::Window
+/// Sharing "the whole screen" of a single-screen desktop means the same screen
+/// every time, so asking again on each cast is noise. Sharing "a window" is a
+/// choice, and it is usually a different one: restoring it skipped the picker
+/// and silently cast the window from the previous run. A screen among several
+/// is a choice too, so a monitor is not restored when `monitors`, the count
+/// the compositor reports, is more than one. An unknown count keeps restoring.
+fn restores_selection(source_type: SourceType, monitors: Option<usize>) -> bool {
+    match source_type {
+        SourceType::Monitor => monitors.is_none_or(|count| count < 2),
+        SourceType::Virtual => true,
+        SourceType::Window => false,
+    }
+}
+
+/// How many monitors are attached, where the compositor says: Mutter's display
+/// configuration on GNOME. `None` elsewhere, and inside Flatpak, whose bus
+/// filter hides that interface.
+async fn monitor_count() -> Option<usize> {
+    let conn = zbus::Connection::session().await.ok()?;
+    let connectors = display_config::connectors(&conn).await;
+    (!connectors.is_empty()).then_some(connectors.len())
 }
 
 /// Where the restore token for a given source kind lives.
@@ -97,10 +113,12 @@ fn clear_restore_token(source_type: SourceType) {
 }
 
 /// What `SelectSources` asks for: one source of `source_type`, persisted only
-/// when [`restores_selection`] says so, restoring `token` when there is one.
+/// when `restorable` (see [`restores_selection`]), restoring `token` when there
+/// is one.
 fn selection_options(
     source_type: SourceType,
     cursor_mode: CursorMode,
+    restorable: bool,
     token: Option<&str>,
 ) -> SelectSourcesOptions {
     let portal_type = match source_type {
@@ -112,7 +130,7 @@ fn selection_options(
         .set_cursor_mode(cursor_mode)
         .set_sources(enumflags2::BitFlags::from(portal_type))
         .set_multiple(false)
-        .set_persist_mode(if restores_selection(source_type) {
+        .set_persist_mode(if restorable {
             PersistMode::ExplicitlyRevoked
         } else {
             PersistMode::DoNot
@@ -153,11 +171,20 @@ impl PortalBackend {
             _ => CursorMode::Hidden,
         };
 
-        let restorable = restores_selection(source_type);
+        let monitors = match source_type {
+            SourceType::Monitor => monitor_count().await,
+            SourceType::Virtual | SourceType::Window => None,
+        };
+        let restorable = restores_selection(source_type, monitors);
         let stored_token = restorable
             .then(|| load_restore_token(source_type))
             .flatten();
-        let options = selection_options(source_type, cursor_mode, stored_token.as_deref());
+        let options = selection_options(
+            source_type,
+            cursor_mode,
+            restorable,
+            stored_token.as_deref(),
+        );
         proxy
             .select_sources(&session, options)
             .await
@@ -511,9 +538,19 @@ mod tests {
 
     #[test]
     fn only_a_screen_is_worth_restoring() {
-        assert!(restores_selection(SourceType::Monitor));
-        assert!(restores_selection(SourceType::Virtual));
-        assert!(!restores_selection(SourceType::Window));
+        assert!(restores_selection(SourceType::Monitor, Some(1)));
+        // Desktops that do not report a count keep the dialog-free restore.
+        assert!(restores_selection(SourceType::Monitor, None));
+        assert!(restores_selection(SourceType::Virtual, None));
+        assert!(!restores_selection(SourceType::Window, Some(1)));
+    }
+
+    #[test]
+    fn a_screen_among_several_is_asked_for_every_time() {
+        // A laptop with an external monitor: the token from the first cast
+        // skipped the portal's picker on every later one.
+        assert!(!restores_selection(SourceType::Monitor, Some(2)));
+        assert!(!restores_selection(SourceType::Monitor, Some(3)));
     }
 
     #[test]
