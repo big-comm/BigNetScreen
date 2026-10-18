@@ -438,6 +438,18 @@ pub async fn connectors(conn: &Connection) -> Vec<String> {
         .collect()
 }
 
+/// How many logical monitors the desktop has: the screens the portal's picker
+/// lists. Unlike [`connectors`], mirrored outputs count once and a panel that
+/// is attached but off (a closed lid) does not count.
+///
+/// Returns `None` when the display configuration cannot be read, or reports
+/// no logical monitor.
+pub async fn logical_monitor_count(conn: &Connection) -> Option<usize> {
+    let proxy = DisplayConfigProxy::new(conn).await.ok()?;
+    let (_, _, logical, _) = proxy.get_current_state().await.ok()?;
+    (!logical.is_empty()).then_some(logical.len())
+}
+
 /// The preferred mode of a connector, and its size.
 ///
 /// Puts the extra screen at the resolution the receiver actually has, rather
