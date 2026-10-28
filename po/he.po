@@ -14,13 +14,13 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: LangForge\n"
 
-#: crates/nd-gui/src/pages/settings.rs:136
+#: crates/nd-gui/src/pages/settings.rs:135
 msgid ""
 "0 lets the system choose. Set one only if you opened a port on your firewall "
 "by hand."
 msgstr "0 מאפשר למערכת לבחור. הגדר ערך רק אם פתחת port בחומת האש ידנית."
 
-#: crates/nd-gui/src/pages/options.rs:476
+#: crates/nd-gui/src/pages/options.rs:479
 msgid "A new screen beside yours, to use as a second monitor"
 msgstr ""
 
@@ -41,11 +41,11 @@ msgstr "אודות BigNetScreen"
 msgid "Add a folder"
 msgstr "שליחת תיקייה"
 
-#: crates/nd-gui/src/pages/options.rs:530
+#: crates/nd-gui/src/pages/options.rs:533
 msgid "Adds a “BigNetScreen” output: only what you send to it is shared"
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:118
+#: crates/nd-gui/src/pages/settings.rs:117
 msgid "Advanced"
 msgstr ""
 
@@ -53,15 +53,15 @@ msgstr ""
 msgid "AirPlay"
 msgstr "AirPlay"
 
-#: crates/nd-gui/src/pages/options.rs:554
+#: crates/nd-gui/src/pages/options.rs:557
 msgid "All"
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:524
+#: crates/nd-gui/src/pages/options.rs:527
 msgid "All computer sound"
 msgstr ""
 
-#: crates/nd-gui/src/pages/share.rs:247
+#: crates/nd-gui/src/pages/share.rs:278
 msgid ""
 "Any phone, tablet or computer on this network opens an address and enters a "
 "PIN"
@@ -79,15 +79,15 @@ msgstr ""
 "הזדהו כשתתבקשו. הורדת החבילה ובנייתה עשויות להימשך כמה דקות. השאירו את "
 "היישום פתוח עד לסיום ההתקנה."
 
-#: crates/nd-gui/src/pages/settings.rs:85
+#: crates/nd-gui/src/pages/settings.rs:84
 msgid "Automatic"
 msgstr "אוטומטי"
 
-#: crates/nd-gui/src/pages/settings.rs:99
+#: crates/nd-gui/src/pages/settings.rs:98
 msgid "Automatic discovery"
 msgstr "גילוי אוטומטי"
 
-#: crates/nd-gui/src/app/wording.rs:24 crates/nd-gui/src/pages/mod.rs:287
+#: crates/nd-gui/src/app/wording.rs:24 crates/nd-gui/src/pages/mod.rs:291
 msgid "Automatic discovery is off"
 msgstr "גילוי אוטומטי כבוי"
 
@@ -101,11 +101,11 @@ msgid "Back 10 seconds"
 msgstr "10 שניות אחורה"
 
 #: crates/nd-gui/src/pages/options.rs:254
-#: crates/nd-gui/src/pages/options.rs:431
+#: crates/nd-gui/src/pages/options.rs:434
 msgid "Balanced"
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:292
+#: crates/nd-gui/src/pages/options.rs:295
 #, fuzzy
 msgid ""
 "Buffering smooths uneven playback and delays everything, the pointer "
@@ -114,16 +114,16 @@ msgstr ""
 "מאגר את התמונה כך שהווידאו ינוגן בצורה חלקה, במחיר של עיכוב. ב‑Miracast זה "
 "מוחל כאן; ב‑Chromecast זו בקשה שהמקלט עשוי להתעלם ממנה."
 
-#: crates/nd-gui/src/app/dialogs.rs:100 crates/nd-gui/src/pages/settings.rs:223
-#: crates/nd-gui/src/pages/share.rs:374
+#: crates/nd-gui/src/app/dialogs.rs:100 crates/nd-gui/src/pages/settings.rs:222
+#: crates/nd-gui/src/pages/share.rs:409
 msgid "Cancel"
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:166
+#: crates/nd-gui/src/pages/settings.rs:165
 msgid "Changes are saved automatically"
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:288
+#: crates/nd-gui/src/pages/mod.rs:292
 #, fuzzy
 msgid "Choose Search to look once."
 msgstr "בחר לאיזה מכשיר לשלוח."
@@ -136,7 +136,7 @@ msgstr "בחירת תיקייה"
 msgid "Choose files"
 msgstr "בחירת קבצים"
 
-#: crates/nd-gui/src/pages/options.rs:555
+#: crates/nd-gui/src/pages/options.rs:558
 msgid "Chosen apps"
 msgstr ""
 
@@ -144,7 +144,7 @@ msgstr ""
 msgid "Chromecast"
 msgstr "Chromecast"
 
-#: crates/nd-gui/src/pages/share.rs:203
+#: crates/nd-gui/src/pages/share.rs:234
 msgid ""
 "Chromecast and DLNA receivers must be on the same network. For Miracast, "
 "open screen mirroring on the TV, then search again."
@@ -155,8 +155,8 @@ msgid "Clear queue"
 msgstr "נקה את רשימת ההשמעה"
 
 #: crates/nd-gui/src/app/dialogs.rs:60 crates/nd-gui/src/app/dialogs.rs:223
-#: crates/nd-gui/src/app/dialogs.rs:245 crates/nd-gui/src/pages/options.rs:880
-#: crates/nd-gui/src/pages/share.rs:422
+#: crates/nd-gui/src/app/dialogs.rs:245 crates/nd-gui/src/pages/options.rs:884
+#: crates/nd-gui/src/pages/share.rs:457
 msgid "Close"
 msgstr "סגירה"
 
@@ -170,7 +170,7 @@ msgstr "מחובר"
 
 #: crates/nd-gui/src/app/mod.rs:306 crates/nd-gui/src/app/session.rs:92
 #: crates/nd-gui/src/app/wording.rs:25 crates/nd-gui/src/app/wording.rs:144
-#: crates/nd-gui/src/pages/mod.rs:165
+#: crates/nd-gui/src/pages/mod.rs:169
 msgid "Connecting…"
 msgstr "מתחבר…"
 
@@ -179,7 +179,7 @@ msgstr "מתחבר…"
 msgid "Copy details"
 msgstr "איכות חיבור"
 
-#: crates/nd-gui/src/pages/share.rs:152
+#: crates/nd-gui/src/pages/share.rs:158
 msgid "Copy the address"
 msgstr ""
 
@@ -188,7 +188,7 @@ msgstr ""
 msgid "Could not connect. Make sure both devices are on the same network."
 msgstr "כדי להשתמש ב‑Chromecast, חברו את שני המכשירים לאותה רשת Wi-Fi."
 
-#: crates/nd-gui/src/pages/share.rs:419
+#: crates/nd-gui/src/pages/share.rs:454
 msgid "Could not forget this receiver's identity"
 msgstr ""
 
@@ -203,12 +203,12 @@ msgstr ""
 msgid "Could not save settings"
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:846
+#: crates/nd-gui/src/pages/options.rs:850
 #, fuzzy
 msgid "Custom size"
 msgstr "רזולוציה מותאמת אישית"
 
-#: crates/nd-gui/src/pages/options.rs:291
+#: crates/nd-gui/src/pages/options.rs:294
 msgid "Delay"
 msgstr ""
 
@@ -225,24 +225,24 @@ msgstr ""
 msgid "Device discovery problems"
 msgstr "גילוי בלבד"
 
-#: crates/nd-gui/src/pages/share.rs:187
+#: crates/nd-gui/src/pages/share.rs:193
 #, fuzzy
 msgid "Devices nearby"
 msgstr "מכשירים"
 
-#: crates/nd-gui/src/pages/device_row.rs:160
+#: crates/nd-gui/src/pages/device_row.rs:158
 msgid "Did not prove it is the same device used before"
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:76
+#: crates/nd-gui/src/pages/settings.rs:75
 msgid "Discovery and devices"
 msgstr "גילוי ומכשירים"
 
-#: crates/nd-gui/src/pages/mod.rs:97 crates/nd-gui/src/pages/mod.rs:261
+#: crates/nd-gui/src/pages/mod.rs:97 crates/nd-gui/src/pages/mod.rs:265
 msgid "Discovery only"
 msgstr "גילוי בלבד"
 
-#: crates/nd-gui/src/pages/settings.rs:124
+#: crates/nd-gui/src/pages/settings.rs:123
 msgid ""
 "Encode on the graphics card, which is faster and uses far less processor. "
 "Turn it off if the picture arrives wrong, broken or not at all."
@@ -252,18 +252,18 @@ msgstr ""
 msgid "Enter the PIN shown on the computer that is sharing."
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:219
+#: crates/nd-gui/src/pages/settings.rs:218
 msgid ""
 "Every setting returns to its default, including this computer's name and the "
 "fixed port."
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:468
+#: crates/nd-gui/src/pages/options.rs:471
 #, fuzzy
 msgid "Everything on your screen, as you see it"
 msgstr "הכול על המסך שלך"
 
-#: crates/nd-gui/src/pages/options.rs:525
+#: crates/nd-gui/src/pages/options.rs:528
 msgid "Everything this computer plays, notifications included"
 msgstr ""
 
@@ -271,16 +271,16 @@ msgstr ""
 msgid "Extra screen"
 msgstr "מסך נוסף"
 
-#: crates/nd-gui/src/pages/mod.rs:94 crates/nd-gui/src/pages/mod.rs:170
+#: crates/nd-gui/src/pages/mod.rs:94 crates/nd-gui/src/pages/mod.rs:174
 msgid "Failed"
 msgstr "נכשל"
 
-#: crates/nd-gui/src/pages/options.rs:47 crates/nd-gui/src/pages/share.rs:215
+#: crates/nd-gui/src/pages/options.rs:47 crates/nd-gui/src/pages/share.rs:246
 msgid "Files"
 msgstr ""
 
 #: crates/nd-gui/src/pages/options.rs:255
-#: crates/nd-gui/src/pages/options.rs:432
+#: crates/nd-gui/src/pages/options.rs:435
 #, fuzzy
 msgid "Film"
 msgstr "מצב סרט"
@@ -289,12 +289,12 @@ msgstr "מצב סרט"
 msgid "Finished"
 msgstr "הושלם"
 
-#: crates/nd-gui/src/pages/settings.rs:134
-#: crates/nd-gui/src/pages/settings.rs:143
+#: crates/nd-gui/src/pages/settings.rs:133
+#: crates/nd-gui/src/pages/settings.rs:142
 msgid "Fixed port"
 msgstr "פורט קבוע"
 
-#: crates/nd-gui/src/pages/share.rs:263
+#: crates/nd-gui/src/pages/share.rs:295
 msgid "For OBS and other video production software on the network"
 msgstr ""
 
@@ -302,7 +302,7 @@ msgstr ""
 msgid "For using the computer on the big screen"
 msgstr ""
 
-#: crates/nd-gui/src/pages/device_row.rs:89
+#: crates/nd-gui/src/pages/device_row.rs:90
 msgid ""
 "Forget the device remembered for this receiver and trust the one that "
 "answers next"
@@ -313,7 +313,7 @@ msgstr ""
 msgid "Forward 10 seconds"
 msgstr "10 שניות קדימה"
 
-#: crates/nd-gui/src/pages/options.rs:653
+#: crates/nd-gui/src/pages/options.rs:656
 #, fuzzy
 msgid "Frames per second"
 msgstr "10 שניות קדימה"
@@ -322,15 +322,15 @@ msgstr "10 שניות קדימה"
 msgid "Got it"
 msgstr "הבנתי"
 
-#: crates/nd-gui/src/pages/settings.rs:122
+#: crates/nd-gui/src/pages/settings.rs:121
 msgid "Hardware acceleration"
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:636
+#: crates/nd-gui/src/pages/options.rs:639
 msgid "Height (pixels)"
 msgstr "גובה (פיקסלים)"
 
-#: crates/nd-gui/src/pages/options.rs:843
+#: crates/nd-gui/src/pages/options.rs:847
 msgid "High (1080p)"
 msgstr "גבוה (1080p)"
 
@@ -366,11 +366,11 @@ msgstr ""
 msgid "Local network discovery is unavailable. Check your network connection."
 msgstr "גילוי רשת מקומית אינו זמין"
 
-#: crates/nd-gui/src/pages/settings.rs:87
+#: crates/nd-gui/src/pages/settings.rs:86
 msgid "Local network only (Chromecast, DLNA, AirPlay)"
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:101
+#: crates/nd-gui/src/pages/settings.rs:100
 msgid "Look for receivers as soon as the app starts"
 msgstr "חפש מקלטים מיד עם הפעלת האפליקציה"
 
@@ -379,16 +379,16 @@ msgstr "חפש מקלטים מיד עם הפעלת האפליקציה"
 msgid "Looking for files…"
 msgstr "מחפש מקלטים…"
 
-#: crates/nd-gui/src/pages/mod.rs:279
+#: crates/nd-gui/src/pages/mod.rs:283
 msgid "Looking for receivers…"
 msgstr "מחפש מקלטים…"
 
 #: crates/nd-gui/src/pages/options.rs:251
-#: crates/nd-gui/src/pages/options.rs:430
+#: crates/nd-gui/src/pages/options.rs:433
 msgid "Low"
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:845
+#: crates/nd-gui/src/pages/options.rs:849
 msgid "Low (480p)"
 msgstr "נמוך (480p)"
 
@@ -396,15 +396,15 @@ msgstr "נמוך (480p)"
 msgid "Main menu"
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:841
+#: crates/nd-gui/src/pages/options.rs:845
 msgid "Maximum (2160p)"
 msgstr "מקסימלי (2160p)"
 
-#: crates/nd-gui/src/pages/mod.rs:218
+#: crates/nd-gui/src/pages/mod.rs:222
 msgid "Measuring…"
 msgstr "מודד…"
 
-#: crates/nd-gui/src/pages/options.rs:844
+#: crates/nd-gui/src/pages/options.rs:848
 msgid "Medium (720p)"
 msgstr "בינוני (720p)"
 
@@ -413,8 +413,8 @@ msgstr "בינוני (720p)"
 msgid "Microphone"
 msgstr "עוצמת מיקרופון"
 
-#: crates/nd-gui/src/pages/options.rs:581
-#: crates/nd-gui/src/pages/options.rs:587
+#: crates/nd-gui/src/pages/options.rs:584
+#: crates/nd-gui/src/pages/options.rs:590
 msgid "Microphone volume"
 msgstr "עוצמת מיקרופון"
 
@@ -442,7 +442,7 @@ msgid ""
 msgstr ""
 "Miracast דורש מתאם Wi‑Fi, ולמחשב זה אין כזה. שידור דרך הרשת עדיין פועל."
 
-#: crates/nd-gui/src/pages/settings.rs:86
+#: crates/nd-gui/src/pages/settings.rs:85
 msgid "Miracast only"
 msgstr "Miracast בלבד"
 
@@ -450,7 +450,7 @@ msgstr "Miracast בלבד"
 msgid "Miracast unavailable: this Wi-Fi card does not support Wi-Fi Direct"
 msgstr "Miracast אינו זמין: כרטיס ה-Wi-Fi הזה אינו תומך ב-Wi-Fi Direct"
 
-#: crates/nd-gui/src/pages/options.rs:572
+#: crates/nd-gui/src/pages/options.rs:575
 msgid "Mix your voice into what is sent"
 msgstr "ערבב את קולך עם מה שנשלח"
 
@@ -463,7 +463,7 @@ msgstr ""
 msgid "Music"
 msgstr "מוזיקה"
 
-#: crates/nd-gui/src/pages/share.rs:262
+#: crates/nd-gui/src/pages/share.rs:294
 msgid "NDI"
 msgstr ""
 
@@ -507,7 +507,7 @@ msgstr "הגדרת NDI"
 msgid "NDI support could not be loaded. Reinstall BigNetScreen to restore it."
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:216
+#: crates/nd-gui/src/pages/mod.rs:220
 msgid "Network response: {} ms. This is not the picture delay."
 msgstr ""
 
@@ -526,7 +526,7 @@ msgstr "אין מוזיקה בתיקיית Music. השתמש ב־\"בחירת ק
 msgid "No photos in {}. Use “Select files” to pick them elsewhere."
 msgstr "אין תמונות בתיקיית Pictures. השתמש ב־\"בחירת קבצים\"."
 
-#: crates/nd-gui/src/app/wording.rs:23 crates/nd-gui/src/pages/mod.rs:281
+#: crates/nd-gui/src/app/wording.rs:23 crates/nd-gui/src/pages/mod.rs:285
 msgid "No receivers found"
 msgstr "לא נמצאו מקלטים"
 
@@ -535,7 +535,7 @@ msgstr "לא נמצאו מקלטים"
 msgid "No receivers yet"
 msgstr "לא נמצאו מקלטים"
 
-#: crates/nd-gui/src/pages/options.rs:521
+#: crates/nd-gui/src/pages/options.rs:524
 #, fuzzy
 msgid "No sound"
 msgstr "לא נמצאו התקנים"
@@ -545,7 +545,7 @@ msgstr "לא נמצאו התקנים"
 msgid "No videos in {}. Use “Select files” to pick them elsewhere."
 msgstr "אין סרטונים בתיקיית Videos. השתמש ב־\"בחירת קבצים\"."
 
-#: crates/nd-gui/src/pages/options.rs:706
+#: crates/nd-gui/src/pages/options.rs:710
 #, fuzzy
 msgid "Not used for files"
 msgstr "בחירת קבצים"
@@ -554,47 +554,47 @@ msgstr "בחירת קבצים"
 msgid "Now playing"
 msgstr "מתנגן כעת"
 
-#: crates/nd-gui/src/pages/options.rs:553
-#: crates/nd-gui/src/pages/options.rs:571
-#: crates/nd-gui/src/pages/options.rs:605
+#: crates/nd-gui/src/pages/options.rs:556
+#: crates/nd-gui/src/pages/options.rs:574
+#: crates/nd-gui/src/pages/options.rs:608
 msgid "Off"
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:572
+#: crates/nd-gui/src/pages/options.rs:575
 msgid "On"
 msgstr ""
 
-#: crates/nd-gui/src/pages/share.rs:132
+#: crates/nd-gui/src/pages/share.rs:138
 msgid "On the TV, phone or computer, open:"
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:529
+#: crates/nd-gui/src/pages/options.rs:532
 msgid "Only chosen applications"
 msgstr ""
 
-#: crates/nd-gui/src/pages/share.rs:201
+#: crates/nd-gui/src/pages/share.rs:232
 msgid ""
 "Only receivers that play files are listed: Chromecast, DLNA televisions and "
 "Miracast."
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:472
+#: crates/nd-gui/src/pages/options.rs:475
 msgid "Only the window you pick; the rest stays private"
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:536
+#: crates/nd-gui/src/pages/options.rs:539
 msgid "Open sound settings"
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:866
+#: crates/nd-gui/src/pages/options.rs:870
 msgid "Open your desktop's sound settings to choose the BigNetScreen output."
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:166
+#: crates/nd-gui/src/pages/mod.rs:170
 msgid "Opening the firewall port…"
 msgstr "פותח את יציאת חומת האש…"
 
-#: crates/nd-gui/src/pages/share.rs:230
+#: crates/nd-gui/src/pages/share.rs:261
 #, fuzzy
 msgid "Other ways to share"
 msgstr "מוכן לשיתוף"
@@ -607,24 +607,24 @@ msgstr "השהה"
 msgid "Photos"
 msgstr "תמונות"
 
-#: crates/nd-gui/src/pages/options.rs:480
+#: crates/nd-gui/src/pages/options.rs:483
 #, fuzzy
 msgid "Photos, videos and music, played by the receiver"
 msgstr "תמונות, סרטונים ומוזיקה"
 
-#: crates/nd-gui/src/pages/settings.rs:80
+#: crates/nd-gui/src/pages/settings.rs:79
 msgid "Preferred protocol"
 msgstr "פרוטוקול מועדף"
 
-#: crates/nd-gui/src/pages/mod.rs:168
+#: crates/nd-gui/src/pages/mod.rs:172
 msgid "Preparing the video…"
 msgstr "מכין את הווידאו…"
 
-#: crates/nd-gui/src/pages/share.rs:272
+#: crates/nd-gui/src/pages/share.rs:305
 msgid "Publish with NDI"
 msgstr "שידור באמצעות NDI"
 
-#: crates/nd-gui/src/pages/options.rs:282
+#: crates/nd-gui/src/pages/options.rs:285
 msgid "Quality"
 msgstr ""
 
@@ -632,7 +632,7 @@ msgstr ""
 msgid "Queue"
 msgstr "רשימת השמעה"
 
-#: crates/nd-gui/src/app/mod.rs:649 crates/nd-gui/src/pages/mod.rs:290
+#: crates/nd-gui/src/app/mod.rs:649 crates/nd-gui/src/pages/mod.rs:294
 msgid "Reconnecting to the sharing service…"
 msgstr ""
 
@@ -644,17 +644,17 @@ msgstr "הסר מרשימת ההשמעה"
 msgid "Restart BigNetScreen to use NDI."
 msgstr "הפעילו מחדש את BigNetScreen כדי להשתמש ב‑NDI."
 
-#: crates/nd-gui/src/pages/settings.rs:224
+#: crates/nd-gui/src/pages/settings.rs:223
 #, fuzzy
 msgid "Restore"
 msgstr "שחזור ברירות מחדל"
 
-#: crates/nd-gui/src/pages/settings.rs:218
+#: crates/nd-gui/src/pages/settings.rs:217
 #, fuzzy
 msgid "Restore default settings?"
 msgstr "שחזור ברירות מחדל"
 
-#: crates/nd-gui/src/pages/settings.rs:176
+#: crates/nd-gui/src/pages/settings.rs:175
 msgid "Restore defaults"
 msgstr "שחזור ברירות מחדל"
 
@@ -681,7 +681,7 @@ msgstr "מחפש…"
 msgid "Select files"
 msgstr "בחירת קבצים"
 
-#: crates/nd-gui/src/pages/share.rs:438
+#: crates/nd-gui/src/pages/share.rs:473
 #, fuzzy
 msgid "Select files below first"
 msgstr "בחירת קבצים"
@@ -706,18 +706,18 @@ msgstr "שולח קבצים…"
 msgid "Settings"
 msgstr "הגדרות"
 
-#: crates/nd-gui/src/pages/device_row.rs:82
-#: crates/nd-gui/src/pages/options.rs:264 crates/nd-gui/src/pages/share.rs:255
-#: crates/nd-gui/src/pages/share.rs:271
+#: crates/nd-gui/src/pages/device_row.rs:83
+#: crates/nd-gui/src/pages/options.rs:264 crates/nd-gui/src/pages/share.rs:287
+#: crates/nd-gui/src/pages/share.rs:304
 #, fuzzy
 msgid "Share"
 msgstr "שיתוף מדיה"
 
-#: crates/nd-gui/src/pages/device_row.rs:97
+#: crates/nd-gui/src/pages/device_row.rs:98
 msgid "Share to {}"
 msgstr ""
 
-#: crates/nd-gui/src/pages/share.rs:256
+#: crates/nd-gui/src/pages/share.rs:288
 msgid "Share with a web browser"
 msgstr ""
 
@@ -758,7 +758,7 @@ msgstr ""
 msgid "Sound"
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:879
+#: crates/nd-gui/src/pages/options.rs:883
 #, fuzzy
 msgid "Sound settings"
 msgstr "הגדרות"
@@ -776,7 +776,7 @@ msgstr "נקה את רשימת ההשמעה"
 msgid "Stop sending"
 msgstr "הפסק שליחה"
 
-#: crates/nd-gui/src/pages/share.rs:178
+#: crates/nd-gui/src/pages/share.rs:184
 #, fuzzy
 msgid "Stop sharing"
 msgstr "הפסק שליחה"
@@ -789,7 +789,7 @@ msgstr ""
 msgid "Stopping…"
 msgstr "מפסיק…"
 
-#: crates/nd-gui/src/pages/mod.rs:169
+#: crates/nd-gui/src/pages/mod.rs:173
 msgid "Streaming"
 msgstr "מזרים"
 
@@ -836,24 +836,24 @@ msgstr "שחזור ברירות מחדל"
 msgid "The details below say what went wrong."
 msgstr ""
 
-#: crates/nd-gui/src/pages/share.rs:412
+#: crates/nd-gui/src/pages/share.rs:447
 msgid "The device that answers on the next connection will be trusted"
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:283
+#: crates/nd-gui/src/pages/options.rs:286
 msgid ""
 "The largest picture sent; a smaller screen is sent as it is. Many Chromecast "
 "models stay at 1080p and 30 frames per second."
 msgstr ""
 
-#: crates/nd-gui/src/pages/share.rs:368
+#: crates/nd-gui/src/pages/share.rs:403
 msgid ""
 "The next device that answers for this receiver will be trusted and "
 "remembered. Do this only if you replaced or reset it and nobody else can "
 "reach this network."
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:213
+#: crates/nd-gui/src/pages/mod.rs:217
 #, fuzzy
 msgid "The receiver did not answer the connection check"
 msgstr "המקלט אינו מגיב"
@@ -866,11 +866,11 @@ msgstr ""
 msgid "The sound that goes with the picture."
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:109
+#: crates/nd-gui/src/pages/settings.rs:108
 msgid "This computer's name"
 msgstr "השם של מחשב זה"
 
-#: crates/nd-gui/src/pages/options.rs:487
+#: crates/nd-gui/src/pages/options.rs:490
 #, fuzzy
 msgid "This desktop cannot create an extra screen."
 msgstr ""
@@ -879,10 +879,6 @@ msgstr ""
 #: crates/nd-gui/src/app/wording.rs:76
 msgid ""
 "This device can be found on the network, but BigNetScreen cannot share to it."
-msgstr ""
-
-#: crates/nd-gui/src/pages/device_row.rs:157
-msgid "This device is visible, but AirPlay sharing is not supported."
 msgstr ""
 
 #: crates/nd-gui/src/app/wording.rs:89
@@ -896,26 +892,26 @@ msgstr ""
 msgid "Too many attempts. Wait half a minute and try again."
 msgstr ""
 
-#: crates/nd-gui/src/pages/device_row.rs:81
-#: crates/nd-gui/src/pages/share.rs:375
+#: crates/nd-gui/src/pages/device_row.rs:82
+#: crates/nd-gui/src/pages/share.rs:410
 msgid "Trust again"
 msgstr ""
 
-#: crates/nd-gui/src/pages/share.rs:367
+#: crates/nd-gui/src/pages/share.rs:402
 msgid "Trust this receiver again?"
 msgstr ""
 
-#: crates/nd-gui/src/pages/device_row.rs:96
+#: crates/nd-gui/src/pages/device_row.rs:97
 msgid "Trust {} again"
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:282
+#: crates/nd-gui/src/pages/mod.rs:286
 msgid ""
 "Turn on your TV or projector and open screen mirroring, or share with a web "
 "browser."
 msgstr ""
 
-#: crates/nd-gui/src/pages/options.rs:842
+#: crates/nd-gui/src/pages/options.rs:846
 msgid "Very high (1440p)"
 msgstr "גבוה מאוד (1440p)"
 
@@ -927,7 +923,7 @@ msgstr "סרטונים"
 msgid "View ndi-sdk in the AUR"
 msgstr "הצגת ndi-sdk ב‑AUR"
 
-#: crates/nd-gui/src/pages/mod.rs:167
+#: crates/nd-gui/src/pages/mod.rs:171
 msgid "Waiting for the receiver…"
 msgstr "ממתין למקלט…"
 
@@ -935,7 +931,7 @@ msgstr "ממתין למקלט…"
 msgid "Watch"
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:144 crates/nd-gui/src/pages/share.rs:246
+#: crates/nd-gui/src/pages/mod.rs:144 crates/nd-gui/src/pages/share.rs:277
 msgid "Web browser"
 msgstr ""
 
@@ -943,7 +939,7 @@ msgstr ""
 msgid "What the receiver shows. Choose before picking where to share."
 msgstr ""
 
-#: crates/nd-gui/src/pages/settings.rs:83
+#: crates/nd-gui/src/pages/settings.rs:82
 msgid "Which kind of receiver to look for"
 msgstr "איזה סוג מקלט לחפש"
 
@@ -956,7 +952,7 @@ msgstr "מה תרצה לשתף?"
 msgid "Whole screen"
 msgstr "מסך מלא"
 
-#: crates/nd-gui/src/pages/options.rs:635
+#: crates/nd-gui/src/pages/options.rs:638
 msgid "Width (pixels)"
 msgstr "רוחב (פיקסלים)"
 
@@ -965,11 +961,11 @@ msgstr "רוחב (פיקסלים)"
 msgid "Your voice, mixed into the sound that is sent."
 msgstr "ערבב את קולך עם מה שנשלח"
 
-#: crates/nd-gui/src/pages/share.rs:157
+#: crates/nd-gui/src/pages/share.rs:163
 msgid "and enter the PIN"
 msgstr ""
 
-#: crates/nd-gui/src/pages/mod.rs:179
+#: crates/nd-gui/src/pages/mod.rs:183
 msgid "delayed a few seconds"
 msgstr ""
 
@@ -986,7 +982,7 @@ msgid_plural "{} receivers"
 msgstr[0] "נמצא {} מקלט"
 msgstr[1] "נמצאו {} מקלטים"
 
-#: crates/nd-gui/src/app/wording.rs:17
+#: crates/nd-gui/src/app/wording.rs:17 crates/nd-gui/src/pages/share.rs:215
 msgid "{} receiver found"
 msgid_plural "{} receivers found"
 msgstr[0] "נמצא {} מקלט"
