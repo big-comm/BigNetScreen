@@ -14,7 +14,7 @@ nd-core.workspace = true
 tracing.workspace = true
 futures.workspace = true
 tokio.workspace = true
-zbus = { version = "5", default-features = false, features = ["tokio"] }
+zbus = { version = "6", default-features = false, features = ["tokio"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
